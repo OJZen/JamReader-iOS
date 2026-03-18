@@ -171,6 +171,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
                     return
                 }
 
+                controller.restorePreferredViewportState()
                 self.notifyPageChangedIfNeeded(spread.primaryPageIndex)
                 self.trimCache(around: spreadIndex)
                 self.prefetchAround(spreadIndex: spreadIndex)
@@ -223,6 +224,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
             let spread = spreads[controller.spreadIndex]
             currentSpreadIndex = controller.spreadIndex
             currentPageIndex = spread.primaryPageIndex
+            controller.restorePreferredViewportState()
             notifyPageChangedIfNeeded(spread.primaryPageIndex)
             trimCache(around: controller.spreadIndex)
             prefetchAround(spreadIndex: controller.spreadIndex)
