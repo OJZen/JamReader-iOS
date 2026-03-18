@@ -672,10 +672,14 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
             contentSize: rotatedContentSize
         )
         let maximumZoomScale = max(minimumZoomScale * 4, 4)
+        let previousMinimumZoomScale = scrollView.minimumZoomScale
+        // When decoding completes before the page gets a real viewport size, the first
+        // successful layout should still snap to fit instead of preserving the placeholder 1x zoom.
+        let wasAtFitZoom = scrollView.zoomScale <= previousMinimumZoomScale + 0.01
         scrollView.minimumZoomScale = minimumZoomScale
         scrollView.maximumZoomScale = maximumZoomScale
 
-        if resetZoomScale {
+        if resetZoomScale || wasAtFitZoom {
             scrollView.zoomScale = minimumZoomScale
         } else {
             scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
