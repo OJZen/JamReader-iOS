@@ -130,6 +130,7 @@ struct RemoteComicReaderView: View {
     @State private var pendingProgressPersistenceTask: Task<Void, Never>?
     @State private var transientNoticeMessage: String?
     @State private var readerViewportRefreshToken = 0
+    @State private var initialViewportCalibrationTask: Task<Void, Never>?
 
     init(
         profile: RemoteServerProfile,
@@ -222,6 +223,7 @@ struct RemoteComicReaderView: View {
             scheduleNoticeDismissalIfNeeded()
         }
         .onDisappear {
+            initialViewportCalibrationTask?.cancel()
             persistProgress(force: true)
             pendingProgressPersistenceTask?.cancel()
             UIApplication.shared.isIdleTimerDisabled = false
@@ -234,6 +236,7 @@ struct RemoteComicReaderView: View {
         }
         .onChange(of: document != nil) { _, _ in
             updateIdleTimerState()
+            scheduleInitialViewportCalibrationIfNeeded()
         }
         .onChange(of: currentPageIndex) { _, _ in
             persistProgress()
@@ -268,6 +271,34 @@ struct RemoteComicReaderView: View {
 
     private var supportsDoublePageSpread: Bool {
         horizontalSizeClass == .regular
+    }
+
+    private func scheduleInitialViewportCalibrationIfNeeded() {
+        initialViewportCalibrationTask?.cancel()
+
+        guard let document,
+              case .imageSequence = document,
+              effectiveReaderLayout.pagingMode == .paged
+        else {
+            return
+        }
+
+        initialViewportCalibrationTask = Task { @MainActor in
+            let refreshMoments: [UInt64] = [120_000_000, 520_000_000]
+            var previousMoment: UInt64 = 0
+
+            for moment in refreshMoments {
+                let delay = moment - previousMoment
+                previousMoment = moment
+                try? await Task.sleep(nanoseconds: delay)
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                readerViewportRefreshToken &+= 1
+            }
+        }
     }
 
     private var effectiveReaderLayout: ReaderDisplayLayout {

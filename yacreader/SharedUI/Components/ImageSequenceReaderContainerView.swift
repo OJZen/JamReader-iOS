@@ -545,13 +545,6 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         }
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        DispatchQueue.main.async { [weak self] in
-            self?.restorePreferredViewportState()
-        }
-    }
-
     private func configureSubviews() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.backgroundColor = .black

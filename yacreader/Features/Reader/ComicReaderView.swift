@@ -17,6 +17,7 @@ struct ComicReaderView: View {
     @State private var isReaderChromeHidden = true
     @State private var pendingReaderAction: ReaderSecondaryAction?
     @State private var readerViewportRefreshToken = 0
+    @State private var initialViewportCalibrationTask: Task<Void, Never>?
 
     init(
         descriptor: LibraryDescriptor,
@@ -84,6 +85,7 @@ struct ComicReaderView: View {
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
         }
         .onDisappear {
+            initialViewportCalibrationTask?.cancel()
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.persistCurrentProgress()
         }
@@ -92,6 +94,7 @@ struct ComicReaderView: View {
         }
         .onChange(of: viewModel.document != nil) { _, _ in
             updateIdleTimerState()
+            scheduleInitialViewportCalibrationIfNeeded()
         }
         .onChange(of: horizontalSizeClass) { _, _ in
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
@@ -184,6 +187,34 @@ struct ComicReaderView: View {
 
     private var supportsDoublePageSpread: Bool {
         horizontalSizeClass == .regular
+    }
+
+    private func scheduleInitialViewportCalibrationIfNeeded() {
+        initialViewportCalibrationTask?.cancel()
+
+        guard let document = viewModel.document,
+              case .imageSequence = document,
+              viewModel.effectiveReaderLayout.pagingMode == .paged
+        else {
+            return
+        }
+
+        initialViewportCalibrationTask = Task { @MainActor in
+            let refreshMoments: [UInt64] = [120_000_000, 520_000_000]
+            var previousMoment: UInt64 = 0
+
+            for moment in refreshMoments {
+                let delay = moment - previousMoment
+                previousMoment = moment
+                try? await Task.sleep(nanoseconds: delay)
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                readerViewportRefreshToken &+= 1
+            }
+        }
     }
 
     @ViewBuilder
