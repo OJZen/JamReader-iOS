@@ -57,6 +57,7 @@ struct ComicReaderView: View {
         .overlay {
             readerChromeOverlay
         }
+        .ignoresSafeArea(.keyboard)
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)

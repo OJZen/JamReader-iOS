@@ -173,6 +173,7 @@ struct RemoteComicReaderView: View {
         .overlay {
             readerChromeOverlay
         }
+        .ignoresSafeArea(.keyboard)
         .navigationTitle(displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
