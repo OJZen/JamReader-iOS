@@ -806,11 +806,8 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     private func updatePanGestureAvailability() {
-        let zoomedContent = zoomedContentSize()
-        let allowsHorizontalPan = zoomedContent.width > scrollView.bounds.width + 2
-        let allowsVerticalPan = zoomedContent.height > scrollView.bounds.height + 2
         let isZoomedBeyondMinimum = scrollView.zoomScale > scrollView.minimumZoomScale + 0.01
-        scrollView.panGestureRecognizer.isEnabled = isZoomedBeyondMinimum || allowsHorizontalPan || allowsVerticalPan
+        scrollView.panGestureRecognizer.isEnabled = isZoomedBeyondMinimum
     }
 
     private func preferredDecodeMaxPixelSize() -> Int {

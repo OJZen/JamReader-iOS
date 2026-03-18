@@ -227,6 +227,7 @@ struct ComicReaderView: View {
                     onReaderTap: handleReaderTap
                 )
             }
+            .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())
         case .imageSequence(let imageSequence):
             if viewModel.effectiveReaderLayout.pagingMode == .verticalContinuous {
@@ -237,6 +238,7 @@ struct ComicReaderView: View {
                     onPageChanged: viewModel.updateCurrentPage(to:),
                     onReaderTap: handleReaderTap
                 )
+                .ignoresSafeArea()
                 .background(Color.black.ignoresSafeArea())
             } else {
                 ImageSequenceReaderContainerView(
@@ -246,6 +248,7 @@ struct ComicReaderView: View {
                     onPageChanged: viewModel.updateCurrentPage(to:),
                     onReaderTap: handleReaderTap
                 )
+                .ignoresSafeArea()
                 .background(Color.black.ignoresSafeArea())
             }
         case .unsupported(let document):
