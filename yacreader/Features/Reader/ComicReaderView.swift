@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct ComicReaderView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
 
@@ -53,61 +54,12 @@ struct ComicReaderView: View {
                 )
             }
         }
+        .overlay {
+            readerChromeOverlay
+        }
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(isReaderChromeHidden ? .hidden : .visible, for: .navigationBar)
-        .toolbar {
-            if !isReaderChromeHidden, viewModel.pageIndicatorText != nil || viewModel.hasReaderNavigationContext {
-                ToolbarItem(placement: .bottomBar) {
-                    HStack(spacing: 16) {
-                        Button {
-                            isReaderChromeHidden = false
-                            isShowingReaderControls = true
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                        }
-                        .disabled(viewModel.document == nil)
-
-                        Spacer(minLength: 8)
-
-                        Button {
-                            viewModel.openPreviousComic()
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-                        .disabled(!viewModel.canOpenPreviousComic)
-
-                        Spacer(minLength: 12)
-
-                        VStack(spacing: 2) {
-                            if let pageIndicatorText = viewModel.pageIndicatorText {
-                                Text(pageIndicatorText)
-                                    .font(.footnote.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if let contextPositionText = viewModel.readerContextPositionText {
-                                Text(contextPositionText)
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-
-                        Spacer(minLength: 12)
-
-                        Button {
-                            viewModel.openNextComic()
-                        } label: {
-                            Image(systemName: "chevron.right")
-                        }
-                        .disabled(!viewModel.canOpenNextComic)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .statusBarHidden(isReaderChromeHidden)
-        .animation(.easeInOut(duration: 0.2), value: isReaderChromeHidden)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
             viewModel.loadIfNeeded()
@@ -323,8 +275,86 @@ struct ComicReaderView: View {
         )
     }
 
+    @ViewBuilder
+    private var readerChromeOverlay: some View {
+        ReaderChromeOverlay(isHidden: isReaderChromeHidden) {
+            ReaderChromeBar {
+                HStack(spacing: 12) {
+                    Button(action: dismiss.callAsFunction) {
+                        Image(systemName: "chevron.backward")
+                            .font(.headline.weight(.semibold))
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(viewModel.navigationTitle)
+                            .font(.headline)
+                            .lineLimit(1)
+
+                        if let contextPositionText = viewModel.readerContextPositionText {
+                            Text(contextPositionText)
+                                .font(.caption2.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+        } bottomBar: {
+            if viewModel.pageIndicatorText != nil || viewModel.hasReaderNavigationContext {
+                ReaderChromeBar {
+                    HStack(spacing: 16) {
+                        Button {
+                            isReaderChromeHidden = false
+                            isShowingReaderControls = true
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.headline)
+                        }
+                        .disabled(viewModel.document == nil)
+
+                        Spacer(minLength: 0)
+
+                        Button(action: viewModel.openPreviousComic) {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
+                        }
+                        .disabled(!viewModel.canOpenPreviousComic)
+
+                        if let pageIndicatorText = viewModel.pageIndicatorText {
+                            ReaderChromePill {
+                                Text(pageIndicatorText)
+                                    .font(.footnote.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Button(action: viewModel.openNextComic) {
+                            Image(systemName: "chevron.right")
+                                .font(.headline)
+                        }
+                        .disabled(!viewModel.canOpenNextComic)
+                    }
+                }
+            }
+        }
+    }
+
     private func toggleReaderChrome() {
-        isReaderChromeHidden.toggle()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isReaderChromeHidden.toggle()
+        }
+    }
+
+    private func hideReaderChrome() {
+        guard !isReaderChromeHidden else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isReaderChromeHidden = true
+        }
     }
 
     private func handleReaderTap(_ tapRegion: ReaderTapRegion) {
@@ -333,13 +363,13 @@ struct ComicReaderView: View {
             toggleReaderChrome()
         case .leading:
             if !isReaderChromeHidden {
-                isReaderChromeHidden = true
+                hideReaderChrome()
             } else if viewModel.canOpenPreviousComic {
                 viewModel.openPreviousComic()
             }
         case .trailing:
             if !isReaderChromeHidden {
-                isReaderChromeHidden = true
+                hideReaderChrome()
             } else if viewModel.canOpenNextComic {
                 viewModel.openNextComic()
             }
