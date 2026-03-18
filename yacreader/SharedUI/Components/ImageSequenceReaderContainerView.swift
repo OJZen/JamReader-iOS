@@ -433,7 +433,7 @@ private struct LoadedComicPage: @unchecked Sendable {
 }
 
 @MainActor
-private final class ComicImageSpreadViewController: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
+private final class ComicImageSpreadViewController: UIViewController, UIScrollViewDelegate {
     let spreadIndex: Int
 
     private let spread: ReaderSpreadDescriptor
@@ -511,7 +511,6 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         scrollView.bouncesZoom = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
-        scrollView.panGestureRecognizer.delegate = self
         singleTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
         scrollView.addGestureRecognizer(singleTapGestureRecognizer)
         scrollView.addGestureRecognizer(doubleTapGestureRecognizer)
@@ -683,6 +682,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         }
 
         centerContentIfNeeded()
+        updatePanGestureAvailability()
     }
 
     private func preferredZoomScale(boundsSize: CGSize, contentSize: CGSize) -> CGFloat {
@@ -726,33 +726,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerContentIfNeeded()
-    }
-
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard gestureRecognizer === scrollView.panGestureRecognizer,
-              let panGestureRecognizer = gestureRecognizer as? UIPanGestureRecognizer
-        else {
-            return true
-        }
-
-        if scrollView.zoomScale > scrollView.minimumZoomScale + 0.01 {
-            return true
-        }
-
-        let velocity = panGestureRecognizer.velocity(in: view)
-        let horizontalVelocity = abs(velocity.x)
-        let verticalVelocity = abs(velocity.y)
-        let contentSize = zoomedContentSize()
-
-        if horizontalVelocity > verticalVelocity {
-            return contentSize.width > scrollView.bounds.width + 2
-        }
-
-        if verticalVelocity > 0 {
-            return contentSize.height > scrollView.bounds.height + 2
-        }
-
-        return false
+        updatePanGestureAvailability()
     }
 
     @objc
@@ -815,6 +789,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         contentView.frame = .zero
         scrollView.contentInset = .zero
         scrollView.contentSize = .zero
+        updatePanGestureAvailability()
         messageLabel.text = message
         messageLabel.isHidden = false
     }
@@ -828,6 +803,14 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
             width: contentView.bounds.width * scrollView.zoomScale,
             height: contentView.bounds.height * scrollView.zoomScale
         )
+    }
+
+    private func updatePanGestureAvailability() {
+        let zoomedContent = zoomedContentSize()
+        let allowsHorizontalPan = zoomedContent.width > scrollView.bounds.width + 2
+        let allowsVerticalPan = zoomedContent.height > scrollView.bounds.height + 2
+        let isZoomedBeyondMinimum = scrollView.zoomScale > scrollView.minimumZoomScale + 0.01
+        scrollView.panGestureRecognizer.isEnabled = isZoomedBeyondMinimum || allowsHorizontalPan || allowsVerticalPan
     }
 
     private func preferredDecodeMaxPixelSize() -> Int {
