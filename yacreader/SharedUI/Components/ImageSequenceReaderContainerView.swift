@@ -746,12 +746,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         }
 
         scrollView.layoutIfNeeded()
-
         if shouldSnapToPreferredViewport {
-            applyPreferredViewportState()
-        } else {
-            updateViewportPresentation(preservingRelativePosition: true)
+            scrollView.contentOffset = .zero
         }
+        centerScrollViewContents()
         updatePanGestureAvailability()
         return true
     }
@@ -777,70 +775,23 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
 
     private func applyPreferredViewportState() {
         scrollView.contentInset = .zero
-        updateCenteredContentPosition()
         scrollView.contentOffset = .zero
+        centerScrollViewContents()
     }
 
-    private func updateViewportPresentation(preservingRelativePosition: Bool) {
-        let previousContentSize = scrollView.contentSize
-        let previousOffset = scrollView.contentOffset
-
+    private func centerScrollViewContents() {
         scrollView.contentInset = .zero
-        updateCenteredContentPosition()
-
-        guard preservingRelativePosition else {
-            scrollView.contentOffset = .zero
-            return
-        }
-
-        let horizontalOverflow = max(previousContentSize.width - scrollView.bounds.width, 0)
-        let verticalOverflow = max(previousContentSize.height - scrollView.bounds.height, 0)
-        let updatedHorizontalOverflow = max(scrollView.contentSize.width - scrollView.bounds.width, 0)
-        let updatedVerticalOverflow = max(scrollView.contentSize.height - scrollView.bounds.height, 0)
-
-        var translatedOffset = CGPoint.zero
-        if updatedHorizontalOverflow > 0, horizontalOverflow > 0 {
-            translatedOffset.x = (previousOffset.x / horizontalOverflow) * updatedHorizontalOverflow
-        }
-        if updatedVerticalOverflow > 0, verticalOverflow > 0 {
-            translatedOffset.y = (previousOffset.y / verticalOverflow) * updatedVerticalOverflow
-        }
-
-        scrollView.contentOffset = clampedContentOffset(
-            translatedOffset,
-            contentSize: scrollView.contentSize
-        )
-    }
-
-    private func updateCenteredContentPosition() {
+        var frameToCenter = contentView.frame
         let boundsSize = scrollView.bounds.size
-        let displayedContentSize = zoomedContentSize()
-        let horizontalInset = max((boundsSize.width - displayedContentSize.width) * 0.5, 0)
-        let verticalInset = max((boundsSize.height - displayedContentSize.height) * 0.5, 0)
 
-        scrollView.contentSize = CGSize(
-            width: max(boundsSize.width, displayedContentSize.width),
-            height: max(boundsSize.height, displayedContentSize.height)
-        )
-        contentView.center = CGPoint(
-            x: displayedContentSize.width * 0.5 + horizontalInset,
-            y: displayedContentSize.height * 0.5 + verticalInset
-        )
-    }
+        frameToCenter.origin.x = frameToCenter.size.width < boundsSize.width - 1
+            ? (boundsSize.width - frameToCenter.size.width) * 0.5
+            : 0
+        frameToCenter.origin.y = frameToCenter.size.height < boundsSize.height - 1
+            ? (boundsSize.height - frameToCenter.size.height) * 0.5
+            : 0
 
-    private func clampedContentOffset(
-        _ proposedOffset: CGPoint,
-        contentSize: CGSize
-    ) -> CGPoint {
-        let minimumX: CGFloat = 0
-        let maximumX = max(minimumX, contentSize.width - scrollView.bounds.width)
-        let minimumY: CGFloat = 0
-        let maximumY = max(minimumY, contentSize.height - scrollView.bounds.height)
-
-        return CGPoint(
-            x: min(max(proposedOffset.x, minimumX), maximumX),
-            y: min(max(proposedOffset.y, minimumY), maximumY)
-        )
+        contentView.frame = frameToCenter
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
@@ -851,7 +802,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         if scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01 {
             applyPreferredViewportState()
         } else {
-            updateViewportPresentation(preservingRelativePosition: true)
+            centerScrollViewContents()
         }
         updatePanGestureAvailability()
     }
@@ -936,15 +887,8 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
     }
 
-    private func zoomedContentSize() -> CGSize {
-        CGSize(
-            width: contentView.bounds.width * scrollView.zoomScale,
-            height: contentView.bounds.height * scrollView.zoomScale
-        )
-    }
-
     private func updatePanGestureAvailability() {
-        let contentSize = zoomedContentSize()
+        let contentSize = contentView.frame.size
         let hasScrollableOverflow = contentSize.width > scrollView.bounds.width + 1
             || contentSize.height > scrollView.bounds.height + 1
         scrollView.panGestureRecognizer.isEnabled = hasScrollableOverflow
