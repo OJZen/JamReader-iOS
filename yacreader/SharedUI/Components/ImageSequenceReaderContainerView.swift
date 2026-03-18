@@ -12,7 +12,6 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
-    let viewportRefreshToken: Int
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
 
@@ -20,7 +19,6 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         Coordinator(
             document: document,
             layout: layout,
-            viewportRefreshToken: viewportRefreshToken,
             currentPageIndex: clampedPageIndex(initialPageIndex),
             onPageChanged: onPageChanged,
             onReaderTap: onReaderTap
@@ -44,8 +42,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         context.coordinator.update(
             document: document,
             layout: layout,
-            requestedPageIndex: clampedPageIndex(initialPageIndex),
-            viewportRefreshToken: viewportRefreshToken
+            requestedPageIndex: clampedPageIndex(initialPageIndex)
         )
     }
 
@@ -67,7 +64,6 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         private(set) var document: ImageSequenceComicDocument
         private(set) var layout: ReaderDisplayLayout
-        private(set) var viewportRefreshToken: Int
         private(set) var spreads: [ReaderSpreadDescriptor]
         private(set) var currentPageIndex: Int
         private(set) var currentSpreadIndex: Int
@@ -77,14 +73,12 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         init(
             document: ImageSequenceComicDocument,
             layout: ReaderDisplayLayout,
-            viewportRefreshToken: Int,
             currentPageIndex: Int,
             onPageChanged: @escaping (Int) -> Void,
             onReaderTap: @escaping (ReaderTapRegion) -> Void
         ) {
             self.document = document
             self.layout = layout
-            self.viewportRefreshToken = viewportRefreshToken
             self.spreads = ReaderSpreadDescriptor.makeSpreads(
                 pageCount: document.pageCount,
                 layout: layout
@@ -126,26 +120,19 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         func update(
             document: ImageSequenceComicDocument,
             layout: ReaderDisplayLayout,
-            requestedPageIndex: Int,
-            viewportRefreshToken: Int
+            requestedPageIndex: Int
         ) {
             let documentChanged = self.document.url != document.url || self.document.pageNames != document.pageNames
             let layoutChanged = self.layout != layout
-            let viewportRefreshRequested = self.viewportRefreshToken != viewportRefreshToken
 
             self.document = document
             self.layout = layout
-            self.viewportRefreshToken = viewportRefreshToken
 
             if documentChanged || layoutChanged {
                 spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: document.pageCount, layout: layout)
                 controllerCache.removeAll()
                 displaySpread(containing: requestedPageIndex, animated: false)
                 return
-            }
-
-            if viewportRefreshRequested {
-                controllerCache[currentSpreadIndex]?.restorePreferredViewportState()
             }
 
             guard requestedPageIndex != currentPageIndex else {
@@ -467,27 +454,16 @@ private struct LoadedComicPage: @unchecked Sendable {
 }
 
 @MainActor
-private final class ComicImageSpreadViewController: UIViewController, UIScrollViewDelegate {
+private final class ComicImageSpreadViewController: UIViewController {
     let spreadIndex: Int
 
     private let spread: ReaderSpreadDescriptor
     private let document: ImageSequenceComicDocument
     private let layout: ReaderDisplayLayout
-    private let scrollView = UIScrollView()
-    private let contentView = UIView()
+    private let zoomablePageView = ZoomableImagePageView()
     private let rotationContainerView = UIView()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
     private let messageLabel = UILabel()
-    private lazy var doubleTapGestureRecognizer: UITapGestureRecognizer = {
-        let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-        gestureRecognizer.numberOfTapsRequired = 2
-        return gestureRecognizer
-    }()
-    private lazy var singleTapGestureRecognizer: UITapGestureRecognizer = {
-        let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
-        gestureRecognizer.numberOfTapsRequired = 1
-        return gestureRecognizer
-    }()
 
     private var imageViews: [UIImageView] = []
     private var loadedPages: [LoadedComicPage] = []
@@ -536,7 +512,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        let viewportSize = scrollView.bounds.size
+
+        zoomablePageView.tapEdgeRatio = preferredTapEdgeRatio()
+
+        let viewportSize = zoomablePageView.bounds.size
         let viewportDidChange = lastViewportSize != .zero && !lastViewportSize.equalTo(viewportSize)
         lastViewportSize = viewportSize
         let shouldResetViewport = viewportDidChange || needsViewportResetOnNextLayout
@@ -546,28 +525,14 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     private func configureSubviews() {
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.backgroundColor = .black
-        scrollView.delegate = self
-        scrollView.contentInsetAdjustmentBehavior = .never
-        scrollView.minimumZoomScale = 1
-        scrollView.maximumZoomScale = 4
-        scrollView.decelerationRate = .fast
-        scrollView.isDirectionalLockEnabled = true
-        scrollView.bounces = false
-        scrollView.alwaysBounceHorizontal = false
-        scrollView.alwaysBounceVertical = false
-        scrollView.bouncesZoom = false
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.showsVerticalScrollIndicator = false
-        singleTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
-        scrollView.addGestureRecognizer(singleTapGestureRecognizer)
-        scrollView.addGestureRecognizer(doubleTapGestureRecognizer)
+        zoomablePageView.translatesAutoresizingMaskIntoConstraints = false
+        zoomablePageView.tapEdgeRatio = preferredTapEdgeRatio()
+        zoomablePageView.onTapRegion = { [weak self] tapRegion in
+            self?.onTapRegion(tapRegion)
+        }
 
-        contentView.backgroundColor = .black
         rotationContainerView.backgroundColor = .black
-        scrollView.addSubview(contentView)
-        contentView.addSubview(rotationContainerView)
+        zoomablePageView.contentContainerView.addSubview(rotationContainerView)
 
         activityIndicator.translatesAutoresizingMaskIntoConstraints = false
         activityIndicator.hidesWhenStopped = true
@@ -579,15 +544,15 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         messageLabel.textAlignment = .center
         messageLabel.isHidden = true
 
-        view.addSubview(scrollView)
+        view.addSubview(zoomablePageView)
         view.addSubview(activityIndicator)
         view.addSubview(messageLabel)
 
         NSLayoutConstraint.activate([
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            zoomablePageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            zoomablePageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            zoomablePageView.topAnchor.constraint(equalTo: view.topAnchor),
+            zoomablePageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             activityIndicator.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             activityIndicator.centerYAnchor.constraint(equalTo: view.centerYAnchor),
@@ -669,7 +634,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         imageViews.forEach { $0.removeFromSuperview() }
         imageViews = loadedPages.map { loadedPage in
             let imageView = UIImageView(image: loadedPage.image)
-            imageView.contentMode = .center
+            imageView.contentMode = .scaleToFill
             imageView.backgroundColor = .black
             rotationContainerView.addSubview(imageView)
             return imageView
@@ -679,11 +644,11 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     @discardableResult
     private func layoutLoadedPages(resetZoomScale: Bool) -> Bool {
         guard !loadedPages.isEmpty else {
-            scrollView.contentSize = .zero
+            zoomablePageView.clearContentLayout()
             return false
         }
 
-        let boundsSize = scrollView.bounds.size
+        let boundsSize = zoomablePageView.bounds.size
         guard boundsSize.width > 0, boundsSize.height > 0 else {
             return false
         }
@@ -708,7 +673,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
 
         let naturalContentSize = CGSize(width: naturalContentWidth, height: naturalContentHeight)
         let rotatedContentSize = layout.rotation.rotatedSize(for: naturalContentSize)
+        let shouldSnapToPreferredViewport = resetZoomScale || zoomablePageView.isAtPreferredZoom
 
+        rotationContainerView.transform = .identity
+        rotationContainerView.frame = CGRect(origin: .zero, size: rotatedContentSize)
         rotationContainerView.bounds = CGRect(origin: .zero, size: naturalContentSize)
         rotationContainerView.center = CGPoint(
             x: rotatedContentSize.width * 0.5,
@@ -716,139 +684,12 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         )
         rotationContainerView.transform = CGAffineTransform(rotationAngle: layout.rotation.radians)
 
-        contentView.frame = CGRect(origin: .zero, size: rotatedContentSize)
-        scrollView.contentSize = rotatedContentSize
-
-        let minimumZoomScale = preferredZoomScale(
-            boundsSize: boundsSize,
-            contentSize: rotatedContentSize
+        zoomablePageView.configureContentLayout(
+            size: rotatedContentSize,
+            fitMode: layout.fitMode,
+            resetZoomScale: shouldSnapToPreferredViewport
         )
-        let maximumZoomScale = max(minimumZoomScale * 4, 4)
-        let previousMinimumZoomScale = scrollView.minimumZoomScale
-        // When decoding completes before the page gets a real viewport size, the first
-        // successful layout should still snap to fit instead of preserving the placeholder 1x zoom.
-        let wasAtFitZoom = scrollView.zoomScale <= previousMinimumZoomScale + 0.01
-        let shouldSnapToPreferredViewport = resetZoomScale || wasAtFitZoom
-        scrollView.minimumZoomScale = minimumZoomScale
-        scrollView.maximumZoomScale = maximumZoomScale
-
-        if shouldSnapToPreferredViewport {
-            scrollView.zoomScale = minimumZoomScale
-        } else {
-            scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
-        }
-
-        scrollView.layoutIfNeeded()
-        if shouldSnapToPreferredViewport {
-            scrollView.contentOffset = .zero
-        }
-        centerScrollViewContents()
-        updatePanGestureAvailability()
         return true
-    }
-
-    private func preferredZoomScale(boundsSize: CGSize, contentSize: CGSize) -> CGFloat {
-        let widthScale = boundsSize.width / contentSize.width
-        let heightScale = boundsSize.height / contentSize.height
-
-        let preferredScale: CGFloat
-        switch layout.fitMode {
-        case .page:
-            preferredScale = min(widthScale, heightScale)
-        case .width:
-            preferredScale = widthScale
-        case .height:
-            preferredScale = heightScale
-        case .originalSize:
-            preferredScale = 1
-        }
-
-        return max(preferredScale, 0.01)
-    }
-
-    private func applyPreferredViewportState() {
-        scrollView.contentInset = .zero
-        scrollView.contentOffset = .zero
-        centerScrollViewContents()
-    }
-
-    private func centerScrollViewContents() {
-        scrollView.contentInset = .zero
-        var frameToCenter = contentView.frame
-        let boundsSize = scrollView.bounds.size
-
-        frameToCenter.origin.x = frameToCenter.size.width < boundsSize.width - 1
-            ? (boundsSize.width - frameToCenter.size.width) * 0.5
-            : 0
-        frameToCenter.origin.y = frameToCenter.size.height < boundsSize.height - 1
-            ? (boundsSize.height - frameToCenter.size.height) * 0.5
-            : 0
-
-        contentView.frame = frameToCenter
-    }
-
-    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-        contentView
-    }
-
-    func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        if scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01 {
-            applyPreferredViewportState()
-        } else {
-            centerScrollViewContents()
-        }
-        updatePanGestureAvailability()
-    }
-
-    @objc
-    private func handleSingleTap(_ gestureRecognizer: UITapGestureRecognizer) {
-        if scrollView.zoomScale > scrollView.minimumZoomScale + 0.01 {
-            onTapRegion(.center)
-            return
-        }
-
-        let tapLocation = gestureRecognizer.location(in: view)
-        let viewWidth = max(view.bounds.width, 1)
-        let horizontalRatio = tapLocation.x / viewWidth
-        let edgeRatio = preferredTapEdgeRatio()
-
-        if horizontalRatio < edgeRatio {
-            onTapRegion(.leading)
-        } else if horizontalRatio > 1 - edgeRatio {
-            onTapRegion(.trailing)
-        } else {
-            onTapRegion(.center)
-        }
-    }
-
-    @objc
-    private func handleDoubleTap(_ gestureRecognizer: UITapGestureRecognizer) {
-        guard !loadedPages.isEmpty else {
-            return
-        }
-
-        let minimumZoomScale = scrollView.minimumZoomScale
-        let maximumZoomScale = scrollView.maximumZoomScale
-
-        if scrollView.zoomScale > minimumZoomScale + 0.01 {
-            scrollView.setZoomScale(minimumZoomScale, animated: true)
-            return
-        }
-
-        let targetZoomScale = min(maximumZoomScale, minimumZoomScale * 2.5)
-        let tapLocation = gestureRecognizer.location(in: contentView)
-        let zoomRectSize = CGSize(
-            width: scrollView.bounds.width / targetZoomScale,
-            height: scrollView.bounds.height / targetZoomScale
-        )
-        let zoomRect = CGRect(
-            x: tapLocation.x - zoomRectSize.width * 0.5,
-            y: tapLocation.y - zoomRectSize.height * 0.5,
-            width: zoomRectSize.width,
-            height: zoomRectSize.height
-        )
-
-        scrollView.zoom(to: zoomRect, animated: true)
     }
 
     private func presentError(_ message: String) {
@@ -857,10 +698,8 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         imageViews.removeAll()
         rotationContainerView.transform = .identity
         rotationContainerView.bounds = .zero
-        contentView.frame = .zero
-        scrollView.contentInset = .zero
-        scrollView.contentSize = .zero
-        updatePanGestureAvailability()
+        rotationContainerView.frame = .zero
+        zoomablePageView.clearContentLayout()
         messageLabel.text = message
         messageLabel.isHidden = false
     }
@@ -873,6 +712,8 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         needsViewportResetOnNextLayout = true
         if layoutLoadedPages(resetZoomScale: true) {
             needsViewportResetOnNextLayout = false
+        } else {
+            zoomablePageView.restorePreferredViewportState()
         }
     }
 
@@ -880,19 +721,12 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
     }
 
-    private func updatePanGestureAvailability() {
-        let contentSize = contentView.frame.size
-        let hasScrollableOverflow = contentSize.width > scrollView.bounds.width + 1
-            || contentSize.height > scrollView.bounds.height + 1
-        scrollView.panGestureRecognizer.isEnabled = hasScrollableOverflow
-    }
-
     private func preferredDecodeMaxPixelSize() -> Int {
-        let bounds = view.bounds
+        let bounds = zoomablePageView.bounds == .zero ? view.bounds : zoomablePageView.bounds
         let baseDimension = max(bounds.width, bounds.height)
         let normalizedDimension = max(baseDimension, 720)
         let screenScale = view.window?.windowScene?.screen.scale ?? traitCollection.displayScale
-        let zoomFactor = min(max(scrollView.maximumZoomScale, 2.5), 3.5)
+        let zoomFactor = min(max(zoomablePageView.maximumZoomScale, 2.5), 3.5)
         let spreadFactor: CGFloat = spread.pageIndices.count > 1 ? 1.2 : 1.5
         let estimatedPixels = normalizedDimension * screenScale * zoomFactor * spreadFactor
         return max(1600, min(Int(estimatedPixels.rounded()), 8192))

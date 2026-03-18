@@ -413,6 +413,11 @@ chrome 需要和内容分离。
 
 - 建立单一真源
 
+当前状态：
+
+- 已开始实现，基础文件已落地：`ReaderSessionState`、`ReaderCommand`、`ReaderContentDescriptor`、`ReaderSessionController`
+- 当前仍未把本地 / 远程阅读壳完整切到 runtime 驱动；这一阶段已完成“内核类型定义”，下一步是把外层状态接线迁过去
+
 任务：
 
 - 定义 `ReaderSessionState`
@@ -430,6 +435,11 @@ chrome 需要和内容分离。
 目标：
 
 - 先把单页缩放和居中做稳
+
+当前状态：
+
+- 已开始实现，`ZoomableImagePageView` 已落地，并已替换旧 `ComicImageSpreadViewController` 里直接管理 `UIScrollView` 的实现
+- 已同步移除本地 / 远程阅读器外层那条 `120ms / 520ms` 的历史 viewport 校准脉冲，避免新容器再次被补丁式二次刷新干扰
 
 任务：
 
