@@ -48,8 +48,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
             return
         }
 
-        centerContentView()
-        updatePanGestureAvailability()
+        syncContentGeometry()
     }
 
     func configureContentLayout(
@@ -64,7 +63,6 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
 
         naturalContentSize = size
         contentContainerView.frame = CGRect(origin: .zero, size: size)
-        scrollView.contentSize = size
 
         let minimumZoomScale = preferredZoomScale(
             boundsSize: scrollView.bounds.size,
@@ -85,8 +83,8 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
             scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
         }
 
-        centerContentView()
-        updatePanGestureAvailability()
+        scrollView.layoutIfNeeded()
+        syncContentGeometry()
     }
 
     func restorePreferredViewportState() {
@@ -98,8 +96,8 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
 
         scrollView.zoomScale = scrollView.minimumZoomScale
         scrollView.contentOffset = .zero
-        centerContentView()
-        updatePanGestureAvailability()
+        scrollView.layoutIfNeeded()
+        syncContentGeometry()
     }
 
     func clearContentLayout() {
@@ -118,8 +116,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        centerContentView()
-        updatePanGestureAvailability()
+        syncContentGeometry()
     }
 
     private func configureSubviews() {
@@ -187,8 +184,12 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         return max(preferredScale, 0.01)
     }
 
-    private func centerContentView() {
-        var frameToCenter = contentContainerView.frame
+    private func syncContentGeometry() {
+        let displayedContentSize = CGSize(
+            width: naturalContentSize.width * scrollView.zoomScale,
+            height: naturalContentSize.height * scrollView.zoomScale
+        )
+        var frameToCenter = CGRect(origin: .zero, size: displayedContentSize)
         let boundsSize = scrollView.bounds.size
 
         frameToCenter.origin.x = frameToCenter.size.width < boundsSize.width - 1
@@ -199,6 +200,8 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
             : 0
 
         contentContainerView.frame = frameToCenter
+        scrollView.contentSize = displayedContentSize
+        updatePanGestureAvailability()
     }
 
     private func updatePanGestureAvailability() {
