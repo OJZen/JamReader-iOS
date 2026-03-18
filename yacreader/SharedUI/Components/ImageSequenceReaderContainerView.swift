@@ -143,7 +143,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
             }
 
             if viewportRefreshRequested {
-                controllerCache[currentSpreadIndex]?.refreshViewportPresentation()
+                controllerCache[currentSpreadIndex]?.restorePreferredViewportState()
             }
 
             guard requestedPageIndex != currentPageIndex else {
@@ -859,13 +859,12 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         messageLabel.isHidden = false
     }
 
-    func refreshViewportPresentation() {
+    func restorePreferredViewportState() {
         guard !loadedPages.isEmpty else {
             return
         }
 
-        updateViewportPresentation(centerIfFitted: true)
-        updatePanGestureAvailability()
+        layoutLoadedPages(resetZoomScale: true)
     }
 
     private func preferredTapEdgeRatio() -> CGFloat {
