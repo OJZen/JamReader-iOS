@@ -63,6 +63,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         private var prefetchTask: Task<Void, Never>?
         private var memoryWarningObserver: NSObjectProtocol?
         private let pageTurnFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
+        private var lastReportedPageIndex: Int?
 
         private(set) var document: ImageSequenceComicDocument
         private(set) var layout: ReaderDisplayLayout
@@ -93,6 +94,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 containing: currentPageIndex,
                 in: spreads
             ) ?? 0
+            self.lastReportedPageIndex = currentPageIndex
             self.onPageChanged = onPageChanged
             self.onReaderTap = onReaderTap
             self.pageTurnFeedbackGenerator.prepare()
@@ -177,11 +179,15 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 [controller],
                 direction: direction,
                 animated: animated
-            )
+            ) { [weak self] completed in
+                guard let self, completed else {
+                    return
+                }
 
-            onPageChanged(spread.primaryPageIndex)
-            trimCache(around: spreadIndex)
-            prefetchAround(spreadIndex: spreadIndex)
+                self.notifyPageChangedIfNeeded(spread.primaryPageIndex)
+                self.trimCache(around: spreadIndex)
+                self.prefetchAround(spreadIndex: spreadIndex)
+            }
         }
 
         func pageViewController(
@@ -230,7 +236,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
             let spread = spreads[controller.spreadIndex]
             currentSpreadIndex = controller.spreadIndex
             currentPageIndex = spread.primaryPageIndex
-            onPageChanged(spread.primaryPageIndex)
+            notifyPageChangedIfNeeded(spread.primaryPageIndex)
             trimCache(around: controller.spreadIndex)
             prefetchAround(spreadIndex: controller.spreadIndex)
         }
@@ -358,6 +364,17 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
             controllerCache.removeAll(keepingCapacity: true)
             controllerCache[currentSpreadIndex] = currentController
+        }
+
+        private func notifyPageChangedIfNeeded(_ pageIndex: Int) {
+            guard lastReportedPageIndex != pageIndex else {
+                return
+            }
+
+            lastReportedPageIndex = pageIndex
+            DispatchQueue.main.async { [onPageChanged] in
+                onPageChanged(pageIndex)
+            }
         }
     }
 }
@@ -707,7 +724,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         rotationContainerView.transform = CGAffineTransform(rotationAngle: layout.rotation.radians)
 
         contentView.frame = CGRect(origin: .zero, size: rotatedContentSize)
-        scrollView.contentSize = contentView.bounds.size
+        scrollView.contentSize = rotatedContentSize
 
         let minimumZoomScale = preferredZoomScale(
             boundsSize: boundsSize,
@@ -728,10 +745,12 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
             scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
         }
 
+        scrollView.layoutIfNeeded()
+
         if shouldSnapToPreferredViewport {
             applyPreferredViewportState()
         } else {
-            updateViewportPresentation(preservingVisibleOrigin: true)
+            updateViewportPresentation(preservingRelativePosition: true)
         }
         updatePanGestureAvailability()
         return true
@@ -757,70 +776,68 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     private func applyPreferredViewportState() {
-        let contentSize = zoomedContentSize()
-        let updatedInset = centeredContentInset(for: contentSize)
-
-        scrollView.contentInset = updatedInset
-        scrollView.contentOffset = preferredContentOffset(for: updatedInset)
+        scrollView.contentInset = .zero
+        updateCenteredContentFrame()
+        scrollView.contentOffset = .zero
     }
 
-    private func updateViewportPresentation(preservingVisibleOrigin: Bool) {
-        let contentSize = zoomedContentSize()
-        let previousInset = scrollView.contentInset
-        let updatedInset = centeredContentInset(for: contentSize)
+    private func updateViewportPresentation(preservingRelativePosition: Bool) {
+        let previousFrameSize = contentView.frame.size
+        let previousOffset = scrollView.contentOffset
 
-        scrollView.contentInset = updatedInset
+        scrollView.contentInset = .zero
+        updateCenteredContentFrame()
 
-        guard preservingVisibleOrigin else {
-            scrollView.contentOffset = preferredContentOffset(for: updatedInset)
+        guard preservingRelativePosition else {
+            scrollView.contentOffset = .zero
             return
         }
 
-        var translatedOffset = CGPoint(
-            x: scrollView.contentOffset.x + previousInset.left - updatedInset.left,
-            y: scrollView.contentOffset.y + previousInset.top - updatedInset.top
-        )
-        if updatedInset.left > 0 {
-            translatedOffset.x = -updatedInset.left
+        let horizontalOverflow = max(previousFrameSize.width - scrollView.bounds.width, 0)
+        let verticalOverflow = max(previousFrameSize.height - scrollView.bounds.height, 0)
+        let updatedHorizontalOverflow = max(contentView.frame.width - scrollView.bounds.width, 0)
+        let updatedVerticalOverflow = max(contentView.frame.height - scrollView.bounds.height, 0)
+
+        var translatedOffset = CGPoint.zero
+        if updatedHorizontalOverflow > 0, horizontalOverflow > 0 {
+            translatedOffset.x = (previousOffset.x / horizontalOverflow) * updatedHorizontalOverflow
         }
-        if updatedInset.top > 0 {
-            translatedOffset.y = -updatedInset.top
+        if updatedVerticalOverflow > 0, verticalOverflow > 0 {
+            translatedOffset.y = (previousOffset.y / verticalOverflow) * updatedVerticalOverflow
         }
+
         scrollView.contentOffset = clampedContentOffset(
             translatedOffset,
-            contentSize: contentSize,
-            contentInset: updatedInset
+            contentSize: scrollView.contentSize
         )
     }
 
-    private func preferredContentOffset(for contentInset: UIEdgeInsets) -> CGPoint {
-        CGPoint(x: -contentInset.left, y: -contentInset.top)
-    }
+    private func updateCenteredContentFrame() {
+        var updatedFrame = contentView.frame
+        let boundsSize = scrollView.bounds.size
 
-    private func centeredContentInset(for contentSize: CGSize) -> UIEdgeInsets {
-        let horizontalInset = contentSize.width < scrollView.bounds.width - 1
-            ? max(0, (scrollView.bounds.width - contentSize.width) * 0.5)
+        updatedFrame.origin.x = updatedFrame.size.width < boundsSize.width - 1
+            ? (boundsSize.width - updatedFrame.size.width) * 0.5
             : 0
-        let verticalInset = contentSize.height < scrollView.bounds.height - 1
-            ? max(0, (scrollView.bounds.height - contentSize.height) * 0.5)
+        updatedFrame.origin.y = updatedFrame.size.height < boundsSize.height - 1
+            ? (boundsSize.height - updatedFrame.size.height) * 0.5
             : 0
-        return UIEdgeInsets(
-            top: verticalInset,
-            left: horizontalInset,
-            bottom: verticalInset,
-            right: horizontalInset
+
+        contentView.frame = updatedFrame
+        scrollView.contentSize = CGSize(
+            width: max(boundsSize.width, updatedFrame.maxX),
+            height: max(boundsSize.height, updatedFrame.maxY)
         )
     }
 
     private func clampedContentOffset(
         _ proposedOffset: CGPoint,
-        contentSize: CGSize,
-        contentInset: UIEdgeInsets
+        contentSize: CGSize
     ) -> CGPoint {
-        let minimumX = -contentInset.left
-        let maximumX = max(minimumX, contentSize.width - scrollView.bounds.width + contentInset.right)
-        let minimumY = -contentInset.top
-        let maximumY = max(minimumY, contentSize.height - scrollView.bounds.height + contentInset.bottom)
+        let minimumX: CGFloat = 0
+        let maximumX = max(minimumX, contentSize.width - scrollView.bounds.width)
+        let minimumY: CGFloat = 0
+        let maximumY = max(minimumY, contentSize.height - scrollView.bounds.height)
 
         return CGPoint(
             x: min(max(proposedOffset.x, minimumX), maximumX),
@@ -836,7 +853,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         if scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01 {
             applyPreferredViewportState()
         } else {
-            updateViewportPresentation(preservingVisibleOrigin: true)
+            updateViewportPresentation(preservingRelativePosition: true)
         }
         updatePanGestureAvailability()
     }
@@ -922,10 +939,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     private func zoomedContentSize() -> CGSize {
-        CGSize(
-            width: contentView.bounds.width * scrollView.zoomScale,
-            height: contentView.bounds.height * scrollView.zoomScale
-        )
+        contentView.frame.size
     }
 
     private func updatePanGestureAvailability() {
