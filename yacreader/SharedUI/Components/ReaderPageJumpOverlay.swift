@@ -1,6 +1,7 @@
 import SwiftUI
+import UIKit
 
-struct ReaderPageJumpOverlay: View {
+struct ReaderPageJumpOverlay: UIViewControllerRepresentable {
     @Binding var pageNumberText: String
 
     let currentPageNumber: Int
@@ -8,93 +9,213 @@ struct ReaderPageJumpOverlay: View {
     let onCancel: () -> Void
     let onJump: () -> Void
 
-    @FocusState private var isFocused: Bool
-
-    private var isValidPageNumber: Bool {
-        guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return false
-        }
-
-        return (1...pageCount).contains(pageNumber)
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
     }
 
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(.black.opacity(0.38))
-                .ignoresSafeArea()
+    func makeUIViewController(context: Context) -> ReaderPageJumpHostViewController {
+        let controller = ReaderPageJumpHostViewController()
+        controller.view.isUserInteractionEnabled = false
+        controller.onDidAppear = { [weak coordinator = context.coordinator, weak controller] in
+            guard let controller else {
+                return
+            }
 
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
+            coordinator?.presentIfNeeded(from: controller)
+        }
+        return controller
+    }
 
-                VStack(spacing: 0) {
-                    HStack {
-                        Button("Cancel", action: onCancel)
-                            .font(.body)
+    func updateUIViewController(_ uiViewController: ReaderPageJumpHostViewController, context: Context) {
+        context.coordinator.update(from: self)
+        context.coordinator.presentIfNeeded(from: uiViewController)
+    }
 
-                        Spacer(minLength: 12)
+    static func dismantleUIViewController(
+        _ uiViewController: ReaderPageJumpHostViewController,
+        coordinator: Coordinator
+    ) {
+        coordinator.dismissIfNeeded(animated: false)
+    }
 
-                        Text("Go to Page")
-                            .font(.headline)
+    final class Coordinator: NSObject {
+        private var pageNumberText: Binding<String>
+        private var currentPageNumber: Int
+        private var pageCount: Int
+        private var onCancel: () -> Void
+        private var onJump: () -> Void
+        private weak var alertController: UIAlertController?
+        private weak var jumpAction: UIAlertAction?
+        private weak var textField: UITextField?
+        private var isPresentingAlert = false
 
-                        Spacer(minLength: 12)
+        init(parent: ReaderPageJumpOverlay) {
+            self.pageNumberText = parent.$pageNumberText
+            self.currentPageNumber = parent.currentPageNumber
+            self.pageCount = parent.pageCount
+            self.onCancel = parent.onCancel
+            self.onJump = parent.onJump
+            super.init()
+        }
 
-                        Button("Jump", action: onJump)
-                            .font(.body.weight(.semibold))
-                            .disabled(!isValidPageNumber)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 14)
+        func update(from parent: ReaderPageJumpOverlay) {
+            pageNumberText = parent.$pageNumberText
+            currentPageNumber = parent.currentPageNumber
+            pageCount = parent.pageCount
+            onCancel = parent.onCancel
+            onJump = parent.onJump
 
-                    Divider()
+            if let alertController {
+                alertController.message = alertMessage
 
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Page")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-
-                        TextField("Page number", text: $pageNumberText)
-                            .keyboardType(.numberPad)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .focused($isFocused)
-                            .font(.system(size: 34, weight: .semibold, design: .default))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                            )
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Current page: \(currentPageNumber)")
-                            Text("Valid range: 1-\(pageCount)")
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 18)
-                    .padding(.bottom, 28)
+                if textField?.text != pageNumberText.wrappedValue {
+                    textField?.text = pageNumberText.wrappedValue
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .fill(Color(uiColor: .systemGroupedBackground))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color(uiColor: .separator).opacity(0.4), lineWidth: 0.5)
-                )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+
+                jumpAction?.isEnabled = isValidPageNumber(pageNumberText.wrappedValue)
             }
         }
-        .onAppear {
-            DispatchQueue.main.async {
-                isFocused = true
+
+        func presentIfNeeded(from controller: UIViewController) {
+            guard alertController == nil, !isPresentingAlert else {
+                return
+            }
+
+            guard controller.viewIfLoaded?.window != nil else {
+                DispatchQueue.main.async { [weak self, weak controller] in
+                    guard let self, let controller else {
+                        return
+                    }
+
+                    self.presentIfNeeded(from: controller)
+                }
+                return
+            }
+
+            let alertController = buildAlertController()
+            isPresentingAlert = true
+            controller.present(alertController, animated: true) { [weak self] in
+                self?.isPresentingAlert = false
+                self?.textField?.becomeFirstResponder()
+            }
+            self.alertController = alertController
+        }
+
+        func dismissIfNeeded(animated: Bool) {
+            guard let alertController else {
+                cleanup()
+                return
+            }
+
+            alertController.dismiss(animated: animated) { [weak self] in
+                self?.cleanup()
             }
         }
+
+        @objc
+        private func handleTextDidChange(_ sender: UITextField) {
+            let updatedText = sender.text ?? ""
+            pageNumberText.wrappedValue = updatedText
+            jumpAction?.isEnabled = isValidPageNumber(updatedText)
+        }
+
+        @objc
+        private func dismissKeyboard() {
+            textField?.resignFirstResponder()
+        }
+
+        private func buildAlertController() -> UIAlertController {
+            let alertController = UIAlertController(
+                title: "Go to Page",
+                message: alertMessage,
+                preferredStyle: .alert
+            )
+
+            alertController.addTextField { [weak self] textField in
+                guard let self else {
+                    return
+                }
+
+                textField.placeholder = "Page number"
+                textField.keyboardType = .numberPad
+                textField.clearButtonMode = .whileEditing
+                textField.text = pageNumberText.wrappedValue
+                textField.inputAccessoryView = accessoryToolbar()
+                textField.addTarget(self, action: #selector(handleTextDidChange(_:)), for: .editingChanged)
+                self.textField = textField
+            }
+
+            let cancelAction = UIAlertAction(title: "Cancel", style: .cancel) { [weak self] _ in
+                self?.cleanup()
+                self?.onCancel()
+            }
+            let jumpAction = UIAlertAction(title: "Jump", style: .default) { [weak self] _ in
+                guard let self else {
+                    return
+                }
+
+                pageNumberText.wrappedValue = textField?.text ?? pageNumberText.wrappedValue
+                cleanup()
+                onJump()
+            }
+            jumpAction.isEnabled = isValidPageNumber(pageNumberText.wrappedValue)
+
+            alertController.addAction(cancelAction)
+            alertController.addAction(jumpAction)
+            self.jumpAction = jumpAction
+            return alertController
+        }
+
+        private func accessoryToolbar() -> UIToolbar {
+            let toolbar = UIToolbar()
+            toolbar.sizeToFit()
+            toolbar.items = [
+                UIBarButtonItem(
+                    barButtonSystemItem: .flexibleSpace,
+                    target: nil,
+                    action: nil
+                ),
+                UIBarButtonItem(
+                    title: "Done",
+                    style: .done,
+                    target: self,
+                    action: #selector(dismissKeyboard)
+                )
+            ]
+            return toolbar
+        }
+
+        private var alertMessage: String {
+            "Current page: \(currentPageNumber)\nValid range: 1-\(pageCount)"
+        }
+
+        private func isValidPageNumber(_ value: String) -> Bool {
+            guard let pageNumber = Int(value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                return false
+            }
+
+            return (1...pageCount).contains(pageNumber)
+        }
+
+        private func cleanup() {
+            alertController = nil
+            jumpAction = nil
+            textField = nil
+            isPresentingAlert = false
+        }
+    }
+}
+
+final class ReaderPageJumpHostViewController: UIViewController {
+    var onDidAppear: (() -> Void)?
+
+    override func loadView() {
+        view = UIView(frame: .zero)
+        view.backgroundColor = .clear
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        onDidAppear?()
     }
 }

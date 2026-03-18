@@ -477,6 +477,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     private var hasStartedLoading = false
     private var loadTask: Task<Void, Never>?
     private var lastViewportSize: CGSize = .zero
+    private var needsViewportResetOnNextLayout = true
     private let onTapRegion: (ReaderTapRegion) -> Void
 
     init(
@@ -511,17 +512,27 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         loadImagesIfNeeded()
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        needsViewportResetOnNextLayout = true
+    }
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let viewportSize = scrollView.bounds.size
         let viewportDidChange = lastViewportSize != .zero && !lastViewportSize.equalTo(viewportSize)
         lastViewportSize = viewportSize
-        layoutLoadedPages(resetZoomScale: viewportDidChange)
+        let shouldResetViewport = viewportDidChange || needsViewportResetOnNextLayout
+        if layoutLoadedPages(resetZoomScale: shouldResetViewport), shouldResetViewport {
+            needsViewportResetOnNextLayout = false
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        layoutLoadedPages(resetZoomScale: true)
+        DispatchQueue.main.async { [weak self] in
+            self?.restorePreferredViewportState()
+        }
     }
 
     private func configureSubviews() {
@@ -630,7 +641,9 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
                 self.loadedPages = loadedPages
                 self.messageLabel.isHidden = true
                 self.configureImageViews(with: loadedPages)
-                self.layoutLoadedPages(resetZoomScale: true)
+                if self.layoutLoadedPages(resetZoomScale: true) {
+                    self.needsViewportResetOnNextLayout = false
+                }
             case .failure(let error):
                 let fallbackMessage = pageNames.joined(separator: ", ")
                 self.presentError(
@@ -653,15 +666,16 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         }
     }
 
-    private func layoutLoadedPages(resetZoomScale: Bool) {
+    @discardableResult
+    private func layoutLoadedPages(resetZoomScale: Bool) -> Bool {
         guard !loadedPages.isEmpty else {
             scrollView.contentSize = .zero
-            return
+            return false
         }
 
         let boundsSize = scrollView.bounds.size
         guard boundsSize.width > 0, boundsSize.height > 0 else {
-            return
+            return false
         }
 
         let spacing: CGFloat = loadedPages.count > 1 ? 12 : 0
@@ -672,7 +686,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         } + CGFloat(max(0, loadedPages.count - 1)) * spacing
 
         guard naturalContentWidth > 0, naturalContentHeight > 0 else {
-            return
+            return false
         }
 
         var currentX: CGFloat = 0
@@ -704,17 +718,23 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         // When decoding completes before the page gets a real viewport size, the first
         // successful layout should still snap to fit instead of preserving the placeholder 1x zoom.
         let wasAtFitZoom = scrollView.zoomScale <= previousMinimumZoomScale + 0.01
+        let shouldSnapToPreferredViewport = resetZoomScale || wasAtFitZoom
         scrollView.minimumZoomScale = minimumZoomScale
         scrollView.maximumZoomScale = maximumZoomScale
 
-        if resetZoomScale || wasAtFitZoom {
+        if shouldSnapToPreferredViewport {
             scrollView.zoomScale = minimumZoomScale
         } else {
             scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
         }
 
-        updateViewportPresentation(centerIfFitted: true)
+        if shouldSnapToPreferredViewport {
+            applyPreferredViewportState()
+        } else {
+            updateViewportPresentation(preservingVisibleOrigin: true)
+        }
         updatePanGestureAvailability()
+        return true
     }
 
     private func preferredZoomScale(boundsSize: CGSize, contentSize: CGSize) -> CGFloat {
@@ -736,28 +756,45 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         return max(preferredScale, 0.01)
     }
 
-    private func updateViewportPresentation(centerIfFitted: Bool) {
+    private func applyPreferredViewportState() {
+        let contentSize = zoomedContentSize()
+        let updatedInset = centeredContentInset(for: contentSize)
+
+        scrollView.contentInset = updatedInset
+        scrollView.contentOffset = preferredContentOffset(for: updatedInset)
+    }
+
+    private func updateViewportPresentation(preservingVisibleOrigin: Bool) {
         let contentSize = zoomedContentSize()
         let previousInset = scrollView.contentInset
         let updatedInset = centeredContentInset(for: contentSize)
-        let shouldCenterContent = updatedInset.top > 0 || updatedInset.left > 0
 
         scrollView.contentInset = updatedInset
 
-        if centerIfFitted && shouldCenterContent {
-            scrollView.contentOffset = CGPoint(x: -updatedInset.left, y: -updatedInset.top)
+        guard preservingVisibleOrigin else {
+            scrollView.contentOffset = preferredContentOffset(for: updatedInset)
             return
         }
 
-        let translatedOffset = CGPoint(
+        var translatedOffset = CGPoint(
             x: scrollView.contentOffset.x + previousInset.left - updatedInset.left,
             y: scrollView.contentOffset.y + previousInset.top - updatedInset.top
         )
+        if updatedInset.left > 0 {
+            translatedOffset.x = -updatedInset.left
+        }
+        if updatedInset.top > 0 {
+            translatedOffset.y = -updatedInset.top
+        }
         scrollView.contentOffset = clampedContentOffset(
             translatedOffset,
             contentSize: contentSize,
             contentInset: updatedInset
         )
+    }
+
+    private func preferredContentOffset(for contentInset: UIEdgeInsets) -> CGPoint {
+        CGPoint(x: -contentInset.left, y: -contentInset.top)
     }
 
     private func centeredContentInset(for contentSize: CGSize) -> UIEdgeInsets {
@@ -796,7 +833,11 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        updateViewportPresentation(centerIfFitted: false)
+        if scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01 {
+            applyPreferredViewportState()
+        } else {
+            updateViewportPresentation(preservingVisibleOrigin: true)
+        }
         updatePanGestureAvailability()
     }
 
@@ -870,7 +911,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
             return
         }
 
-        layoutLoadedPages(resetZoomScale: true)
+        needsViewportResetOnNextLayout = true
+        if layoutLoadedPages(resetZoomScale: true) {
+            needsViewportResetOnNextLayout = false
+        }
     }
 
     private func preferredTapEdgeRatio() -> CGFloat {
