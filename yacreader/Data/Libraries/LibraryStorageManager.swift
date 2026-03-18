@@ -110,6 +110,28 @@ final class LibraryStorageManager {
         metadataRootURL(for: descriptor).appendingPathComponent("covers", isDirectory: true)
     }
 
+    func ensureImportedComicsLibraryRootURL() throws -> URL {
+        let supportURL = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+
+        let importedRootURL = supportURL
+            .appendingPathComponent("YACReader", isDirectory: true)
+            .appendingPathComponent("ImportedComics", isDirectory: true)
+
+        if !fileManager.fileExists(atPath: importedRootURL.path) {
+            try fileManager.createDirectory(
+                at: importedRootURL,
+                withIntermediateDirectories: true
+            )
+        }
+
+        return importedRootURL
+    }
+
     func accessSnapshot(for descriptor: LibraryDescriptor, inspector: SQLiteDatabaseInspector) -> LibraryAccessSnapshot {
         do {
             return try withScopedSourceAccess(for: descriptor) { _ in

@@ -22,12 +22,14 @@ final class ComicReaderViewModel: ObservableObject {
     private let databaseWriter: LibraryDatabaseWriter
     private let documentLoader: ComicDocumentLoader
     private let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
+    private let onComicUpdated: ((LibraryComic) -> Void)?
     private var navigationContext: ReaderNavigationContext?
 
     private let databaseURL: URL
     private var accessSession: LibraryAccessSession?
     private var hasLoaded = false
     private var lastPersistedPageIndex: Int?
+    private var pendingProgressPersistenceTask: Task<Void, Never>?
 
     init(
         descriptor: LibraryDescriptor,
@@ -36,7 +38,8 @@ final class ComicReaderViewModel: ObservableObject {
         storageManager: LibraryStorageManager,
         databaseWriter: LibraryDatabaseWriter,
         documentLoader: ComicDocumentLoader,
-        readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
+        readerLayoutPreferencesStore: ReaderLayoutPreferencesStore,
+        onComicUpdated: ((LibraryComic) -> Void)?
     ) {
         self.descriptor = descriptor
         self.comic = comic
@@ -44,12 +47,17 @@ final class ComicReaderViewModel: ObservableObject {
         self.databaseWriter = databaseWriter
         self.documentLoader = documentLoader
         self.readerLayoutPreferencesStore = readerLayoutPreferencesStore
+        self.onComicUpdated = onComicUpdated
         self.navigationContext = navigationContext
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         self.bookmarkPageIndices = comic.bookmarkPageIndices.filter { $0 >= 0 }.sorted()
         self.readerLayout = readerLayoutPreferencesStore.loadLayout(for: comic.type)
         self.isFavorite = comic.isFavorite
         self.rating = Self.normalizedRatingValue(from: comic.rating)
+    }
+
+    deinit {
+        pendingProgressPersistenceTask?.cancel()
     }
 
     var navigationTitle: String {
@@ -89,7 +97,11 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     var supportsRotationControls: Bool {
-        document != nil
+        guard document != nil else {
+            return false
+        }
+
+        return effectiveReaderLayout.pagingMode != .verticalContinuous
     }
 
     var effectiveReaderLayout: ReaderDisplayLayout {
@@ -174,7 +186,11 @@ final class ComicReaderViewModel: ObservableObject {
             return
         }
 
-        currentPageIndex = pageIndex
+        if let pageCount = document?.pageCount, pageCount > 0 {
+            currentPageIndex = min(pageIndex, pageCount - 1)
+        } else {
+            currentPageIndex = pageIndex
+        }
         persistProgress()
     }
 
@@ -192,6 +208,18 @@ final class ComicReaderViewModel: ObservableObject {
         }
 
         readerLayout.spreadMode = spreadMode
+        persistLayoutPreferences()
+    }
+
+    func setPagingMode(_ pagingMode: ReaderPagingMode) {
+        guard readerLayout.pagingMode != pagingMode else {
+            return
+        }
+
+        readerLayout.pagingMode = pagingMode
+        if pagingMode == .verticalContinuous {
+            readerLayout.spreadMode = .singlePage
+        }
         persistLayoutPreferences()
     }
 
@@ -268,9 +296,7 @@ final class ComicReaderViewModel: ObservableObject {
                 for: comic.id,
                 in: databaseURL
             )
-            isFavorite = updatedValue
-            comic = comic.updatingFavorite(updatedValue)
-            updateNavigationContextComic(comic)
+            publishComicUpdate(comic.updatingFavorite(updatedValue))
         } catch {
             alert = LibraryAlertState(title: "Failed to Update Favorites", message: error.localizedDescription)
         }
@@ -289,9 +315,7 @@ final class ComicReaderViewModel: ObservableObject {
                 for: comic.id,
                 in: databaseURL
             )
-            self.rating = normalizedRating
-            comic = comic.updatingRating(ratingValue)
-            updateNavigationContextComic(comic)
+            publishComicUpdate(comic.updatingRating(ratingValue))
         } catch {
             alert = LibraryAlertState(title: "Failed to Update Rating", message: error.localizedDescription)
         }
@@ -319,11 +343,10 @@ final class ComicReaderViewModel: ObservableObject {
                 currentPageIndex = isRead ? (pageCount - 1) : 0
             }
 
-            comic = comic.updatingReadState(
+            publishComicUpdate(comic.updatingReadState(
                 isRead,
                 resolvedPageCount: resolvedPageCount
-            )
-            updateNavigationContextComic(comic)
+            ))
             persistProgress(force: true)
         } catch {
             alert = LibraryAlertState(title: "Failed to Update Read Status", message: error.localizedDescription)
@@ -335,7 +358,11 @@ final class ComicReaderViewModel: ObservableObject {
             return
         }
 
-        currentPageIndex = pageIndex
+        if let pageCount = document?.pageCount, pageCount > 0 {
+            currentPageIndex = min(pageIndex, pageCount - 1)
+        } else {
+            currentPageIndex = pageIndex
+        }
         persistProgress()
     }
 
@@ -363,13 +390,10 @@ final class ComicReaderViewModel: ObservableObject {
             persistLayoutPreferences(for: previousType)
         }
 
-        comic = updatedComic
-        rating = Self.normalizedRatingValue(from: updatedComic.rating)
+        publishComicUpdate(updatedComic)
         if updatedComic.type != previousType {
             readerLayout = readerLayoutPreferencesStore.loadLayout(for: updatedComic.type)
         }
-
-        updateNavigationContextComic(updatedComic)
     }
 
     func dismissPageJump() {
@@ -423,7 +447,7 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     private func persistProgress(force: Bool = false) {
-        guard let pageCount = document?.pageCount else {
+        guard document?.pageCount != nil else {
             return
         }
 
@@ -431,7 +455,36 @@ final class ComicReaderViewModel: ObservableObject {
             return
         }
 
-        let currentPage = max(1, currentPageIndex + 1)
+        pendingProgressPersistenceTask?.cancel()
+
+        if force {
+            writeProgress(for: currentPageIndex)
+            return
+        }
+
+        let requestedPageIndex = currentPageIndex
+        pendingProgressPersistenceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self?.writeProgress(for: requestedPageIndex)
+        }
+    }
+
+    private func writeProgress(for pageIndex: Int) {
+        guard let pageCount = document?.pageCount else {
+            return
+        }
+
+        let clampedPageIndex = min(max(pageIndex, 0), max(pageCount - 1, 0))
+        guard lastPersistedPageIndex != clampedPageIndex else {
+            return
+        }
+
+        let currentPage = max(1, clampedPageIndex + 1)
         let progress = ComicReadingProgress(
             currentPage: currentPage,
             pageCount: pageCount,
@@ -446,7 +499,8 @@ final class ComicReaderViewModel: ObservableObject {
                 progress: progress,
                 in: databaseURL
             )
-            lastPersistedPageIndex = currentPageIndex
+            lastPersistedPageIndex = clampedPageIndex
+            publishComicUpdate(comic.updatingReadingProgress(progress))
         } catch {
             alert = LibraryAlertState(title: "Failed to Save Progress", message: error.localizedDescription)
         }
@@ -497,6 +551,7 @@ final class ComicReaderViewModel: ObservableObject {
                 in: databaseURL
             )
             bookmarkPageIndices = bookmarkArray
+            publishComicUpdate(comic.updatingBookmarkPageIndices(bookmarkArray))
         } catch {
             alert = LibraryAlertState(title: "Failed to Save Bookmarks", message: error.localizedDescription)
         }
@@ -530,6 +585,20 @@ final class ComicReaderViewModel: ObservableObject {
             persistedLayout,
             for: type ?? comic.type
         )
+    }
+
+    private func publishComicUpdate(_ updatedComic: LibraryComic) {
+        let didChange = updatedComic != comic
+        comic = updatedComic
+        isFavorite = updatedComic.isFavorite
+        rating = Self.normalizedRatingValue(from: updatedComic.rating)
+        updateNavigationContextComic(updatedComic)
+
+        guard didChange else {
+            return
+        }
+
+        onComicUpdated?(updatedComic)
     }
 
     private static func normalizedRatingValue(from rating: Double?) -> Int {

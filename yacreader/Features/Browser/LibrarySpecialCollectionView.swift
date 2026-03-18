@@ -22,6 +22,7 @@ struct LibrarySpecialCollectionView: View {
     @State private var isShowingBatchMetadataSheet = false
     @State private var isShowingComicInfoImportSheet = false
     @State private var isShowingBatchOrganizationSheet = false
+    @State private var isShowingSelectionActionsSheet = false
 
     init(
         descriptor: LibraryDescriptor,
@@ -75,101 +76,54 @@ struct LibrarySpecialCollectionView: View {
                         toggleSelectAllVisibleComics()
                     }
                 }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingBatchMetadataSheet = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .disabled(!hasSelectedComics)
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingComicInfoImportSheet = true
-                    } label: {
-                        Image(systemName: "doc.badge.arrow.down")
-                    }
-                    .disabled(selectedComics.isEmpty)
-                }
             }
 
-            if canImportComicInfo && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingComicInfoImportSheet = true
-                    } label: {
-                        Image(systemName: "doc.badge.arrow.down")
+            if !isSelectionMode {
+                if usesCondensedTopBarActions {
+                    if hasCondensedTopBarActions {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            condensedTopBarActionsMenu
+                        }
                     }
-                }
-            }
-
-            if canAdjustRecentWindow && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryRecentWindowOption.allCases) { option in
+                } else {
+                    if canImportComicInfo {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button {
-                                recentWindowRawValue = option.rawValue
+                                isShowingComicInfoImportSheet = true
                             } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(option.title)
-                                        Text(option.subtitle)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    if recentWindowOption == option {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                Image(systemName: "doc.badge.arrow.down")
                             }
                         }
-                    } label: {
-                        Image(systemName: "calendar.badge.clock")
                     }
-                }
-            }
 
-            if canSortComics && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryComicDisplayMode.allCases) { mode in
-                            Button {
-                                applyDisplayMode(mode)
+                    if canAdjustRecentWindow {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                recentWindowMenuContent
                             } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    Spacer()
-                                    if displayMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                Image(systemName: "calendar.badge.clock")
                             }
                         }
-                    } label: {
-                        Image(systemName: displayMode.systemImageName)
                     }
-                }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryComicSortMode.allCases) { mode in
-                            Button {
-                                applySortMode(mode)
+                    if canAdjustDisplayMode {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                displayModeMenuContent
                             } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    Spacer()
-                                    if comicSortMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                Image(systemName: displayMode.systemImageName)
                             }
                         }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down.circle")
+                    }
+
+                    if canSortComics {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                sortModeMenuContent
+                            } label: {
+                                Image(systemName: "arrow.up.arrow.down.circle")
+                            }
+                        }
                     }
                 }
             }
@@ -182,48 +136,10 @@ struct LibrarySpecialCollectionView: View {
                 }
 
                 ToolbarItem(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            performBatchReadAction(true)
-                        } label: {
-                            Label("Mark Read", systemImage: "checkmark.circle")
-                        }
-
-                        Button {
-                            performBatchReadAction(false)
-                        } label: {
-                            Label("Mark Unread", systemImage: "arrow.uturn.backward.circle")
-                        }
-                    } label: {
-                        Label("Read", systemImage: "checkmark.circle")
-                    }
-                    .disabled(!hasSelectedComics)
-                }
-
-                ToolbarItem(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            performBatchFavoriteAction(true)
-                        } label: {
-                            Label("Add Favorite", systemImage: "star")
-                        }
-
-                        Button {
-                            performBatchFavoriteAction(false)
-                        } label: {
-                            Label("Remove Favorite", systemImage: "star.slash")
-                        }
-                    } label: {
-                        Label("Favorite", systemImage: "star")
-                    }
-                    .disabled(!hasSelectedComics)
-                }
-
-                ToolbarItem(placement: .bottomBar) {
                     Button {
-                        isShowingBatchOrganizationSheet = true
+                        isShowingSelectionActionsSheet = true
                     } label: {
-                        Label("Organize", systemImage: "tag")
+                        Label("Actions", systemImage: "ellipsis.circle")
                     }
                     .disabled(!hasSelectedComics)
                 }
@@ -328,6 +244,32 @@ struct LibrarySpecialCollectionView: View {
                 endSelectionMode()
                 viewModel.load()
             }
+        }
+        .sheet(isPresented: $isShowingSelectionActionsSheet) {
+            LibrarySelectionActionsSheet(
+                selectionCount: selectedComicIDs.count,
+                onEditMetadata: {
+                    isShowingBatchMetadataSheet = true
+                },
+                onImportComicInfo: {
+                    isShowingComicInfoImportSheet = true
+                },
+                onOpenOrganization: {
+                    isShowingBatchOrganizationSheet = true
+                },
+                onMarkRead: {
+                    performBatchReadAction(true)
+                },
+                onMarkUnread: {
+                    performBatchReadAction(false)
+                },
+                onAddFavorite: {
+                    performBatchFavoriteAction(true)
+                },
+                onRemoveFavorite: {
+                    performBatchFavoriteAction(false)
+                }
+            )
         }
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -515,6 +457,7 @@ struct LibrarySpecialCollectionView: View {
                         title: viewModel.kind.title,
                         comics: displayedComics
                     ),
+                    onComicUpdated: handleReaderComicUpdate,
                     dependencies: dependencies
                 )
             } label: {
@@ -563,6 +506,7 @@ struct LibrarySpecialCollectionView: View {
                         title: viewModel.kind.title,
                         comics: displayedComics
                     ),
+                    onComicUpdated: handleReaderComicUpdate,
                     dependencies: dependencies
                 )
             } label: {
@@ -621,6 +565,14 @@ struct LibrarySpecialCollectionView: View {
         return count == 1 ? "1 selected" : "\(count) selected"
     }
 
+    private var supportsGridDisplay: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var usesCondensedTopBarActions: Bool {
+        !supportsGridDisplay
+    }
+
     private var recentWindowOption: LibraryRecentWindowOption {
         LibraryRecentWindowOption(rawValue: recentWindowRawValue) ?? .defaultOption
     }
@@ -629,8 +581,112 @@ struct LibrarySpecialCollectionView: View {
         viewModel.kind == .recent
     }
 
+    private var canAdjustDisplayMode: Bool {
+        supportsGridDisplay && canSortComics
+    }
+
+    private var hasCondensedTopBarActions: Bool {
+        canImportComicInfo || canAdjustRecentWindow || canSortComics
+    }
+
     private var kindSubtitle: String {
         viewModel.kind.subtitleText(recentDays: viewModel.currentRecentDays)
+    }
+
+    private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
+        viewModel.applyUpdatedComic(updatedComic)
+    }
+
+    @ViewBuilder
+    private var condensedTopBarActionsMenu: some View {
+        Menu {
+            if canImportComicInfo {
+                Button {
+                    isShowingComicInfoImportSheet = true
+                } label: {
+                    Label("Import ComicInfo", systemImage: "doc.badge.arrow.down")
+                }
+            }
+
+            if canImportComicInfo && (canAdjustRecentWindow || canSortComics) {
+                Divider()
+            }
+
+            if canAdjustRecentWindow {
+                Menu {
+                    recentWindowMenuContent
+                } label: {
+                    Label("Recent Window", systemImage: "calendar.badge.clock")
+                }
+            }
+
+            if canSortComics {
+                Menu {
+                    sortModeMenuContent
+                } label: {
+                    Label("Sort Comics", systemImage: "arrow.up.arrow.down.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("More Collection Actions")
+    }
+
+    @ViewBuilder
+    private var recentWindowMenuContent: some View {
+        ForEach(LibraryRecentWindowOption.allCases) { option in
+            Button {
+                recentWindowRawValue = option.rawValue
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(option.title)
+                        Text(option.subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if recentWindowOption == option {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var displayModeMenuContent: some View {
+        ForEach(LibraryComicDisplayMode.allCases) { mode in
+            Button {
+                applyDisplayMode(mode)
+            } label: {
+                HStack {
+                    Text(mode.title)
+                    Spacer()
+                    if displayMode == mode {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sortModeMenuContent: some View {
+        ForEach(LibraryComicSortMode.allCases) { mode in
+            Button {
+                applySortMode(mode)
+            } label: {
+                HStack {
+                    Text(mode.title)
+                    Spacer()
+                    if comicSortMode == mode {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
     }
 
     private func applySortMode(_ mode: LibraryComicSortMode) {
@@ -852,6 +908,7 @@ struct LibrarySpecialCollectionView: View {
         isShowingBatchMetadataSheet = false
         isShowingComicInfoImportSheet = false
         isShowingBatchOrganizationSheet = false
+        isShowingSelectionActionsSheet = false
         selectedComicIDs.removeAll()
     }
 

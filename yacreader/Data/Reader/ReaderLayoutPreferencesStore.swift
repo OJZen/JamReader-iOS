@@ -21,6 +21,11 @@ final class ReaderLayoutPreferencesStore {
             layout.readingDirection = readingDirection
         }
 
+        if let rawPagingMode = userDefaults.string(forKey: key(for: scope, field: "pagingMode")),
+           let pagingMode = ReaderPagingMode(rawValue: rawPagingMode) {
+            layout.pagingMode = pagingMode
+        }
+
         if let rawFitMode = userDefaults.string(forKey: key(for: scope, field: "fitMode")),
            let fitMode = ReaderFitMode(rawValue: rawFitMode) {
             layout.fitMode = fitMode
@@ -35,6 +40,7 @@ final class ReaderLayoutPreferencesStore {
 
     func saveLayout(_ layout: ReaderDisplayLayout, for type: LibraryFileType) {
         let scope = ReaderLayoutPreferenceScope(type: type)
+        userDefaults.set(layout.pagingMode.rawValue, forKey: key(for: scope, field: "pagingMode"))
         userDefaults.set(layout.spreadMode.rawValue, forKey: key(for: scope, field: "spreadMode"))
         userDefaults.set(layout.readingDirection.rawValue, forKey: key(for: scope, field: "readingDirection"))
         userDefaults.set(layout.fitMode.rawValue, forKey: key(for: scope, field: "fitMode"))

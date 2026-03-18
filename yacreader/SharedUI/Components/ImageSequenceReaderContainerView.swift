@@ -276,6 +276,8 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 navigateByReadingOrder(step: step)
                 if currentSpreadIndex != previousSpreadIndex {
                     pageTurnFeedbackGenerator.impactOccurred()
+                } else {
+                    onReaderTap(.leading)
                 }
             case .trailing:
                 let previousSpreadIndex = currentSpreadIndex
@@ -283,6 +285,8 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 navigateByReadingOrder(step: step)
                 if currentSpreadIndex != previousSpreadIndex {
                     pageTurnFeedbackGenerator.impactOccurred()
+                } else {
+                    onReaderTap(.trailing)
                 }
             }
         }
@@ -374,7 +378,42 @@ private final class ReaderPageViewController: UIPageViewController {
         )
         previousPageCommand.discoverabilityTitle = "Previous Page"
 
-        return [nextPageCommand, previousPageCommand]
+        let nextPageDownCommand = UIKeyCommand(
+            input: UIKeyCommand.inputDownArrow,
+            modifierFlags: [],
+            action: #selector(handleAdvance)
+        )
+        nextPageDownCommand.discoverabilityTitle = "Next Page"
+
+        let previousPageUpCommand = UIKeyCommand(
+            input: UIKeyCommand.inputUpArrow,
+            modifierFlags: [],
+            action: #selector(handleRetreat)
+        )
+        previousPageUpCommand.discoverabilityTitle = "Previous Page"
+
+        let nextPageSpaceCommand = UIKeyCommand(
+            input: " ",
+            modifierFlags: [],
+            action: #selector(handleAdvance)
+        )
+        nextPageSpaceCommand.discoverabilityTitle = "Next Page"
+
+        let previousPageShiftSpaceCommand = UIKeyCommand(
+            input: " ",
+            modifierFlags: [.shift],
+            action: #selector(handleRetreat)
+        )
+        previousPageShiftSpaceCommand.discoverabilityTitle = "Previous Page"
+
+        return [
+            nextPageCommand,
+            previousPageCommand,
+            nextPageDownCommand,
+            previousPageUpCommand,
+            nextPageSpaceCommand,
+            previousPageShiftSpaceCommand
+        ]
     }
 
     @objc
@@ -394,7 +433,7 @@ private struct LoadedComicPage: @unchecked Sendable {
 }
 
 @MainActor
-private final class ComicImageSpreadViewController: UIViewController, UIScrollViewDelegate {
+private final class ComicImageSpreadViewController: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     let spreadIndex: Int
 
     private let spread: ReaderSpreadDescriptor
@@ -465,9 +504,14 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         scrollView.delegate = self
         scrollView.minimumZoomScale = 1
         scrollView.maximumZoomScale = 4
+        scrollView.decelerationRate = .fast
+        scrollView.isDirectionalLockEnabled = true
+        scrollView.alwaysBounceHorizontal = false
+        scrollView.alwaysBounceVertical = false
         scrollView.bouncesZoom = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.panGestureRecognizer.delegate = self
         singleTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
         scrollView.addGestureRecognizer(singleTapGestureRecognizer)
         scrollView.addGestureRecognizer(doubleTapGestureRecognizer)
@@ -684,6 +728,33 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         centerContentIfNeeded()
     }
 
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === scrollView.panGestureRecognizer,
+              let panGestureRecognizer = gestureRecognizer as? UIPanGestureRecognizer
+        else {
+            return true
+        }
+
+        if scrollView.zoomScale > scrollView.minimumZoomScale + 0.01 {
+            return true
+        }
+
+        let velocity = panGestureRecognizer.velocity(in: view)
+        let horizontalVelocity = abs(velocity.x)
+        let verticalVelocity = abs(velocity.y)
+        let contentSize = zoomedContentSize()
+
+        if horizontalVelocity > verticalVelocity {
+            return contentSize.width > scrollView.bounds.width + 2
+        }
+
+        if verticalVelocity > 0 {
+            return contentSize.height > scrollView.bounds.height + 2
+        }
+
+        return false
+    }
+
     @objc
     private func handleSingleTap(_ gestureRecognizer: UITapGestureRecognizer) {
         if scrollView.zoomScale > scrollView.minimumZoomScale + 0.01 {
@@ -750,6 +821,13 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
 
     private func preferredTapEdgeRatio() -> CGFloat {
         traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
+    }
+
+    private func zoomedContentSize() -> CGSize {
+        CGSize(
+            width: contentView.bounds.width * scrollView.zoomScale,
+            height: contentView.bounds.height * scrollView.zoomScale
+        )
     }
 
     private func preferredDecodeMaxPixelSize() -> Int {

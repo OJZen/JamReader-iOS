@@ -47,55 +47,39 @@ struct LibraryOrganizationView: View {
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if supportsGridDisplay {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryComicDisplayMode.allCases) { mode in
-                            Button {
-                                applyDisplayMode(mode)
-                            } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    Spacer()
-                                    if displayMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: displayMode.systemImageName)
-                    }
-                }
-            }
-
-            if canSortCollections {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryOrganizationSortMode.allCases) { mode in
-                            Button {
-                                applySortMode(mode)
-                            } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    Spacer()
-                                    if sortMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down.circle")
-                    }
-                }
-            }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     viewModel.presentCreateSheet()
                 } label: {
                     Image(systemName: "plus")
+                }
+            }
+
+            if usesCondensedTopBarActions {
+                if hasCondensedTopBarActions {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        condensedTopBarActionsMenu
+                    }
+                }
+            } else {
+                if supportsGridDisplay {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            displayModeMenuContent
+                        } label: {
+                            Image(systemName: displayMode.systemImageName)
+                        }
+                    }
+                }
+
+                if canSortCollections {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            sortModeMenuContent
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down.circle")
+                        }
+                    }
                 }
             }
         }
@@ -181,12 +165,15 @@ struct LibraryOrganizationView: View {
                         } label: {
                             LibraryOrganizationCollectionRow(
                                 collection: collection,
-                                trailingAccessoryReservedWidth: 40
+                                trailingAccessoryReservedWidth: usesProminentCollectionActions ? 86 : 40
                             )
                         }
                         .overlay(alignment: .trailing) {
-                            collectionActionMenu(for: collection)
-                                .padding(.trailing, 8)
+                            collectionActionMenu(
+                                for: collection,
+                                style: usesProminentCollectionActions ? .compactCapsule : .icon
+                            )
+                            .padding(.trailing, usesProminentCollectionActions ? 6 : 8)
                         }
                     }
                 }
@@ -221,7 +208,7 @@ struct LibraryOrganizationView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .overlay(alignment: .topTrailing) {
-                                    collectionActionMenu(for: collection, compact: true)
+                                    collectionActionMenu(for: collection, style: .elevatedIcon)
                                         .padding(12)
                                 }
                             }
@@ -343,6 +330,18 @@ struct LibraryOrganizationView: View {
         horizontalSizeClass == .regular
     }
 
+    private var usesCondensedTopBarActions: Bool {
+        !supportsGridDisplay
+    }
+
+    private var hasCondensedTopBarActions: Bool {
+        canSortCollections
+    }
+
+    private var usesProminentCollectionActions: Bool {
+        !supportsGridDisplay
+    }
+
     private var canSortCollections: Bool {
         !viewModel.collections.isEmpty
     }
@@ -375,6 +374,56 @@ struct LibraryOrganizationView: View {
     private func applySortMode(_ mode: LibraryOrganizationSortMode) {
         sortMode = mode
         Self.persistSortMode(mode, for: viewModel.sectionKind)
+    }
+
+    @ViewBuilder
+    private var condensedTopBarActionsMenu: some View {
+        Menu {
+            if canSortCollections {
+                Menu {
+                    sortModeMenuContent
+                } label: {
+                    Label("Sort Collections", systemImage: "arrow.up.arrow.down.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("More Collection Actions")
+    }
+
+    @ViewBuilder
+    private var displayModeMenuContent: some View {
+        ForEach(LibraryComicDisplayMode.allCases) { mode in
+            Button {
+                applyDisplayMode(mode)
+            } label: {
+                HStack {
+                    Text(mode.title)
+                    Spacer()
+                    if displayMode == mode {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sortModeMenuContent: some View {
+        ForEach(LibraryOrganizationSortMode.allCases) { mode in
+            Button {
+                applySortMode(mode)
+            } label: {
+                HStack {
+                    Text(mode.title)
+                    Spacer()
+                    if sortMode == mode {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
     }
 
     private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
@@ -496,7 +545,7 @@ struct LibraryOrganizationView: View {
     @ViewBuilder
     private func collectionActionMenu(
         for collection: LibraryOrganizationCollection,
-        compact: Bool = false
+        style: CollectionActionAffordanceStyle = .icon
     ) -> some View {
         Menu {
             Button {
@@ -518,7 +567,13 @@ struct LibraryOrganizationView: View {
             }
         } label: {
             Group {
-                if compact {
+                if style == .compactCapsule {
+                    Label("Manage", systemImage: "ellipsis.circle")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                } else if style == .elevatedIcon {
                     Image(systemName: "ellipsis.circle.fill")
                         .font(.title3)
                         .foregroundStyle(.secondary)
@@ -534,6 +589,12 @@ struct LibraryOrganizationView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Collection Actions")
     }
+}
+
+private enum CollectionActionAffordanceStyle {
+    case icon
+    case compactCapsule
+    case elevatedIcon
 }
 
 private struct LibraryOrganizationCreateSheet: View {

@@ -3,16 +3,20 @@ import UniformTypeIdentifiers
 
 struct LibraryHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
 
+    @AppStorage("libraryHome.selectedLibraryID") private var storedSelectedLibraryID = ""
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
-    @State private var isImporterPresented = false
+    @State private var isLibraryFolderImporterPresented = false
+    @State private var isComicFileImporterPresented = false
     @State private var selectedLibraryID: UUID?
     @State private var libraryActionsItem: LibraryListItem?
     @State private var renamingLibraryItem: LibraryListItem?
     @State private var libraryInfoItem: LibraryListItem?
     @State private var pendingLibraryAction: PendingLibraryAction?
+    @State private var latestRemoteSession: RemoteComicReadingSession?
 
     var body: some View {
         Group {
@@ -23,8 +27,20 @@ struct LibraryHomeView: View {
             }
         }
         .fileImporter(
-            isPresented: $isImporterPresented,
+            isPresented: $isLibraryFolderImporterPresented,
             allowedContentTypes: [.folder],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                viewModel.importLibraries(from: urls)
+            case .failure(let error):
+                viewModel.presentImportError(error)
+            }
+        }
+        .fileImporter(
+            isPresented: $isComicFileImporterPresented,
+            allowedContentTypes: [.data],
             allowsMultipleSelection: true
         ) { result in
             switch result {
@@ -37,9 +53,18 @@ struct LibraryHomeView: View {
         .onAppear {
             viewModel.reload()
             synchronizeSelection()
+            refreshRemoteAccessSummary()
         }
         .onChange(of: viewModel.items) { _, _ in
             synchronizeSelection()
+        }
+        .onChange(of: selectedLibraryID) { _, newValue in
+            storedSelectedLibraryID = newValue?.uuidString ?? ""
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                refreshRemoteAccessSummary()
+            }
         }
         .sheet(item: $libraryActionsItem) { item in
             LibraryHomeLibraryActionsSheet(
@@ -95,6 +120,7 @@ struct LibraryHomeView: View {
         NavigationStack {
             List {
                 overviewSection
+                compactRemoteAccessSection
                 compactLibrariesSection
             }
             .navigationTitle("YACReader")
@@ -111,6 +137,7 @@ struct LibraryHomeView: View {
         NavigationSplitView {
             List(selection: $selectedLibraryID) {
                 sidebarOverviewSection
+                splitRemoteAccessSection
                 splitLibrariesSection
             }
             .navigationTitle("YACReader")
@@ -126,6 +153,7 @@ struct LibraryHomeView: View {
                 if let selectedItem {
                     LibraryBrowserView(
                         descriptor: selectedItem.descriptor,
+                        folderID: preferredFolderID(for: selectedItem),
                         dependencies: dependencies
                     )
                     .id(selectedItem.id)
@@ -133,7 +161,7 @@ struct LibraryHomeView: View {
                     LibraryHomeDetailPlaceholder(
                         itemCount: viewModel.items.count,
                         onAddLibrary: {
-                            isImporterPresented = true
+                            presentLibraryFolderImporter()
                         }
                     )
                 }
@@ -145,10 +173,20 @@ struct LibraryHomeView: View {
     @ToolbarContentBuilder
     private var addLibraryToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button {
-                isImporterPresented = true
+            Menu {
+                Button {
+                    presentLibraryFolderImporter()
+                } label: {
+                    Label("Add Library Folder", systemImage: "folder.badge.plus")
+                }
+
+                Button {
+                    presentComicFileImporter()
+                } label: {
+                    Label("Import Comic Files", systemImage: "square.and.arrow.down")
+                }
             } label: {
-                Label("Add Library", systemImage: "plus")
+                Label("Add", systemImage: "plus")
             }
         }
     }
@@ -161,33 +199,112 @@ struct LibraryHomeView: View {
         return viewModel.items.first(where: { $0.id == selectedLibraryID })
     }
 
+    private var resumeLibraryItem: LibraryListItem? {
+        if let selectedItem {
+            return selectedItem
+        }
+
+        if let storedLibraryID = UUID(uuidString: storedSelectedLibraryID) {
+            return viewModel.items.first(where: { $0.id == storedLibraryID })
+        }
+
+        return viewModel.items.first
+    }
+
     private func synchronizeSelection() {
         if viewModel.items.isEmpty {
             selectedLibraryID = nil
         } else if let selectedLibraryID,
                   viewModel.items.contains(where: { $0.id == selectedLibraryID }) {
             return
+        } else if let storedLibraryID = UUID(uuidString: storedSelectedLibraryID),
+                  viewModel.items.contains(where: { $0.id == storedLibraryID }) {
+            selectedLibraryID = storedLibraryID
         } else {
             selectedLibraryID = viewModel.items.first?.id
         }
     }
 
+    private func preferredFolderID(for item: LibraryListItem) -> Int64 {
+        LibraryBrowserView.lastOpenedFolderID(for: item.id)
+    }
+
+    private func presentLibraryFolderImporter() {
+        isLibraryFolderImporterPresented = true
+    }
+
+    private func presentComicFileImporter() {
+        isComicFileImporterPresented = true
+    }
+
     private var overviewSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Migration Bootstrap")
+                Text("Continue Where You Left Off")
                     .font(.headline)
 
-                Text("The app now has a persistent library registry, storage mode detection, metadata path planning, and a live SQLite inspector for existing desktop libraries.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if let resumeLibraryItem {
+                    NavigationLink {
+                        LibraryBrowserView(
+                            descriptor: resumeLibraryItem.descriptor,
+                            folderID: preferredFolderID(for: resumeLibraryItem),
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: "books.vertical.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 30, height: 30)
 
-                HStack(spacing: 8) {
-                    StatusBadge(title: "M0", tint: .blue)
-                    StatusBadge(title: "M1", tint: .green)
-                    Text("Foundation in progress")
-                        .font(.footnote.weight(.medium))
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(resumeLibraryItem.descriptor.name)
+                                        .font(.subheadline.weight(.semibold))
+
+                                    Text("Resume your last-used workspace without starting from the library root again.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+
+                                Spacer(minLength: 12)
+
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.blue)
+                            }
+
+                            HStack(spacing: 8) {
+                                StatusBadge(title: "\(viewModel.items.count) libraries", tint: .blue)
+                                StatusBadge(title: resumeLibraryItem.descriptor.storageMode.title, tint: resumeLibraryItem.descriptor.storageMode.tintColor)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Text("Add an existing library folder, or import comic archives into Imported Comics.")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        presentLibraryFolderImporter()
+                    } label: {
+                        Label("Add Library", systemImage: "folder.badge.plus")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        presentComicFileImporter()
+                    } label: {
+                        Label("Import Comics", systemImage: "square.and.arrow.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             }
             .padding(.vertical, 8)
@@ -200,7 +317,7 @@ struct LibraryHomeView: View {
                 ContentUnavailableView(
                     "No Libraries Yet",
                     systemImage: "books.vertical",
-                    description: Text("Choose a folder to register an existing library root or to prepare a new YACReader library.")
+                    description: Text("Choose a library folder, or select comic files (zip/rar/cbz/cbr/pdf) to import into Imported Comics.")
                 )
                 .padding(.vertical, 24)
             } else {
@@ -208,21 +325,32 @@ struct LibraryHomeView: View {
                     NavigationLink {
                         LibraryBrowserView(
                             descriptor: item.descriptor,
+                            folderID: preferredFolderID(for: item),
                             dependencies: dependencies
                         )
                     } label: {
                         LibraryRowView(
                             item: item,
-                            trailingAccessoryReservedWidth: 40
+                            trailingAccessoryReservedWidth: compactLibraryActionReservedWidth
                         )
                     }
                     .overlay(alignment: .trailing) {
                         libraryQuickActionButton(for: item)
-                            .padding(.trailing, 8)
+                            .padding(.trailing, 6)
                     }
                     .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
                 }
                 .onDelete(perform: viewModel.removeLibraries)
+            }
+        }
+    }
+
+    private var compactRemoteAccessSection: some View {
+        Section("Remote Access") {
+            NavigationLink {
+                RemoteServerListView(dependencies: dependencies)
+            } label: {
+                RemoteAccessRow(compact: true, latestSession: latestRemoteSession)
             }
         }
     }
@@ -233,17 +361,31 @@ struct LibraryHomeView: View {
                 Text("Library Workspace")
                     .font(.headline)
 
-                Text("Use the sidebar to keep libraries in reach while browsing folders and reading on the detail side.")
+                Text(sidebarWorkspaceSummary)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 8) {
                     StatusBadge(title: "\(viewModel.items.count) libraries", tint: .blue)
                     StatusBadge(title: "iPad", tint: .green)
+                    if let resumeLibraryItem {
+                        StatusBadge(
+                            title: resumeLibraryItem.descriptor.name,
+                            tint: resumeLibraryItem.descriptor.storageMode.tintColor
+                        )
+                    }
                 }
             }
             .padding(.vertical, 6)
         }
+    }
+
+    private var sidebarWorkspaceSummary: String {
+        if let resumeLibraryItem {
+            return "Keep libraries in reach while the detail pane resumes \(resumeLibraryItem.descriptor.name) close to where you left off."
+        }
+
+        return "Use the sidebar to keep libraries in reach while browsing folders and reading on the detail side."
     }
 
     private var splitLibrariesSection: some View {
@@ -252,7 +394,7 @@ struct LibraryHomeView: View {
                 ContentUnavailableView(
                     "No Libraries Yet",
                     systemImage: "books.vertical",
-                    description: Text("Add a library folder to start browsing in split view.")
+                    description: Text("Add a library folder, or import comic files into Imported Comics.")
                 )
                 .padding(.vertical, 24)
             } else {
@@ -272,8 +414,22 @@ struct LibraryHomeView: View {
         }
     }
 
+    private var splitRemoteAccessSection: some View {
+        Section("Remote Access") {
+            NavigationLink {
+                RemoteServerListView(dependencies: dependencies)
+            } label: {
+                RemoteAccessRow(compact: false, latestSession: latestRemoteSession)
+            }
+        }
+    }
+
+    private var compactLibraryActionReservedWidth: CGFloat {
+        88
+    }
+
     private func libraryQuickActionButton(for item: LibraryListItem) -> some View {
-        LibraryHomeQuickActionButton {
+        LibraryHomeQuickActionButton(prominent: !usesSplitViewLayout) {
             libraryActionsItem = item
         }
     }
@@ -281,6 +437,12 @@ struct LibraryHomeView: View {
     private func queueLibraryAction(_ action: PendingLibraryAction) {
         pendingLibraryAction = action
         libraryActionsItem = nil
+    }
+
+    private func refreshRemoteAccessSummary() {
+        let activeServerIDs = Set(((try? dependencies.remoteServerProfileStore.load()) ?? []).map(\.id))
+        let sessions = (try? dependencies.remoteReadingProgressStore.loadSessions()) ?? []
+        latestRemoteSession = sessions.first { activeServerIDs.contains($0.serverID) }
     }
 }
 
@@ -290,7 +452,12 @@ private struct LibraryRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "books.vertical.fill")
+                    .font(.title3)
+                    .foregroundStyle(item.descriptor.storageMode.tintColor)
+                    .frame(width: 28, height: 28)
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.descriptor.name)
                         .font(.headline)
@@ -298,7 +465,7 @@ private struct LibraryRowView: View {
                     Text(item.descriptor.sourcePath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 12)
@@ -312,25 +479,18 @@ private struct LibraryRowView: View {
             HStack(spacing: 8) {
                 StatusBadge(title: item.accessSnapshot.sourceStatus, tint: item.accessSnapshot.sourceExists ? .green : .red)
                 StatusBadge(title: item.accessSnapshot.writeStatus, tint: item.accessSnapshot.sourceWritable ? .green : .orange)
-                StatusBadge(title: item.accessSnapshot.metadataExists ? "Metadata Ready" : "Metadata Missing", tint: item.accessSnapshot.metadataExists ? .blue : .gray)
+                StatusBadge(title: item.accessSnapshot.metadataExists ? "Metadata" : "No Metadata", tint: item.accessSnapshot.metadataExists ? .blue : .gray)
             }
 
             Text(item.accessSnapshot.database.summaryLine)
                 .font(.subheadline)
                 .foregroundStyle(item.accessSnapshot.database.exists ? .primary : .secondary)
 
-            Group {
-                Text("Metadata: \(item.metadataPath)")
-                Text("Database: \(item.databasePath)")
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .textSelection(.enabled)
-
             if let error = item.accessSnapshot.lastError ?? item.accessSnapshot.database.lastError {
-                Text(error)
+                Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
+                    .lineLimit(2)
             }
         }
         .padding(.trailing, trailingAccessoryReservedWidth)
@@ -404,7 +564,7 @@ private struct LibraryHomeDetailPlaceholder: View {
 
             if itemCount == 0 {
                 Button(action: onAddLibrary) {
-                    Label("Add Library", systemImage: "plus")
+                    Label("Add Library or Comics", systemImage: "plus")
                         .frame(minWidth: 180)
                 }
                 .buttonStyle(.borderedProminent)
@@ -426,10 +586,55 @@ private struct LibraryHomeDetailPlaceholder: View {
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Import an existing YACReader library root, or register a new folder so the iPad workspace can open it in split view."
+            return "Import a YACReader library folder, or select comic files (zip/rar/cbz/cbr/pdf) to build your Imported Comics library."
         }
 
         return "Keep your libraries in the sidebar, browse the folder tree on the right, and move into reading without losing navigation context."
+    }
+}
+
+private struct RemoteAccessRow: View {
+    let compact: Bool
+    let latestSession: RemoteComicReadingSession?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "server.rack")
+                .font(.title3)
+                .foregroundStyle(.blue)
+                .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Remote SMB Servers")
+                    .font(.headline)
+
+                Text(descriptionText)
+                    .font(compact ? .caption : .footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(compact ? 3 : 2)
+
+                if let latestSession {
+                    Label(
+                        "Last remote comic: \(latestSession.displayName) · \(latestSession.progressText)",
+                        systemImage: "book.closed"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(compact ? 2 : 1)
+                }
+
+                HStack(spacing: 6) {
+                    StatusBadge(title: "SMB", tint: .blue)
+                    StatusBadge(title: "Single Comics", tint: .green)
+                    StatusBadge(title: "On-Demand", tint: .orange)
+                }
+            }
+        }
+        .padding(.vertical, compact ? 4 : 6)
+    }
+
+    private var descriptionText: String {
+        "Connect to an SMB share, browse remote folders, and open a single comic file without importing an entire library."
     }
 }
 

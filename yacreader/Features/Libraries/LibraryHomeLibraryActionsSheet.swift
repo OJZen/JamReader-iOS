@@ -165,15 +165,26 @@ struct LibraryInfoSheet: View {
 }
 
 struct LibraryHomeQuickActionButton: View {
+    var prominent = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "ellipsis.circle")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .padding(4)
-                .background(.ultraThinMaterial, in: Circle())
+            Group {
+                if prominent {
+                    Label("Manage", systemImage: "ellipsis.circle")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                } else {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .padding(4)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Library Actions")

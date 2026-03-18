@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryBrowserView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -22,6 +23,8 @@ struct LibraryBrowserView: View {
     @State private var isShowingBatchMetadataSheet = false
     @State private var isShowingComicInfoImportSheet = false
     @State private var isShowingBatchOrganizationSheet = false
+    @State private var isShowingSelectionActionsSheet = false
+    @State private var isShowingComicFileImporter = false
 
     init(
         descriptor: LibraryDescriptor,
@@ -126,151 +129,75 @@ struct LibraryBrowserView: View {
                         toggleSelectAllVisibleComics()
                     }
                 }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingBatchMetadataSheet = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                    }
-                    .disabled(!hasSelectedComics)
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingComicInfoImportSheet = true
-                    } label: {
-                        Image(systemName: "doc.badge.arrow.down")
-                    }
-                    .disabled(selectedComics.isEmpty)
-                }
             }
 
-            if canImportComicInfo && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingComicInfoImportSheet = true
-                    } label: {
-                        Image(systemName: "doc.badge.arrow.down")
+            if !isSelectionMode {
+                if usesCondensedTopBarActions {
+                    if hasCondensedTopBarActions {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            condensedTopBarActionsMenu
+                        }
                     }
-                }
-            }
-
-            if canAdjustRecentWindow && !viewModel.hasActiveSearch && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryRecentWindowOption.allCases) { option in
+                } else {
+                    if canImportComicInfo {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button {
-                                recentWindowRawValue = option.rawValue
+                                isShowingComicInfoImportSheet = true
                             } label: {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(option.title)
-                                        Text(option.subtitle)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    if recentWindowOption == option {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                Image(systemName: "doc.badge.arrow.down")
                             }
                         }
-                    } label: {
-                        Image(systemName: "calendar.badge.clock")
                     }
-                }
-            }
 
-            if viewModel.canScanFromCurrentContext && !viewModel.hasActiveSearch && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        if viewModel.canRefreshLibrary {
+                    if canImportComicFiles {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Button {
-                                viewModel.refreshLibrary()
+                                isShowingComicFileImporter = true
                             } label: {
-                                Label("Refresh Library", systemImage: "arrow.clockwise")
+                                Image(systemName: "square.and.arrow.down")
                             }
+                            .accessibilityLabel("Import Comic Files")
                         }
+                    }
 
-                        if viewModel.canRefreshCurrentFolder {
-                            Button {
-                                viewModel.refreshCurrentFolder()
-                            } label: {
-                                Label("Refresh Current Folder", systemImage: "folder.badge.plus")
-                            }
-                        }
-
-                        if viewModel.canImportLibraryComicInfo || viewModel.canImportCurrentFolderComicInfo {
-                            Divider()
-                        }
-
-                        if viewModel.canImportLibraryComicInfo {
+                    if canAdjustRecentWindow {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Menu {
-                                comicInfoImportPolicyActions { policy in
-                                    viewModel.importLibraryComicInfo(policy: policy)
-                                }
+                                recentWindowMenuContent
                             } label: {
-                                Label("Import Library ComicInfo", systemImage: "doc.badge.arrow.down")
+                                Image(systemName: "calendar.badge.clock")
                             }
                         }
+                    }
 
-                        if viewModel.canImportCurrentFolderComicInfo {
+                    if canMaintainCurrentContext {
+                        ToolbarItem(placement: .topBarTrailing) {
                             Menu {
-                                comicInfoImportPolicyActions { policy in
-                                    viewModel.importCurrentFolderComicInfo(policy: policy)
-                                }
+                                currentContextMaintenanceMenuContent
                             } label: {
-                                Label("Import Current Folder ComicInfo", systemImage: "doc.badge.arrow.down")
+                                Image(systemName: "arrow.clockwise.circle")
                             }
                         }
-                    } label: {
-                        Image(systemName: "arrow.clockwise.circle")
                     }
-                }
-            }
 
-            if supportsGridDisplay && !viewModel.hasActiveSearch && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryBrowserDisplayMode.allCases) { mode in
-                            Button {
-                                applyDisplayMode(mode)
+                    if canAdjustDisplayMode {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                displayModeMenuContent
                             } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    Spacer()
-                                    if displayMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                Image(systemName: displayMode.systemImageName)
                             }
                         }
-                    } label: {
-                        Image(systemName: displayMode.systemImageName)
                     }
-                }
-            }
 
-            if canSortCurrentComics && !isSelectionMode {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        ForEach(LibraryComicSortMode.allCases) { mode in
-                            Button {
-                                applySortMode(mode)
+                    if canSortCurrentComics {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Menu {
+                                sortModeMenuContent
                             } label: {
-                                HStack {
-                                    Text(mode.title)
-                                    Spacer()
-                                    if comicSortMode == mode {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                Image(systemName: "arrow.up.arrow.down.circle")
                             }
                         }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down.circle")
                     }
                 }
             }
@@ -283,48 +210,10 @@ struct LibraryBrowserView: View {
                 }
 
                 ToolbarItem(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            performBatchReadAction(true)
-                        } label: {
-                            Label("Mark Read", systemImage: "checkmark.circle")
-                        }
-
-                        Button {
-                            performBatchReadAction(false)
-                        } label: {
-                            Label("Mark Unread", systemImage: "arrow.uturn.backward.circle")
-                        }
-                    } label: {
-                        Label("Read", systemImage: "checkmark.circle")
-                    }
-                    .disabled(!hasSelectedComics)
-                }
-
-                ToolbarItem(placement: .bottomBar) {
-                    Menu {
-                        Button {
-                            performBatchFavoriteAction(true)
-                        } label: {
-                            Label("Add Favorite", systemImage: "star")
-                        }
-
-                        Button {
-                            performBatchFavoriteAction(false)
-                        } label: {
-                            Label("Remove Favorite", systemImage: "star.slash")
-                        }
-                    } label: {
-                        Label("Favorite", systemImage: "star")
-                    }
-                    .disabled(!hasSelectedComics)
-                }
-
-                ToolbarItem(placement: .bottomBar) {
                     Button {
-                        isShowingBatchOrganizationSheet = true
+                        isShowingSelectionActionsSheet = true
                     } label: {
-                        Label("Organize", systemImage: "tag")
+                        Label("Actions", systemImage: "ellipsis.circle")
                     }
                     .disabled(!hasSelectedComics)
                 }
@@ -339,6 +228,16 @@ struct LibraryBrowserView: View {
             configurePreferredDisplayModeIfNeeded()
             viewModel.setRecentDays(recentWindowOption.dayCount)
             viewModel.refreshIfLoaded()
+            if let currentFolderID = viewModel.content?.folder.id {
+                Self.persistLastOpenedFolderID(currentFolderID, for: viewModel.descriptor.id)
+            }
+        }
+        .onChange(of: viewModel.content?.folder.id) { _, newFolderID in
+            guard let newFolderID else {
+                return
+            }
+
+            Self.persistLastOpenedFolderID(newFolderID, for: viewModel.descriptor.id)
         }
         .onChange(of: viewModel.hasActiveSearch) { _, hasActiveSearch in
             if hasActiveSearch {
@@ -454,6 +353,47 @@ struct LibraryBrowserView: View {
                 viewModel.load()
             }
         }
+        .sheet(isPresented: $isShowingSelectionActionsSheet) {
+            LibrarySelectionActionsSheet(
+                selectionCount: selectedComicIDs.count,
+                onEditMetadata: {
+                    isShowingBatchMetadataSheet = true
+                },
+                onImportComicInfo: {
+                    isShowingComicInfoImportSheet = true
+                },
+                onOpenOrganization: {
+                    isShowingBatchOrganizationSheet = true
+                },
+                onMarkRead: {
+                    performBatchReadAction(true)
+                },
+                onMarkUnread: {
+                    performBatchReadAction(false)
+                },
+                onAddFavorite: {
+                    performBatchFavoriteAction(true)
+                },
+                onRemoveFavorite: {
+                    performBatchFavoriteAction(false)
+                }
+            )
+        }
+        .fileImporter(
+            isPresented: $isShowingComicFileImporter,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                viewModel.importComicFiles(from: urls)
+            case .failure(let error):
+                viewModel.alert = LibraryAlertState(
+                    title: "Import Failed",
+                    message: error.localizedDescription
+                )
+            }
+        }
         .alert(item: $viewModel.alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -480,12 +420,37 @@ struct LibraryBrowserView: View {
         horizontalSizeClass == .regular
     }
 
+    private var usesCondensedTopBarActions: Bool {
+        horizontalSizeClass != .regular
+    }
+
     private var recentWindowOption: LibraryRecentWindowOption {
         LibraryRecentWindowOption(rawValue: recentWindowRawValue) ?? .defaultOption
     }
 
     private var canAdjustRecentWindow: Bool {
-        viewModel.content?.folder.isRoot == true
+        viewModel.content?.folder.isRoot == true && !viewModel.hasActiveSearch
+    }
+
+    private var canImportComicFiles: Bool {
+        viewModel.canImportComicFiles && !viewModel.hasActiveSearch
+    }
+
+    private var canMaintainCurrentContext: Bool {
+        viewModel.canScanFromCurrentContext && !viewModel.hasActiveSearch
+    }
+
+    private var canAdjustDisplayMode: Bool {
+        supportsGridDisplay && !viewModel.hasActiveSearch
+    }
+
+    private var hasCondensedTopBarActions: Bool {
+        canImportComicInfo
+            || canImportComicFiles
+            || canAdjustRecentWindow
+            || canMaintainCurrentContext
+            || canAdjustDisplayMode
+            || canSortCurrentComics
     }
 
     private var canSelectComics: Bool {
@@ -557,6 +522,170 @@ struct LibraryBrowserView: View {
         return "Opening Library"
     }
 
+    private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
+        viewModel.applyUpdatedComic(updatedComic)
+    }
+
+    @ViewBuilder
+    private var condensedTopBarActionsMenu: some View {
+        Menu {
+            if canImportComicInfo {
+                Button {
+                    isShowingComicInfoImportSheet = true
+                } label: {
+                    Label("Import ComicInfo", systemImage: "doc.badge.arrow.down")
+                }
+            }
+
+            if canImportComicFiles {
+                Button {
+                    isShowingComicFileImporter = true
+                } label: {
+                    Label("Import Comic Files", systemImage: "square.and.arrow.down")
+                }
+            }
+
+            if (canImportComicInfo || canImportComicFiles)
+                && (canAdjustRecentWindow || canMaintainCurrentContext || canAdjustDisplayMode || canSortCurrentComics) {
+                Divider()
+            }
+
+            if canAdjustRecentWindow {
+                Menu {
+                    recentWindowMenuContent
+                } label: {
+                    Label("Recent Window", systemImage: "calendar.badge.clock")
+                }
+            }
+
+            if canMaintainCurrentContext {
+                Menu {
+                    currentContextMaintenanceMenuContent
+                } label: {
+                    Label("Refresh & Scan", systemImage: "arrow.clockwise.circle")
+                }
+            }
+
+            if canAdjustDisplayMode {
+                Menu {
+                    displayModeMenuContent
+                } label: {
+                    Label("Display Mode", systemImage: displayMode.systemImageName)
+                }
+            }
+
+            if canSortCurrentComics {
+                Menu {
+                    sortModeMenuContent
+                } label: {
+                    Label("Sort Comics", systemImage: "arrow.up.arrow.down.circle")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("More Library Actions")
+    }
+
+    @ViewBuilder
+    private var recentWindowMenuContent: some View {
+        ForEach(LibraryRecentWindowOption.allCases) { option in
+            Button {
+                recentWindowRawValue = option.rawValue
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(option.title)
+                        Text(option.subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if recentWindowOption == option {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var currentContextMaintenanceMenuContent: some View {
+        if viewModel.canRefreshLibrary {
+            Button {
+                viewModel.refreshLibrary()
+            } label: {
+                Label("Refresh Library", systemImage: "arrow.clockwise")
+            }
+        }
+
+        if viewModel.canRefreshCurrentFolder {
+            Button {
+                viewModel.refreshCurrentFolder()
+            } label: {
+                Label("Refresh Current Folder", systemImage: "folder.badge.plus")
+            }
+        }
+
+        if viewModel.canImportLibraryComicInfo || viewModel.canImportCurrentFolderComicInfo {
+            Divider()
+        }
+
+        if viewModel.canImportLibraryComicInfo {
+            Menu {
+                comicInfoImportPolicyActions { policy in
+                    viewModel.importLibraryComicInfo(policy: policy)
+                }
+            } label: {
+                Label("Import Library ComicInfo", systemImage: "doc.badge.arrow.down")
+            }
+        }
+
+        if viewModel.canImportCurrentFolderComicInfo {
+            Menu {
+                comicInfoImportPolicyActions { policy in
+                    viewModel.importCurrentFolderComicInfo(policy: policy)
+                }
+            } label: {
+                Label("Import Current Folder ComicInfo", systemImage: "doc.badge.arrow.down")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var displayModeMenuContent: some View {
+        ForEach(LibraryBrowserDisplayMode.allCases) { mode in
+            Button {
+                applyDisplayMode(mode)
+            } label: {
+                HStack {
+                    Text(mode.title)
+                    Spacer()
+                    if displayMode == mode {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var sortModeMenuContent: some View {
+        ForEach(LibraryComicSortMode.allCases) { mode in
+            Button {
+                applySortMode(mode)
+            } label: {
+                HStack {
+                    Text(mode.title)
+                    Spacer()
+                    if comicSortMode == mode {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        }
+    }
+
     private func applySortMode(_ mode: LibraryComicSortMode) {
         comicSortMode = mode
         Self.persistSortMode(mode)
@@ -589,6 +718,24 @@ struct LibraryBrowserView: View {
             mode.rawValue,
             forKey: sortModeStorageKey()
         )
+    }
+
+    static func lastOpenedFolderID(for libraryID: UUID) -> Int64 {
+        let value = UserDefaults.standard.object(
+            forKey: lastOpenedFolderStorageKey(for: libraryID)
+        ) as? NSNumber
+        return max(1, value?.int64Value ?? 1)
+    }
+
+    static func persistLastOpenedFolderID(_ folderID: Int64, for libraryID: UUID) {
+        UserDefaults.standard.set(
+            max(1, folderID),
+            forKey: lastOpenedFolderStorageKey(for: libraryID)
+        )
+    }
+
+    private static func lastOpenedFolderStorageKey(for libraryID: UUID) -> String {
+        "libraryBrowser.lastOpenedFolderID.\(libraryID.uuidString)"
     }
 
     private func sortedComics(_ comics: [LibraryComic]) -> [LibraryComic] {
@@ -828,6 +975,7 @@ struct LibraryBrowserView: View {
                             title: LibrarySpecialCollectionKind.reading.title,
                             comics: viewModel.continueReadingComics
                         ),
+                        onComicUpdated: handleReaderComicUpdate,
                         dependencies: dependencies
                     )
                 } label: {
@@ -876,6 +1024,7 @@ struct LibraryBrowserView: View {
                                 title: LibrarySpecialCollectionKind.recent.title,
                                 comics: viewModel.recentComics
                             ),
+                            onComicUpdated: handleReaderComicUpdate,
                             dependencies: dependencies
                         )
                     } label: {
@@ -923,8 +1072,9 @@ struct LibraryBrowserView: View {
                             comic: comic,
                             navigationContext: ReaderNavigationContext(
                                 title: LibrarySpecialCollectionKind.favorites.title,
-                                comics: viewModel.favoritesPreviewComics
+                                comics: viewModel.favoritesComics
                             ),
+                            onComicUpdated: handleReaderComicUpdate,
                             dependencies: dependencies
                         )
                     } label: {
@@ -1063,6 +1213,7 @@ struct LibraryBrowserView: View {
                             title: LibrarySpecialCollectionKind.reading.title,
                             comics: viewModel.continueReadingComics
                         ),
+                        onComicUpdated: handleReaderComicUpdate,
                         dependencies: dependencies
                     )
                 } label: {
@@ -1103,6 +1254,7 @@ struct LibraryBrowserView: View {
                                     title: LibrarySpecialCollectionKind.recent.title,
                                     comics: viewModel.recentComics
                                 ),
+                                onComicUpdated: handleReaderComicUpdate,
                                 dependencies: dependencies
                             )
                         } label: {
@@ -1140,8 +1292,9 @@ struct LibraryBrowserView: View {
                                 comic: comic,
                                 navigationContext: ReaderNavigationContext(
                                     title: LibrarySpecialCollectionKind.favorites.title,
-                                    comics: viewModel.favoritesPreviewComics
+                                    comics: viewModel.favoritesComics
                                 ),
+                                onComicUpdated: handleReaderComicUpdate,
                                 dependencies: dependencies
                             )
                         } label: {
@@ -1300,6 +1453,7 @@ struct LibraryBrowserView: View {
                                     title: content.folder.displayName,
                                     comics: displayedComics
                                 ),
+                                onComicUpdated: handleReaderComicUpdate,
                                 dependencies: dependencies
                             )
                         } label: {
@@ -1358,6 +1512,7 @@ struct LibraryBrowserView: View {
                                         title: content.folder.displayName,
                                         comics: displayedComics
                                     ),
+                                    onComicUpdated: handleReaderComicUpdate,
                                     dependencies: dependencies
                                 )
                             } label: {
@@ -1536,6 +1691,7 @@ struct LibraryBrowserView: View {
         isShowingBatchMetadataSheet = false
         isShowingComicInfoImportSheet = false
         isShowingBatchOrganizationSheet = false
+        isShowingSelectionActionsSheet = false
         selectedComicIDs.removeAll()
     }
 
@@ -1589,34 +1745,81 @@ struct LibraryBrowserView: View {
 
     @ViewBuilder
     private func localFolderControls(_ content: LibraryFolderContent) -> some View {
-        if (content.subfolders.isEmpty && content.comics.isEmpty) || isSelectionMode {
+        if isSelectionMode {
             EmptyView()
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                LibraryInlineSearchField(
-                    prompt: content.folder.isRoot ? "Filter this library section" : "Filter this folder",
-                    text: $folderSearchQuery
-                )
+                folderLocationControls(content)
 
-                if !content.comics.isEmpty {
-                    LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                        comicFilter = selectedFilter
-                    }
-                }
+                if !(content.subfolders.isEmpty && content.comics.isEmpty) {
+                    LibraryInlineSearchField(
+                        prompt: content.folder.isRoot ? "Filter this library section" : "Filter this folder",
+                        text: $folderSearchQuery
+                    )
 
-                if hasActiveLocalFolderFilters {
-                    Button {
-                        folderSearchQuery = ""
-                        comicFilter = .all
-                    } label: {
-                        Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
-                            .font(.caption.weight(.semibold))
+                    if !content.comics.isEmpty {
+                        LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
+                            comicFilter = selectedFilter
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
+
+                    if hasActiveLocalFolderFilters {
+                        Button {
+                            folderSearchQuery = ""
+                            comicFilter = .all
+                        } label: {
+                            Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                    }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func folderLocationControls(_ content: LibraryFolderContent) -> some View {
+        if !content.folder.isRoot {
+            HStack(spacing: 10) {
+                if let parentFolderID = parentFolderID(for: content) {
+                    NavigationLink {
+                        LibraryBrowserView(
+                            descriptor: viewModel.descriptor,
+                            folderID: parentFolderID,
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        Label("Up One Level", systemImage: "arrow.up.backward")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if content.folder.parentID != 1 {
+                    NavigationLink {
+                        LibraryBrowserView(
+                            descriptor: viewModel.descriptor,
+                            folderID: 1,
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        Label("Library Root", systemImage: "house")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+    }
+
+    private func parentFolderID(for content: LibraryFolderContent) -> Int64? {
+        guard !content.folder.isRoot else {
+            return nil
+        }
+
+        return content.folder.parentID > 0 ? content.folder.parentID : 1
     }
 
     private func folderCountTitle(displayed: Int, total: Int) -> String {
@@ -1826,6 +2029,7 @@ struct LibraryBrowserView: View {
                                             title: "Search",
                                             comics: displayedSearchComics
                                         ),
+                                        onComicUpdated: handleReaderComicUpdate,
                                         dependencies: dependencies
                                     )
                                 } label: {

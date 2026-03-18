@@ -19,7 +19,9 @@ struct yacreaderApp: App {
             wrappedValue: LibraryListViewModel(
                 store: dependencies.libraryDescriptorStore,
                 storageManager: dependencies.libraryStorageManager,
-                inspector: dependencies.databaseInspector
+                inspector: dependencies.databaseInspector,
+                databaseBootstrapper: dependencies.libraryDatabaseBootstrapper,
+                libraryScanner: dependencies.libraryScanner
             )
         )
     }

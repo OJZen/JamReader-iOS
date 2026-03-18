@@ -6,18 +6,18 @@ struct PDFReaderContainerView: UIViewRepresentable {
     let requestedPageIndex: Int
     let rotation: ReaderRotationAngle
     let onPageChanged: (Int) -> Void
-    let onReaderChromeToggle: () -> Void
+    let onReaderTap: (ReaderTapRegion) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             rotation: rotation,
             onPageChanged: onPageChanged,
-            onReaderChromeToggle: onReaderChromeToggle
+            onReaderTap: onReaderTap
         )
     }
 
     func makeUIView(context: Context) -> PDFView {
-        let pdfView = PDFView()
+        let pdfView = ReaderPDFView()
         pdfView.autoScales = true
         pdfView.displayMode = .singlePage
         pdfView.displayDirection = .horizontal
@@ -41,8 +41,15 @@ struct PDFReaderContainerView: UIViewRepresentable {
             object: pdfView
         )
 
+        pdfView.onAdvancePage = { [weak coordinator = context.coordinator] in
+            coordinator?.goToNextPage()
+        }
+        pdfView.onRetreatPage = { [weak coordinator = context.coordinator] in
+            coordinator?.goToPreviousPage()
+        }
+
         context.coordinator.pdfView = pdfView
-        context.coordinator.onReaderChromeToggle = onReaderChromeToggle
+        context.coordinator.onReaderTap = onReaderTap
         syncRequestedPage(in: pdfView, coordinator: context.coordinator)
 
         return pdfView
@@ -50,7 +57,7 @@ struct PDFReaderContainerView: UIViewRepresentable {
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
         context.coordinator.onPageChanged = onPageChanged
-        context.coordinator.onReaderChromeToggle = onReaderChromeToggle
+        context.coordinator.onReaderTap = onReaderTap
 
         let rotationChanged = context.coordinator.lastAppliedRotation != rotation
         if pdfView.document !== document {
@@ -106,16 +113,16 @@ struct PDFReaderContainerView: UIViewRepresentable {
         private let pageTurnFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
 
         var onPageChanged: (Int) -> Void
-        var onReaderChromeToggle: () -> Void
+        var onReaderTap: (ReaderTapRegion) -> Void
 
         init(
             rotation: ReaderRotationAngle,
             onPageChanged: @escaping (Int) -> Void,
-            onReaderChromeToggle: @escaping () -> Void
+            onReaderTap: @escaping (ReaderTapRegion) -> Void
         ) {
             self.lastAppliedRotation = rotation
             self.onPageChanged = onPageChanged
-            self.onReaderChromeToggle = onReaderChromeToggle
+            self.onReaderTap = onReaderTap
             self.pageTurnFeedbackGenerator.prepare()
         }
 
@@ -140,7 +147,7 @@ struct PDFReaderContainerView: UIViewRepresentable {
             }
 
             if pdfView.scaleFactor > pdfView.scaleFactorForSizeToFit + 0.01 {
-                onReaderChromeToggle()
+                onReaderTap(.center)
                 return
             }
 
@@ -155,18 +162,23 @@ struct PDFReaderContainerView: UIViewRepresentable {
                     pageTurnFeedbackGenerator.prepare()
                     return
                 }
+                onReaderTap(.leading)
+                return
             } else if horizontalRatio > 1 - edgeRatio {
                 if goToNextPage() {
                     pageTurnFeedbackGenerator.impactOccurred()
                     pageTurnFeedbackGenerator.prepare()
                     return
                 }
+                onReaderTap(.trailing)
+                return
             }
 
-            onReaderChromeToggle()
+            onReaderTap(.center)
         }
 
-        private func goToPreviousPage() -> Bool {
+        @discardableResult
+        func goToPreviousPage() -> Bool {
             guard let pdfView,
                   let document = pdfView.document,
                   let currentPage = pdfView.currentPage
@@ -186,7 +198,8 @@ struct PDFReaderContainerView: UIViewRepresentable {
             return true
         }
 
-        private func goToNextPage() -> Bool {
+        @discardableResult
+        func goToNextPage() -> Bool {
             guard let pdfView,
                   let document = pdfView.document,
                   let currentPage = pdfView.currentPage
@@ -205,5 +218,87 @@ struct PDFReaderContainerView: UIViewRepresentable {
             onPageChanged(targetIndex)
             return true
         }
+    }
+}
+
+private final class ReaderPDFView: PDFView {
+    var onAdvancePage: (() -> Void)?
+    var onRetreatPage: (() -> Void)?
+
+    override var canBecomeFirstResponder: Bool {
+        true
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+
+        if window == nil {
+            resignFirstResponder()
+        } else {
+            becomeFirstResponder()
+        }
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        let nextPageCommand = UIKeyCommand(
+            input: UIKeyCommand.inputRightArrow,
+            modifierFlags: [],
+            action: #selector(handleAdvancePage)
+        )
+        nextPageCommand.discoverabilityTitle = "Next Page"
+
+        let previousPageCommand = UIKeyCommand(
+            input: UIKeyCommand.inputLeftArrow,
+            modifierFlags: [],
+            action: #selector(handleRetreatPage)
+        )
+        previousPageCommand.discoverabilityTitle = "Previous Page"
+
+        let nextPageDownCommand = UIKeyCommand(
+            input: UIKeyCommand.inputDownArrow,
+            modifierFlags: [],
+            action: #selector(handleAdvancePage)
+        )
+        nextPageDownCommand.discoverabilityTitle = "Next Page"
+
+        let previousPageUpCommand = UIKeyCommand(
+            input: UIKeyCommand.inputUpArrow,
+            modifierFlags: [],
+            action: #selector(handleRetreatPage)
+        )
+        previousPageUpCommand.discoverabilityTitle = "Previous Page"
+
+        let nextPageSpaceCommand = UIKeyCommand(
+            input: " ",
+            modifierFlags: [],
+            action: #selector(handleAdvancePage)
+        )
+        nextPageSpaceCommand.discoverabilityTitle = "Next Page"
+
+        let previousPageShiftSpaceCommand = UIKeyCommand(
+            input: " ",
+            modifierFlags: [.shift],
+            action: #selector(handleRetreatPage)
+        )
+        previousPageShiftSpaceCommand.discoverabilityTitle = "Previous Page"
+
+        return [
+            nextPageCommand,
+            previousPageCommand,
+            nextPageDownCommand,
+            previousPageUpCommand,
+            nextPageSpaceCommand,
+            previousPageShiftSpaceCommand
+        ]
+    }
+
+    @objc
+    private func handleAdvancePage() {
+        onAdvancePage?()
+    }
+
+    @objc
+    private func handleRetreatPage() {
+        onRetreatPage?()
     }
 }

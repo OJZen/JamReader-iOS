@@ -38,7 +38,10 @@ final class ComicDocumentLoader {
 
     func loadDocument(for comic: LibraryComic, sourceRootURL: URL) throws -> ComicDocument {
         let fileURL = resolveFileURL(for: comic, sourceRootURL: sourceRootURL)
+        return try loadDocument(at: fileURL)
+    }
 
+    func loadDocument(at fileURL: URL) throws -> ComicDocument {
         guard fileManager.fileExists(atPath: fileURL.path) else {
             throw ComicDocumentLoadError.fileMissing
         }

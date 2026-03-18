@@ -20,6 +20,7 @@ struct ComicReaderView: View {
         descriptor: LibraryDescriptor,
         comic: LibraryComic,
         navigationContext: ReaderNavigationContext? = nil,
+        onComicUpdated: ((LibraryComic) -> Void)? = nil,
         dependencies: AppDependencies
     ) {
         self.dependencies = dependencies
@@ -31,7 +32,8 @@ struct ComicReaderView: View {
                 storageManager: dependencies.libraryStorageManager,
                 databaseWriter: dependencies.libraryDatabaseWriter,
                 documentLoader: dependencies.comicDocumentLoader,
-                readerLayoutPreferencesStore: dependencies.readerLayoutPreferencesStore
+                readerLayoutPreferencesStore: dependencies.readerLayoutPreferencesStore,
+                onComicUpdated: onComicUpdated
             )
         )
     }
@@ -42,34 +44,7 @@ struct ComicReaderView: View {
                 ProgressView("Opening Comic")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let document = viewModel.document {
-                switch document {
-                case .pdf(let pdf):
-                    ReaderRotationHost(rotation: viewModel.readerLayout.rotation) {
-                        PDFReaderContainerView(
-                            document: pdf.pdfDocument,
-                            requestedPageIndex: viewModel.currentPageIndex,
-                            rotation: viewModel.readerLayout.rotation,
-                            onPageChanged: viewModel.updateCurrentPage(to:),
-                            onReaderChromeToggle: toggleReaderChrome
-                        )
-                    }
-                    .background(Color.black.ignoresSafeArea())
-                case .imageSequence(let imageSequence):
-                    ImageSequenceReaderContainerView(
-                        document: imageSequence,
-                        initialPageIndex: viewModel.currentPageIndex,
-                        layout: viewModel.effectiveReaderLayout,
-                        onPageChanged: viewModel.updateCurrentPage(to:),
-                        onReaderTap: handleReaderTap
-                    )
-                    .background(Color.black.ignoresSafeArea())
-                case .unsupported(let document):
-                    ContentUnavailableView(
-                        "Reader Not Ready",
-                        systemImage: "shippingbox",
-                        description: Text("`. \(document.fileExtension)` files are already indexed by the library, but archive page extraction is still being ported.\n\n\(document.reason)")
-                    )
-                }
+                readerContent(for: document)
             } else {
                 ContentUnavailableView(
                     "Comic Unavailable",
@@ -175,64 +150,7 @@ struct ComicReaderView: View {
             }
         }
         .sheet(isPresented: $isShowingReaderControls) {
-            ReaderControlsSheet(
-                pageIndicatorText: viewModel.pageIndicatorText,
-                currentPageNumber: viewModel.currentPageNumber,
-                pageCount: viewModel.pageCount,
-                currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
-                bookmarkItems: viewModel.bookmarkItems,
-                isFavorite: viewModel.isFavorite,
-                isRead: viewModel.comic.read,
-                rating: viewModel.rating,
-                supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
-                supportsDoublePageSpread: supportsDoublePageSpread,
-                supportsRotationControls: viewModel.supportsRotationControls,
-                fitMode: viewModel.effectiveReaderLayout.fitMode,
-                spreadMode: viewModel.effectiveReaderLayout.spreadMode,
-                readingDirection: viewModel.effectiveReaderLayout.readingDirection,
-                coverAsSinglePage: viewModel.effectiveReaderLayout.coverAsSinglePage,
-                rotation: viewModel.readerLayout.rotation,
-                onDone: { isShowingReaderControls = false },
-                onToggleFavorite: viewModel.toggleFavoriteStatus,
-                onToggleReadStatus: viewModel.toggleReadStatus,
-                onOpenQuickMetadata: {
-                    pendingReaderAction = .quickMetadata
-                    isShowingReaderControls = false
-                },
-                onOpenMetadata: {
-                    pendingReaderAction = .metadata
-                    isShowingReaderControls = false
-                },
-                onOpenOrganization: {
-                    pendingReaderAction = .organization
-                    isShowingReaderControls = false
-                },
-                onOpenThumbnails: {
-                    pendingReaderAction = .thumbnails
-                    isShowingReaderControls = false
-                },
-                onOpenPageJump: {
-                    pendingReaderAction = .pageJump
-                    isShowingReaderControls = false
-                },
-                onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
-                onSetRating: viewModel.setRating,
-                onGoToBookmark: { pageIndex in
-                    viewModel.goToBookmark(pageIndex: pageIndex)
-                    isShowingReaderControls = false
-                },
-                onGoToPageNumber: { pageNumber in
-                    viewModel.goToPage(number: pageNumber)
-                    isShowingReaderControls = false
-                },
-                onSetFitMode: viewModel.setFitMode,
-                onSetSpreadMode: viewModel.setSpreadMode,
-                onSetReadingDirection: viewModel.setReadingDirection,
-                onSetCoverAsSinglePage: viewModel.setCoverAsSinglePage,
-                onRotateCounterClockwise: viewModel.rotateCounterClockwise,
-                onRotateClockwise: viewModel.rotateClockwise,
-                onResetRotation: viewModel.resetRotation
-            )
+            readerControlsSheet
         }
         .sheet(isPresented: $isShowingQuickMetadataSheet) {
             ReaderQuickMetadataSheet(
@@ -296,6 +214,112 @@ struct ComicReaderView: View {
         horizontalSizeClass == .regular
     }
 
+    @ViewBuilder
+    private func readerContent(for document: ComicDocument) -> some View {
+        switch document {
+        case .pdf(let pdf):
+            ReaderRotationHost(rotation: viewModel.readerLayout.rotation) {
+                PDFReaderContainerView(
+                    document: pdf.pdfDocument,
+                    requestedPageIndex: viewModel.currentPageIndex,
+                    rotation: viewModel.readerLayout.rotation,
+                    onPageChanged: viewModel.updateCurrentPage(to:),
+                    onReaderTap: handleReaderTap
+                )
+            }
+            .background(Color.black.ignoresSafeArea())
+        case .imageSequence(let imageSequence):
+            if viewModel.effectiveReaderLayout.pagingMode == .verticalContinuous {
+                VerticalImageSequenceReaderContainerView(
+                    document: imageSequence,
+                    initialPageIndex: viewModel.currentPageIndex,
+                    layout: viewModel.effectiveReaderLayout,
+                    onPageChanged: viewModel.updateCurrentPage(to:),
+                    onReaderTap: handleReaderTap
+                )
+                .background(Color.black.ignoresSafeArea())
+            } else {
+                ImageSequenceReaderContainerView(
+                    document: imageSequence,
+                    initialPageIndex: viewModel.currentPageIndex,
+                    layout: viewModel.effectiveReaderLayout,
+                    onPageChanged: viewModel.updateCurrentPage(to:),
+                    onReaderTap: handleReaderTap
+                )
+                .background(Color.black.ignoresSafeArea())
+            }
+        case .unsupported(let document):
+            ContentUnavailableView(
+                "Reader Not Ready",
+                systemImage: "shippingbox",
+                description: Text("`. \(document.fileExtension)` files are already indexed by the library, but archive page extraction is still being ported.\n\n\(document.reason)")
+            )
+        }
+    }
+
+    private var readerControlsSheet: some View {
+        ReaderControlsSheet(
+            pageIndicatorText: viewModel.pageIndicatorText,
+            currentPageNumber: viewModel.currentPageNumber,
+            pageCount: viewModel.pageCount,
+            currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
+            bookmarkItems: viewModel.bookmarkItems,
+            isFavorite: viewModel.isFavorite,
+            isRead: viewModel.comic.read,
+            rating: viewModel.rating,
+            supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
+            supportsDoublePageSpread: supportsDoublePageSpread,
+            supportsRotationControls: viewModel.supportsRotationControls,
+            fitMode: viewModel.effectiveReaderLayout.fitMode,
+            pagingMode: viewModel.effectiveReaderLayout.pagingMode,
+            spreadMode: viewModel.effectiveReaderLayout.spreadMode,
+            readingDirection: viewModel.effectiveReaderLayout.readingDirection,
+            coverAsSinglePage: viewModel.effectiveReaderLayout.coverAsSinglePage,
+            rotation: viewModel.readerLayout.rotation,
+            onDone: { isShowingReaderControls = false },
+            onToggleFavorite: viewModel.toggleFavoriteStatus,
+            onToggleReadStatus: viewModel.toggleReadStatus,
+            onOpenQuickMetadata: {
+                pendingReaderAction = .quickMetadata
+                isShowingReaderControls = false
+            },
+            onOpenMetadata: {
+                pendingReaderAction = .metadata
+                isShowingReaderControls = false
+            },
+            onOpenOrganization: {
+                pendingReaderAction = .organization
+                isShowingReaderControls = false
+            },
+            onOpenThumbnails: {
+                pendingReaderAction = .thumbnails
+                isShowingReaderControls = false
+            },
+            onOpenPageJump: {
+                pendingReaderAction = .pageJump
+                isShowingReaderControls = false
+            },
+            onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
+            onSetRating: viewModel.setRating,
+            onGoToBookmark: { pageIndex in
+                viewModel.goToBookmark(pageIndex: pageIndex)
+                isShowingReaderControls = false
+            },
+            onGoToPageNumber: { pageNumber in
+                viewModel.goToPage(number: pageNumber)
+                isShowingReaderControls = false
+            },
+            onSetFitMode: viewModel.setFitMode,
+            onSetPagingMode: viewModel.setPagingMode,
+            onSetSpreadMode: viewModel.setSpreadMode,
+            onSetReadingDirection: viewModel.setReadingDirection,
+            onSetCoverAsSinglePage: viewModel.setCoverAsSinglePage,
+            onRotateCounterClockwise: viewModel.rotateCounterClockwise,
+            onRotateClockwise: viewModel.rotateClockwise,
+            onResetRotation: viewModel.resetRotation
+        )
+    }
+
     private func toggleReaderChrome() {
         isReaderChromeHidden.toggle()
     }
@@ -304,9 +328,17 @@ struct ComicReaderView: View {
         switch tapRegion {
         case .center:
             toggleReaderChrome()
-        case .leading, .trailing:
+        case .leading:
             if !isReaderChromeHidden {
                 isReaderChromeHidden = true
+            } else if viewModel.canOpenPreviousComic {
+                viewModel.openPreviousComic()
+            }
+        case .trailing:
+            if !isReaderChromeHidden {
+                isReaderChromeHidden = true
+            } else if viewModel.canOpenNextComic {
+                viewModel.openNextComic()
             }
         }
     }
@@ -410,6 +442,7 @@ private struct ReaderControlsSheet: View {
     let supportsDoublePageSpread: Bool
     let supportsRotationControls: Bool
     let fitMode: ReaderFitMode
+    let pagingMode: ReaderPagingMode
     let spreadMode: ReaderSpreadMode
     let readingDirection: ReaderReadingDirection
     let coverAsSinglePage: Bool
@@ -427,6 +460,7 @@ private struct ReaderControlsSheet: View {
     let onGoToBookmark: (Int) -> Void
     let onGoToPageNumber: (Int) -> Void
     let onSetFitMode: (ReaderFitMode) -> Void
+    let onSetPagingMode: (ReaderPagingMode) -> Void
     let onSetSpreadMode: (ReaderSpreadMode) -> Void
     let onSetReadingDirection: (ReaderReadingDirection) -> Void
     let onSetCoverAsSinglePage: (Bool) -> Void
@@ -449,6 +483,7 @@ private struct ReaderControlsSheet: View {
         supportsDoublePageSpread: Bool,
         supportsRotationControls: Bool,
         fitMode: ReaderFitMode,
+        pagingMode: ReaderPagingMode,
         spreadMode: ReaderSpreadMode,
         readingDirection: ReaderReadingDirection,
         coverAsSinglePage: Bool,
@@ -466,6 +501,7 @@ private struct ReaderControlsSheet: View {
         onGoToBookmark: @escaping (Int) -> Void,
         onGoToPageNumber: @escaping (Int) -> Void,
         onSetFitMode: @escaping (ReaderFitMode) -> Void,
+        onSetPagingMode: @escaping (ReaderPagingMode) -> Void,
         onSetSpreadMode: @escaping (ReaderSpreadMode) -> Void,
         onSetReadingDirection: @escaping (ReaderReadingDirection) -> Void,
         onSetCoverAsSinglePage: @escaping (Bool) -> Void,
@@ -485,6 +521,7 @@ private struct ReaderControlsSheet: View {
         self.supportsDoublePageSpread = supportsDoublePageSpread
         self.supportsRotationControls = supportsRotationControls
         self.fitMode = fitMode
+        self.pagingMode = pagingMode
         self.spreadMode = spreadMode
         self.readingDirection = readingDirection
         self.coverAsSinglePage = coverAsSinglePage
@@ -502,6 +539,7 @@ private struct ReaderControlsSheet: View {
         self.onGoToBookmark = onGoToBookmark
         self.onGoToPageNumber = onGoToPageNumber
         self.onSetFitMode = onSetFitMode
+        self.onSetPagingMode = onSetPagingMode
         self.onSetSpreadMode = onSetSpreadMode
         self.onSetReadingDirection = onSetReadingDirection
         self.onSetCoverAsSinglePage = onSetCoverAsSinglePage
@@ -522,6 +560,13 @@ private struct ReaderControlsSheet: View {
         Binding(
             get: { spreadMode },
             set: onSetSpreadMode
+        )
+    }
+
+    private var pagingModeBinding: Binding<ReaderPagingMode> {
+        Binding(
+            get: { pagingMode },
+            set: onSetPagingMode
         )
     }
 
@@ -560,6 +605,10 @@ private struct ReaderControlsSheet: View {
         }
 
         return min(max(1, Int(selectedPageNumber.rounded())), pageCount)
+    }
+
+    private var isVerticalContinuousMode: Bool {
+        pagingMode == .verticalContinuous
     }
 
     var body: some View {
@@ -665,47 +714,61 @@ private struct ReaderControlsSheet: View {
 
                 if supportsImageLayoutControls {
                     Section {
-                        Picker("Fit Mode", selection: fitModeBinding) {
-                            ForEach(ReaderFitMode.allCases, id: \.self) { fitMode in
-                                Text(fitMode.title).tag(fitMode)
+                        Picker("Reading Mode", selection: pagingModeBinding) {
+                            ForEach(ReaderPagingMode.allCases, id: \.self) { pagingMode in
+                                Text(pagingMode.title).tag(pagingMode)
                             }
                         }
+                        .pickerStyle(.segmented)
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Page Layout")
-                                .font(.subheadline.weight(.medium))
+                        if !isVerticalContinuousMode {
+                            Picker("Fit Mode", selection: fitModeBinding) {
+                                ForEach(ReaderFitMode.allCases, id: \.self) { fitMode in
+                                    Text(fitMode.title).tag(fitMode)
+                                }
+                            }
 
-                            if supportsDoublePageSpread {
-                                Picker("Page Layout", selection: spreadModeBinding) {
-                                    ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
-                                        Text(spreadMode.title).tag(spreadMode)
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Page Layout")
+                                    .font(.subheadline.weight(.medium))
+
+                                if supportsDoublePageSpread {
+                                    Picker("Page Layout", selection: spreadModeBinding) {
+                                        ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
+                                            Text(spreadMode.title).tag(spreadMode)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                } else {
+                                    LabeledContent("Mode", value: ReaderSpreadMode.singlePage.title)
+                                    Text("iPhone uses single-page reading. Double-page mode is available on iPad.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Reading Direction")
+                                    .font(.subheadline.weight(.medium))
+
+                                Picker("Reading Direction", selection: readingDirectionBinding) {
+                                    ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
+                                        Text(readingDirection.title).tag(readingDirection)
                                     }
                                 }
                                 .pickerStyle(.segmented)
-                            } else {
-                                LabeledContent("Mode", value: ReaderSpreadMode.singlePage.title)
-                                Text("iPhone uses single-page reading. Double-page mode is available on iPad.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                             }
-                        }
-                        .padding(.vertical, 4)
+                            .padding(.vertical, 4)
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Reading Direction")
-                                .font(.subheadline.weight(.medium))
-
-                            Picker("Reading Direction", selection: readingDirectionBinding) {
-                                ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
-                                    Text(readingDirection.title).tag(readingDirection)
-                                }
+                            if supportsDoublePageSpread, spreadMode == .doublePage {
+                                Toggle("Show Covers as Single Page", isOn: coverAsSinglePageBinding)
                             }
-                            .pickerStyle(.segmented)
-                        }
-                        .padding(.vertical, 4)
-
-                        if supportsDoublePageSpread, spreadMode == .doublePage {
-                            Toggle("Show Covers as Single Page", isOn: coverAsSinglePageBinding)
+                        } else {
+                            Text("Vertical mode is optimized for mobile scrolling. Page spread and rotation controls are hidden for consistency.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 4)
                         }
                     } header: {
                         Text("Display")

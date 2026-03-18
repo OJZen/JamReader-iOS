@@ -35,6 +35,12 @@ xcodebuild \
   build
 ```
 
+Gesture architecture guard (no SwiftUI gestures; UIKit recognizers only):
+
+```bash
+/Volumes/Ju/Projects/ios/yacreader/scripts/check_no_swiftui_gestures.sh
+```
+
 ## Quick validation checklist
 
 1. Add/open a local library folder.

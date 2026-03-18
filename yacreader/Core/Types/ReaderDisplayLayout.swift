@@ -29,6 +29,20 @@ enum ReaderReadingDirection: String, CaseIterable, Hashable {
     }
 }
 
+enum ReaderPagingMode: String, CaseIterable, Hashable {
+    case paged
+    case verticalContinuous
+
+    var title: String {
+        switch self {
+        case .paged:
+            return "Paged"
+        case .verticalContinuous:
+            return "Vertical Scroll"
+        }
+    }
+}
+
 enum ReaderFitMode: String, CaseIterable, Hashable {
     case page
     case width
@@ -103,6 +117,7 @@ enum ReaderRotationAngle: Int, CaseIterable, Hashable {
 }
 
 struct ReaderDisplayLayout: Equatable {
+    var pagingMode: ReaderPagingMode
     var spreadMode: ReaderSpreadMode
     var readingDirection: ReaderReadingDirection
     var coverAsSinglePage: Bool
@@ -110,12 +125,14 @@ struct ReaderDisplayLayout: Equatable {
     var rotation: ReaderRotationAngle
 
     init(
+        pagingMode: ReaderPagingMode = .paged,
         spreadMode: ReaderSpreadMode = .singlePage,
         readingDirection: ReaderReadingDirection = .leftToRight,
         coverAsSinglePage: Bool = true,
         fitMode: ReaderFitMode = .page,
         rotation: ReaderRotationAngle = .degrees0
     ) {
+        self.pagingMode = pagingMode
         self.spreadMode = spreadMode
         self.readingDirection = readingDirection
         self.coverAsSinglePage = coverAsSinglePage
@@ -126,19 +143,43 @@ struct ReaderDisplayLayout: Equatable {
     init(defaultsFor type: LibraryFileType) {
         switch type {
         case .manga, .yonkoma:
-            self.init(spreadMode: .singlePage, readingDirection: .rightToLeft, coverAsSinglePage: true, fitMode: .page)
-        case .westernManga, .comic, .webComic:
-            self.init(spreadMode: .singlePage, readingDirection: .leftToRight, coverAsSinglePage: true, fitMode: .page)
+            self.init(
+                pagingMode: .paged,
+                spreadMode: .singlePage,
+                readingDirection: .rightToLeft,
+                coverAsSinglePage: true,
+                fitMode: .page
+            )
+        case .webComic:
+            self.init(
+                pagingMode: .verticalContinuous,
+                spreadMode: .singlePage,
+                readingDirection: .leftToRight,
+                coverAsSinglePage: true,
+                fitMode: .width
+            )
+        case .westernManga, .comic:
+            self.init(
+                pagingMode: .paged,
+                spreadMode: .singlePage,
+                readingDirection: .leftToRight,
+                coverAsSinglePage: true,
+                fitMode: .page
+            )
         }
     }
 
     func normalized(allowingDoublePageSpread: Bool) -> ReaderDisplayLayout {
-        guard !allowingDoublePageSpread, spreadMode == .doublePage else {
-            return self
+        var adjustedLayout = self
+
+        if adjustedLayout.pagingMode == .verticalContinuous {
+            adjustedLayout.spreadMode = .singlePage
         }
 
-        var adjustedLayout = self
-        adjustedLayout.spreadMode = .singlePage
+        if !allowingDoublePageSpread, adjustedLayout.spreadMode == .doublePage {
+            adjustedLayout.spreadMode = .singlePage
+        }
+
         return adjustedLayout
     }
 }

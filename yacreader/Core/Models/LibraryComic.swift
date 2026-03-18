@@ -104,6 +104,56 @@ struct LibraryComic: Identifiable, Hashable {
         )
     }
 
+    func updatingBookmarkPageIndices(_ bookmarkPageIndices: [Int]) -> LibraryComic {
+        LibraryComic(
+            id: id,
+            parentID: parentID,
+            fileName: fileName,
+            path: path,
+            hash: hash,
+            title: title,
+            issueNumber: issueNumber,
+            currentPage: currentPage,
+            pageCount: pageCount,
+            bookmarkPageIndices: bookmarkPageIndices,
+            read: read,
+            hasBeenOpened: hasBeenOpened,
+            coverSizeRatio: coverSizeRatio,
+            lastOpenedAt: lastOpenedAt,
+            addedAt: addedAt,
+            type: type,
+            series: series,
+            volume: volume,
+            rating: rating,
+            isFavorite: isFavorite
+        )
+    }
+
+    func updatingReadingProgress(_ progress: ComicReadingProgress) -> LibraryComic {
+        LibraryComic(
+            id: id,
+            parentID: parentID,
+            fileName: fileName,
+            path: path,
+            hash: hash,
+            title: title,
+            issueNumber: issueNumber,
+            currentPage: progress.currentPage,
+            pageCount: progress.pageCount ?? pageCount,
+            bookmarkPageIndices: bookmarkPageIndices,
+            read: progress.read,
+            hasBeenOpened: progress.hasBeenOpened,
+            coverSizeRatio: coverSizeRatio,
+            lastOpenedAt: progress.lastTimeOpened,
+            addedAt: addedAt,
+            type: type,
+            series: series,
+            volume: volume,
+            rating: rating,
+            isFavorite: isFavorite
+        )
+    }
+
     func applying(metadata: LibraryComicMetadata) -> LibraryComic {
         LibraryComic(
             id: id,

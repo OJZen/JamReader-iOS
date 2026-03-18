@@ -156,6 +156,139 @@ struct LibraryComicQuickActionButton: View {
     }
 }
 
+struct LibrarySelectionActionsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let selectionCount: Int
+    var organizeActionTitle = "Tags and Reading Lists"
+    var removeFromContextTitle: String?
+    var onEditMetadata: (() -> Void)?
+    var onImportComicInfo: (() -> Void)?
+    var onOpenOrganization: (() -> Void)?
+    let onMarkRead: () -> Void
+    let onMarkUnread: () -> Void
+    let onAddFavorite: () -> Void
+    let onRemoveFavorite: () -> Void
+    var onRemoveFromCurrentContext: (() -> Void)?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(selectionSummary)
+                            .font(.headline)
+
+                        Text("Choose one action and apply it to the current multi-selection.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 6)
+                }
+
+                Section("Status") {
+                    actionButton(
+                        title: "Mark Read",
+                        systemImage: "checkmark.circle",
+                        action: onMarkRead
+                    )
+
+                    actionButton(
+                        title: "Mark Unread",
+                        systemImage: "arrow.uturn.backward.circle",
+                        action: onMarkUnread
+                    )
+
+                    actionButton(
+                        title: "Add Favorite",
+                        systemImage: "star",
+                        action: onAddFavorite
+                    )
+
+                    actionButton(
+                        title: "Remove Favorite",
+                        systemImage: "star.slash",
+                        action: onRemoveFavorite
+                    )
+                }
+
+                if onEditMetadata != nil || onImportComicInfo != nil || onOpenOrganization != nil {
+                    Section("Manage") {
+                        if let onEditMetadata {
+                            actionButton(
+                                title: "Edit Metadata",
+                                systemImage: "square.and.pencil",
+                                action: onEditMetadata
+                            )
+                        }
+
+                        if let onImportComicInfo {
+                            actionButton(
+                                title: "Import ComicInfo.xml",
+                                systemImage: "doc.badge.arrow.down",
+                                action: onImportComicInfo
+                            )
+                        }
+
+                        if let onOpenOrganization {
+                            actionButton(
+                                title: organizeActionTitle,
+                                systemImage: "tag",
+                                action: onOpenOrganization
+                            )
+                        }
+                    }
+                }
+
+                if let removeFromContextTitle, let onRemoveFromCurrentContext {
+                    Section {
+                        Button(role: .destructive) {
+                            performAction(onRemoveFromCurrentContext)
+                        } label: {
+                            Label(removeFromContextTitle, systemImage: "minus.circle")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Selection Actions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var selectionSummary: String {
+        selectionCount == 1 ? "1 comic selected" : "\(selectionCount) comics selected"
+    }
+
+    private func actionButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            performAction(action)
+        } label: {
+            Label(title, systemImage: systemImage)
+        }
+    }
+
+    private func performAction(_ action: @escaping () -> Void) {
+        dismiss()
+        DispatchQueue.main.async {
+            action()
+        }
+    }
+}
+
 private struct FlowLayout<Content: View>: View {
     let spacing: CGFloat
     @ViewBuilder let content: () -> Content

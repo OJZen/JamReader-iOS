@@ -10,6 +10,8 @@ struct ReaderThumbnailBrowserSheet: View {
     let onSelectPage: (Int) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var isPageNumberFieldFocused: Bool
+    @State private var pageNumberText = ""
 
     private let thumbnailWidth: CGFloat = 112
     private let thumbnailHeight: CGFloat = 156
@@ -18,31 +20,44 @@ struct ReaderThumbnailBrowserSheet: View {
         document.pageCount ?? 0
     }
 
+    private var normalizedSelectedPageIndex: Int? {
+        guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              (1...pageCount).contains(pageNumber)
+        else {
+            return nil
+        }
+
+        return pageNumber - 1
+    }
+
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: thumbnailWidth, maximum: thumbnailWidth), spacing: 16)],
-                        spacing: 18
-                    ) {
-                        ForEach(0..<pageCount, id: \.self) { pageIndex in
-                            ReaderThumbnailCell(
-                                document: document,
-                                pageIndex: pageIndex,
-                                isCurrentPage: pageIndex == currentPageIndex,
-                                width: thumbnailWidth,
-                                height: thumbnailHeight
-                            ) {
-                                onSelectPage(pageIndex)
-                                dismiss()
+                VStack(spacing: 0) {
+                    jumpHeader(proxy: proxy)
+
+                    ScrollView {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: thumbnailWidth, maximum: thumbnailWidth), spacing: 16)],
+                            spacing: 18
+                        ) {
+                            ForEach(0..<pageCount, id: \.self) { pageIndex in
+                                ReaderThumbnailCell(
+                                    document: document,
+                                    pageIndex: pageIndex,
+                                    isCurrentPage: pageIndex == currentPageIndex,
+                                    width: thumbnailWidth,
+                                    height: thumbnailHeight
+                                ) {
+                                    openPage(at: pageIndex)
+                                }
+                                .id(pageIndex)
                             }
-                            .id(pageIndex)
                         }
+                        .padding(20)
                     }
-                    .padding(20)
+                    .background(Color(.systemGroupedBackground))
                 }
-                .background(Color(.systemGroupedBackground))
                 .navigationTitle("Pages")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -52,15 +67,25 @@ struct ReaderThumbnailBrowserSheet: View {
                         }
                     }
                 }
+                .onAppear {
+                    if pageNumberText.isEmpty {
+                        pageNumberText = "\(currentPageIndex + 1)"
+                    }
+                }
+                .onChange(of: currentPageIndex) { _, newValue in
+                    guard !isPageNumberFieldFocused else {
+                        return
+                    }
+
+                    pageNumberText = "\(newValue + 1)"
+                }
                 .task(id: scrollRequestID) {
                     guard pageCount > 0 else {
                         return
                     }
 
                     try? await Task.sleep(nanoseconds: 120_000_000)
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        proxy.scrollTo(currentPageIndex, anchor: .center)
-                    }
+                    scrollToPage(currentPageIndex, using: proxy, animated: false)
                 }
             }
         }
@@ -70,6 +95,70 @@ struct ReaderThumbnailBrowserSheet: View {
 
     private var scrollRequestID: String {
         "\(document.fileURL.path)#\(currentPageIndex)#\(pageCount)"
+    }
+
+    private func jumpHeader(proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                TextField("Page", text: $pageNumberText)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isPageNumberFieldFocused)
+                    .submitLabel(.go)
+                    .frame(maxWidth: 120)
+                    .onSubmit {
+                        openSelectedPage()
+                    }
+
+                Button("Open") {
+                    openSelectedPage()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(normalizedSelectedPageIndex == nil)
+
+                Button("Current") {
+                    isPageNumberFieldFocused = false
+                    scrollToPage(currentPageIndex, using: proxy, animated: true)
+                }
+                .buttonStyle(.bordered)
+
+                Spacer(minLength: 0)
+            }
+
+            if pageCount > 0 {
+                Text("Current page \(currentPageIndex + 1) of \(pageCount)")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color(.secondarySystemGroupedBackground))
+    }
+
+    private func openSelectedPage() {
+        guard let pageIndex = normalizedSelectedPageIndex else {
+            return
+        }
+
+        openPage(at: pageIndex)
+    }
+
+    private func openPage(at pageIndex: Int) {
+        onSelectPage(pageIndex)
+        dismiss()
+    }
+
+    private func scrollToPage(_ pageIndex: Int, using proxy: ScrollViewProxy, animated: Bool) {
+        let action = {
+            proxy.scrollTo(pageIndex, anchor: .center)
+        }
+
+        if animated {
+            withAnimation(.easeInOut(duration: 0.2), action)
+        } else {
+            action()
+        }
     }
 }
 

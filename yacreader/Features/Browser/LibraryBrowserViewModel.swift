@@ -15,13 +15,13 @@ final class LibraryBrowserViewModel: ObservableObject {
     @Published private(set) var searchResults: LibrarySearchResults?
     @Published private(set) var continueReadingComics: [LibraryComic] = []
     @Published private(set) var recentComics: [LibraryComic] = []
-    @Published private(set) var favoritesPreviewComics: [LibraryComic] = []
+    @Published private(set) var favoritesComics: [LibraryComic] = []
     @Published private(set) var specialCollectionCounts: [LibrarySpecialCollectionKind: Int] = [:]
     @Published var searchQuery = ""
     @Published var alert: LibraryAlertState?
 
     let descriptor: LibraryDescriptor
-    let folderID: Int64
+    private(set) var folderID: Int64
 
     private let storageManager: LibraryStorageManager
     private let databaseReader: LibraryDatabaseReader
@@ -40,6 +40,9 @@ final class LibraryBrowserViewModel: ObservableObject {
     private var hasLoaded = false
     private let previewCollectionLimit = 6
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
+    private let supportedImportedFileExtensions: Set<String> = [
+        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"
+    ]
 
     init(
         descriptor: LibraryDescriptor,
@@ -106,6 +109,10 @@ final class LibraryBrowserViewModel: ObservableObject {
         folderID != 1 && content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
     }
 
+    var canImportComicFiles: Bool {
+        content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+    }
+
     var hasActiveSearch: Bool {
         !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -116,6 +123,10 @@ final class LibraryBrowserViewModel: ObservableObject {
 
     var recentPreviewComics: [LibraryComic] {
         Array(recentComics.prefix(previewCollectionLimit))
+    }
+
+    var favoritesPreviewComics: [LibraryComic] {
+        Array(favoritesComics.prefix(previewCollectionLimit))
     }
 
     var currentRecentDays: Int {
@@ -131,7 +142,7 @@ final class LibraryBrowserViewModel: ObservableObject {
         case .reading:
             return continueReadingComics.count
         case .favorites:
-            return favoritesPreviewComics.count
+            return favoritesComics.count
         case .recent:
             return recentComics.count
         }
@@ -171,17 +182,14 @@ final class LibraryBrowserViewModel: ObservableObject {
             }
         }
 
-        if !favoritesPreviewComics.isEmpty {
-            favoritesPreviewComics = favoritesPreviewComics.compactMap { comic in
+        if folderID == 1 {
+            favoritesComics = favoritesComics.compactMap { comic in
                 let resolvedComic = comic.id == updatedComic.id ? updatedComic : comic
                 return resolvedComic.isFavorite ? resolvedComic : nil
             }
-        }
 
-        if updatedComic.isFavorite, !favoritesPreviewComics.contains(where: { $0.id == updatedComic.id }) {
-            favoritesPreviewComics.insert(updatedComic, at: 0)
-            if favoritesPreviewComics.count > previewCollectionLimit {
-                favoritesPreviewComics.removeLast(favoritesPreviewComics.count - previewCollectionLimit)
+            if updatedComic.isFavorite, !favoritesComics.contains(where: { $0.id == updatedComic.id }) {
+                favoritesComics.insert(updatedComic, at: 0)
             }
         }
 
@@ -375,7 +383,25 @@ final class LibraryBrowserViewModel: ObservableObject {
                 accessSession = try storageManager.makeAccessSession(for: descriptor)
             }
 
-            content = try databaseReader.loadFolderContent(databaseURL: databaseURL, folderID: folderID)
+            var resolvedFolderID = folderID
+            do {
+                content = try databaseReader.loadFolderContent(
+                    databaseURL: databaseURL,
+                    folderID: resolvedFolderID
+                )
+            } catch let error as LibraryDatabaseReadError {
+                if case .folderNotFound = error, resolvedFolderID != 1 {
+                    resolvedFolderID = 1
+                    content = try databaseReader.loadFolderContent(
+                        databaseURL: databaseURL,
+                        folderID: resolvedFolderID
+                    )
+                } else {
+                    throw error
+                }
+            }
+
+            folderID = resolvedFolderID
             emptyStateMessage = nil
             refreshSpecialCollectionPreviewsIfNeeded()
             refreshSearchIfNeeded()
@@ -384,7 +410,7 @@ final class LibraryBrowserViewModel: ObservableObject {
             emptyStateMessage = error.localizedDescription
             continueReadingComics = []
             recentComics = []
-            favoritesPreviewComics = []
+            favoritesComics = []
             specialCollectionCounts = [:]
             clearSearch()
         } catch {
@@ -392,7 +418,7 @@ final class LibraryBrowserViewModel: ObservableObject {
             alert = LibraryAlertState(title: "Failed to Open Library", message: error.localizedDescription)
             continueReadingComics = []
             recentComics = []
-            favoritesPreviewComics = []
+            favoritesComics = []
             specialCollectionCounts = [:]
             clearSearch()
         }
@@ -606,6 +632,100 @@ final class LibraryBrowserViewModel: ObservableObject {
         }
     }
 
+    func importComicFiles(from urls: [URL]) {
+        guard canImportComicFiles else {
+            return
+        }
+
+        var importedCount = 0
+        var unsupportedNames: [String] = []
+        var failedNames: [String] = []
+
+        do {
+            let destinationDirectoryURL = try importDestinationDirectoryURL()
+            if !FileManager.default.fileExists(atPath: destinationDirectoryURL.path) {
+                try FileManager.default.createDirectory(
+                    at: destinationDirectoryURL,
+                    withIntermediateDirectories: true
+                )
+            }
+
+            for url in urls {
+                let standardizedURL = url.standardizedFileURL
+                let scopedAccess = standardizedURL.startAccessingSecurityScopedResource()
+                defer {
+                    if scopedAccess {
+                        standardizedURL.stopAccessingSecurityScopedResource()
+                    }
+                }
+
+                let values = try standardizedURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+                guard values.isDirectory != true, values.isRegularFile == true else {
+                    unsupportedNames.append(standardizedURL.lastPathComponent)
+                    continue
+                }
+
+                let fileExtension = standardizedURL.pathExtension.lowercased()
+                guard supportedImportedFileExtensions.contains(fileExtension) else {
+                    unsupportedNames.append(standardizedURL.lastPathComponent)
+                    continue
+                }
+
+                let destinationURL = uniqueDestinationURL(
+                    for: standardizedURL,
+                    in: destinationDirectoryURL
+                )
+
+                do {
+                    try FileManager.default.copyItem(at: standardizedURL, to: destinationURL)
+                    importedCount += 1
+                } catch {
+                    failedNames.append(standardizedURL.lastPathComponent)
+                }
+            }
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Import Comics",
+                message: error.localizedDescription
+            )
+            return
+        }
+
+        if importedCount > 0 {
+            if canRefreshCurrentFolder {
+                refreshCurrentFolder()
+            } else if canRefreshLibrary {
+                refreshLibrary()
+            } else {
+                load()
+            }
+        }
+
+        if importedCount == 0 && unsupportedNames.isEmpty && failedNames.isEmpty {
+            return
+        }
+
+        var messageLines: [String] = []
+        if importedCount > 0 {
+            let comicWord = importedCount == 1 ? "comic file" : "comic files"
+            messageLines.append("Imported \(importedCount) \(comicWord) into the current library location.")
+        }
+
+        if !unsupportedNames.isEmpty {
+            let fileWord = unsupportedNames.count == 1 ? "file" : "files"
+            messageLines.append("Skipped \(unsupportedNames.count) unsupported \(fileWord).")
+        }
+
+        if !failedNames.isEmpty {
+            messageLines.append("Failed to import \(failedNames.count) item(s): \(previewList(from: failedNames)).")
+        }
+
+        alert = LibraryAlertState(
+            title: importedCount > 0 ? "Import Completed" : "Import Finished with Warnings",
+            message: messageLines.joined(separator: "\n")
+        )
+    }
+
     func importLibraryComicInfo(policy: ComicInfoImportPolicy) {
         guard canImportLibraryComicInfo else {
             return
@@ -655,6 +775,64 @@ final class LibraryBrowserViewModel: ObservableObject {
 
     private var databaseExists: Bool {
         FileManager.default.fileExists(atPath: databaseURL.path)
+    }
+
+    private func importDestinationDirectoryURL() throws -> URL {
+        if accessSession == nil {
+            accessSession = try storageManager.makeAccessSession(for: descriptor)
+        }
+
+        let sourceRootURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+        guard let content else {
+            return sourceRootURL
+        }
+
+        guard !content.folder.isRoot else {
+            return sourceRootURL
+        }
+
+        let relativePath = content.folder.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !relativePath.isEmpty else {
+            return sourceRootURL
+        }
+
+        return sourceRootURL.appendingPathComponent(relativePath, isDirectory: true)
+    }
+
+    private func uniqueDestinationURL(for sourceURL: URL, in directoryURL: URL) -> URL {
+        let preferredURL = directoryURL.appendingPathComponent(sourceURL.lastPathComponent)
+        guard !FileManager.default.fileExists(atPath: preferredURL.path) else {
+            let baseName = sourceURL.deletingPathExtension().lastPathComponent
+            let fileExtension = sourceURL.pathExtension
+            var counter = 1
+
+            while true {
+                let candidateName: String
+                if fileExtension.isEmpty {
+                    candidateName = "\(baseName) (\(counter))"
+                } else {
+                    candidateName = "\(baseName) (\(counter)).\(fileExtension)"
+                }
+
+                let candidateURL = directoryURL.appendingPathComponent(candidateName)
+                if !FileManager.default.fileExists(atPath: candidateURL.path) {
+                    return candidateURL
+                }
+                counter += 1
+            }
+        }
+
+        return preferredURL
+    }
+
+    private func previewList(from names: [String], limit: Int = 3) -> String {
+        let uniqueSortedNames = Array(Set(names)).sorted()
+        guard uniqueSortedNames.count > limit else {
+            return uniqueSortedNames.joined(separator: ", ")
+        }
+
+        let preview = uniqueSortedNames.prefix(limit).joined(separator: ", ")
+        return "\(preview), +\(uniqueSortedNames.count - limit) more"
     }
 
     private func configureSearch() {
@@ -834,7 +1012,7 @@ final class LibraryBrowserViewModel: ObservableObject {
         guard folderID == 1 else {
             continueReadingComics = []
             recentComics = []
-            favoritesPreviewComics = []
+            favoritesComics = []
             specialCollectionCounts = [:]
             return
         }
@@ -851,11 +1029,10 @@ final class LibraryBrowserViewModel: ObservableObject {
             recentDays: recentDays
         )) ?? []
 
-        favoritesPreviewComics = (try? databaseReader.loadSpecialListComics(
+        favoritesComics = (try? databaseReader.loadSpecialListComics(
             databaseURL: databaseURL,
             kind: .favorites,
-            recentDays: recentDays,
-            limit: previewCollectionLimit
+            recentDays: recentDays
         )) ?? []
 
         if let counts = try? databaseReader.loadSpecialListCounts(
@@ -866,7 +1043,7 @@ final class LibraryBrowserViewModel: ObservableObject {
         } else {
             specialCollectionCounts = [
                 .reading: continueReadingComics.count,
-                .favorites: favoritesPreviewComics.count,
+                .favorites: favoritesComics.count,
                 .recent: recentComics.count
             ]
         }
@@ -885,7 +1062,7 @@ final class LibraryBrowserViewModel: ObservableObject {
             return comic
         }
 
-        if let comic = favoritesPreviewComics.first(where: { $0.id == comicID }) {
+        if let comic = favoritesComics.first(where: { $0.id == comicID }) {
             return comic
         }
 
@@ -917,7 +1094,7 @@ final class LibraryBrowserViewModel: ObservableObject {
             let wasFavorite = previous.belongs(to: .favorites, now: now)
             let isFavorite = updated.belongs(to: .favorites, now: now)
             if wasFavorite != isFavorite {
-                counts[.favorites] = max(0, (counts[.favorites] ?? favoritesPreviewComics.count) + (isFavorite ? 1 : -1))
+                counts[.favorites] = max(0, (counts[.favorites] ?? favoritesComics.count) + (isFavorite ? 1 : -1))
             }
 
             let wasRecent = previous.belongs(
@@ -935,7 +1112,7 @@ final class LibraryBrowserViewModel: ObservableObject {
             }
         } else {
             counts[.reading] = continueReadingComics.count
-            counts[.favorites] = max(counts[.favorites] ?? 0, favoritesPreviewComics.count)
+            counts[.favorites] = max(counts[.favorites] ?? 0, favoritesComics.count)
             counts[.recent] = recentComics.count
         }
 
