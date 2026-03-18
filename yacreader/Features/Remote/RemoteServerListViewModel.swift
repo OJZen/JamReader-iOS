@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-struct RemoteAlertState: Identifiable {
+struct RemoteAlertState: Identifiable, Error {
     let id = UUID()
     let title: String
     let message: String
@@ -138,7 +138,7 @@ final class RemoteServerListViewModel: ObservableObject {
         )
     }
 
-    func save(draft: RemoteServerEditorDraft) -> Bool {
+    func save(draft: RemoteServerEditorDraft) -> Result<Void, RemoteAlertState> {
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let host = draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
         let shareName = draft.shareName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -147,11 +147,12 @@ final class RemoteServerListViewModel: ObservableObject {
         let password = draft.password.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let port = Int(draft.portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            alert = RemoteAlertState(
-                title: "Invalid Port",
-                message: "Enter a numeric port for the SMB server."
+            return .failure(
+                RemoteAlertState(
+                    title: "Invalid Port",
+                    message: "Enter a numeric port for the SMB server."
+                )
             )
-            return false
         }
 
         let serverID = draft.existingProfileID ?? draft.id
@@ -181,19 +182,21 @@ final class RemoteServerListViewModel: ObservableObject {
             .map(\.message)
 
         if draft.authenticationMode.requiresPassword && password.isEmpty && !draft.hasStoredPassword {
-            alert = RemoteAlertState(
-                title: "Password Required",
-                message: "Enter a password for this SMB server, or switch the connection to Guest."
+            return .failure(
+                RemoteAlertState(
+                    title: "Password Required",
+                    message: "Enter a password for this SMB server, or switch the connection to Guest."
+                )
             )
-            return false
         }
 
         if !blockingIssues.isEmpty {
-            alert = RemoteAlertState(
-                title: "Incomplete SMB Server",
-                message: blockingIssues.joined(separator: "\n")
+            return .failure(
+                RemoteAlertState(
+                    title: "Incomplete SMB Server",
+                    message: blockingIssues.joined(separator: "\n")
+                )
             )
-            return false
         }
 
         do {
@@ -218,13 +221,14 @@ final class RemoteServerListViewModel: ObservableObject {
             }
             refreshRecentActivity()
             refreshCacheSummary()
-            return true
+            return .success(())
         } catch {
-            alert = RemoteAlertState(
-                title: "Failed to Save SMB Server",
-                message: error.localizedDescription
+            return .failure(
+                RemoteAlertState(
+                    title: "Failed to Save SMB Server",
+                    message: error.localizedDescription
+                )
             )
-            return false
         }
     }
 

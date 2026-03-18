@@ -84,9 +84,11 @@ struct RemoteServerListView: View {
         }
         .sheet(item: $editorDraft) { draft in
             RemoteServerEditorSheet(draft: draft) { updatedDraft in
-                if viewModel.save(draft: updatedDraft) {
+                let result = viewModel.save(draft: updatedDraft)
+                if case .success = result {
                     editorDraft = nil
                 }
+                return result
             }
         }
         .sheet(item: $actionsProfile) { profile in
@@ -387,14 +389,15 @@ private enum PendingRemoteServerAction {
 private struct RemoteServerEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    let onSave: (RemoteServerEditorDraft) -> Void
+    let onSave: (RemoteServerEditorDraft) -> Result<Void, RemoteAlertState>
 
     @State private var draft: RemoteServerEditorDraft
+    @State private var alert: RemoteAlertState?
     @FocusState private var isNameFieldFocused: Bool
 
     init(
         draft: RemoteServerEditorDraft,
-        onSave: @escaping (RemoteServerEditorDraft) -> Void
+        onSave: @escaping (RemoteServerEditorDraft) -> Result<Void, RemoteAlertState>
     ) {
         self.onSave = onSave
         _draft = State(initialValue: draft)
@@ -477,14 +480,35 @@ private struct RemoteServerEditorSheet: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button(draft.actionTitle) {
-                        onSave(draft)
+                        switch onSave(draft) {
+                        case .success:
+                            break
+                        case .failure(let alertState):
+                            alert = alertState
+                        }
                     }
                 }
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .onAppear {
+        .alert(item: $alert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .task {
+            guard !Task.isCancelled else {
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+
             isNameFieldFocused = true
         }
     }
