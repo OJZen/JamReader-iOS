@@ -8,17 +8,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
-    }
-}
+    @ObservedObject var viewModel: LibraryListViewModel
+    let dependencies: AppDependencies
 
-#Preview {
-    ContentView()
+    var body: some View {
+        LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
+    }
 }

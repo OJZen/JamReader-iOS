@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+xcuserdata/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Local test outputs
+/tmp/
+
+# Local large sample archives (kept locally for manual testing)
+res/*.zip
+res/*.rar
+res/*.7z
+res/*.cbz
+res/*.cbr
+res/*.cb7
+res/*.cbt

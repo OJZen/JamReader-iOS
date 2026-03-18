@@ -9,9 +9,24 @@ import SwiftUI
 
 @main
 struct yacreaderApp: App {
+    private let dependencies: AppDependencies
+    @StateObject private var libraryListViewModel: LibraryListViewModel
+
+    init() {
+        let dependencies = AppDependencies.makeDefault()
+        self.dependencies = dependencies
+        _libraryListViewModel = StateObject(
+            wrappedValue: LibraryListViewModel(
+                store: dependencies.libraryDescriptorStore,
+                storageManager: dependencies.libraryStorageManager,
+                inspector: dependencies.databaseInspector
+            )
+        )
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(viewModel: libraryListViewModel, dependencies: dependencies)
         }
     }
 }

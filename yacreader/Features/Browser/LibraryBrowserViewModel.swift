@@ -1,0 +1,958 @@
+import Combine
+import Foundation
+
+@MainActor
+final class LibraryBrowserViewModel: ObservableObject {
+    @Published private(set) var content: LibraryFolderContent?
+    @Published private(set) var isLoading = false
+    @Published private(set) var isInitializingLibrary = false
+    @Published private(set) var isRefreshingLibrary = false
+    @Published private(set) var isSearching = false
+    @Published private(set) var emptyStateMessage: String?
+    @Published private(set) var lastInitializationSummary: LibraryScanSummary?
+    @Published private(set) var scanProgress: LibraryScanProgress?
+    @Published private(set) var scanCompletion: LibraryScanCompletionState?
+    @Published private(set) var searchResults: LibrarySearchResults?
+    @Published private(set) var continueReadingComics: [LibraryComic] = []
+    @Published private(set) var recentComics: [LibraryComic] = []
+    @Published private(set) var favoritesPreviewComics: [LibraryComic] = []
+    @Published private(set) var specialCollectionCounts: [LibrarySpecialCollectionKind: Int] = [:]
+    @Published var searchQuery = ""
+    @Published var alert: LibraryAlertState?
+
+    let descriptor: LibraryDescriptor
+    let folderID: Int64
+
+    private let storageManager: LibraryStorageManager
+    private let databaseReader: LibraryDatabaseReader
+    private let databaseWriter: LibraryDatabaseWriter
+    private let databaseBootstrapper: LibraryDatabaseBootstrapper
+    private let libraryScanner: LibraryScanner
+    private let coverLocator: LibraryCoverLocator
+    private let comicInfoImportService: ComicInfoImportService
+
+    private let metadataRootURL: URL
+    private let databaseURL: URL
+    private var activeSearchToken = UUID()
+    private var accessSession: LibraryAccessSession?
+    private var cancellables = Set<AnyCancellable>()
+    private var scanCompletionDismissTask: Task<Void, Never>?
+    private var hasLoaded = false
+    private let previewCollectionLimit = 6
+    private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
+
+    init(
+        descriptor: LibraryDescriptor,
+        folderID: Int64 = 1,
+        storageManager: LibraryStorageManager,
+        databaseReader: LibraryDatabaseReader,
+        databaseWriter: LibraryDatabaseWriter,
+        databaseBootstrapper: LibraryDatabaseBootstrapper,
+        libraryScanner: LibraryScanner,
+        coverLocator: LibraryCoverLocator,
+        comicInfoImportService: ComicInfoImportService
+    ) {
+        self.descriptor = descriptor
+        self.folderID = folderID
+        self.storageManager = storageManager
+        self.databaseReader = databaseReader
+        self.databaseWriter = databaseWriter
+        self.databaseBootstrapper = databaseBootstrapper
+        self.libraryScanner = libraryScanner
+        self.coverLocator = coverLocator
+        self.comicInfoImportService = comicInfoImportService
+        self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
+        self.databaseURL = storageManager.databaseURL(for: descriptor)
+        configureSearch()
+    }
+
+    var navigationTitle: String {
+        if let content {
+            return content.folder.isRoot ? descriptor.name : content.folder.displayName
+        }
+
+        return descriptor.name
+    }
+
+    var folderPath: String {
+        content?.folder.path ?? descriptor.sourcePath
+    }
+
+    var databasePath: String {
+        databaseURL.path
+    }
+
+    var canInitializeLibrary: Bool {
+        content == nil && !databaseExists && folderID == 1
+    }
+
+    var canRefreshLibrary: Bool {
+        folderID == 1 && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+    }
+
+    var canRefreshCurrentFolder: Bool {
+        folderID != 1 && content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+    }
+
+    var canScanFromCurrentContext: Bool {
+        canRefreshLibrary || canRefreshCurrentFolder
+    }
+
+    var canImportLibraryComicInfo: Bool {
+        folderID == 1 && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+    }
+
+    var canImportCurrentFolderComicInfo: Bool {
+        folderID != 1 && content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+    }
+
+    var hasActiveSearch: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var continueReadingComic: LibraryComic? {
+        continueReadingComics.first
+    }
+
+    var recentPreviewComics: [LibraryComic] {
+        Array(recentComics.prefix(previewCollectionLimit))
+    }
+
+    var currentRecentDays: Int {
+        recentDays
+    }
+
+    func specialCollectionCount(for kind: LibrarySpecialCollectionKind) -> Int {
+        if let count = specialCollectionCounts[kind] {
+            return count
+        }
+
+        switch kind {
+        case .reading:
+            return continueReadingComics.count
+        case .favorites:
+            return favoritesPreviewComics.count
+        case .recent:
+            return recentComics.count
+        }
+    }
+
+    func applyUpdatedComic(_ updatedComic: LibraryComic) {
+        let previousComic = existingComicSnapshot(for: updatedComic.id)
+
+        if let content {
+            let updatedComics = content.comics.map { comic in
+                comic.id == updatedComic.id ? updatedComic : comic
+            }
+
+            if updatedComics != content.comics {
+                self.content = LibraryFolderContent(
+                    folder: content.folder,
+                    subfolders: content.subfolders,
+                    comics: updatedComics
+                )
+            }
+        }
+
+        if !continueReadingComics.isEmpty {
+            continueReadingComics = continueReadingComics.compactMap { comic in
+                let resolvedComic = comic.id == updatedComic.id ? updatedComic : comic
+                return resolvedComic.isContinueReadingCandidate ? resolvedComic : nil
+            }
+        }
+
+        if !recentComics.isEmpty {
+            recentComics = recentComics.compactMap { comic in
+                let resolvedComic = comic.id == updatedComic.id ? updatedComic : comic
+                return resolvedComic.belongs(
+                    to: .recent,
+                    recentDays: recentDays
+                ) ? resolvedComic : nil
+            }
+        }
+
+        if !favoritesPreviewComics.isEmpty {
+            favoritesPreviewComics = favoritesPreviewComics.compactMap { comic in
+                let resolvedComic = comic.id == updatedComic.id ? updatedComic : comic
+                return resolvedComic.isFavorite ? resolvedComic : nil
+            }
+        }
+
+        if updatedComic.isFavorite, !favoritesPreviewComics.contains(where: { $0.id == updatedComic.id }) {
+            favoritesPreviewComics.insert(updatedComic, at: 0)
+            if favoritesPreviewComics.count > previewCollectionLimit {
+                favoritesPreviewComics.removeLast(favoritesPreviewComics.count - previewCollectionLimit)
+            }
+        }
+
+        if let searchResults {
+            self.searchResults = LibrarySearchResults(
+                query: searchResults.query,
+                folders: searchResults.folders,
+                comics: searchResults.comics.map { comic in
+                    comic.id == updatedComic.id ? updatedComic : comic
+                }
+            )
+        }
+
+        refreshSpecialCollectionCountsLocally(
+            previous: previousComic,
+            updated: updatedComic
+        )
+    }
+
+    func toggleFavorite(for comic: LibraryComic) {
+        let updatedValue = !comic.isFavorite
+
+        do {
+            try databaseWriter.setFavorite(
+                updatedValue,
+                for: comic.id,
+                in: databaseURL
+            )
+            applyUpdatedComic(comic.updatingFavorite(updatedValue))
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Update Favorites",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func toggleReadStatus(for comic: LibraryComic) {
+        let updatedValue = !comic.read
+
+        do {
+            try databaseWriter.setReadStatus(
+                updatedValue,
+                for: comic.id,
+                in: databaseURL
+            )
+            applyUpdatedComic(comic.updatingReadState(updatedValue))
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Update Read Status",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func setRating(_ rating: Int, for comic: LibraryComic) {
+        let normalizedRating = min(max(rating, 0), 5)
+        let ratingValue = normalizedRating > 0 ? Double(normalizedRating) : nil
+        let currentRating = min(max(Int((comic.rating ?? 0).rounded()), 0), 5)
+        guard currentRating != normalizedRating else {
+            return
+        }
+
+        do {
+            try databaseWriter.setRating(
+                ratingValue,
+                for: comic.id,
+                in: databaseURL
+            )
+            applyUpdatedComic(comic.updatingRating(ratingValue))
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Update Rating",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func setFavorite(
+        _ isFavorite: Bool,
+        for comicIDs: [Int64]
+    ) -> Bool {
+        let visibleComicsByID = Dictionary(uniqueKeysWithValues: (content?.comics ?? []).map { ($0.id, $0) })
+        let targetComics = comicIDs.compactMap { visibleComicsByID[$0] }
+        guard !targetComics.isEmpty else {
+            return false
+        }
+
+        do {
+            try databaseWriter.setFavorite(
+                isFavorite,
+                for: targetComics.map(\.id),
+                in: databaseURL
+            )
+
+            for comic in targetComics {
+                applyUpdatedComic(comic.updatingFavorite(isFavorite))
+            }
+            return true
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Update Favorites",
+                message: error.localizedDescription
+            )
+            return false
+        }
+    }
+
+    func setReadStatus(
+        _ isRead: Bool,
+        for comicIDs: [Int64]
+    ) -> Bool {
+        let visibleComicsByID = Dictionary(uniqueKeysWithValues: (content?.comics ?? []).map { ($0.id, $0) })
+        let targetComics = comicIDs.compactMap { visibleComicsByID[$0] }
+        guard !targetComics.isEmpty else {
+            return false
+        }
+
+        do {
+            try databaseWriter.setReadStatus(
+                isRead,
+                for: targetComics.map(\.id),
+                in: databaseURL
+            )
+
+            for comic in targetComics {
+                applyUpdatedComic(comic.updatingReadState(isRead))
+            }
+            return true
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Update Read Status",
+                message: error.localizedDescription
+            )
+            return false
+        }
+    }
+
+    func loadIfNeeded() {
+        guard !hasLoaded else {
+            return
+        }
+
+        hasLoaded = true
+        load()
+    }
+
+    func refreshIfLoaded() {
+        guard hasLoaded else {
+            return
+        }
+
+        load()
+    }
+
+    func load() {
+        loadContent(respectingTransientState: true)
+    }
+
+    func setRecentDays(_ days: Int) {
+        let normalizedDays = max(1, days)
+        guard recentDays != normalizedDays else {
+            return
+        }
+
+        recentDays = normalizedDays
+
+        guard hasLoaded else {
+            return
+        }
+
+        refreshSpecialCollectionPreviewsIfNeeded()
+    }
+
+    private func loadContent(respectingTransientState: Bool) {
+        if respectingTransientState {
+            guard !isLoading, !isInitializingLibrary, !isRefreshingLibrary else {
+                return
+            }
+        } else if isLoading {
+            return
+        }
+
+        isLoading = true
+        defer {
+            isLoading = false
+        }
+
+        do {
+            if accessSession == nil {
+                accessSession = try storageManager.makeAccessSession(for: descriptor)
+            }
+
+            content = try databaseReader.loadFolderContent(databaseURL: databaseURL, folderID: folderID)
+            emptyStateMessage = nil
+            refreshSpecialCollectionPreviewsIfNeeded()
+            refreshSearchIfNeeded()
+        } catch let error as LibraryDatabaseReadError {
+            content = nil
+            emptyStateMessage = error.localizedDescription
+            continueReadingComics = []
+            recentComics = []
+            favoritesPreviewComics = []
+            specialCollectionCounts = [:]
+            clearSearch()
+        } catch {
+            content = nil
+            alert = LibraryAlertState(title: "Failed to Open Library", message: error.localizedDescription)
+            continueReadingComics = []
+            recentComics = []
+            favoritesPreviewComics = []
+            specialCollectionCounts = [:]
+            clearSearch()
+        }
+    }
+
+    func initializeLibrary() {
+        guard canInitializeLibrary, !isInitializingLibrary else {
+            return
+        }
+
+        dismissScanCompletion()
+        isInitializingLibrary = true
+        emptyStateMessage = nil
+        alert = nil
+        scanProgress = LibraryScanProgress(
+            phase: .preparing,
+            currentPath: "/",
+            processedFolderCount: 0,
+            processedComicCount: 0
+        )
+
+        do {
+            if accessSession == nil {
+                accessSession = try storageManager.makeAccessSession(for: descriptor)
+            }
+            let sourceURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+            let retainedAccessSession = accessSession
+            let databaseBootstrapper = self.databaseBootstrapper
+            let libraryScanner = self.libraryScanner
+            let databaseURL = self.databaseURL
+            let progressHandler = makeScanProgressHandler()
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = retainedAccessSession
+
+                let result = Result {
+                    try databaseBootstrapper.createDatabaseIfNeeded(at: databaseURL)
+                    return try libraryScanner.scanLibrary(
+                        sourceRootURL: sourceURL,
+                        databaseURL: databaseURL,
+                        progressHandler: progressHandler
+                    )
+                }
+
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+
+                    self.isInitializingLibrary = false
+                    self.scanProgress = nil
+
+                    switch result {
+                    case .success(let summary):
+                        self.lastInitializationSummary = summary
+                        self.loadContent(respectingTransientState: false)
+                        self.showScanCompletion(
+                            title: "Library Ready",
+                            summary: summary
+                        )
+                    case .failure(let error):
+                        self.alert = LibraryAlertState(
+                            title: "Failed to Initialize Library",
+                            message: error.localizedDescription
+                        )
+                        self.emptyStateMessage = error.localizedDescription
+                    }
+                }
+            }
+        } catch {
+            isInitializingLibrary = false
+            scanProgress = nil
+            alert = LibraryAlertState(title: "Failed to Initialize Library", message: error.localizedDescription)
+            emptyStateMessage = error.localizedDescription
+        }
+    }
+
+    func refreshLibrary() {
+        guard canRefreshLibrary else {
+            return
+        }
+
+        dismissScanCompletion()
+        isRefreshingLibrary = true
+        alert = nil
+        scanProgress = LibraryScanProgress(
+            phase: .preparing,
+            currentPath: "/",
+            processedFolderCount: 0,
+            processedComicCount: 0
+        )
+
+        do {
+            if accessSession == nil {
+                accessSession = try storageManager.makeAccessSession(for: descriptor)
+            }
+            let sourceURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+            let retainedAccessSession = accessSession
+            let libraryScanner = self.libraryScanner
+            let databaseURL = self.databaseURL
+            let progressHandler = makeScanProgressHandler()
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = retainedAccessSession
+
+                let result = Result {
+                    try libraryScanner.rescanLibrary(
+                        sourceRootURL: sourceURL,
+                        databaseURL: databaseURL,
+                        progressHandler: progressHandler
+                    )
+                }
+
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+
+                    self.isRefreshingLibrary = false
+                    self.scanProgress = nil
+
+                    switch result {
+                    case .success(let summary):
+                        self.lastInitializationSummary = summary
+                        self.loadContent(respectingTransientState: false)
+                        self.showScanCompletion(
+                            title: "Library Refreshed",
+                            summary: summary
+                        )
+                    case .failure(let error):
+                        self.alert = LibraryAlertState(
+                            title: "Failed to Refresh Library",
+                            message: error.localizedDescription
+                        )
+                    }
+                }
+            }
+        } catch {
+            isRefreshingLibrary = false
+            scanProgress = nil
+            alert = LibraryAlertState(title: "Failed to Refresh Library", message: error.localizedDescription)
+        }
+    }
+
+    func refreshCurrentFolder() {
+        guard canRefreshCurrentFolder, let currentFolder = content?.folder else {
+            return
+        }
+
+        dismissScanCompletion()
+        isRefreshingLibrary = true
+        alert = nil
+        scanProgress = LibraryScanProgress(
+            phase: .preparing,
+            currentPath: currentFolder.path,
+            processedFolderCount: 0,
+            processedComicCount: 0
+        )
+
+        do {
+            if accessSession == nil {
+                accessSession = try storageManager.makeAccessSession(for: descriptor)
+            }
+
+            let sourceURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+            let retainedAccessSession = accessSession
+            let libraryScanner = self.libraryScanner
+            let databaseURL = self.databaseURL
+            let progressHandler = makeScanProgressHandler()
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = retainedAccessSession
+
+                let result = Result {
+                    try libraryScanner.refreshFolder(
+                        sourceRootURL: sourceURL,
+                        databaseURL: databaseURL,
+                        folder: currentFolder,
+                        progressHandler: progressHandler
+                    )
+                }
+
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+
+                    self.isRefreshingLibrary = false
+                    self.scanProgress = nil
+
+                    switch result {
+                    case .success(let summary):
+                        self.lastInitializationSummary = summary
+                        self.loadContent(respectingTransientState: false)
+                        self.showScanCompletion(
+                            title: "Folder Refreshed",
+                            summary: summary
+                        )
+                    case .failure(let error):
+                        self.alert = LibraryAlertState(
+                            title: "Failed to Refresh Folder",
+                            message: error.localizedDescription
+                        )
+                    }
+                }
+            }
+        } catch {
+            isRefreshingLibrary = false
+            scanProgress = nil
+            alert = LibraryAlertState(title: "Failed to Refresh Folder", message: error.localizedDescription)
+        }
+    }
+
+    func importLibraryComicInfo(policy: ComicInfoImportPolicy) {
+        guard canImportLibraryComicInfo else {
+            return
+        }
+
+        performComicInfoImport(
+            policy: policy,
+            initialPath: "/",
+            emptyTitle: "No Comics Found",
+            emptyMessage: "The library does not contain any comics yet."
+        ) { databaseURL, databaseReader in
+            try databaseReader.loadAllComics(databaseURL: databaseURL)
+        }
+    }
+
+    func importCurrentFolderComicInfo(policy: ComicInfoImportPolicy) {
+        guard canImportCurrentFolderComicInfo, let currentFolder = content?.folder else {
+            return
+        }
+
+        performComicInfoImport(
+            policy: policy,
+            initialPath: currentFolder.path,
+            emptyTitle: "No Comics Found",
+            emptyMessage: "The current folder does not contain any comics yet."
+        ) { databaseURL, databaseReader in
+            try databaseReader.loadComicsRecursively(
+                databaseURL: databaseURL,
+                folderID: currentFolder.id
+            )
+        }
+    }
+
+    func coverURL(for folder: LibraryFolder) -> URL? {
+        coverLocator.coverURL(for: folder, metadataRootURL: metadataRootURL)
+    }
+
+    func coverURL(for comic: LibraryComic) -> URL? {
+        coverLocator.coverURL(for: comic, metadataRootURL: metadataRootURL)
+    }
+
+    func dismissScanCompletion() {
+        scanCompletionDismissTask?.cancel()
+        scanCompletionDismissTask = nil
+        scanCompletion = nil
+    }
+
+    private var databaseExists: Bool {
+        FileManager.default.fileExists(atPath: databaseURL.path)
+    }
+
+    private func configureSearch() {
+        $searchQuery
+            .removeDuplicates()
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .sink { [weak self] query in
+                self?.searchLibrary(matching: query)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func showScanCompletion(title: String, summary: LibraryScanSummary) {
+        showCompletion(
+            title: title,
+            message: summary.completionLine
+        )
+    }
+
+    private func showCompletion(title: String, message: String) {
+        let completion = LibraryScanCompletionState(
+            title: title,
+            message: message
+        )
+
+        scanCompletionDismissTask?.cancel()
+        scanCompletion = completion
+
+        scanCompletionDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                guard self?.scanCompletion?.id == completion.id else {
+                    return
+                }
+
+                self?.scanCompletion = nil
+                self?.scanCompletionDismissTask = nil
+            }
+        }
+    }
+
+    private func performComicInfoImport(
+        policy: ComicInfoImportPolicy,
+        initialPath: String?,
+        emptyTitle: String,
+        emptyMessage: String,
+        comicsLoader: @escaping (URL, LibraryDatabaseReader) throws -> [LibraryComic]
+    ) {
+        guard !isInitializingLibrary, !isRefreshingLibrary else {
+            return
+        }
+
+        dismissScanCompletion()
+        isRefreshingLibrary = true
+        alert = nil
+        scanProgress = LibraryScanProgress(
+            phase: .preparing,
+            currentPath: initialPath,
+            processedFolderCount: 0,
+            processedComicCount: 0
+        )
+
+        let descriptor = self.descriptor
+        let databaseReader = self.databaseReader
+        let databaseURL = self.databaseURL
+        let comicInfoImportService = self.comicInfoImportService
+        let progressHandler = makeScanProgressHandler()
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                let comics = try comicsLoader(databaseURL, databaseReader)
+                guard !comics.isEmpty else {
+                    return ComicInfoImportBatchResult(
+                        totalCount: 0,
+                        importedCount: 0,
+                        skippedCount: 0,
+                        failedTitles: []
+                    )
+                }
+
+                return try comicInfoImportService.importEmbeddedComicInfoSynchronously(
+                    for: descriptor,
+                    comics: comics,
+                    policy: policy,
+                    progressHandler: progressHandler
+                )
+            }
+
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    return
+                }
+
+                self.isRefreshingLibrary = false
+                self.scanProgress = nil
+
+                switch result {
+                case .success(let summary):
+                    guard summary.totalCount > 0 else {
+                        self.alert = LibraryAlertState(
+                            title: emptyTitle,
+                            message: emptyMessage
+                        )
+                        return
+                    }
+
+                    self.loadContent(respectingTransientState: false)
+                    self.showCompletion(
+                        title: summary.alertTitle,
+                        message: summary.alertMessage
+                    )
+                case .failure(let error):
+                    self.alert = LibraryAlertState(
+                        title: "Failed to Import ComicInfo",
+                        message: error.localizedDescription
+                    )
+                }
+            }
+        }
+    }
+
+    private func searchLibrary(matching query: String) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            clearSearch()
+            return
+        }
+
+        let searchToken = UUID()
+        activeSearchToken = searchToken
+        isSearching = true
+
+        let databaseReader = self.databaseReader
+        let databaseURL = self.databaseURL
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                try databaseReader.searchLibrary(
+                    databaseURL: databaseURL,
+                    query: trimmedQuery,
+                    limit: 40
+                )
+            }
+
+            Task { @MainActor [weak self] in
+                guard let self, self.activeSearchToken == searchToken else {
+                    return
+                }
+
+                self.isSearching = false
+
+                switch result {
+                case .success(let results):
+                    self.searchResults = results
+                case .failure(let error):
+                    self.searchResults = nil
+                    self.alert = LibraryAlertState(title: "Search Failed", message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func refreshSearchIfNeeded() {
+        guard hasActiveSearch else {
+            return
+        }
+
+        searchLibrary(matching: searchQuery)
+    }
+
+    private func refreshSpecialCollectionPreviewsIfNeeded() {
+        guard folderID == 1 else {
+            continueReadingComics = []
+            recentComics = []
+            favoritesPreviewComics = []
+            specialCollectionCounts = [:]
+            return
+        }
+
+        continueReadingComics = (try? databaseReader.loadSpecialListComics(
+            databaseURL: databaseURL,
+            kind: .reading,
+            recentDays: recentDays
+        )) ?? []
+
+        recentComics = (try? databaseReader.loadSpecialListComics(
+            databaseURL: databaseURL,
+            kind: .recent,
+            recentDays: recentDays
+        )) ?? []
+
+        favoritesPreviewComics = (try? databaseReader.loadSpecialListComics(
+            databaseURL: databaseURL,
+            kind: .favorites,
+            recentDays: recentDays,
+            limit: previewCollectionLimit
+        )) ?? []
+
+        if let counts = try? databaseReader.loadSpecialListCounts(
+            databaseURL: databaseURL,
+            recentDays: recentDays
+        ) {
+            specialCollectionCounts = counts
+        } else {
+            specialCollectionCounts = [
+                .reading: continueReadingComics.count,
+                .favorites: favoritesPreviewComics.count,
+                .recent: recentComics.count
+            ]
+        }
+    }
+
+    private func existingComicSnapshot(for comicID: Int64) -> LibraryComic? {
+        if let comic = content?.comics.first(where: { $0.id == comicID }) {
+            return comic
+        }
+
+        if let comic = continueReadingComics.first(where: { $0.id == comicID }) {
+            return comic
+        }
+
+        if let comic = recentComics.first(where: { $0.id == comicID }) {
+            return comic
+        }
+
+        if let comic = favoritesPreviewComics.first(where: { $0.id == comicID }) {
+            return comic
+        }
+
+        if let comic = searchResults?.comics.first(where: { $0.id == comicID }) {
+            return comic
+        }
+
+        return nil
+    }
+
+    private func refreshSpecialCollectionCountsLocally(
+        previous: LibraryComic?,
+        updated: LibraryComic
+    ) {
+        var counts = specialCollectionCounts
+        guard !counts.isEmpty else {
+            return
+        }
+
+        let now = Date()
+
+        if let previous {
+            let wasReading = previous.belongs(to: .reading, now: now)
+            let isReading = updated.belongs(to: .reading, now: now)
+            if wasReading != isReading {
+                counts[.reading] = max(0, (counts[.reading] ?? continueReadingComics.count) + (isReading ? 1 : -1))
+            }
+
+            let wasFavorite = previous.belongs(to: .favorites, now: now)
+            let isFavorite = updated.belongs(to: .favorites, now: now)
+            if wasFavorite != isFavorite {
+                counts[.favorites] = max(0, (counts[.favorites] ?? favoritesPreviewComics.count) + (isFavorite ? 1 : -1))
+            }
+
+            let wasRecent = previous.belongs(
+                to: .recent,
+                recentDays: recentDays,
+                now: now
+            )
+            let isRecent = updated.belongs(
+                to: .recent,
+                recentDays: recentDays,
+                now: now
+            )
+            if wasRecent != isRecent {
+                counts[.recent] = max(0, (counts[.recent] ?? recentComics.count) + (isRecent ? 1 : -1))
+            }
+        } else {
+            counts[.reading] = continueReadingComics.count
+            counts[.favorites] = max(counts[.favorites] ?? 0, favoritesPreviewComics.count)
+            counts[.recent] = recentComics.count
+        }
+
+        specialCollectionCounts = counts
+    }
+
+    private func clearSearch() {
+        activeSearchToken = UUID()
+        isSearching = false
+        searchResults = nil
+    }
+
+    private func makeScanProgressHandler() -> (LibraryScanProgress) -> Void {
+        { [weak self] progress in
+            Task { @MainActor [weak self] in
+                self?.scanProgress = progress
+            }
+        }
+    }
+}

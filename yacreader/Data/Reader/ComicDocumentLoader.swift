@@ -1,0 +1,101 @@
+import Foundation
+import PDFKit
+
+enum ComicDocumentLoadError: LocalizedError {
+    case fileMissing
+    case unreadablePDF
+
+    var errorDescription: String? {
+        switch self {
+        case .fileMissing:
+            return "The selected comic file could not be found."
+        case .unreadablePDF:
+            return "The PDF could not be opened."
+        }
+    }
+}
+
+final class ComicDocumentLoader {
+    private let fileManager: FileManager
+    private let directoryImageSequenceReader: DirectoryImageSequenceReader
+    private let libArchiveReader: LibArchiveReader
+    private let zipArchiveReader: ZIPArchiveReader
+    private let tarArchiveReader: TARArchiveReader
+
+    init(
+        fileManager: FileManager = .default,
+        directoryImageSequenceReader: DirectoryImageSequenceReader = DirectoryImageSequenceReader(),
+        libArchiveReader: LibArchiveReader = LibArchiveReader(),
+        zipArchiveReader: ZIPArchiveReader = ZIPArchiveReader(),
+        tarArchiveReader: TARArchiveReader = TARArchiveReader()
+    ) {
+        self.fileManager = fileManager
+        self.directoryImageSequenceReader = directoryImageSequenceReader
+        self.libArchiveReader = libArchiveReader
+        self.zipArchiveReader = zipArchiveReader
+        self.tarArchiveReader = tarArchiveReader
+    }
+
+    func loadDocument(for comic: LibraryComic, sourceRootURL: URL) throws -> ComicDocument {
+        let fileURL = resolveFileURL(for: comic, sourceRootURL: sourceRootURL)
+
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            throw ComicDocumentLoadError.fileMissing
+        }
+
+        if isDirectory(fileURL) {
+            return .imageSequence(try directoryImageSequenceReader.loadDocument(at: fileURL))
+        }
+
+        let `extension` = fileURL.pathExtension.lowercased()
+        switch `extension` {
+        case "pdf":
+            guard let document = PDFDocument(url: fileURL), document.pageCount > 0 else {
+                throw ComicDocumentLoadError.unreadablePDF
+            }
+
+            return .pdf(
+                PDFComicDocument(
+                    url: fileURL,
+                    pdfDocument: document
+                )
+            )
+        case "cbz", "zip":
+            return .imageSequence(try zipArchiveReader.loadDocument(at: fileURL))
+        case "cbr", "rar", "cb7", "7z", "arj":
+            return .imageSequence(try libArchiveReader.loadDocument(at: fileURL))
+        case "cbt", "tar":
+            return .imageSequence(try tarArchiveReader.loadDocument(at: fileURL))
+        default:
+            return .unsupported(
+                UnsupportedComicDocument(
+                    url: fileURL,
+                    fileExtension: `extension`,
+                    reason: "Archive and image-stream readers are the next migration step."
+                )
+            )
+        }
+    }
+
+    private func isDirectory(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey])
+        return values?.isDirectory == true
+    }
+
+    private func resolveFileURL(for comic: LibraryComic, sourceRootURL: URL) -> URL {
+        let relativePath = {
+            let rawPath = comic.path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if rawPath.isEmpty {
+                return comic.fileName
+            }
+
+            return rawPath
+        }()
+
+        if relativePath.hasPrefix("/") {
+            return sourceRootURL.appendingPathComponent(String(relativePath.dropFirst()))
+        }
+
+        return sourceRootURL.appendingPathComponent(relativePath)
+    }
+}
