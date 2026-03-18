@@ -55,8 +55,21 @@ struct ComicReaderView: View {
                 )
             }
         }
+        .allowsHitTesting(!viewModel.isShowingPageJumpSheet)
         .overlay {
             readerChromeOverlay
+                .allowsHitTesting(!viewModel.isShowingPageJumpSheet)
+        }
+        .overlay {
+            if viewModel.isShowingPageJumpSheet {
+                ReaderPageJumpOverlay(
+                    pageNumberText: $viewModel.pendingPageNumberText,
+                    currentPageNumber: viewModel.currentPageNumber ?? 1,
+                    pageCount: viewModel.pageCount ?? 1,
+                    onCancel: viewModel.dismissPageJump,
+                    onJump: viewModel.submitPageJump
+                )
+            }
         }
         .ignoresSafeArea(.keyboard)
         .navigationTitle(viewModel.navigationTitle)
@@ -82,15 +95,6 @@ struct ComicReaderView: View {
         }
         .onChange(of: horizontalSizeClass) { _, _ in
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
-        }
-        .sheet(isPresented: $viewModel.isShowingPageJumpSheet) {
-            ReaderPageJumpSheet(
-                pageNumberText: $viewModel.pendingPageNumberText,
-                currentPageNumber: viewModel.currentPageNumber ?? 1,
-                pageCount: viewModel.pageCount ?? 1,
-                onCancel: viewModel.dismissPageJump,
-                onJump: viewModel.submitPageJump
-            )
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document = viewModel.document {

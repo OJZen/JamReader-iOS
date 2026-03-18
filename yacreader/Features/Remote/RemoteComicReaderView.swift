@@ -171,8 +171,21 @@ struct RemoteComicReaderView: View {
                 )
             }
         }
+        .allowsHitTesting(!isShowingPageJumpSheet)
         .overlay {
             readerChromeOverlay
+                .allowsHitTesting(!isShowingPageJumpSheet)
+        }
+        .overlay {
+            if isShowingPageJumpSheet {
+                ReaderPageJumpOverlay(
+                    pageNumberText: $pendingPageNumberText,
+                    currentPageNumber: currentPageNumber ?? 1,
+                    pageCount: document?.pageCount ?? 1,
+                    onCancel: dismissPageJump,
+                    onJump: submitPageJump
+                )
+            }
         }
         .ignoresSafeArea(.keyboard)
         .navigationTitle(displayName)
@@ -224,15 +237,6 @@ struct RemoteComicReaderView: View {
         }
         .onChange(of: currentPageIndex) { _, _ in
             persistProgress()
-        }
-        .sheet(isPresented: $isShowingPageJumpSheet) {
-            RemoteReaderPageJumpSheet(
-                pageNumberText: $pendingPageNumberText,
-                currentPageNumber: currentPageNumber ?? 1,
-                pageCount: document?.pageCount ?? 1,
-                onCancel: dismissPageJump,
-                onJump: submitPageJump
-            )
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document {
