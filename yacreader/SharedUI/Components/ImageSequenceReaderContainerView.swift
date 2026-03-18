@@ -476,6 +476,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     private var loadedPages: [LoadedComicPage] = []
     private var hasStartedLoading = false
     private var loadTask: Task<Void, Never>?
+    private var hasAppliedInitialPresentation = false
     private var lastViewportSize: CGSize = .zero
     private let onTapRegion: (ReaderTapRegion) -> Void
 
@@ -519,10 +520,22 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         layoutLoadedPages(resetZoomScale: viewportDidChange)
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasAppliedInitialPresentation else {
+            return
+        }
+
+        hasAppliedInitialPresentation = true
+        layoutLoadedPages(resetZoomScale: true)
+    }
+
     private func configureSubviews() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.backgroundColor = .black
         scrollView.delegate = self
+        scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.minimumZoomScale = 1
         scrollView.maximumZoomScale = 4
         scrollView.decelerationRate = .fast

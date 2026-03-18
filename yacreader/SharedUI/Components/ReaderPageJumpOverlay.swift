@@ -24,22 +24,32 @@ struct ReaderPageJumpOverlay: View {
                 .fill(.black.opacity(0.38))
                 .ignoresSafeArea()
 
-            VStack {
-                Spacer(minLength: 96)
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
 
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(spacing: 0) {
                     HStack {
-                        Text("Go to Page")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
+                        Button("Cancel", action: onCancel)
+                            .font(.body)
 
                         Spacer(minLength: 12)
 
-                        Button("Cancel", action: onCancel)
-                            .buttonStyle(.borderless)
-                    }
+                        Text("Go to Page")
+                            .font(.headline)
 
-                    VStack(alignment: .leading, spacing: 10) {
+                        Spacer(minLength: 12)
+
+                        Button("Jump", action: onJump)
+                            .font(.body.weight(.semibold))
+                            .disabled(!isValidPageNumber)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 14)
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("Page")
                             .font(.headline)
                             .foregroundStyle(.secondary)
@@ -49,42 +59,36 @@ struct ReaderPageJumpOverlay: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .focused($isFocused)
-                            .font(.system(size: 30, weight: .semibold, design: .rounded))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 16)
+                            .font(.system(size: 34, weight: .semibold, design: .default))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
                             .background(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(Color(uiColor: .secondarySystemBackground))
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
                             )
 
-                        Text("Current page: \(currentPageNumber)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Text("Valid range: 1-\(pageCount)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Current page: \(currentPageNumber)")
+                            Text("Valid range: 1-\(pageCount)")
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
-
-                    Button(action: onJump) {
-                        Text("Jump")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(!isValidPageNumber)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .padding(.bottom, 28)
                 }
-                .padding(22)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color(uiColor: .systemGroupedBackground))
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
-                        .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                        .stroke(Color(uiColor: .separator).opacity(0.4), lineWidth: 0.5)
                 )
-                .shadow(color: .black.opacity(0.22), radius: 28, y: 12)
-                .padding(.horizontal, 20)
-
-                Spacer(minLength: 0)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
         }
         .onAppear {

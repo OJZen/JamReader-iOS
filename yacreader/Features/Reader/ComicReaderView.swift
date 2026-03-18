@@ -96,6 +96,13 @@ struct ComicReaderView: View {
         .onChange(of: horizontalSizeClass) { _, _ in
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
         }
+        .onChange(of: viewModel.currentPageIndex) { oldValue, newValue in
+            guard oldValue != newValue else {
+                return
+            }
+
+            hideReaderChrome()
+        }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document = viewModel.document {
                 ReaderThumbnailBrowserSheet(

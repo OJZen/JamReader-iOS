@@ -237,6 +237,7 @@ struct RemoteComicReaderView: View {
         }
         .onChange(of: currentPageIndex) { _, _ in
             persistProgress()
+            hideReaderChrome()
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document {
@@ -550,6 +551,16 @@ struct RemoteComicReaderView: View {
             case .center, .leading, .trailing:
                 isReaderChromeHidden.toggle()
             }
+        }
+    }
+
+    private func hideReaderChrome() {
+        guard !isReaderChromeHidden else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isReaderChromeHidden = true
         }
     }
 
