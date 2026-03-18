@@ -6,30 +6,24 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
     @ViewBuilder let bottomBar: () -> BottomBar
 
     var body: some View {
-        GeometryReader { proxy in
-            VStack(spacing: 0) {
-                if !isHidden {
-                    topBar()
-                        .allowsHitTesting(true)
-                        .padding(.top, proxy.safeAreaInsets.top + 8)
-                        .padding(.horizontal, 12)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-
-                Spacer(minLength: 0)
-
-                if !isHidden {
-                    bottomBar()
-                        .allowsHitTesting(true)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, max(proxy.safeAreaInsets.bottom, 12))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+        VStack(spacing: 0) {
+            if !isHidden {
+                topBar()
+                    .padding(.top, 12)
+                    .padding(.horizontal, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            Spacer(minLength: 0)
+
+            if !isHidden {
+                bottomBar()
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: isHidden)
     }
 }
@@ -41,7 +35,12 @@ struct ReaderChromeBar<Content: View>: View {
         content()
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
     }
 }
 
@@ -52,6 +51,10 @@ struct ReaderChromePill<Content: View>: View {
         content()
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.ultraThinMaterial, in: Capsule())
+            .background(.thinMaterial, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
     }
 }

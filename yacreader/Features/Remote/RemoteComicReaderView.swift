@@ -195,7 +195,7 @@ struct RemoteComicReaderView: View {
                         .background(.ultraThinMaterial, in: Capsule())
                 }
             }
-            .padding(.top, 12)
+            .padding(.top, isReaderChromeHidden ? 12 : 88)
             .padding(.horizontal, 16)
         }
         .task {
