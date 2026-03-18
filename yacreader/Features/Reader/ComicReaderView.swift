@@ -16,6 +16,7 @@ struct ComicReaderView: View {
     @State private var isShowingThumbnailBrowser = false
     @State private var isReaderChromeHidden = true
     @State private var pendingReaderAction: ReaderSecondaryAction?
+    @State private var readerViewportRefreshToken = 0
 
     init(
         descriptor: LibraryDescriptor,
@@ -161,6 +162,13 @@ struct ComicReaderView: View {
                 viewModel.presentPageJump()
             }
         }
+        .onChange(of: viewModel.isShowingPageJumpSheet) { _, isPresented in
+            guard !isPresented else {
+                return
+            }
+
+            readerViewportRefreshToken &+= 1
+        }
     }
 
     private var supportsDoublePageSpread: Bool {
@@ -198,6 +206,7 @@ struct ComicReaderView: View {
                     document: imageSequence,
                     initialPageIndex: viewModel.currentPageIndex,
                     layout: viewModel.effectiveReaderLayout,
+                    viewportRefreshToken: readerViewportRefreshToken,
                     onPageChanged: viewModel.updateCurrentPage(to:),
                     onReaderTap: handleReaderTap
                 )

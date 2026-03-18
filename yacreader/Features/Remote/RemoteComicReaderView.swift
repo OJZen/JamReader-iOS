@@ -129,6 +129,7 @@ struct RemoteComicReaderView: View {
     @State private var lastPersistedBookmarkPageIndices: [Int]
     @State private var pendingProgressPersistenceTask: Task<Void, Never>?
     @State private var transientNoticeMessage: String?
+    @State private var readerViewportRefreshToken = 0
 
     init(
         profile: RemoteServerProfile,
@@ -250,6 +251,13 @@ struct RemoteComicReaderView: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .onChange(of: isShowingPageJumpSheet) { _, isPresented in
+            guard !isPresented else {
+                return
+            }
+
+            readerViewportRefreshToken &+= 1
         }
     }
 
@@ -488,6 +496,7 @@ struct RemoteComicReaderView: View {
                     document: imageSequence,
                     initialPageIndex: currentPageIndex,
                     layout: effectiveReaderLayout,
+                    viewportRefreshToken: readerViewportRefreshToken,
                     onPageChanged: { pageIndex in
                         currentPageIndex = pageIndex
                     },

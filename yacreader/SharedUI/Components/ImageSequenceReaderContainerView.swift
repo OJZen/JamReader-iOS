@@ -12,6 +12,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
+    let viewportRefreshToken: Int
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
 
@@ -19,6 +20,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         Coordinator(
             document: document,
             layout: layout,
+            viewportRefreshToken: viewportRefreshToken,
             currentPageIndex: clampedPageIndex(initialPageIndex),
             onPageChanged: onPageChanged,
             onReaderTap: onReaderTap
@@ -42,7 +44,8 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         context.coordinator.update(
             document: document,
             layout: layout,
-            requestedPageIndex: clampedPageIndex(initialPageIndex)
+            requestedPageIndex: clampedPageIndex(initialPageIndex),
+            viewportRefreshToken: viewportRefreshToken
         )
     }
 
@@ -63,6 +66,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         private(set) var document: ImageSequenceComicDocument
         private(set) var layout: ReaderDisplayLayout
+        private(set) var viewportRefreshToken: Int
         private(set) var spreads: [ReaderSpreadDescriptor]
         private(set) var currentPageIndex: Int
         private(set) var currentSpreadIndex: Int
@@ -72,12 +76,14 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         init(
             document: ImageSequenceComicDocument,
             layout: ReaderDisplayLayout,
+            viewportRefreshToken: Int,
             currentPageIndex: Int,
             onPageChanged: @escaping (Int) -> Void,
             onReaderTap: @escaping (ReaderTapRegion) -> Void
         ) {
             self.document = document
             self.layout = layout
+            self.viewportRefreshToken = viewportRefreshToken
             self.spreads = ReaderSpreadDescriptor.makeSpreads(
                 pageCount: document.pageCount,
                 layout: layout
@@ -115,18 +121,29 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
             }
         }
 
-        func update(document: ImageSequenceComicDocument, layout: ReaderDisplayLayout, requestedPageIndex: Int) {
+        func update(
+            document: ImageSequenceComicDocument,
+            layout: ReaderDisplayLayout,
+            requestedPageIndex: Int,
+            viewportRefreshToken: Int
+        ) {
             let documentChanged = self.document.url != document.url || self.document.pageNames != document.pageNames
             let layoutChanged = self.layout != layout
+            let viewportRefreshRequested = self.viewportRefreshToken != viewportRefreshToken
 
             self.document = document
             self.layout = layout
+            self.viewportRefreshToken = viewportRefreshToken
 
             if documentChanged || layoutChanged {
                 spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: document.pageCount, layout: layout)
                 controllerCache.removeAll()
                 displaySpread(containing: requestedPageIndex, animated: false)
                 return
+            }
+
+            if viewportRefreshRequested {
+                controllerCache[currentSpreadIndex]?.refreshViewportPresentation()
             }
 
             guard requestedPageIndex != currentPageIndex else {
@@ -716,8 +733,8 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     private func updateViewportPresentation(centerIfFitted: Bool) {
         let contentSize = zoomedContentSize()
         let previousInset = scrollView.contentInset
-        let shouldCenterContent = scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01
-        let updatedInset = shouldCenterContent ? centeredContentInset(for: contentSize) : .zero
+        let updatedInset = centeredContentInset(for: contentSize)
+        let shouldCenterContent = updatedInset.top > 0 || updatedInset.left > 0
 
         scrollView.contentInset = updatedInset
 
@@ -738,8 +755,12 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     private func centeredContentInset(for contentSize: CGSize) -> UIEdgeInsets {
-        let horizontalInset = max(0, (scrollView.bounds.width - contentSize.width) * 0.5)
-        let verticalInset = max(0, (scrollView.bounds.height - contentSize.height) * 0.5)
+        let horizontalInset = contentSize.width < scrollView.bounds.width - 1
+            ? max(0, (scrollView.bounds.width - contentSize.width) * 0.5)
+            : 0
+        let verticalInset = contentSize.height < scrollView.bounds.height - 1
+            ? max(0, (scrollView.bounds.height - contentSize.height) * 0.5)
+            : 0
         return UIEdgeInsets(
             top: verticalInset,
             left: horizontalInset,
@@ -838,6 +859,15 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         messageLabel.isHidden = false
     }
 
+    func refreshViewportPresentation() {
+        guard !loadedPages.isEmpty else {
+            return
+        }
+
+        updateViewportPresentation(centerIfFitted: true)
+        updatePanGestureAvailability()
+    }
+
     private func preferredTapEdgeRatio() -> CGFloat {
         traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
     }
@@ -850,8 +880,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     private func updatePanGestureAvailability() {
-        let isZoomedBeyondMinimum = scrollView.zoomScale > scrollView.minimumZoomScale + 0.01
-        scrollView.panGestureRecognizer.isEnabled = isZoomedBeyondMinimum
+        let contentSize = zoomedContentSize()
+        let hasScrollableOverflow = contentSize.width > scrollView.bounds.width + 1
+            || contentSize.height > scrollView.bounds.height + 1
+        scrollView.panGestureRecognizer.isEnabled = hasScrollableOverflow
     }
 
     private func preferredDecodeMaxPixelSize() -> Int {
