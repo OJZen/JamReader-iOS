@@ -41,6 +41,7 @@ struct RemoteServerListView: View {
                         NavigationLink {
                             RemoteServerBrowserView(
                                 profile: profile,
+                                currentPath: RemoteServerBrowserViewModel.lastBrowsedPath(for: profile),
                                 dependencies: dependencies
                             )
                         } label: {
@@ -516,19 +517,33 @@ struct RemoteServerBrowserView: View {
 
             if !viewModel.isAtRootPath {
                 Section {
-                    NavigationLink {
-                        RemoteServerBrowserView(
-                            profile: viewModel.profile,
-                            currentPath: viewModel.rootPath,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        Label("Return to Session Root", systemImage: "arrow.up.left.and.arrow.down.right")
+                    if let parentPath = viewModel.parentPath {
+                        NavigationLink {
+                            RemoteServerBrowserView(
+                                profile: viewModel.profile,
+                                currentPath: parentPath,
+                                dependencies: dependencies
+                            )
+                        } label: {
+                            Label("Up One Level", systemImage: "arrow.up")
+                        }
+                    }
+
+                    if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
+                        NavigationLink {
+                            RemoteServerBrowserView(
+                                profile: viewModel.profile,
+                                currentPath: viewModel.rootPath,
+                                dependencies: dependencies
+                            )
+                        } label: {
+                            Label("Return to Session Root", systemImage: "arrow.up.left.and.arrow.down.right")
+                        }
                     }
                 } header: {
                     Text("Navigation")
                 } footer: {
-                    Text("Jump back to the saved base directory for this server without popping through each parent folder.")
+                    Text("Resume from the last browsed folder, move up one level, or jump straight back to the saved base directory.")
                 }
             }
 
@@ -560,7 +575,20 @@ struct RemoteServerBrowserView: View {
                             }
                             .buttonStyle(.borderedProminent)
 
-                            if !viewModel.isAtRootPath {
+                            if let parentPath = viewModel.parentPath {
+                                NavigationLink {
+                                    RemoteServerBrowserView(
+                                        profile: viewModel.profile,
+                                        currentPath: parentPath,
+                                        dependencies: dependencies
+                                    )
+                                } label: {
+                                    Label("Up One Level", systemImage: "arrow.up")
+                                }
+                                .buttonStyle(.bordered)
+                            }
+
+                            if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
                                 NavigationLink {
                                     RemoteServerBrowserView(
                                         profile: viewModel.profile,

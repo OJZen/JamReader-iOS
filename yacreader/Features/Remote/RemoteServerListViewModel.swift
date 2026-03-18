@@ -240,6 +240,7 @@ final class RemoteServerListViewModel: ObservableObject {
 
             try? browsingService.clearCachedComics(for: profile)
             try? readingProgressStore.deleteSessions(for: profile.id)
+            RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             profiles = updatedProfiles.sorted {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }

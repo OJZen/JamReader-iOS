@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 final class RemoteServerBrowserViewModel: ObservableObject {
+    private static let lastBrowsedPathKeyPrefix = "remoteServerBrowser.lastPath."
+
     @Published private(set) var items: [RemoteDirectoryItem] = []
     @Published private(set) var progressByItemID: [String: RemoteComicReadingSession] = [:]
     @Published private(set) var isLoading = false
@@ -24,7 +26,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         readingProgressStore: RemoteReadingProgressStore
     ) {
         self.profile = profile
-        self.currentPath = currentPath ?? profile.normalizedBaseDirectoryPath
+        self.currentPath = Self.initialPath(for: profile, explicitPath: currentPath)
         self.capabilities = browsingService.capabilities(for: profile.providerKind)
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
@@ -44,6 +46,21 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     var isAtRootPath: Bool {
         currentPath == rootPath
+    }
+
+    var parentPath: String? {
+        let rootComponents = Self.pathComponents(for: rootPath)
+        let currentComponents = Self.pathComponents(for: currentPath)
+        guard currentComponents.count > rootComponents.count else {
+            return nil
+        }
+
+        let parentComponents = Array(currentComponents.dropLast())
+        if parentComponents.isEmpty {
+            return ""
+        }
+
+        return "/" + parentComponents.joined(separator: "/")
     }
 
     var currentPathDisplayText: String {
@@ -123,6 +140,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             }
             refreshProgressState()
             loadErrorMessage = nil
+            Self.rememberLastBrowsedPath(currentPath, for: profile)
         } catch {
             items = []
             progressByItemID = [:]
@@ -145,5 +163,73 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func progress(for item: RemoteDirectoryItem) -> RemoteComicReadingSession? {
         progressByItemID[item.id]
+    }
+
+    static func lastBrowsedPath(for profile: RemoteServerProfile) -> String {
+        initialPath(for: profile, explicitPath: nil)
+    }
+
+    static func clearRememberedPath(for profile: RemoteServerProfile) {
+        UserDefaults.standard.removeObject(forKey: lastBrowsedPathStorageKey(for: profile.id))
+    }
+
+    private static func initialPath(for profile: RemoteServerProfile, explicitPath: String?) -> String {
+        if let explicitPath {
+            return normalizedPath(explicitPath)
+        }
+
+        let rootPath = normalizedPath(profile.normalizedBaseDirectoryPath)
+        let storedPath = normalizedPath(
+            UserDefaults.standard.string(forKey: lastBrowsedPathStorageKey(for: profile.id)) ?? rootPath
+        )
+
+        guard isPath(storedPath, withinRootPath: rootPath) else {
+            return rootPath
+        }
+
+        return storedPath
+    }
+
+    private static func rememberLastBrowsedPath(_ path: String, for profile: RemoteServerProfile) {
+        UserDefaults.standard.set(
+            normalizedPath(path),
+            forKey: lastBrowsedPathStorageKey(for: profile.id)
+        )
+    }
+
+    private static func isPath(_ path: String, withinRootPath rootPath: String) -> Bool {
+        let rootComponents = pathComponents(for: rootPath)
+        let pathComponents = pathComponents(for: path)
+
+        guard pathComponents.count >= rootComponents.count else {
+            return false
+        }
+
+        return Array(pathComponents.prefix(rootComponents.count)) == rootComponents
+    }
+
+    private static func normalizedPath(_ rawPath: String) -> String {
+        let collapsedPath = rawPath
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+
+        guard !collapsedPath.isEmpty else {
+            return ""
+        }
+
+        return "/" + collapsedPath
+    }
+
+    private static func pathComponents(for path: String) -> [String] {
+        normalizedPath(path)
+            .split(separator: "/")
+            .map(String.init)
+    }
+
+    private static func lastBrowsedPathStorageKey(for serverID: UUID) -> String {
+        "\(lastBrowsedPathKeyPrefix)\(serverID.uuidString)"
     }
 }
