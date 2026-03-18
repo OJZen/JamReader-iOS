@@ -459,6 +459,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     private var loadedPages: [LoadedComicPage] = []
     private var hasStartedLoading = false
     private var loadTask: Task<Void, Never>?
+    private var lastViewportSize: CGSize = .zero
     private let onTapRegion: (ReaderTapRegion) -> Void
 
     init(
@@ -495,7 +496,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        layoutLoadedPages(resetZoomScale: false)
+        let viewportSize = scrollView.bounds.size
+        let viewportDidChange = lastViewportSize != .zero && !lastViewportSize.equalTo(viewportSize)
+        lastViewportSize = viewportSize
+        layoutLoadedPages(resetZoomScale: viewportDidChange)
     }
 
     private func configureSubviews() {
@@ -506,9 +510,10 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         scrollView.maximumZoomScale = 4
         scrollView.decelerationRate = .fast
         scrollView.isDirectionalLockEnabled = true
+        scrollView.bounces = false
         scrollView.alwaysBounceHorizontal = false
         scrollView.alwaysBounceVertical = false
-        scrollView.bouncesZoom = true
+        scrollView.bouncesZoom = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
         singleTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
@@ -685,7 +690,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
             scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
         }
 
-        centerContentIfNeeded()
+        updateViewportPresentation(centerIfFitted: true)
         updatePanGestureAvailability()
     }
 
@@ -708,19 +713,54 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
         return max(preferredScale, 0.01)
     }
 
-    private func centerContentIfNeeded() {
-        let contentSize = CGSize(
-            width: contentView.frame.width * scrollView.zoomScale,
-            height: contentView.frame.height * scrollView.zoomScale
-        )
+    private func updateViewportPresentation(centerIfFitted: Bool) {
+        let contentSize = zoomedContentSize()
+        let previousInset = scrollView.contentInset
+        let shouldCenterContent = scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01
+        let updatedInset = shouldCenterContent ? centeredContentInset(for: contentSize) : .zero
 
+        scrollView.contentInset = updatedInset
+
+        if centerIfFitted && shouldCenterContent {
+            scrollView.contentOffset = CGPoint(x: -updatedInset.left, y: -updatedInset.top)
+            return
+        }
+
+        let translatedOffset = CGPoint(
+            x: scrollView.contentOffset.x + previousInset.left - updatedInset.left,
+            y: scrollView.contentOffset.y + previousInset.top - updatedInset.top
+        )
+        scrollView.contentOffset = clampedContentOffset(
+            translatedOffset,
+            contentSize: contentSize,
+            contentInset: updatedInset
+        )
+    }
+
+    private func centeredContentInset(for contentSize: CGSize) -> UIEdgeInsets {
         let horizontalInset = max(0, (scrollView.bounds.width - contentSize.width) * 0.5)
         let verticalInset = max(0, (scrollView.bounds.height - contentSize.height) * 0.5)
-        scrollView.contentInset = UIEdgeInsets(
+        return UIEdgeInsets(
             top: verticalInset,
             left: horizontalInset,
             bottom: verticalInset,
             right: horizontalInset
+        )
+    }
+
+    private func clampedContentOffset(
+        _ proposedOffset: CGPoint,
+        contentSize: CGSize,
+        contentInset: UIEdgeInsets
+    ) -> CGPoint {
+        let minimumX = -contentInset.left
+        let maximumX = max(minimumX, contentSize.width - scrollView.bounds.width + contentInset.right)
+        let minimumY = -contentInset.top
+        let maximumY = max(minimumY, contentSize.height - scrollView.bounds.height + contentInset.bottom)
+
+        return CGPoint(
+            x: min(max(proposedOffset.x, minimumX), maximumX),
+            y: min(max(proposedOffset.y, minimumY), maximumY)
         )
     }
 
@@ -729,7 +769,7 @@ private final class ComicImageSpreadViewController: UIViewController, UIScrollVi
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
-        centerContentIfNeeded()
+        updateViewportPresentation(centerIfFitted: false)
         updatePanGestureAvailability()
     }
 
