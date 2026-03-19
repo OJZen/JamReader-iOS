@@ -38,10 +38,16 @@ enum RemoteComicAccessState: Equatable {
     }
 }
 
+enum RemoteComicOpenMode {
+    case automatic
+    case preferLocalCache
+}
+
 struct RemoteComicLoadingView: View {
     private let profile: RemoteServerProfile
     private let item: RemoteDirectoryItem
     private let dependencies: AppDependencies
+    private let openMode: RemoteComicOpenMode
     private let reference: RemoteComicFileReference?
 
     @State private var localFileURL: URL?
@@ -53,11 +59,13 @@ struct RemoteComicLoadingView: View {
     init(
         profile: RemoteServerProfile,
         item: RemoteDirectoryItem,
-        dependencies: AppDependencies
+        dependencies: AppDependencies,
+        openMode: RemoteComicOpenMode = .automatic
     ) {
         self.profile = profile
         self.item = item
         self.dependencies = dependencies
+        self.openMode = openMode
         self.reference = try? dependencies.remoteServerBrowsingService.makeComicFileReference(from: item)
     }
 
@@ -119,6 +127,25 @@ struct RemoteComicLoadingView: View {
         loadErrorMessage = nil
         defer {
             isLoading = false
+        }
+
+        if openMode == .preferLocalCache,
+           let cachedFileURL = dependencies.remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
+            localFileURL = cachedFileURL
+            let availability = dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
+            switch availability.kind {
+            case .unavailable:
+                accessState = .liveRemoteCopy
+                noticeMessage = nil
+            case .current:
+                accessState = .cachedCurrent
+                noticeMessage = "Opened the downloaded copy saved on this device."
+            case .stale:
+                let message = "Opened an older downloaded copy saved on this device."
+                accessState = .cachedFallback(message)
+                noticeMessage = message
+            }
+            return
         }
 
         do {

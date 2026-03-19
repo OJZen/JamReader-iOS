@@ -381,6 +381,15 @@ final class RemoteServerBrowsingService {
         return RemoteComicCachedAvailability(kind: .stale)
     }
 
+    func cachedFileURLIfAvailable(for reference: RemoteComicFileReference) -> URL? {
+        let destinationURL = cachedFileURL(for: reference)
+        guard fileManager.fileExists(atPath: destinationURL.path) else {
+            return nil
+        }
+
+        return destinationURL
+    }
+
     func classifyDirectoryEntry(
         named name: String,
         fullPath: String,

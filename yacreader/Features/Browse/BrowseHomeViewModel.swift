@@ -76,6 +76,16 @@ final class BrowseHomeViewModel: ObservableObject {
         cacheSummary.isEmpty ? "No downloaded remote comics" : cacheSummary.summaryText
     }
 
+    var offlineReadySessions: [RemoteComicReadingSession] {
+        sessions.filter {
+            remoteServerBrowsingService.cachedAvailability(for: $0.comicFileReference).hasLocalCopy
+        }
+    }
+
+    var offlineReadyCountText: String {
+        "\(offlineReadySessions.count)"
+    }
+
     var thumbnailCacheSummaryText: String {
         thumbnailCacheSummary.isEmpty ? "No saved thumbnails yet" : thumbnailCacheSummary.summaryText
     }

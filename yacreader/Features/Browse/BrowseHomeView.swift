@@ -19,6 +19,7 @@ struct BrowseHomeView: View {
                     heroSection
                     quickActionsSection
                     continueReadingSection
+                    offlineReadySection
                     savedServersSection
                 }
                 .padding(.horizontal, 16)
@@ -72,10 +73,14 @@ struct BrowseHomeView: View {
 
             HStack(spacing: 12) {
                 MetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
-                MetricPill(title: "Sessions", value: viewModel.sessionCountText, tint: .green)
-                MetricPill(title: "Cache", value: viewModel.cacheSummaryText, tint: .orange)
+                MetricPill(title: "Recent", value: viewModel.sessionCountText, tint: .green)
+                MetricPill(title: "Offline", value: viewModel.offlineReadyCountText, tint: .orange)
             }
             .frame(maxWidth: .infinity)
+
+            Label(viewModel.cacheSummaryText, systemImage: "arrow.down.circle.fill")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.9))
 
             Label(viewModel.thumbnailCacheSummaryText, systemImage: "photo.stack.fill")
                 .font(.caption.weight(.medium))
@@ -171,6 +176,58 @@ struct BrowseHomeView: View {
                     )
                 }
                 .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var offlineReadySection: some View {
+        let sessions = viewModel.offlineReadySessions
+
+        if !sessions.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Offline Ready", subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.")
+
+                VStack(spacing: 12) {
+                    ForEach(Array(sessions.prefix(3))) { session in
+                        if let profile = viewModel.profile(for: session.serverID) {
+                            NavigationLink {
+                                RemoteComicLoadingView(
+                                    profile: profile,
+                                    item: session.directoryItem,
+                                    dependencies: dependencies,
+                                    openMode: .preferLocalCache
+                                )
+                            } label: {
+                                OfflineReadyCard(
+                                    session: session,
+                                    profile: profile,
+                                    availability: dependencies.remoteServerBrowsingService.cachedAvailability(
+                                        for: session.comicFileReference
+                                    )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    NavigationLink {
+                        RemoteOfflineShelfView(dependencies: dependencies)
+                    } label: {
+                        HStack {
+                            Label("Open Offline Shelf", systemImage: "arrow.right.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text("\(sessions.count)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
@@ -391,6 +448,84 @@ private struct SavedServerCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
+        }
+    }
+}
+
+private struct OfflineReadyCard: View {
+    let session: RemoteComicReadingSession
+    let profile: RemoteServerProfile
+    let availability: RemoteComicCachedAvailability
+
+    private var availabilityTint: Color {
+        switch availability.kind {
+        case .unavailable:
+            return .secondary
+        case .current:
+            return .blue
+        case .stale:
+            return .orange
+        }
+    }
+
+    private var subtitleText: String {
+        switch availability.kind {
+        case .unavailable:
+            return "No downloaded copy available on this device."
+        case .current:
+            return "Downloaded on this device and ready to open locally."
+        case .stale:
+            return "A downloaded copy is available locally, but the remote file may be newer."
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(availabilityTint)
+                    .frame(width: 30, height: 30)
+                    .background(availabilityTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.displayName)
+                        .font(.headline)
+
+                    Text(profile.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 10)
+
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+            }
+
+            HStack(spacing: 8) {
+                if let badgeTitle = availability.badgeTitle {
+                    StatusBadge(title: badgeTitle, tint: availabilityTint)
+                }
+                StatusBadge(title: session.progressText, tint: session.read ? .green : .orange)
+            }
+
+            Text(subtitleText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
