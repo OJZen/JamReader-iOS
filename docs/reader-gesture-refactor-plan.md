@@ -416,7 +416,8 @@ chrome 需要和内容分离。
 当前状态：
 
 - 已开始实现，基础文件已落地：`ReaderSessionState`、`ReaderCommand`、`ReaderContentDescriptor`、`ReaderSessionController`
-- 当前仍未把本地 / 远程阅读壳完整切到 runtime 驱动；这一阶段已完成“内核类型定义”，下一步是把外层状态接线迁过去
+- 已把本地 / 远程阅读壳的 `currentPage / chrome / pageJump / layout` 运行期状态接到 `ReaderSessionController` 过渡层
+- 当前仍未把所有业务写回与导航命令完全迁入 runtime；这一阶段已完成“外层状态先并轨”，下一步是继续收拢持久化和阅读命令
 
 任务：
 

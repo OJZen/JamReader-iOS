@@ -35,7 +35,72 @@ final class ReaderSessionController: ObservableObject {
     }
 
     func syncVisiblePageIndex(_ pageIndex: Int) {
-        let lastPageIndex = max(state.descriptor.pageCount - 1, 0)
-        state.currentPageIndex = min(max(pageIndex, 0), lastPageIndex)
+        state.currentPageIndex = clampedPageIndex(pageIndex, pageCount: state.descriptor.pageCount)
+    }
+
+    func updateDescriptor(
+        _ descriptor: ReaderContentDescriptor,
+        preferredPageIndex: Int? = nil
+    ) {
+        state.descriptor = descriptor
+        state.layout = descriptor.layout
+        state.currentPageIndex = clampedPageIndex(
+            preferredPageIndex ?? state.currentPageIndex,
+            pageCount: descriptor.pageCount
+        )
+    }
+
+    func updateCurrentPage(_ pageIndex: Int) {
+        state.currentPageIndex = clampedPageIndex(pageIndex, pageCount: state.descriptor.pageCount)
+    }
+
+    func updateLayout(_ layout: ReaderDisplayLayout) {
+        state.layout = layout
+        state.descriptor = ReaderContentDescriptor(
+            documentURL: state.descriptor.documentURL,
+            kind: resolvedContentKind(for: layout),
+            pageCount: state.descriptor.pageCount,
+            initialPageIndex: state.currentPageIndex,
+            layout: layout
+        )
+    }
+
+    func toggleChrome() {
+        state.isChromeVisible.toggle()
+    }
+
+    func setChromeVisible(_ isVisible: Bool) {
+        state.isChromeVisible = isVisible
+    }
+
+    func hideChrome() {
+        state.isChromeVisible = false
+    }
+
+    func presentPageJump(defaultPageNumber: Int) {
+        state.pendingPageNumberText = "\(max(defaultPageNumber, 1))"
+        state.isPageJumpPresented = true
+    }
+
+    func dismissPageJump() {
+        state.isPageJumpPresented = false
+    }
+
+    func updatePendingPageNumberText(_ text: String) {
+        state.pendingPageNumberText = text
+    }
+
+    private func clampedPageIndex(_ pageIndex: Int, pageCount: Int) -> Int {
+        let lastPageIndex = max(pageCount - 1, 0)
+        return min(max(pageIndex, 0), lastPageIndex)
+    }
+
+    private func resolvedContentKind(for layout: ReaderDisplayLayout) -> ReaderContentKind {
+        switch state.descriptor.kind {
+        case .pdf:
+            return .pdf
+        case .imagePaged, .imageContinuous:
+            return layout.pagingMode == .verticalContinuous ? .imageContinuous : .imagePaged
+        }
     }
 }

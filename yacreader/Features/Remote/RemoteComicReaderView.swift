@@ -113,17 +113,13 @@ struct RemoteComicReaderView: View {
     private let dependencies: AppDependencies
     private let initialStoredProgress: RemoteComicReadingSession?
 
+    @StateObject private var readerSession: ReaderSessionController
     @State private var document: ComicDocument?
     @State private var isLoading = false
     @State private var hasLoaded = false
     @State private var isRefreshingRemoteCopy = false
-    @State private var isShowingPageJumpSheet = false
     @State private var isShowingThumbnailBrowser = false
-    @State private var currentPageIndex = 0
-    @State private var pendingPageNumberText = ""
     @State private var bookmarkPageIndices: [Int]
-    @State private var readerLayout: ReaderDisplayLayout
-    @State private var isReaderChromeHidden = true
     @State private var alert: RemoteAlertState?
     @State private var lastPersistedPageIndex: Int?
     @State private var lastPersistedBookmarkPageIndices: [Int]
@@ -146,19 +142,25 @@ struct RemoteComicReaderView: View {
         self.dependencies = dependencies
         let storedProgress = try? dependencies.remoteReadingProgressStore.loadProgress(for: reference)
         self.initialStoredProgress = storedProgress
-        _currentPageIndex = State(initialValue: Self.initialPageIndex(from: storedProgress))
+        let initialLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: .comic)
+        let initialDescriptor = ReaderContentDescriptor.placeholder(
+            documentURL: fileURL,
+            pageCount: max(storedProgress?.pageCount ?? 1, 1),
+            initialPageIndex: Self.initialPageIndex(from: storedProgress),
+            layout: initialLayout
+        )
         _transientNoticeMessage = State(initialValue: noticeMessage)
         _bookmarkPageIndices = State(initialValue: Self.normalizedBookmarkPageIndices(storedProgress?.bookmarkPageIndices ?? []))
         _lastPersistedBookmarkPageIndices = State(initialValue: [])
-        _readerLayout = State(
-            initialValue: dependencies.readerLayoutPreferencesStore.loadLayout(for: .comic)
+        _readerSession = StateObject(
+            wrappedValue: ReaderSessionController(descriptor: initialDescriptor)
         )
     }
 
     var body: some View {
         ReaderSurface(
-            isInteractionLocked: isShowingPageJumpSheet,
-            isChromeHidden: isReaderChromeHidden
+            isInteractionLocked: readerSession.state.isPageJumpPresented,
+            isChromeHidden: !readerSession.state.isChromeVisible
         ) {
             Group {
                 if isLoading {
@@ -181,12 +183,12 @@ struct RemoteComicReaderView: View {
         } statusOverlay: {
             readerStatusOverlay
         } modalOverlay: {
-            if isShowingPageJumpSheet {
+            if readerSession.state.isPageJumpPresented {
                 ReaderPageJumpOverlay(
-                    pageNumberText: $pendingPageNumberText,
+                    pageNumberText: pageJumpTextBinding,
                     currentPageNumber: currentPageNumber ?? 1,
                     pageCount: document?.pageCount ?? 1,
-                    onCancel: dismissPageJump,
+                    onCancel: readerSession.dismissPageJump,
                     onJump: submitPageJump
                 )
             }
@@ -197,10 +199,12 @@ struct RemoteComicReaderView: View {
         .task {
             await loadIfNeeded()
             updateIdleTimerState()
+            synchronizeReaderSession()
         }
         .onAppear {
             updateIdleTimerState()
             scheduleNoticeDismissalIfNeeded()
+            synchronizeReaderSession()
         }
         .onDisappear {
             persistProgress(force: true)
@@ -215,6 +219,13 @@ struct RemoteComicReaderView: View {
         }
         .onChange(of: document != nil) { _, _ in
             updateIdleTimerState()
+            synchronizeReaderSession()
+        }
+        .onChange(of: readerSession.state.layout) { _, _ in
+            synchronizeReaderSession()
+        }
+        .onChange(of: supportsDoublePageSpread) { _, _ in
+            synchronizeReaderSession()
         }
         .onChange(of: currentPageIndex) { _, _ in
             persistProgress()
@@ -226,7 +237,7 @@ struct RemoteComicReaderView: View {
                     document: document,
                     currentPageIndex: currentPageIndex
                 ) { pageIndex in
-                    updateCurrentPage(to: pageIndex)
+                    updateVisiblePage(to: pageIndex)
                     isShowingThumbnailBrowser = false
                 }
             }
@@ -242,6 +253,14 @@ struct RemoteComicReaderView: View {
 
     private var supportsDoublePageSpread: Bool {
         horizontalSizeClass == .regular
+    }
+
+    private var currentPageIndex: Int {
+        readerSession.state.currentPageIndex
+    }
+
+    private var readerLayout: ReaderDisplayLayout {
+        readerSession.state.layout
     }
 
     private var effectiveReaderLayout: ReaderDisplayLayout {
@@ -356,7 +375,7 @@ struct RemoteComicReaderView: View {
                             Section("Bookmarks") {
                                 ForEach(bookmarkItems) { bookmark in
                                     Button {
-                                        updateCurrentPage(to: bookmark.pageIndex)
+                                        updateVisiblePage(to: bookmark.pageIndex)
                                         persistProgress(force: true)
                                     } label: {
                                         Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
@@ -459,9 +478,7 @@ struct RemoteComicReaderView: View {
                 document: pdf.pdfDocument,
                 requestedPageIndex: currentPageIndex,
                 rotation: .degrees0,
-                onPageChanged: { pageIndex in
-                    currentPageIndex = pageIndex
-                },
+                onPageChanged: handleVisiblePageChange(to:),
                 onReaderTap: handleReaderTap
             )
             .ignoresSafeArea()
@@ -472,9 +489,7 @@ struct RemoteComicReaderView: View {
                     document: imageSequence,
                     initialPageIndex: currentPageIndex,
                     layout: effectiveReaderLayout,
-                    onPageChanged: { pageIndex in
-                        currentPageIndex = pageIndex
-                    },
+                    onPageChanged: handleVisiblePageChange(to:),
                     onReaderTap: handleReaderTap
                 )
                 .ignoresSafeArea()
@@ -484,9 +499,7 @@ struct RemoteComicReaderView: View {
                     document: imageSequence,
                     initialPageIndex: currentPageIndex,
                     layout: effectiveReaderLayout,
-                    onPageChanged: { pageIndex in
-                        currentPageIndex = pageIndex
-                    },
+                    onPageChanged: handleVisiblePageChange(to:),
                     onReaderTap: handleReaderTap
                 )
                 .ignoresSafeArea()
@@ -516,7 +529,14 @@ struct RemoteComicReaderView: View {
         do {
             let loadedDocument = try dependencies.comicDocumentLoader.loadDocument(at: fileURL)
             document = loadedDocument
-            currentPageIndex = initialPageIndex(for: loadedDocument.pageCount)
+            readerSession.updateDescriptor(
+                .resolved(
+                    document: loadedDocument,
+                    currentPageIndex: initialPageIndex(for: loadedDocument.pageCount),
+                    layout: effectiveReaderLayout
+                ),
+                preferredPageIndex: initialPageIndex(for: loadedDocument.pageCount)
+            )
             normalizeBookmarks(for: loadedDocument.pageCount)
             persistProgress(force: true)
         } catch {
@@ -531,18 +551,18 @@ struct RemoteComicReaderView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             switch region {
             case .center, .leading, .trailing:
-                isReaderChromeHidden.toggle()
+                readerSession.toggleChrome()
             }
         }
     }
 
     private func hideReaderChrome() {
-        guard !isReaderChromeHidden else {
+        guard readerSession.state.isChromeVisible else {
             return
         }
 
         withAnimation(.easeInOut(duration: 0.2)) {
-            isReaderChromeHidden = true
+            readerSession.hideChrome()
         }
     }
 
@@ -560,9 +580,9 @@ struct RemoteComicReaderView: View {
         }
 
         if let pageCount = document?.pageCount, pageCount > 0 {
-            currentPageIndex = min(pageIndex, pageCount - 1)
+            readerSession.updateCurrentPage(min(pageIndex, pageCount - 1))
         } else {
-            currentPageIndex = pageIndex
+            readerSession.updateCurrentPage(pageIndex)
         }
     }
 
@@ -583,12 +603,7 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        pendingPageNumberText = "\(currentPageNumber)"
-        isShowingPageJumpSheet = true
-    }
-
-    private func dismissPageJump() {
-        isShowingPageJumpSheet = false
+        readerSession.presentPageJump(defaultPageNumber: currentPageNumber)
     }
 
     private func submitPageJump() {
@@ -596,7 +611,7 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        let trimmedValue = pendingPageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedValue = readerSession.state.pendingPageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let pageNumber = Int(trimmedValue), (1...pageCount).contains(pageNumber) else {
             alert = RemoteAlertState(
                 title: "Invalid Page Number",
@@ -605,8 +620,8 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        updateCurrentPage(to: pageNumber - 1)
-        isShowingPageJumpSheet = false
+        updateVisiblePage(to: pageNumber - 1)
+        readerSession.dismissPageJump()
         persistProgress(force: true)
     }
 
@@ -615,10 +630,12 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        readerLayout.pagingMode = pagingMode
+        var updatedLayout = readerLayout
+        updatedLayout.pagingMode = pagingMode
         if pagingMode == .verticalContinuous {
-            readerLayout.spreadMode = .singlePage
+            updatedLayout.spreadMode = .singlePage
         }
+        readerSession.updateLayout(updatedLayout)
         persistLayout()
     }
 
@@ -627,7 +644,9 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        readerLayout.fitMode = fitMode
+        var updatedLayout = readerLayout
+        updatedLayout.fitMode = fitMode
+        readerSession.updateLayout(updatedLayout)
         persistLayout()
     }
 
@@ -636,7 +655,9 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        readerLayout.readingDirection = readingDirection
+        var updatedLayout = readerLayout
+        updatedLayout.readingDirection = readingDirection
+        readerSession.updateLayout(updatedLayout)
         persistLayout()
     }
 
@@ -645,7 +666,9 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        readerLayout.spreadMode = spreadMode
+        var updatedLayout = readerLayout
+        updatedLayout.spreadMode = spreadMode
+        readerSession.updateLayout(updatedLayout)
         persistLayout()
     }
 
@@ -791,7 +814,14 @@ struct RemoteComicReaderView: View {
             )
             let loadedDocument = try dependencies.comicDocumentLoader.loadDocument(at: result.localFileURL)
             document = loadedDocument
-            updateCurrentPage(to: min(preservedPageIndex, max((loadedDocument.pageCount ?? 1) - 1, 0)))
+            readerSession.updateDescriptor(
+                .resolved(
+                    document: loadedDocument,
+                    currentPageIndex: min(preservedPageIndex, max((loadedDocument.pageCount ?? 1) - 1, 0)),
+                    layout: effectiveReaderLayout
+                ),
+                preferredPageIndex: min(preservedPageIndex, max((loadedDocument.pageCount ?? 1) - 1, 0))
+            )
             normalizeBookmarks(for: loadedDocument.pageCount)
             persistProgress(force: true)
 
@@ -824,6 +854,44 @@ struct RemoteComicReaderView: View {
             } else {
                 Text(title)
             }
+        }
+    }
+
+    private var pageJumpTextBinding: Binding<String> {
+        Binding(
+            get: { readerSession.state.pendingPageNumberText },
+            set: { readerSession.updatePendingPageNumberText($0) }
+        )
+    }
+
+    private func handleVisiblePageChange(to pageIndex: Int) {
+        readerSession.updateCurrentPage(pageIndex)
+    }
+
+    private func updateVisiblePage(to pageIndex: Int) {
+        updateCurrentPage(to: pageIndex)
+    }
+
+    private func synchronizeReaderSession() {
+        if let document {
+            readerSession.updateDescriptor(
+                .resolved(
+                    document: document,
+                    currentPageIndex: currentPageIndex,
+                    layout: effectiveReaderLayout
+                ),
+                preferredPageIndex: currentPageIndex
+            )
+        } else {
+            readerSession.updateDescriptor(
+                .placeholder(
+                    documentURL: fileURL,
+                    pageCount: max(initialStoredProgress?.pageCount ?? 1, 1),
+                    initialPageIndex: currentPageIndex,
+                    layout: effectiveReaderLayout
+                ),
+                preferredPageIndex: currentPageIndex
+            )
         }
     }
 

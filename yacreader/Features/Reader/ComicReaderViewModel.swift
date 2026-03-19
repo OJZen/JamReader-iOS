@@ -12,8 +12,6 @@ final class ComicReaderViewModel: ObservableObject {
     @Published private(set) var allowsDoublePageSpread = true
     @Published private(set) var isFavorite: Bool
     @Published private(set) var rating: Int
-    @Published var isShowingPageJumpSheet = false
-    @Published var pendingPageNumberText = ""
     @Published var alert: LibraryAlertState?
 
     let descriptor: LibraryDescriptor
@@ -375,15 +373,6 @@ final class ComicReaderViewModel: ObservableObject {
         persistProgress(force: true)
     }
 
-    func presentPageJump() {
-        guard let currentPageNumber else {
-            return
-        }
-
-        pendingPageNumberText = "\(currentPageNumber)"
-        isShowingPageJumpSheet = true
-    }
-
     func applyUpdatedComic(_ updatedComic: LibraryComic) {
         let previousType = comic.type
         if updatedComic.type != previousType {
@@ -394,29 +383,6 @@ final class ComicReaderViewModel: ObservableObject {
         if updatedComic.type != previousType {
             readerLayout = readerLayoutPreferencesStore.loadLayout(for: updatedComic.type)
         }
-    }
-
-    func dismissPageJump() {
-        isShowingPageJumpSheet = false
-    }
-
-    func submitPageJump() {
-        guard let pageCount = document?.pageCount, pageCount > 0 else {
-            return
-        }
-
-        let trimmedValue = pendingPageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let pageNumber = Int(trimmedValue), (1...pageCount).contains(pageNumber) else {
-            alert = LibraryAlertState(
-                title: "Invalid Page Number",
-                message: "Enter a page between 1 and \(pageCount)."
-            )
-            return
-        }
-
-        currentPageIndex = pageNumber - 1
-        isShowingPageJumpSheet = false
-        persistProgress(force: true)
     }
 
     func openPreviousComic() {
@@ -521,9 +487,7 @@ final class ComicReaderViewModel: ObservableObject {
         readerLayout = readerLayoutPreferencesStore.loadLayout(for: newComic.type)
         isFavorite = newComic.isFavorite
         rating = Self.normalizedRatingValue(from: newComic.rating)
-        pendingPageNumberText = ""
         lastPersistedPageIndex = nil
-        isShowingPageJumpSheet = false
 
         load()
     }

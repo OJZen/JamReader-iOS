@@ -119,6 +119,7 @@
 - 已启动阅读器专项重构的第一批落地：新增 `ReaderKernel` 基础类型与 `ZoomableImagePageView`，并已把分页页内旧 `UIScrollView` 逻辑替换为新页视图，同时移除本地 / 远程阅读器外层那条 `120ms / 520ms` 的历史 viewport 校准补丁，避免首次进入后的补丁式二次跳变
 - 已完成分页图片阅读宿主切换：`ImageSequenceReaderContainerView` 现已改为基于 `UICollectionView` 的横向分页宿主，旧 `UIPageViewController` 主路径已退场，并开始清理相关遗留代码
 - 已开始围绕新分页宿主整理阅读器外层结构：本地与远程阅读器现共用 `ReaderSurface`、`ReaderTopBar` 与状态提示层，明确分离内容层、chrome 层、提示层与跳页弹层，降低后续 UI / 手势迭代的重复改动成本
+- 已把阅读壳运行期状态进一步并轨到 `ReaderSessionController`：本地与远程阅读器现在统一通过 session 维护当前页、布局、chrome 显隐与跳页输入状态，减少 SwiftUI 外层与 UIKit 内容宿主之间的状态漂移
 - 本文档持续按实现进度迭代
 
 总体进度估计：

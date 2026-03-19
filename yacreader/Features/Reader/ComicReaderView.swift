@@ -9,12 +9,12 @@ struct ComicReaderView: View {
     private let dependencies: AppDependencies
 
     @StateObject private var viewModel: ComicReaderViewModel
+    @StateObject private var readerSession: ReaderSessionController
     @State private var isShowingMetadataSheet = false
     @State private var isShowingQuickMetadataSheet = false
     @State private var isShowingOrganizationSheet = false
     @State private var isShowingReaderControls = false
     @State private var isShowingThumbnailBrowser = false
-    @State private var isReaderChromeHidden = true
     @State private var pendingReaderAction: ReaderSecondaryAction?
 
     init(
@@ -25,6 +25,13 @@ struct ComicReaderView: View {
         dependencies: AppDependencies
     ) {
         self.dependencies = dependencies
+        let initialLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: comic.type)
+        let initialDescriptor = ReaderContentDescriptor.placeholder(
+            documentURL: URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true),
+            pageCount: max(comic.pageCount ?? max(comic.currentPage, 1), 1),
+            initialPageIndex: max(comic.currentPage - 1, 0),
+            layout: initialLayout
+        )
         _viewModel = StateObject(
             wrappedValue: ComicReaderViewModel(
                 descriptor: descriptor,
@@ -37,12 +44,15 @@ struct ComicReaderView: View {
                 onComicUpdated: onComicUpdated
             )
         )
+        _readerSession = StateObject(
+            wrappedValue: ReaderSessionController(descriptor: initialDescriptor)
+        )
     }
 
     var body: some View {
         ReaderSurface(
-            isInteractionLocked: viewModel.isShowingPageJumpSheet,
-            isChromeHidden: isReaderChromeHidden
+            isInteractionLocked: readerSession.state.isPageJumpPresented,
+            isChromeHidden: !readerSession.state.isChromeVisible
         ) {
             Group {
                 if viewModel.isLoading {
@@ -65,13 +75,13 @@ struct ComicReaderView: View {
         } statusOverlay: {
             EmptyView()
         } modalOverlay: {
-            if viewModel.isShowingPageJumpSheet {
+            if readerSession.state.isPageJumpPresented {
                 ReaderPageJumpOverlay(
-                    pageNumberText: $viewModel.pendingPageNumberText,
+                    pageNumberText: pageJumpTextBinding,
                     currentPageNumber: viewModel.currentPageNumber ?? 1,
                     pageCount: viewModel.pageCount ?? 1,
-                    onCancel: viewModel.dismissPageJump,
-                    onJump: viewModel.submitPageJump
+                    onCancel: readerSession.dismissPageJump,
+                    onJump: submitPageJump
                 )
             }
         }
@@ -81,10 +91,12 @@ struct ComicReaderView: View {
         .task {
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
             viewModel.loadIfNeeded()
+            synchronizeReaderSession()
         }
         .onAppear {
             updateIdleTimerState()
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
+            synchronizeReaderSession()
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -98,21 +110,29 @@ struct ComicReaderView: View {
         }
         .onChange(of: horizontalSizeClass) { _, _ in
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
+            synchronizeReaderSession()
+        }
+        .onChange(of: viewModel.document?.fileURL) { _, _ in
+            synchronizeReaderSession()
+        }
+        .onChange(of: viewModel.readerLayout) { _, _ in
+            synchronizeReaderSession()
         }
         .onChange(of: viewModel.currentPageIndex) { oldValue, newValue in
             guard oldValue != newValue else {
                 return
             }
 
+            readerSession.updateCurrentPage(newValue)
             hideReaderChrome()
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document = viewModel.document {
                 ReaderThumbnailBrowserSheet(
                     document: document,
-                    currentPageIndex: viewModel.currentPageIndex
+                    currentPageIndex: readerSession.state.currentPageIndex
                 ) { pageIndex in
-                    viewModel.updateCurrentPage(to: pageIndex)
+                    updateVisiblePage(to: pageIndex)
                     isShowingThumbnailBrowser = false
                 }
             }
@@ -154,7 +174,7 @@ struct ComicReaderView: View {
         }
         .onChange(of: isShowingReaderControls) { _, isPresented in
             if isPresented {
-                isReaderChromeHidden = false
+                readerSession.setChromeVisible(true)
                 return
             }
 
@@ -173,7 +193,7 @@ struct ComicReaderView: View {
             case .thumbnails:
                 isShowingThumbnailBrowser = true
             case .pageJump:
-                viewModel.presentPageJump()
+                presentPageJump()
             }
         }
     }
@@ -186,24 +206,24 @@ struct ComicReaderView: View {
     private func readerContent(for document: ComicDocument) -> some View {
         switch document {
         case .pdf(let pdf):
-            ReaderRotationHost(rotation: viewModel.readerLayout.rotation) {
+            ReaderRotationHost(rotation: readerSession.state.layout.rotation) {
                 PDFReaderContainerView(
                     document: pdf.pdfDocument,
-                    requestedPageIndex: viewModel.currentPageIndex,
-                    rotation: viewModel.readerLayout.rotation,
-                    onPageChanged: viewModel.updateCurrentPage(to:),
+                    requestedPageIndex: readerSession.state.currentPageIndex,
+                    rotation: readerSession.state.layout.rotation,
+                    onPageChanged: handleVisiblePageChange(to:),
                     onReaderTap: handleReaderTap
                 )
             }
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())
         case .imageSequence(let imageSequence):
-            if viewModel.effectiveReaderLayout.pagingMode == .verticalContinuous {
+            if readerSession.state.layout.pagingMode == .verticalContinuous {
                 VerticalImageSequenceReaderContainerView(
                     document: imageSequence,
-                    initialPageIndex: viewModel.currentPageIndex,
-                    layout: viewModel.effectiveReaderLayout,
-                    onPageChanged: viewModel.updateCurrentPage(to:),
+                    initialPageIndex: readerSession.state.currentPageIndex,
+                    layout: readerSession.state.layout,
+                    onPageChanged: handleVisiblePageChange(to:),
                     onReaderTap: handleReaderTap
                 )
                 .ignoresSafeArea()
@@ -211,9 +231,9 @@ struct ComicReaderView: View {
             } else {
                 ImageSequenceReaderContainerView(
                     document: imageSequence,
-                    initialPageIndex: viewModel.currentPageIndex,
-                    layout: viewModel.effectiveReaderLayout,
-                    onPageChanged: viewModel.updateCurrentPage(to:),
+                    initialPageIndex: readerSession.state.currentPageIndex,
+                    layout: readerSession.state.layout,
+                    onPageChanged: handleVisiblePageChange(to:),
                     onReaderTap: handleReaderTap
                 )
                 .ignoresSafeArea()
@@ -241,12 +261,12 @@ struct ComicReaderView: View {
             supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
             supportsDoublePageSpread: supportsDoublePageSpread,
             supportsRotationControls: viewModel.supportsRotationControls,
-            fitMode: viewModel.effectiveReaderLayout.fitMode,
-            pagingMode: viewModel.effectiveReaderLayout.pagingMode,
-            spreadMode: viewModel.effectiveReaderLayout.spreadMode,
-            readingDirection: viewModel.effectiveReaderLayout.readingDirection,
-            coverAsSinglePage: viewModel.effectiveReaderLayout.coverAsSinglePage,
-            rotation: viewModel.readerLayout.rotation,
+            fitMode: readerSession.state.layout.fitMode,
+            pagingMode: readerSession.state.layout.pagingMode,
+            spreadMode: readerSession.state.layout.spreadMode,
+            readingDirection: readerSession.state.layout.readingDirection,
+            coverAsSinglePage: readerSession.state.layout.coverAsSinglePage,
+            rotation: readerSession.state.layout.rotation,
             onDone: { isShowingReaderControls = false },
             onToggleFavorite: viewModel.toggleFavoriteStatus,
             onToggleReadStatus: viewModel.toggleReadStatus,
@@ -274,20 +294,46 @@ struct ComicReaderView: View {
             onSetRating: viewModel.setRating,
             onGoToBookmark: { pageIndex in
                 viewModel.goToBookmark(pageIndex: pageIndex)
+                readerSession.updateCurrentPage(pageIndex)
                 isShowingReaderControls = false
             },
             onGoToPageNumber: { pageNumber in
                 viewModel.goToPage(number: pageNumber)
+                readerSession.updateCurrentPage(pageNumber - 1)
                 isShowingReaderControls = false
             },
-            onSetFitMode: viewModel.setFitMode,
-            onSetPagingMode: viewModel.setPagingMode,
-            onSetSpreadMode: viewModel.setSpreadMode,
-            onSetReadingDirection: viewModel.setReadingDirection,
-            onSetCoverAsSinglePage: viewModel.setCoverAsSinglePage,
-            onRotateCounterClockwise: viewModel.rotateCounterClockwise,
-            onRotateClockwise: viewModel.rotateClockwise,
-            onResetRotation: viewModel.resetRotation
+            onSetFitMode: { fitMode in
+                viewModel.setFitMode(fitMode)
+                synchronizeReaderSession()
+            },
+            onSetPagingMode: { pagingMode in
+                viewModel.setPagingMode(pagingMode)
+                synchronizeReaderSession()
+            },
+            onSetSpreadMode: { spreadMode in
+                viewModel.setSpreadMode(spreadMode)
+                synchronizeReaderSession()
+            },
+            onSetReadingDirection: { readingDirection in
+                viewModel.setReadingDirection(readingDirection)
+                synchronizeReaderSession()
+            },
+            onSetCoverAsSinglePage: { coverAsSinglePage in
+                viewModel.setCoverAsSinglePage(coverAsSinglePage)
+                synchronizeReaderSession()
+            },
+            onRotateCounterClockwise: {
+                viewModel.rotateCounterClockwise()
+                synchronizeReaderSession()
+            },
+            onRotateClockwise: {
+                viewModel.rotateClockwise()
+                synchronizeReaderSession()
+            },
+            onResetRotation: {
+                viewModel.resetRotation()
+                synchronizeReaderSession()
+            }
         )
     }
 
@@ -307,7 +353,7 @@ struct ComicReaderView: View {
             ReaderChromeBar {
                 HStack(spacing: 16) {
                     Button {
-                        isReaderChromeHidden = false
+                        readerSession.setChromeVisible(true)
                         isShowingReaderControls = true
                     } label: {
                         Image(systemName: "slider.horizontal.3")
@@ -343,17 +389,17 @@ struct ComicReaderView: View {
 
     private func toggleReaderChrome() {
         withAnimation(.easeInOut(duration: 0.2)) {
-            isReaderChromeHidden.toggle()
+            readerSession.toggleChrome()
         }
     }
 
     private func hideReaderChrome() {
-        guard !isReaderChromeHidden else {
+        guard readerSession.state.isChromeVisible else {
             return
         }
 
         withAnimation(.easeInOut(duration: 0.2)) {
-            isReaderChromeHidden = true
+            readerSession.hideChrome()
         }
     }
 
@@ -362,17 +408,84 @@ struct ComicReaderView: View {
         case .center:
             toggleReaderChrome()
         case .leading:
-            if !isReaderChromeHidden {
+            if readerSession.state.isChromeVisible {
                 hideReaderChrome()
             } else if viewModel.canOpenPreviousComic {
                 viewModel.openPreviousComic()
             }
         case .trailing:
-            if !isReaderChromeHidden {
+            if readerSession.state.isChromeVisible {
                 hideReaderChrome()
             } else if viewModel.canOpenNextComic {
                 viewModel.openNextComic()
             }
+        }
+    }
+
+    private var pageJumpTextBinding: Binding<String> {
+        Binding(
+            get: { readerSession.state.pendingPageNumberText },
+            set: { readerSession.updatePendingPageNumberText($0) }
+        )
+    }
+
+    private func handleVisiblePageChange(to pageIndex: Int) {
+        readerSession.updateCurrentPage(pageIndex)
+        viewModel.updateCurrentPage(to: pageIndex)
+    }
+
+    private func updateVisiblePage(to pageIndex: Int) {
+        readerSession.updateCurrentPage(pageIndex)
+        viewModel.updateCurrentPage(to: pageIndex)
+    }
+
+    private func presentPageJump() {
+        guard let currentPageNumber = viewModel.currentPageNumber else {
+            return
+        }
+
+        readerSession.presentPageJump(defaultPageNumber: currentPageNumber)
+    }
+
+    private func submitPageJump() {
+        guard let pageCount = viewModel.pageCount, pageCount > 0 else {
+            return
+        }
+
+        let trimmedValue = readerSession.state.pendingPageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let pageNumber = Int(trimmedValue), (1...pageCount).contains(pageNumber) else {
+            viewModel.alert = LibraryAlertState(
+                title: "Invalid Page Number",
+                message: "Enter a page between 1 and \(pageCount)."
+            )
+            return
+        }
+
+        readerSession.dismissPageJump()
+        updateVisiblePage(to: pageNumber - 1)
+    }
+
+    private func synchronizeReaderSession() {
+        let resolvedLayout = viewModel.effectiveReaderLayout
+        if let document = viewModel.document {
+            readerSession.updateDescriptor(
+                .resolved(
+                    document: document,
+                    currentPageIndex: viewModel.currentPageIndex,
+                    layout: resolvedLayout
+                ),
+                preferredPageIndex: viewModel.currentPageIndex
+            )
+        } else {
+            readerSession.updateDescriptor(
+                .placeholder(
+                    documentURL: URL(fileURLWithPath: viewModel.descriptor.sourcePath, isDirectory: true),
+                    pageCount: max(viewModel.comic.pageCount ?? max(viewModel.comic.currentPage, 1), 1),
+                    initialPageIndex: viewModel.currentPageIndex,
+                    layout: resolvedLayout
+                ),
+                preferredPageIndex: viewModel.currentPageIndex
+            )
         }
     }
 
