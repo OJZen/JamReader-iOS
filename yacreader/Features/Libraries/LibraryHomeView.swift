@@ -426,6 +426,13 @@ struct LibraryHomeView: View {
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
+
+                            if let maintenanceRecord = resumeLibraryItem.maintenanceRecord {
+                                Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         .padding(.vertical, 4)
                     }
@@ -655,6 +662,13 @@ private struct LibraryRowView: View {
                 .font(.subheadline)
                 .foregroundStyle(item.accessSnapshot.database.exists ? .primary : .secondary)
 
+            if let maintenanceRecord = item.maintenanceRecord {
+                Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let compatibilityNote = compatibilityPresentation.rowHint,
                let iconName = compatibilityPresentation.iconName {
                 Label(compatibilityNote, systemImage: iconName)
@@ -699,6 +713,13 @@ private struct LibrarySidebarRowView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+
+                if let maintenanceRecord = item.maintenanceRecord {
+                    Text(maintenanceRecord.summaryLine)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
 
                 HStack(spacing: 6) {
                     StatusBadge(

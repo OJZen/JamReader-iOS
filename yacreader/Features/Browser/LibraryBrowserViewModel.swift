@@ -10,6 +10,7 @@ final class LibraryBrowserViewModel: ObservableObject {
     @Published private(set) var isSearching = false
     @Published private(set) var emptyStateMessage: String?
     @Published private(set) var lastInitializationSummary: LibraryScanSummary?
+    @Published private(set) var maintenanceRecord: LibraryMaintenanceRecord?
     @Published private(set) var scanProgress: LibraryScanProgress?
     @Published private(set) var scanCompletion: LibraryScanCompletionState?
     @Published private(set) var searchResults: LibrarySearchResults?
@@ -28,6 +29,7 @@ final class LibraryBrowserViewModel: ObservableObject {
     private let databaseWriter: LibraryDatabaseWriter
     private let databaseBootstrapper: LibraryDatabaseBootstrapper
     private let libraryScanner: LibraryScanner
+    private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let coverLocator: LibraryCoverLocator
     private let comicInfoImportService: ComicInfoImportService
     private let importedComicsImportService: ImportedComicsImportService
@@ -53,6 +55,7 @@ final class LibraryBrowserViewModel: ObservableObject {
         databaseWriter: LibraryDatabaseWriter,
         databaseBootstrapper: LibraryDatabaseBootstrapper,
         libraryScanner: LibraryScanner,
+        maintenanceStatusStore: LibraryMaintenanceStatusStore,
         coverLocator: LibraryCoverLocator,
         comicInfoImportService: ComicInfoImportService,
         importedComicsImportService: ImportedComicsImportService
@@ -64,11 +67,14 @@ final class LibraryBrowserViewModel: ObservableObject {
         self.databaseWriter = databaseWriter
         self.databaseBootstrapper = databaseBootstrapper
         self.libraryScanner = libraryScanner
+        self.maintenanceStatusStore = maintenanceStatusStore
         self.coverLocator = coverLocator
         self.comicInfoImportService = comicInfoImportService
         self.importedComicsImportService = importedComicsImportService
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
         self.databaseURL = storageManager.databaseURL(for: descriptor)
+        self.maintenanceRecord = maintenanceStatusStore.loadRecord(for: descriptor.id)
+        self.lastInitializationSummary = maintenanceRecord?.summary
         configureSearch()
     }
 
@@ -499,7 +505,12 @@ final class LibraryBrowserViewModel: ObservableObject {
 
                     switch result {
                     case .success(let summary):
-                        self.lastInitializationSummary = summary
+                        self.recordMaintenanceStatus(
+                            title: "Library Ready",
+                            summary: summary,
+                            scope: .library,
+                            contextPath: nil
+                        )
                         self.loadContent(respectingTransientState: false)
                         self.showScanCompletion(
                             title: "Library Ready",
@@ -568,7 +579,12 @@ final class LibraryBrowserViewModel: ObservableObject {
 
                     switch result {
                     case .success(let summary):
-                        self.lastInitializationSummary = summary
+                        self.recordMaintenanceStatus(
+                            title: "Library Refreshed",
+                            summary: summary,
+                            scope: .library,
+                            contextPath: nil
+                        )
                         self.loadContent(respectingTransientState: false)
                         self.showScanCompletion(
                             title: "Library Refreshed",
@@ -637,7 +653,12 @@ final class LibraryBrowserViewModel: ObservableObject {
 
                     switch result {
                     case .success(let summary):
-                        self.lastInitializationSummary = summary
+                        self.recordMaintenanceStatus(
+                            title: "Folder Refreshed",
+                            summary: summary,
+                            scope: .folder,
+                            contextPath: currentFolder.path
+                        )
                         self.loadContent(respectingTransientState: false)
                         self.showScanCompletion(
                             title: "Folder Refreshed",
@@ -882,6 +903,25 @@ final class LibraryBrowserViewModel: ObservableObject {
             title: title,
             message: summary.completionLine
         )
+    }
+
+    private func recordMaintenanceStatus(
+        title: String,
+        summary: LibraryScanSummary,
+        scope: LibraryMaintenanceRecord.Scope,
+        contextPath: String?
+    ) {
+        lastInitializationSummary = summary
+        let record = LibraryMaintenanceRecord(
+            libraryID: descriptor.id,
+            title: title,
+            summary: summary,
+            scope: scope,
+            contextPath: contextPath,
+            scannedAt: Date()
+        )
+        maintenanceRecord = record
+        maintenanceStatusStore.saveRecord(record)
     }
 
     private func showCompletion(title: String, message: String) {

@@ -45,6 +45,7 @@ struct LibraryBrowserView: View {
                 databaseWriter: dependencies.libraryDatabaseWriter,
                 databaseBootstrapper: dependencies.libraryDatabaseBootstrapper,
                 libraryScanner: dependencies.libraryScanner,
+                maintenanceStatusStore: dependencies.libraryMaintenanceStatusStore,
                 coverLocator: dependencies.libraryCoverLocator,
                 comicInfoImportService: dependencies.comicInfoImportService,
                 importedComicsImportService: dependencies.importedComicsImportService
@@ -1172,11 +1173,7 @@ struct LibraryBrowserView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            if let summary = viewModel.lastInitializationSummary {
-                Text("Latest scan: \(summary.summaryLine)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            maintenanceSummaryView
 
             if let scanProgress = viewModel.scanProgress {
                 scanProgressPanel(scanProgress)
@@ -1348,11 +1345,7 @@ struct LibraryBrowserView: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
 
-                if let summary = viewModel.lastInitializationSummary {
-                    Text("Latest scan: \(summary.summaryLine)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                maintenanceSummaryView
 
                 if let scanProgress = viewModel.scanProgress {
                     scanProgressPanel(scanProgress)
@@ -1387,6 +1380,27 @@ struct LibraryBrowserView: View {
         }
         .padding(12)
         .background((presentation.tint ?? .orange).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var maintenanceSummaryView: some View {
+        if let maintenanceRecord = viewModel.maintenanceRecord {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(maintenanceRecord.summaryLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let detailLine = maintenanceRecord.detailLine {
+                    Text(detailLine)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } else if let summary = viewModel.lastInitializationSummary {
+            Text("Latest scan: \(summary.summaryLine)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder

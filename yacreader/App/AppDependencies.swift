@@ -10,6 +10,7 @@ struct AppDependencies {
     let libraryDatabaseWriter: LibraryDatabaseWriter
     let libraryDatabaseBootstrapper: LibraryDatabaseBootstrapper
     let libraryScanner: LibraryScanner
+    let libraryMaintenanceStatusStore: LibraryMaintenanceStatusStore
     let importedComicsImportService: ImportedComicsImportService
     let comicDocumentLoader: ComicDocumentLoader
     let libraryCoverLocator: LibraryCoverLocator
@@ -24,6 +25,7 @@ struct AppDependencies {
         let databaseWriter = LibraryDatabaseWriter()
         let databaseBootstrapper = LibraryDatabaseBootstrapper()
         let libraryScanner = LibraryScanner()
+        let libraryMaintenanceStatusStore = LibraryMaintenanceStatusStore()
         let remoteServerCredentialStore = RemoteServerCredentialStore()
         let remoteReadingProgressStore = RemoteReadingProgressStore()
         return AppDependencies(
@@ -36,11 +38,13 @@ struct AppDependencies {
             libraryDatabaseWriter: databaseWriter,
             libraryDatabaseBootstrapper: databaseBootstrapper,
             libraryScanner: libraryScanner,
+            libraryMaintenanceStatusStore: libraryMaintenanceStatusStore,
             importedComicsImportService: ImportedComicsImportService(
                 store: descriptorStore,
                 storageManager: storageManager,
                 databaseBootstrapper: databaseBootstrapper,
-                libraryScanner: libraryScanner
+                libraryScanner: libraryScanner,
+                maintenanceStatusStore: libraryMaintenanceStatusStore
             ),
             comicDocumentLoader: ComicDocumentLoader(),
             libraryCoverLocator: LibraryCoverLocator(),

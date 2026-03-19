@@ -31,6 +31,13 @@ struct LibraryHomeLibraryActionsSheet: View {
                                 tint: item.accessSnapshot.sourceExists ? .green : .orange
                             )
                         }
+
+                        if let maintenanceRecord = item.maintenanceRecord {
+                            Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .padding(.vertical, 6)
                 }
@@ -147,6 +154,20 @@ struct LibraryInfoSheet: View {
                     LabeledContent("Direct Imports", value: compatibilityPresentation.directImportsTitle)
                     LabeledContent("Metadata", value: item.accessSnapshot.metadataExists ? "Ready" : "Missing")
                     LabeledContent("Database", value: item.accessSnapshot.database.summaryLine)
+                }
+
+                if let maintenanceRecord = item.maintenanceRecord {
+                    Section("Maintenance") {
+                        LabeledContent("Last Action", value: maintenanceRecord.title)
+                        LabeledContent("Summary", value: maintenanceRecord.summary.summaryLine)
+                        LabeledContent("When", value: maintenanceRecord.formattedTimestampLine)
+
+                        if let detailLine = maintenanceRecord.detailLine {
+                            Text(detailLine)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 if let libraryImportCompatibilityDetail = compatibilityPresentation.infoDetail {

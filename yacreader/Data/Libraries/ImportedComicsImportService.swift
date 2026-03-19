@@ -77,6 +77,7 @@ final class ImportedComicsImportService {
     private let storageManager: LibraryStorageManager
     private let databaseBootstrapper: LibraryDatabaseBootstrapper
     private let libraryScanner: LibraryScanner
+    private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let fileManager: FileManager
 
     private let supportedComicFileExtensions: Set<String> = [
@@ -89,12 +90,14 @@ final class ImportedComicsImportService {
         storageManager: LibraryStorageManager,
         databaseBootstrapper: LibraryDatabaseBootstrapper,
         libraryScanner: LibraryScanner,
+        maintenanceStatusStore: LibraryMaintenanceStatusStore,
         fileManager: FileManager = .default
     ) {
         self.store = store
         self.storageManager = storageManager
         self.databaseBootstrapper = databaseBootstrapper
         self.libraryScanner = libraryScanner
+        self.maintenanceStatusStore = maintenanceStatusStore
         self.fileManager = fileManager
     }
 
@@ -274,13 +277,24 @@ final class ImportedComicsImportService {
     private func ensureIndexedLibrary(for descriptor: LibraryDescriptor) throws -> LibraryScanSummary {
         let databaseURL = storageManager.databaseURL(for: descriptor)
         let accessSession = try storageManager.makeAccessSession(for: descriptor)
-        return try withExtendedLifetime(accessSession) {
+        let summary = try withExtendedLifetime(accessSession) {
             try databaseBootstrapper.createDatabaseIfNeeded(at: databaseURL)
             return try libraryScanner.rescanLibrary(
                 sourceRootURL: accessSession.sourceURL,
                 databaseURL: databaseURL
             )
         }
+        maintenanceStatusStore.saveRecord(
+            LibraryMaintenanceRecord(
+                libraryID: descriptor.id,
+                title: "Library Updated",
+                summary: summary,
+                scope: .importIndex,
+                contextPath: nil,
+                scannedAt: Date()
+            )
+        )
+        return summary
     }
 
     private func importAvailability(

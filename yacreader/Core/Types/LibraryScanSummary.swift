@@ -1,6 +1,6 @@
 import Foundation
 
-struct LibraryScanSummary: Equatable {
+struct LibraryScanSummary: Codable, Equatable {
     let folderCount: Int
     let comicCount: Int
     let previousFolderCount: Int?

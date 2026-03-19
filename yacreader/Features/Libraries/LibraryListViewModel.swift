@@ -4,6 +4,7 @@ import Foundation
 struct LibraryListItem: Identifiable, Equatable {
     let descriptor: LibraryDescriptor
     let accessSnapshot: LibraryAccessSnapshot
+    let maintenanceRecord: LibraryMaintenanceRecord?
     let metadataPath: String
     let databasePath: String
 
@@ -48,6 +49,7 @@ final class LibraryListViewModel: ObservableObject {
     private let store: LibraryDescriptorStore
     private let storageManager: LibraryStorageManager
     private let inspector: SQLiteDatabaseInspector
+    private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let importedComicsImportService: ImportedComicsImportService
 
     private var descriptors: [LibraryDescriptor] = []
@@ -56,6 +58,7 @@ final class LibraryListViewModel: ObservableObject {
         store: LibraryDescriptorStore,
         storageManager: LibraryStorageManager,
         inspector: SQLiteDatabaseInspector,
+        maintenanceStatusStore: LibraryMaintenanceStatusStore,
         databaseBootstrapper _: LibraryDatabaseBootstrapper,
         libraryScanner _: LibraryScanner,
         importedComicsImportService: ImportedComicsImportService,
@@ -64,6 +67,7 @@ final class LibraryListViewModel: ObservableObject {
         self.store = store
         self.storageManager = storageManager
         self.inspector = inspector
+        self.maintenanceStatusStore = maintenanceStatusStore
         self.importedComicsImportService = importedComicsImportService
         reload()
     }
@@ -175,6 +179,7 @@ final class LibraryListViewModel: ObservableObject {
 
     func removeLibraries(at offsets: IndexSet) {
         let idsToRemove = offsets.map { items[$0].descriptor.id }
+        idsToRemove.forEach { maintenanceStatusStore.clearRecord(for: $0) }
         descriptors.removeAll { idsToRemove.contains($0.id) }
 
         do {
@@ -217,6 +222,7 @@ final class LibraryListViewModel: ObservableObject {
     }
 
     func removeLibrary(id: UUID) {
+        maintenanceStatusStore.clearRecord(for: id)
         descriptors.removeAll { $0.id == id }
 
         do {
@@ -319,6 +325,7 @@ final class LibraryListViewModel: ObservableObject {
                 LibraryListItem(
                     descriptor: descriptor,
                     accessSnapshot: storageManager.accessSnapshot(for: descriptor, inspector: inspector),
+                    maintenanceRecord: maintenanceStatusStore.loadRecord(for: descriptor.id),
                     metadataPath: storageManager.metadataRootURL(for: descriptor).path,
                     databasePath: storageManager.databaseURL(for: descriptor).path
                 )
