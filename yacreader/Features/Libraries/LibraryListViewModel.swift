@@ -13,9 +13,31 @@ struct LibraryListItem: Identifiable, Equatable {
 }
 
 struct LibraryAlertState: Identifiable {
+    enum PrimaryAction {
+        case openLibrary(UUID)
+
+        var title: String {
+            switch self {
+            case .openLibrary:
+                return "Open Library"
+            }
+        }
+    }
+
     let id = UUID()
     let title: String
     let message: String
+    let primaryAction: PrimaryAction?
+
+    init(
+        title: String,
+        message: String,
+        primaryAction: PrimaryAction? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.primaryAction = primaryAction
+    }
 }
 
 @MainActor
@@ -265,7 +287,10 @@ final class LibraryListViewModel: ObservableObject {
 
             alert = LibraryAlertState(
                 title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
-                message: messageLines.joined(separator: "\n")
+                message: messageLines.joined(separator: "\n"),
+                primaryAction: (result.createdLibrary || result.hasImportedAnyComics)
+                    ? .openLibrary(result.importedDestinationID)
+                    : nil
             )
         } catch {
             alert = LibraryAlertState(

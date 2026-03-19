@@ -124,6 +124,13 @@ struct LibraryRenameSheet: View {
 struct LibraryInfoSheet: View {
     let item: LibraryListItem
 
+    private var compatibilityPresentation: LibraryCompatibilityPresentation {
+        LibraryCompatibilityPresentation.resolve(
+            descriptor: item.descriptor,
+            accessSnapshot: item.accessSnapshot
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -137,12 +144,12 @@ struct LibraryInfoSheet: View {
                 Section("Access") {
                     LabeledContent("Source", value: item.accessSnapshot.sourceStatus)
                     LabeledContent("Write Access", value: item.accessSnapshot.writeStatus)
-                    LabeledContent("Direct Imports", value: libraryImportCompatibilityTitle)
+                    LabeledContent("Direct Imports", value: compatibilityPresentation.directImportsTitle)
                     LabeledContent("Metadata", value: item.accessSnapshot.metadataExists ? "Ready" : "Missing")
                     LabeledContent("Database", value: item.accessSnapshot.database.summaryLine)
                 }
 
-                if let libraryImportCompatibilityDetail {
+                if let libraryImportCompatibilityDetail = compatibilityPresentation.infoDetail {
                     Section("Compatibility") {
                         Text(libraryImportCompatibilityDetail)
                             .font(.footnote)
@@ -170,26 +177,6 @@ struct LibraryInfoSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private var libraryImportCompatibilityTitle: String {
-        if item.descriptor.storageMode == .mirrored {
-            return "Browse Only"
-        }
-
-        return item.accessSnapshot.sourceWritable ? "Allowed" : "Unavailable"
-    }
-
-    private var libraryImportCompatibilityDetail: String? {
-        if item.descriptor.storageMode == .mirrored {
-            return "This library is being kept compatible with a desktop or external source. It remains available for browsing, search, reading, and metadata compatibility, but direct file imports are disabled to avoid writing into a mirrored library. After desktop-side changes, open the library and run Refresh on iOS to pick up new files."
-        }
-
-        if !item.accessSnapshot.sourceWritable {
-            return "This library is currently readable but not writable from iOS, so direct file imports are disabled until write access is available again."
-        }
-
-        return nil
     }
 }
 

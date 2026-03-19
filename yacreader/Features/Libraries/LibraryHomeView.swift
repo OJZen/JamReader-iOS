@@ -93,11 +93,7 @@ struct LibraryHomeView: View {
             }
         }
         .alert(item: $viewModel.alert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
+            makeLibraryAlert(for: alert)
         }
         .onChange(of: libraryActionsItem) { _, newValue in
             guard newValue == nil, let pendingLibraryAction else {
@@ -360,6 +356,10 @@ struct LibraryHomeView: View {
 
                 if let resumeLibraryItem {
                     NavigationLink(value: resumeLibraryItem.id) {
+                        let compatibilityPresentation = LibraryCompatibilityPresentation.resolve(
+                            descriptor: resumeLibraryItem.descriptor,
+                            accessSnapshot: resumeLibraryItem.accessSnapshot
+                        )
                         VStack(alignment: .leading, spacing: 10) {
                             HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: "books.vertical.fill")
@@ -387,13 +387,14 @@ struct LibraryHomeView: View {
                             HStack(spacing: 8) {
                                 StatusBadge(title: "\(viewModel.items.count) libraries", tint: .blue)
                                 StatusBadge(title: resumeLibraryItem.descriptor.storageMode.title, tint: resumeLibraryItem.descriptor.storageMode.tintColor)
-                                if resumeLibraryItem.descriptor.storageMode == .mirrored {
-                                    StatusBadge(title: "Desktop Compatible", tint: .orange)
+                                if let badgeTitle = compatibilityPresentation.badgeTitle {
+                                    StatusBadge(title: badgeTitle, tint: .orange)
                                 }
                             }
 
-                            if let compatibilityNote = libraryCompatibilityNote(for: resumeLibraryItem) {
-                                Label(compatibilityNote, systemImage: compatibilitySymbolName(for: resumeLibraryItem))
+                            if let compatibilityNote = compatibilityPresentation.rowHint,
+                               let iconName = compatibilityPresentation.iconName {
+                                Label(compatibilityNote, systemImage: iconName)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -587,6 +588,11 @@ private struct LibraryRowView: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
+        let compatibilityPresentation = LibraryCompatibilityPresentation.resolve(
+            descriptor: item.descriptor,
+            accessSnapshot: item.accessSnapshot
+        )
+
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "books.vertical.fill")
@@ -622,8 +628,9 @@ private struct LibraryRowView: View {
                 .font(.subheadline)
                 .foregroundStyle(item.accessSnapshot.database.exists ? .primary : .secondary)
 
-            if let compatibilityNote = libraryCompatibilityNote(for: item) {
-                Label(compatibilityNote, systemImage: compatibilitySymbolName(for: item))
+            if let compatibilityNote = compatibilityPresentation.rowHint,
+               let iconName = compatibilityPresentation.iconName {
+                Label(compatibilityNote, systemImage: iconName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -645,6 +652,11 @@ private struct LibrarySidebarRowView: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
+        let compatibilityPresentation = LibraryCompatibilityPresentation.resolve(
+            descriptor: item.descriptor,
+            accessSnapshot: item.accessSnapshot
+        )
+
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "books.vertical.fill")
                 .font(.title3)
@@ -666,8 +678,8 @@ private struct LibrarySidebarRowView: View {
                         title: item.descriptor.storageMode.title,
                         tint: item.descriptor.storageMode.tintColor
                     )
-                    if item.descriptor.storageMode == .mirrored {
-                        StatusBadge(title: "Desktop Compatible", tint: .orange)
+                    if let badgeTitle = compatibilityPresentation.badgeTitle {
+                        StatusBadge(title: badgeTitle, tint: .orange)
                     }
                     StatusBadge(
                         title: item.accessSnapshot.sourceExists ? "Ready" : "Needs Access",
@@ -681,24 +693,26 @@ private struct LibrarySidebarRowView: View {
     }
 }
 
-private func libraryCompatibilityNote(for item: LibraryListItem) -> String? {
-    if item.descriptor.storageMode == .mirrored {
-        return "Desktop-compatible library. Browse and read here, then refresh after desktop-side changes."
+private func makeLibraryAlert(for alert: LibraryAlertState) -> Alert {
+    if let primaryAction = alert.primaryAction {
+        return Alert(
+            title: Text(alert.title),
+            message: Text(alert.message),
+            primaryButton: .default(Text(primaryAction.title)) {
+                switch primaryAction {
+                case .openLibrary(let libraryID):
+                    AppNavigationRouter.openLibrary(libraryID)
+                }
+            },
+            secondaryButton: .cancel(Text("Not Now"))
+        )
     }
 
-    if !item.accessSnapshot.sourceWritable {
-        return "Currently readable on this device, but direct imports stay disabled until write access returns."
-    }
-
-    return nil
-}
-
-private func compatibilitySymbolName(for item: LibraryListItem) -> String {
-    if item.descriptor.storageMode == .mirrored {
-        return "desktopcomputer"
-    }
-
-    return "lock.fill"
+    return Alert(
+        title: Text(alert.title),
+        message: Text(alert.message),
+        dismissButton: .default(Text("OK"))
+    )
 }
 
 private struct LibraryHomeDetailPlaceholder: View {

@@ -1182,8 +1182,8 @@ struct LibraryBrowserView: View {
                 scanProgressPanel(scanProgress)
             }
 
-            if let libraryImportCompatibilityNotice = viewModel.libraryImportCompatibilityNotice {
-                libraryImportCompatibilityPanel(message: libraryImportCompatibilityNotice)
+            if let compatibilityPresentation = viewModel.compatibilityPresentation {
+                libraryImportCompatibilityPanel(compatibilityPresentation)
             }
 
             localFolderControls(content)
@@ -1358,8 +1358,8 @@ struct LibraryBrowserView: View {
                     scanProgressPanel(scanProgress)
                 }
 
-                if let libraryImportCompatibilityNotice = viewModel.libraryImportCompatibilityNotice {
-                    libraryImportCompatibilityPanel(message: libraryImportCompatibilityNotice)
+                if let compatibilityPresentation = viewModel.compatibilityPresentation {
+                    libraryImportCompatibilityPanel(compatibilityPresentation)
                 }
 
                 localFolderControls(content)
@@ -1368,53 +1368,25 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private func libraryImportCompatibilityPanel(message: String) -> some View {
+    private func libraryImportCompatibilityPanel(
+        _ presentation: LibraryCompatibilityPresentation
+    ) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: compatibilityPanelIconName)
+            Image(systemName: presentation.iconName ?? "externaldrive.badge.exclamationmark")
                 .font(.headline)
-                .foregroundStyle(compatibilityPanelTint)
+                .foregroundStyle(presentation.tint ?? .orange)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(compatibilityPanelTitle)
+                Text(presentation.bannerTitle ?? "Direct Imports Unavailable")
                     .font(.subheadline.weight(.semibold))
 
-                Text(message)
+                Text(presentation.bannerMessage ?? "")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
-
-                if viewModel.descriptor.storageMode == .mirrored {
-                    Text("Refresh this library after desktop-side changes to pick up new files on iOS.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .padding(12)
-        .background(compatibilityPanelTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-
-    private var compatibilityPanelTitle: String {
-        if viewModel.descriptor.storageMode == .mirrored {
-            return "Desktop-Compatible Library"
-        }
-
-        return "Direct Imports Unavailable"
-    }
-
-    private var compatibilityPanelIconName: String {
-        if viewModel.descriptor.storageMode == .mirrored {
-            return "desktopcomputer"
-        }
-
-        return "externaldrive.badge.exclamationmark"
-    }
-
-    private var compatibilityPanelTint: Color {
-        if viewModel.descriptor.storageMode == .mirrored {
-            return .blue
-        }
-
-        return .orange
+        .background((presentation.tint ?? .orange).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder

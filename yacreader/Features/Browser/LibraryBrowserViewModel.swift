@@ -125,6 +125,16 @@ final class LibraryBrowserViewModel: ObservableObject {
         }
     }
 
+    var compatibilityPresentation: LibraryCompatibilityPresentation? {
+        let availability = importedComicsImportService.importAvailability(for: descriptor)
+        let presentation = LibraryCompatibilityPresentation.resolve(
+            descriptor: descriptor,
+            availability: availability
+        )
+
+        return presentation.bannerTitle == nil ? nil : presentation
+    }
+
     var supportsDirectLibraryImports: Bool {
         importedComicsImportService.importAvailability(for: descriptor).isSelectable
     }
