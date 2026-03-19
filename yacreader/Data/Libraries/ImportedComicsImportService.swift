@@ -1,6 +1,7 @@
 import Foundation
 
 struct ImportedComicsImportResult {
+    let importedDestinationID: UUID
     let importedDestinationName: String
     let createdLibrary: Bool
     let importedComicCount: Int
@@ -155,6 +156,7 @@ final class ImportedComicsImportService {
         }
 
         return ImportedComicsImportResult(
+            importedDestinationID: destinationResolution.descriptor.id,
             importedDestinationName: destinationResolution.descriptor.name,
             createdLibrary: destinationResolution.wasCreated,
             importedComicCount: importedComicCount,

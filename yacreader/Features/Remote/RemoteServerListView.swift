@@ -111,11 +111,7 @@ struct RemoteServerListView: View {
             )
         }
         .alert(item: $viewModel.alert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
+            makeRemoteAlert(for: alert)
         }
         .confirmationDialog(
             "Clear all downloaded remote comics?",
@@ -493,11 +489,7 @@ private struct RemoteServerEditorSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .alert(item: $alert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
+            makeRemoteAlert(for: alert)
         }
         .task {
             guard !Task.isCancelled else {
@@ -604,11 +596,7 @@ struct RemoteServerBrowserView: View {
             }
         }
         .alert(item: $viewModel.alert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
+            makeRemoteAlert(for: alert, onPrimaryAction: handleRemoteAlertPrimaryAction(_:))
         }
         .sheet(item: $importRequest) { request in
             switch request {
@@ -1151,6 +1139,35 @@ struct RemoteServerBrowserView: View {
     private static func persistDisplayMode(_ mode: LibraryComicDisplayMode) {
         UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.displayMode")
     }
+
+    private func handleRemoteAlertPrimaryAction(_ action: RemoteAlertPrimaryAction) {
+        switch action {
+        case .openLibrary(let libraryID):
+            AppNavigationRouter.openLibrary(libraryID)
+        }
+    }
+}
+
+private func makeRemoteAlert(
+    for alert: RemoteAlertState,
+    onPrimaryAction: @escaping (RemoteAlertPrimaryAction) -> Void = { _ in }
+) -> Alert {
+    if let primaryAction = alert.primaryAction {
+        return Alert(
+            title: Text(alert.title),
+            message: Text(alert.message),
+            primaryButton: .default(Text(primaryAction.title)) {
+                onPrimaryAction(primaryAction)
+            },
+            secondaryButton: .cancel(Text("Not Now"))
+        )
+    }
+
+    return Alert(
+        title: Text(alert.title),
+        message: Text(alert.message),
+        dismissButton: .default(Text("OK"))
+    )
 }
 
 private enum RemoteBrowserImportRequest: Identifiable {

@@ -5,6 +5,7 @@ struct LibraryHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @AppStorage("libraryHome.selectedLibraryID") private var storedSelectedLibraryID = ""
+    @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
@@ -16,6 +17,7 @@ struct LibraryHomeView: View {
     @State private var renamingLibraryItem: LibraryListItem?
     @State private var libraryInfoItem: LibraryListItem?
     @State private var pendingLibraryAction: PendingLibraryAction?
+    @State private var compactNavigationPath: [UUID] = []
 
     var body: some View {
         Group {
@@ -43,12 +45,17 @@ struct LibraryHomeView: View {
         .onAppear {
             viewModel.reload()
             synchronizeSelection()
+            handlePendingLibraryFocusIfNeeded()
         }
         .onChange(of: viewModel.items) { _, _ in
             synchronizeSelection()
+            handlePendingLibraryFocusIfNeeded()
         }
         .onChange(of: selectedLibraryID) { _, newValue in
             storedSelectedLibraryID = newValue?.uuidString ?? ""
+        }
+        .onChange(of: pendingFocusedLibraryID) { _, _ in
+            handlePendingLibraryFocusIfNeeded()
         }
         .sheet(item: $libraryActionsItem) { item in
             LibraryHomeLibraryActionsSheet(
@@ -112,7 +119,7 @@ struct LibraryHomeView: View {
     }
 
     private var compactLayout: some View {
-        NavigationStack {
+        NavigationStack(path: $compactNavigationPath) {
             List {
                 overviewSection
                 compactLibrariesSection
@@ -123,6 +130,25 @@ struct LibraryHomeView: View {
             }
             .refreshable {
                 viewModel.reload()
+            }
+            .navigationDestination(for: UUID.self) { libraryID in
+                if let item = viewModel.items.first(where: { $0.id == libraryID }) {
+                    LibraryBrowserView(
+                        descriptor: item.descriptor,
+                        folderID: preferredFolderID(for: item),
+                        dependencies: dependencies
+                    )
+                    .id(item.id)
+                    .onAppear {
+                        selectedLibraryID = item.id
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "Library Unavailable",
+                        systemImage: "books.vertical",
+                        description: Text("This library is no longer available on this device.")
+                    )
+                }
             }
         }
     }
@@ -224,6 +250,23 @@ struct LibraryHomeView: View {
         }
     }
 
+    private func handlePendingLibraryFocusIfNeeded() {
+        guard let libraryID = UUID(uuidString: pendingFocusedLibraryID),
+              viewModel.items.contains(where: { $0.id == libraryID }) else {
+            return
+        }
+
+        selectedLibraryID = libraryID
+
+        if usesSplitViewLayout {
+            compactNavigationPath = []
+        } else {
+            compactNavigationPath = [libraryID]
+        }
+
+        pendingFocusedLibraryID = ""
+    }
+
     private func preferredFolderID(for item: LibraryListItem) -> Int64 {
         LibraryBrowserView.lastOpenedFolderID(for: item.id)
     }
@@ -316,13 +359,7 @@ struct LibraryHomeView: View {
                     .font(.headline)
 
                 if let resumeLibraryItem {
-                    NavigationLink {
-                        LibraryBrowserView(
-                            descriptor: resumeLibraryItem.descriptor,
-                            folderID: preferredFolderID(for: resumeLibraryItem),
-                            dependencies: dependencies
-                        )
-                    } label: {
+                    NavigationLink(value: resumeLibraryItem.id) {
                         VStack(alignment: .leading, spacing: 10) {
                             HStack(alignment: .top, spacing: 12) {
                                 Image(systemName: "books.vertical.fill")
@@ -350,6 +387,16 @@ struct LibraryHomeView: View {
                             HStack(spacing: 8) {
                                 StatusBadge(title: "\(viewModel.items.count) libraries", tint: .blue)
                                 StatusBadge(title: resumeLibraryItem.descriptor.storageMode.title, tint: resumeLibraryItem.descriptor.storageMode.tintColor)
+                                if resumeLibraryItem.descriptor.storageMode == .mirrored {
+                                    StatusBadge(title: "Desktop Compatible", tint: .orange)
+                                }
+                            }
+
+                            if let compatibilityNote = libraryCompatibilityNote(for: resumeLibraryItem) {
+                                Label(compatibilityNote, systemImage: compatibilitySymbolName(for: resumeLibraryItem))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         .padding(.vertical, 4)
@@ -404,13 +451,7 @@ struct LibraryHomeView: View {
                 .padding(.vertical, 24)
             } else {
                 ForEach(viewModel.items) { item in
-                    NavigationLink {
-                        LibraryBrowserView(
-                            descriptor: item.descriptor,
-                            folderID: preferredFolderID(for: item),
-                            dependencies: dependencies
-                        )
-                    } label: {
+                    NavigationLink(value: item.id) {
                         LibraryRowView(
                             item: item,
                             trailingAccessoryReservedWidth: compactLibraryActionReservedWidth
@@ -581,6 +622,13 @@ private struct LibraryRowView: View {
                 .font(.subheadline)
                 .foregroundStyle(item.accessSnapshot.database.exists ? .primary : .secondary)
 
+            if let compatibilityNote = libraryCompatibilityNote(for: item) {
+                Label(compatibilityNote, systemImage: compatibilitySymbolName(for: item))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if let error = item.accessSnapshot.lastError ?? item.accessSnapshot.database.lastError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
@@ -618,6 +666,9 @@ private struct LibrarySidebarRowView: View {
                         title: item.descriptor.storageMode.title,
                         tint: item.descriptor.storageMode.tintColor
                     )
+                    if item.descriptor.storageMode == .mirrored {
+                        StatusBadge(title: "Desktop Compatible", tint: .orange)
+                    }
                     StatusBadge(
                         title: item.accessSnapshot.sourceExists ? "Ready" : "Needs Access",
                         tint: item.accessSnapshot.sourceExists ? .green : .orange
@@ -628,6 +679,26 @@ private struct LibrarySidebarRowView: View {
         .padding(.vertical, 4)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
+}
+
+private func libraryCompatibilityNote(for item: LibraryListItem) -> String? {
+    if item.descriptor.storageMode == .mirrored {
+        return "Desktop-compatible library. Browse and read here, then refresh after desktop-side changes."
+    }
+
+    if !item.accessSnapshot.sourceWritable {
+        return "Currently readable on this device, but direct imports stay disabled until write access returns."
+    }
+
+    return nil
+}
+
+private func compatibilitySymbolName(for item: LibraryListItem) -> String {
+    if item.descriptor.storageMode == .mirrored {
+        return "desktopcomputer"
+    }
+
+    return "lock.fill"
 }
 
 private struct LibraryHomeDetailPlaceholder: View {

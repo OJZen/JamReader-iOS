@@ -1,10 +1,32 @@
 import Combine
 import Foundation
 
+enum RemoteAlertPrimaryAction {
+    case openLibrary(UUID)
+
+    var title: String {
+        switch self {
+        case .openLibrary:
+            return "Open Library"
+        }
+    }
+}
+
 struct RemoteAlertState: Identifiable, Error {
     let id = UUID()
     let title: String
     let message: String
+    let primaryAction: RemoteAlertPrimaryAction?
+
+    init(
+        title: String,
+        message: String,
+        primaryAction: RemoteAlertPrimaryAction? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.primaryAction = primaryAction
+    }
 }
 
 struct RemoteServerEditorDraft: Identifiable {

@@ -464,7 +464,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         alert = RemoteAlertState(
             title: result.importedComicCount > 0 ? successTitle : "Import Finished with Warnings",
-            message: messageLines.joined(separator: "\n")
+            message: messageLines.joined(separator: "\n"),
+            primaryAction: (result.createdLibrary || result.hasImportedAnyComics)
+                ? .openLibrary(result.importedDestinationID)
+                : nil
         )
     }
 

@@ -182,7 +182,7 @@ struct LibraryInfoSheet: View {
 
     private var libraryImportCompatibilityDetail: String? {
         if item.descriptor.storageMode == .mirrored {
-            return "This library is being kept compatible with a desktop or external source. It remains available for browsing, search, reading, and metadata compatibility, but direct file imports are disabled to avoid writing into a mirrored library."
+            return "This library is being kept compatible with a desktop or external source. It remains available for browsing, search, reading, and metadata compatibility, but direct file imports are disabled to avoid writing into a mirrored library. After desktop-side changes, open the library and run Refresh on iOS to pick up new files."
         }
 
         if !item.accessSnapshot.sourceWritable {

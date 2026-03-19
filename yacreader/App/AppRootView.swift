@@ -4,7 +4,7 @@ struct AppRootView: View {
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
-    @SceneStorage("appRoot.selectedTab") private var selectedTabRawValue = AppRootTab.library.rawValue
+    @AppStorage(AppNavigationStorageKeys.selectedTab) private var selectedTabRawValue = AppRootTab.library.rawValue
 
     private var selectedTab: Binding<AppRootTab> {
         Binding(
@@ -32,23 +32,6 @@ struct AppRootView: View {
                     Label("Settings", systemImage: AppRootTab.settings.systemImage)
                 }
                 .tag(AppRootTab.settings)
-        }
-    }
-}
-
-private enum AppRootTab: String, Hashable {
-    case library
-    case browse
-    case settings
-
-    var systemImage: String {
-        switch self {
-        case .library:
-            return "books.vertical.fill"
-        case .browse:
-            return "globe.asia.australia.fill"
-        case .settings:
-            return "gearshape.fill"
         }
     }
 }
