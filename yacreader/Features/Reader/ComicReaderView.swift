@@ -206,7 +206,7 @@ struct ComicReaderView: View {
     private func readerContent(for document: ComicDocument) -> some View {
         switch document {
         case .pdf(let pdf):
-            ReaderRotationHost(rotation: readerSession.state.layout.rotation) {
+            ReaderRotatedContentHost(rotation: readerSession.state.layout.rotation) {
                 PDFReaderContainerView(
                     document: pdf.pdfDocument,
                     requestedPageIndex: readerSession.state.currentPageIndex,
@@ -495,26 +495,6 @@ private enum ReaderSecondaryAction {
     case pageJump
 }
 
-private struct ReaderRotationHost<Content: View>: View {
-    let rotation: ReaderRotationAngle
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        GeometryReader { proxy in
-            let outerSize = proxy.size
-            let innerSize = rotation.isQuarterTurn
-                ? CGSize(width: outerSize.height, height: outerSize.width)
-                : outerSize
-
-            content()
-                .frame(width: innerSize.width, height: innerSize.height)
-                .rotationEffect(.degrees(Double(rotation.rawValue)))
-                .position(x: outerSize.width * 0.5, y: outerSize.height * 0.5)
-        }
-        .clipped()
-    }
-}
-
 private struct ReaderControlsSheet: View {
     let pageIndicatorText: String?
     let currentPageNumber: Int?
@@ -554,122 +534,6 @@ private struct ReaderControlsSheet: View {
     let onRotateClockwise: () -> Void
     let onResetRotation: () -> Void
 
-    @State private var selectedPageNumber: Double
-
-    init(
-        pageIndicatorText: String?,
-        currentPageNumber: Int?,
-        pageCount: Int?,
-        currentPageIsBookmarked: Bool,
-        bookmarkItems: [ReaderBookmarkItem],
-        isFavorite: Bool,
-        isRead: Bool,
-        rating: Int,
-        supportsImageLayoutControls: Bool,
-        supportsDoublePageSpread: Bool,
-        supportsRotationControls: Bool,
-        fitMode: ReaderFitMode,
-        pagingMode: ReaderPagingMode,
-        spreadMode: ReaderSpreadMode,
-        readingDirection: ReaderReadingDirection,
-        coverAsSinglePage: Bool,
-        rotation: ReaderRotationAngle,
-        onDone: @escaping () -> Void,
-        onToggleFavorite: @escaping () -> Void,
-        onToggleReadStatus: @escaping () -> Void,
-        onOpenQuickMetadata: @escaping () -> Void,
-        onOpenMetadata: @escaping () -> Void,
-        onOpenOrganization: @escaping () -> Void,
-        onOpenThumbnails: @escaping () -> Void,
-        onOpenPageJump: @escaping () -> Void,
-        onToggleBookmark: @escaping () -> Void,
-        onSetRating: @escaping (Int) -> Void,
-        onGoToBookmark: @escaping (Int) -> Void,
-        onGoToPageNumber: @escaping (Int) -> Void,
-        onSetFitMode: @escaping (ReaderFitMode) -> Void,
-        onSetPagingMode: @escaping (ReaderPagingMode) -> Void,
-        onSetSpreadMode: @escaping (ReaderSpreadMode) -> Void,
-        onSetReadingDirection: @escaping (ReaderReadingDirection) -> Void,
-        onSetCoverAsSinglePage: @escaping (Bool) -> Void,
-        onRotateCounterClockwise: @escaping () -> Void,
-        onRotateClockwise: @escaping () -> Void,
-        onResetRotation: @escaping () -> Void
-    ) {
-        self.pageIndicatorText = pageIndicatorText
-        self.currentPageNumber = currentPageNumber
-        self.pageCount = pageCount
-        self.currentPageIsBookmarked = currentPageIsBookmarked
-        self.bookmarkItems = bookmarkItems
-        self.isFavorite = isFavorite
-        self.isRead = isRead
-        self.rating = rating
-        self.supportsImageLayoutControls = supportsImageLayoutControls
-        self.supportsDoublePageSpread = supportsDoublePageSpread
-        self.supportsRotationControls = supportsRotationControls
-        self.fitMode = fitMode
-        self.pagingMode = pagingMode
-        self.spreadMode = spreadMode
-        self.readingDirection = readingDirection
-        self.coverAsSinglePage = coverAsSinglePage
-        self.rotation = rotation
-        self.onDone = onDone
-        self.onToggleFavorite = onToggleFavorite
-        self.onToggleReadStatus = onToggleReadStatus
-        self.onOpenQuickMetadata = onOpenQuickMetadata
-        self.onOpenMetadata = onOpenMetadata
-        self.onOpenOrganization = onOpenOrganization
-        self.onOpenThumbnails = onOpenThumbnails
-        self.onOpenPageJump = onOpenPageJump
-        self.onToggleBookmark = onToggleBookmark
-        self.onSetRating = onSetRating
-        self.onGoToBookmark = onGoToBookmark
-        self.onGoToPageNumber = onGoToPageNumber
-        self.onSetFitMode = onSetFitMode
-        self.onSetPagingMode = onSetPagingMode
-        self.onSetSpreadMode = onSetSpreadMode
-        self.onSetReadingDirection = onSetReadingDirection
-        self.onSetCoverAsSinglePage = onSetCoverAsSinglePage
-        self.onRotateCounterClockwise = onRotateCounterClockwise
-        self.onRotateClockwise = onRotateClockwise
-        self.onResetRotation = onResetRotation
-        _selectedPageNumber = State(initialValue: Double(currentPageNumber ?? 1))
-    }
-
-    private var fitModeBinding: Binding<ReaderFitMode> {
-        Binding(
-            get: { fitMode },
-            set: onSetFitMode
-        )
-    }
-
-    private var spreadModeBinding: Binding<ReaderSpreadMode> {
-        Binding(
-            get: { spreadMode },
-            set: onSetSpreadMode
-        )
-    }
-
-    private var pagingModeBinding: Binding<ReaderPagingMode> {
-        Binding(
-            get: { pagingMode },
-            set: onSetPagingMode
-        )
-    }
-
-    private var readingDirectionBinding: Binding<ReaderReadingDirection> {
-        Binding(
-            get: { readingDirection },
-            set: onSetReadingDirection
-        )
-    }
-
-    private var coverAsSinglePageBinding: Binding<Bool> {
-        Binding(
-            get: { coverAsSinglePage },
-            set: onSetCoverAsSinglePage
-        )
-    }
-
     private var ratingBinding: Binding<Int> {
         Binding(
             get: { rating },
@@ -677,226 +541,88 @@ private struct ReaderControlsSheet: View {
         )
     }
 
-    private var canUsePageSlider: Bool {
-        guard let pageCount else {
-            return false
-        }
-
-        return pageCount > 1
-    }
-
-    private var normalizedSelectedPageNumber: Int {
-        guard let pageCount else {
-            return Int(selectedPageNumber.rounded())
-        }
-
-        return min(max(1, Int(selectedPageNumber.rounded())), pageCount)
-    }
-
-    private var isVerticalContinuousMode: Bool {
-        pagingMode == .verticalContinuous
-    }
-
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Navigate") {
-                    if let pageIndicatorText {
-                        LabeledContent("Current Page", value: pageIndicatorText)
+        ReaderControlsContainer(title: "Reader Controls", onDone: onDone) {
+            ReaderNavigationControlsSection(
+                pageIndicatorText: pageIndicatorText,
+                currentPageNumber: currentPageNumber,
+                pageCount: pageCount,
+                onOpenThumbnails: onOpenThumbnails,
+                onOpenPageJump: onOpenPageJump,
+                onGoToPageNumber: onGoToPageNumber
+            )
 
-                        Button(action: onOpenThumbnails) {
-                            Label("Browse Thumbnails", systemImage: "square.grid.3x2")
-                        }
-
-                        Button(action: onOpenPageJump) {
-                            Label("Go to Page", systemImage: "number.square")
-                        }
-
-                        if canUsePageSlider, let pageCount {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack {
-                                    Text("Quick Scrub")
-                                        .font(.subheadline.weight(.medium))
-
-                                    Spacer()
-
-                                    Text("Page \(normalizedSelectedPageNumber) / \(pageCount)")
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Slider(
-                                    value: $selectedPageNumber,
-                                    in: 1...Double(pageCount),
-                                    step: 1
-                                )
-
-                                Button {
-                                    onGoToPageNumber(normalizedSelectedPageNumber)
-                                } label: {
-                                    Label("Open Selected Page", systemImage: "play.circle")
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
+            Section("Reading Status") {
+                Button(action: onToggleFavorite) {
+                    Label(
+                        isFavorite ? "Remove Favorite" : "Add Favorite",
+                        systemImage: isFavorite ? "star.slash" : "star"
+                    )
                 }
 
-                Section("Reading Status") {
-                    Button(action: onToggleFavorite) {
-                        Label(
-                            isFavorite ? "Remove Favorite" : "Add Favorite",
-                            systemImage: isFavorite ? "star.slash" : "star"
-                        )
-                    }
-
-                    Button(action: onToggleReadStatus) {
-                        Label(
-                            isRead ? "Mark Unread" : "Mark Read",
-                            systemImage: isRead ? "arrow.uturn.backward.circle" : "checkmark.circle"
-                        )
-                    }
-
-                    Button(action: onToggleBookmark) {
-                        Label(
-                            currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
-                            systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
-                        )
-                    }
-
-                    Picker("Rating", selection: ratingBinding) {
-                        Text("Unrated").tag(0)
-                        ForEach(1...5, id: \.self) { value in
-                            Text(value == 1 ? "1 Star" : "\(value) Stars").tag(value)
-                        }
-                    }
+                Button(action: onToggleReadStatus) {
+                    Label(
+                        isRead ? "Mark Unread" : "Mark Read",
+                        systemImage: isRead ? "arrow.uturn.backward.circle" : "checkmark.circle"
+                    )
                 }
 
-                if !bookmarkItems.isEmpty {
-                    Section("Bookmarks") {
-                        ForEach(bookmarkItems) { bookmark in
-                            Button {
-                                onGoToBookmark(bookmark.pageIndex)
-                            } label: {
-                                Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
-                            }
-                        }
-                    }
+                Button(action: onToggleBookmark) {
+                    Label(
+                        currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
+                        systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
+                    )
                 }
 
-                Section("Library") {
-                    Button(action: onOpenQuickMetadata) {
-                        Label("Quick Edit Metadata", systemImage: "pencil")
-                    }
-
-                    Button(action: onOpenMetadata) {
-                        Label("Edit Metadata", systemImage: "square.and.pencil")
-                    }
-
-                    Button(action: onOpenOrganization) {
-                        Label("Tags and Reading Lists", systemImage: "tag")
-                    }
-                }
-
-                if supportsImageLayoutControls {
-                    Section {
-                        Picker("Reading Mode", selection: pagingModeBinding) {
-                            ForEach(ReaderPagingMode.allCases, id: \.self) { pagingMode in
-                                Text(pagingMode.title).tag(pagingMode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        if !isVerticalContinuousMode {
-                            Picker("Fit Mode", selection: fitModeBinding) {
-                                ForEach(ReaderFitMode.allCases, id: \.self) { fitMode in
-                                    Text(fitMode.title).tag(fitMode)
-                                }
-                            }
-
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Page Layout")
-                                    .font(.subheadline.weight(.medium))
-
-                                if supportsDoublePageSpread {
-                                    Picker("Page Layout", selection: spreadModeBinding) {
-                                        ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
-                                            Text(spreadMode.title).tag(spreadMode)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                } else {
-                                    LabeledContent("Mode", value: ReaderSpreadMode.singlePage.title)
-                                    Text("iPhone uses single-page reading. Double-page mode is available on iPad.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.vertical, 4)
-
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("Reading Direction")
-                                    .font(.subheadline.weight(.medium))
-
-                                Picker("Reading Direction", selection: readingDirectionBinding) {
-                                    ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
-                                        Text(readingDirection.title).tag(readingDirection)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                            .padding(.vertical, 4)
-
-                            if supportsDoublePageSpread, spreadMode == .doublePage {
-                                Toggle("Show Covers as Single Page", isOn: coverAsSinglePageBinding)
-                            }
-                        } else {
-                            Text("Vertical mode is optimized for mobile scrolling. Page spread and rotation controls are hidden for consistency.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.vertical, 4)
-                        }
-                    } header: {
-                        Text("Display")
-                    } footer: {
-                        Text("Layout preferences are remembered separately for comics and manga, matching mobile reading habits.")
-                    }
-                }
-
-                if supportsRotationControls {
-                    Section("Rotation") {
-                        LabeledContent("Current Rotation", value: rotation.title)
-
-                        Button(action: onRotateCounterClockwise) {
-                            Label("Rotate Left", systemImage: "rotate.left")
-                        }
-
-                        Button(action: onRotateClockwise) {
-                            Label("Rotate Right", systemImage: "rotate.right")
-                        }
-
-                        if rotation != .degrees0 {
-                            Button(action: onResetRotation) {
-                                Label("Reset Rotation", systemImage: "arrow.counterclockwise")
-                            }
-                        }
+                Picker("Rating", selection: ratingBinding) {
+                    Text("Unrated").tag(0)
+                    ForEach(1...5, id: \.self) { value in
+                        Text(value == 1 ? "1 Star" : "\(value) Stars").tag(value)
                     }
                 }
             }
-            .navigationTitle("Reader Controls")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: onDone)
+
+            ReaderBookmarksControlsSection(
+                bookmarkItems: bookmarkItems,
+                onGoToBookmark: onGoToBookmark
+            )
+
+            Section("Library") {
+                Button(action: onOpenQuickMetadata) {
+                    Label("Quick Edit Metadata", systemImage: "pencil")
+                }
+
+                Button(action: onOpenMetadata) {
+                    Label("Edit Metadata", systemImage: "square.and.pencil")
+                }
+
+                Button(action: onOpenOrganization) {
+                    Label("Tags and Reading Lists", systemImage: "tag")
                 }
             }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
-        .onChange(of: currentPageNumber) { _, newValue in
-            if let newValue {
-                selectedPageNumber = Double(newValue)
-            }
+
+            ReaderDisplaySettingsControlsSection(
+                supportsImageLayoutControls: supportsImageLayoutControls,
+                supportsDoublePageSpread: supportsDoublePageSpread,
+                fitMode: fitMode,
+                pagingMode: pagingMode,
+                spreadMode: spreadMode,
+                readingDirection: readingDirection,
+                coverAsSinglePage: coverAsSinglePage,
+                onSetFitMode: onSetFitMode,
+                onSetPagingMode: onSetPagingMode,
+                onSetSpreadMode: onSetSpreadMode,
+                onSetReadingDirection: onSetReadingDirection,
+                onSetCoverAsSinglePage: onSetCoverAsSinglePage
+            )
+
+            ReaderRotationControlsSection(
+                supportsRotationControls: supportsRotationControls,
+                rotation: rotation,
+                onRotateCounterClockwise: onRotateCounterClockwise,
+                onRotateClockwise: onRotateClockwise,
+                onResetRotation: onResetRotation
+            )
         }
     }
 }

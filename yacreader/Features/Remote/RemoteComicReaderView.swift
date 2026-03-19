@@ -118,7 +118,9 @@ struct RemoteComicReaderView: View {
     @State private var isLoading = false
     @State private var hasLoaded = false
     @State private var isRefreshingRemoteCopy = false
+    @State private var isShowingReaderControls = false
     @State private var isShowingThumbnailBrowser = false
+    @State private var pendingReaderAction: RemoteReaderSecondaryAction?
     @State private var bookmarkPageIndices: [Int]
     @State private var alert: RemoteAlertState?
     @State private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
@@ -231,6 +233,28 @@ struct RemoteComicReaderView: View {
             persistProgress()
             hideReaderChrome()
         }
+        .onChange(of: isShowingReaderControls) { _, isPresented in
+            if isPresented {
+                readerSession.apply(.setChromeVisible(true))
+                return
+            }
+
+            guard !isPresented, let pendingReaderAction else {
+                return
+            }
+
+            self.pendingReaderAction = nil
+            switch pendingReaderAction {
+            case .thumbnails:
+                isShowingThumbnailBrowser = true
+            case .pageJump:
+                presentPageJump()
+            case .refreshRemoteCopy:
+                Task {
+                    await refreshRemoteCopy()
+                }
+            }
+        }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document {
                 ReaderThumbnailBrowserSheet(
@@ -241,6 +265,57 @@ struct RemoteComicReaderView: View {
                     isShowingThumbnailBrowser = false
                 }
             }
+        }
+        .sheet(isPresented: $isShowingReaderControls) {
+            RemoteReaderControlsSheet(
+                pageIndicatorText: pageIndicatorText,
+                currentPageNumber: currentPageNumber,
+                pageCount: document?.pageCount,
+                currentPageIsBookmarked: currentPageIsBookmarked,
+                bookmarkItems: bookmarkItems,
+                isRefreshingRemoteCopy: isRefreshingRemoteCopy,
+                supportsImageLayoutControls: supportsImageLayoutControls,
+                supportsDoublePageSpread: supportsDoublePageSpread,
+                supportsRotationControls: supportsRotationControls,
+                fitMode: effectiveReaderLayout.fitMode,
+                pagingMode: effectiveReaderLayout.pagingMode,
+                spreadMode: effectiveReaderLayout.spreadMode,
+                readingDirection: effectiveReaderLayout.readingDirection,
+                coverAsSinglePage: effectiveReaderLayout.coverAsSinglePage,
+                rotation: effectiveReaderLayout.rotation,
+                onDone: { isShowingReaderControls = false },
+                onOpenThumbnails: {
+                    pendingReaderAction = .thumbnails
+                    isShowingReaderControls = false
+                },
+                onOpenPageJump: {
+                    pendingReaderAction = .pageJump
+                    isShowingReaderControls = false
+                },
+                onToggleBookmark: toggleBookmark,
+                onGoToBookmark: { pageIndex in
+                    updateVisiblePage(to: pageIndex)
+                    persistProgress(force: true)
+                    isShowingReaderControls = false
+                },
+                onGoToPageNumber: { pageNumber in
+                    updateVisiblePage(to: pageNumber - 1)
+                    persistProgress(force: true)
+                    isShowingReaderControls = false
+                },
+                onRefreshRemoteCopy: {
+                    pendingReaderAction = .refreshRemoteCopy
+                    isShowingReaderControls = false
+                },
+                onSetFitMode: setFitMode,
+                onSetPagingMode: setPagingMode,
+                onSetSpreadMode: setSpreadMode,
+                onSetReadingDirection: setReadingDirection,
+                onSetCoverAsSinglePage: setCoverAsSinglePage,
+                onRotateCounterClockwise: rotateCounterClockwise,
+                onRotateClockwise: rotateClockwise,
+                onResetRotation: resetRotation
+            )
         }
         .alert(item: $alert) { alert in
             Alert(
@@ -273,6 +348,14 @@ struct RemoteComicReaderView: View {
         }
 
         return false
+    }
+
+    private var supportsRotationControls: Bool {
+        guard document != nil else {
+            return false
+        }
+
+        return effectiveReaderLayout.pagingMode != .verticalContinuous
     }
 
     private var currentPageIsBookmarked: Bool {
@@ -318,107 +401,14 @@ struct RemoteComicReaderView: View {
         if let pageIndicatorText {
             ReaderChromeBar {
                 HStack(spacing: 16) {
-                    Menu {
-                        if let document, document.pageCount ?? 0 > 1 {
-                            Section("Navigation") {
-                                Button {
-                                    isShowingThumbnailBrowser = true
-                                } label: {
-                                    Label("Page Browser", systemImage: "rectangle.grid.2x2")
-                                }
-
-                                Button(action: presentPageJump) {
-                                    Label("Go to Page", systemImage: "number")
-                                }
-                            }
-                        }
-
-                        Section("Remote") {
-                            Button {
-                                Task {
-                                    await refreshRemoteCopy()
-                                }
-                            } label: {
-                                Label("Refresh Remote Copy", systemImage: "arrow.clockwise")
-                            }
-                            .disabled(isRefreshingRemoteCopy)
-                        }
-
-                        Section("Reading Status") {
-                            Button(action: toggleBookmark) {
-                                Label(
-                                    currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
-                                    systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
-                                )
-                            }
-                        }
-
-                        if !bookmarkItems.isEmpty {
-                            Section("Bookmarks") {
-                                ForEach(bookmarkItems) { bookmark in
-                                    Button {
-                                        updateVisiblePage(to: bookmark.pageIndex)
-                                        persistProgress(force: true)
-                                    } label: {
-                                        Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
-                                    }
-                                }
-                            }
-                        }
-
-                        if supportsImageLayoutControls {
-                            Section("Paging") {
-                                ForEach(ReaderPagingMode.allCases, id: \.self) { pagingMode in
-                                    layoutOptionButton(
-                                        title: pagingMode.title,
-                                        isSelected: effectiveReaderLayout.pagingMode == pagingMode
-                                    ) {
-                                        setPagingMode(pagingMode)
-                                    }
-                                }
-                            }
-
-                            Section("Fit") {
-                                ForEach(ReaderFitMode.allCases, id: \.self) { fitMode in
-                                    layoutOptionButton(
-                                        title: fitMode.title,
-                                        isSelected: effectiveReaderLayout.fitMode == fitMode
-                                    ) {
-                                        setFitMode(fitMode)
-                                    }
-                                }
-                            }
-
-                            if effectiveReaderLayout.pagingMode == .paged {
-                                Section("Direction") {
-                                    ForEach(ReaderReadingDirection.allCases, id: \.self) { direction in
-                                        layoutOptionButton(
-                                            title: direction.title,
-                                            isSelected: effectiveReaderLayout.readingDirection == direction
-                                        ) {
-                                            setReadingDirection(direction)
-                                        }
-                                    }
-                                }
-
-                                if supportsDoublePageSpread {
-                                    Section("Spread") {
-                                        ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
-                                            layoutOptionButton(
-                                                title: spreadMode.title,
-                                                isSelected: effectiveReaderLayout.spreadMode == spreadMode
-                                            ) {
-                                                setSpreadMode(spreadMode)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    Button {
+                        readerSession.apply(.setChromeVisible(true))
+                        isShowingReaderControls = true
                     } label: {
                         Image(systemName: "slider.horizontal.3")
                             .font(.headline)
                     }
+                    .disabled(document == nil)
 
                     Spacer(minLength: 0)
 
@@ -456,13 +446,15 @@ struct RemoteComicReaderView: View {
     private func readerContent(for document: ComicDocument) -> some View {
         switch document {
         case .pdf(let pdf):
-            PDFReaderContainerView(
-                document: pdf.pdfDocument,
-                requestedPageIndex: currentPageIndex,
-                rotation: .degrees0,
-                onPageChanged: handleVisiblePageChange(to:),
-                onReaderTap: handleReaderTap
-            )
+            ReaderRotatedContentHost(rotation: effectiveReaderLayout.rotation) {
+                PDFReaderContainerView(
+                    document: pdf.pdfDocument,
+                    requestedPageIndex: currentPageIndex,
+                    rotation: effectiveReaderLayout.rotation,
+                    onPageChanged: handleVisiblePageChange(to:),
+                    onReaderTap: handleReaderTap
+                )
+            }
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())
         case .imageSequence(let imageSequence):
@@ -619,48 +611,88 @@ struct RemoteComicReaderView: View {
     }
 
     private func setPagingMode(_ pagingMode: ReaderPagingMode) {
-        guard readerLayout.pagingMode != pagingMode else {
-            return
-        }
+        updateLayout { updatedLayout in
+            guard updatedLayout.pagingMode != pagingMode else {
+                return
+            }
 
-        var updatedLayout = readerLayout
-        updatedLayout.pagingMode = pagingMode
-        if pagingMode == .verticalContinuous {
-            updatedLayout.spreadMode = .singlePage
+            updatedLayout.pagingMode = pagingMode
+            if pagingMode == .verticalContinuous {
+                updatedLayout.spreadMode = .singlePage
+            }
         }
-        readerSession.updateLayout(updatedLayout)
-        persistLayout()
     }
 
     private func setFitMode(_ fitMode: ReaderFitMode) {
-        guard readerLayout.fitMode != fitMode else {
-            return
-        }
+        updateLayout { updatedLayout in
+            guard updatedLayout.fitMode != fitMode else {
+                return
+            }
 
-        var updatedLayout = readerLayout
-        updatedLayout.fitMode = fitMode
-        readerSession.updateLayout(updatedLayout)
-        persistLayout()
+            updatedLayout.fitMode = fitMode
+        }
     }
 
     private func setReadingDirection(_ readingDirection: ReaderReadingDirection) {
-        guard readerLayout.readingDirection != readingDirection else {
-            return
-        }
+        updateLayout { updatedLayout in
+            guard updatedLayout.readingDirection != readingDirection else {
+                return
+            }
 
-        var updatedLayout = readerLayout
-        updatedLayout.readingDirection = readingDirection
-        readerSession.updateLayout(updatedLayout)
-        persistLayout()
+            updatedLayout.readingDirection = readingDirection
+        }
     }
 
     private func setSpreadMode(_ spreadMode: ReaderSpreadMode) {
-        guard readerLayout.spreadMode != spreadMode else {
+        updateLayout { updatedLayout in
+            guard updatedLayout.spreadMode != spreadMode else {
+                return
+            }
+
+            updatedLayout.spreadMode = spreadMode
+        }
+    }
+
+    private func setCoverAsSinglePage(_ coverAsSinglePage: Bool) {
+        updateLayout { updatedLayout in
+            guard updatedLayout.coverAsSinglePage != coverAsSinglePage else {
+                return
+            }
+
+            updatedLayout.coverAsSinglePage = coverAsSinglePage
+        }
+    }
+
+    private func rotateCounterClockwise() {
+        updateLayout { updatedLayout in
+            updatedLayout.rotation = updatedLayout.rotation.rotatedCounterClockwise()
+        }
+    }
+
+    private func rotateClockwise() {
+        updateLayout { updatedLayout in
+            updatedLayout.rotation = updatedLayout.rotation.rotatedClockwise()
+        }
+    }
+
+    private func resetRotation() {
+        updateLayout { updatedLayout in
+            guard updatedLayout.rotation != .degrees0 else {
+                return
+            }
+
+            updatedLayout.rotation = .degrees0
+        }
+    }
+
+    private func updateLayout(_ mutate: (inout ReaderDisplayLayout) -> Void) {
+        var updatedLayout = readerLayout
+        let previousLayout = updatedLayout
+        mutate(&updatedLayout)
+        guard updatedLayout != previousLayout else {
             return
         }
 
-        var updatedLayout = readerLayout
-        updatedLayout.spreadMode = spreadMode
         readerSession.updateLayout(updatedLayout)
         persistLayout()
     }
@@ -825,21 +857,6 @@ struct RemoteComicReaderView: View {
         }
     }
 
-    @ViewBuilder
-    private func layoutOptionButton(
-        title: String,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            if isSelected {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-    }
-
     private var pageJumpTextBinding: Binding<String> {
         Binding(
             get: { readerSession.state.pendingPageNumberText },
@@ -874,4 +891,10 @@ struct RemoteComicReaderView: View {
             bookmarkPageIndices = normalizedBookmarks
         }
     }
+}
+
+private enum RemoteReaderSecondaryAction {
+    case thumbnails
+    case pageJump
+    case refreshRemoteCopy
 }
