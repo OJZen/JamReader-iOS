@@ -36,10 +36,15 @@ final class LibraryImportDestinationSheetViewModel: ObservableObject {
     func load() {
         do {
             let loadedOptions = try importedComicsImportService.availableDestinationOptions()
-            let availableSelections = Set(loadedOptions.map(\.selection))
-            if !availableSelections.contains(suggestedSelection) {
+            let selectableSelections = Set(
+                loadedOptions
+                    .filter(\.isSelectable)
+                    .map(\.selection)
+            )
+            if !selectableSelections.contains(suggestedSelection) {
                 suggestedSelection = preferredSelection
-                    .flatMap { availableSelections.contains($0) ? $0 : nil }
+                    .flatMap { selectableSelections.contains($0) ? $0 : nil }
+                    ?? loadedOptions.first(where: \.isSelectable)?.selection
                     ?? .importedComics
             }
 
@@ -64,6 +69,9 @@ final class LibraryImportDestinationSheetViewModel: ObservableObject {
         preferredSelection: LibraryImportDestinationSelection
     ) -> [LibraryImportDestinationOption] {
         options.sorted { lhs, rhs in
+            if lhs.isSelectable != rhs.isSelectable {
+                return lhs.isSelectable
+            }
             if lhs.selection == preferredSelection {
                 return true
             }
@@ -138,6 +146,9 @@ struct LibraryImportDestinationSheet: View {
                 Section {
                     ForEach(viewModel.options) { option in
                         Button {
+                            guard option.isSelectable else {
+                                return
+                            }
                             viewModel.rememberSelection(option.selection)
                             dismiss()
                             onSelect(option.selection)
@@ -158,6 +169,13 @@ struct LibraryImportDestinationSheet: View {
                                             .foregroundStyle(.tertiary)
                                             .lineLimit(2)
                                     }
+
+                                    if case .unavailable(let reason) = option.availability {
+                                        Text(reason)
+                                            .font(.caption.weight(.medium))
+                                            .foregroundStyle(.orange)
+                                            .lineLimit(2)
+                                    }
                                 }
 
                                 Spacer(minLength: 8)
@@ -174,18 +192,19 @@ struct LibraryImportDestinationSheet: View {
 
                                     Image(systemName: "arrow.right.circle.fill")
                                         .font(.title3)
-                                        .foregroundStyle(.blue)
+                                        .foregroundStyle(option.isSelectable ? .blue : .secondary)
                                 }
                             }
                             .padding(.vertical, 4)
                         }
                         .buttonStyle(.plain)
+                        .disabled(!option.isSelectable)
                         .accessibilityHint(confirmLabel)
                     }
                 } header: {
                     Text("Choose Destination")
                 } footer: {
-                    Text("Imported files are copied into the selected library folder and then indexed automatically.")
+                    Text("Imported files are copied into the selected library folder and then indexed automatically. Read-only or mirrored desktop libraries stay compatible for browsing, but are not used as writable import targets.")
                 }
             }
             .navigationTitle("Import Destination")

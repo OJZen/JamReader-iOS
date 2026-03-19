@@ -37,12 +37,26 @@ enum LibraryImportDestinationSelection: Hashable, Identifiable {
 }
 
 struct LibraryImportDestinationOption: Identifiable, Hashable {
+    enum Availability: Hashable {
+        case available
+        case unavailable(String)
+    }
+
     let selection: LibraryImportDestinationSelection
     let title: String
     let subtitle: String
     let detail: String?
+    let availability: Availability
 
     var id: String {
         selection.id
+    }
+
+    var isSelectable: Bool {
+        if case .available = availability {
+            return true
+        }
+
+        return false
     }
 }

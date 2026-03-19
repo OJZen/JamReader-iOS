@@ -96,7 +96,7 @@ struct RemoteImportOptionsSheet: View {
                         onConfirm(selectedDestination, selectedScope)
                     }
                     .fontWeight(.semibold)
-                    .disabled(destinationViewModel.options.isEmpty)
+                    .disabled(!isSelectedDestinationSelectable)
                 }
             }
             .onAppear {
@@ -150,6 +150,9 @@ struct RemoteImportOptionsSheet: View {
         Section {
             ForEach(destinationViewModel.options) { option in
                 Button {
+                    guard option.isSelectable else {
+                        return
+                    }
                     selectedDestination = option.selection
                 } label: {
                     RemoteImportDestinationRow(
@@ -159,11 +162,12 @@ struct RemoteImportOptionsSheet: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(!option.isSelectable)
             }
         } header: {
             Text("Choose Destination")
         } footer: {
-            Text("Imported files are copied into the selected library folder and then indexed automatically.")
+            Text("Imported files are copied into the selected library folder and then indexed automatically. Read-only or mirrored desktop libraries stay compatible for browsing, but are not used as writable import targets.")
         }
     }
 
@@ -174,6 +178,12 @@ struct RemoteImportOptionsSheet: View {
 
         hasAppliedSuggestedDestination = true
         selectedDestination = destinationViewModel.suggestedSelection
+    }
+
+    private var isSelectedDestinationSelectable: Bool {
+        destinationViewModel.options.contains {
+            $0.selection == selectedDestination && $0.isSelectable
+        }
     }
 }
 
@@ -227,6 +237,13 @@ private struct RemoteImportDestinationRow: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(2)
                 }
+
+                if case .unavailable(let reason) = option.availability {
+                    Text(reason)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.orange)
+                        .lineLimit(2)
+                }
             }
 
             Spacer(minLength: 8)
@@ -244,7 +261,7 @@ private struct RemoteImportDestinationRow: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(option.isSelectable ? .blue : .secondary)
                 }
             }
         }

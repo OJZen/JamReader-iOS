@@ -58,6 +58,20 @@ struct ImportedComicsImportResult {
 }
 
 final class ImportedComicsImportService {
+    enum ImportDestinationValidationError: LocalizedError {
+        case destinationLibraryNotWritable(String)
+        case destinationLibraryMirrored(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .destinationLibraryNotWritable(let libraryName):
+                return "\(libraryName) is currently read-only. Choose a writable local library or Imported Comics instead."
+            case .destinationLibraryMirrored(let libraryName):
+                return "\(libraryName) is mirrored from an external source and is kept compatible for browsing. Import new comics into a writable in-place library instead."
+            }
+        }
+    }
+
     private let store: LibraryDescriptorStore
     private let storageManager: LibraryStorageManager
     private let databaseBootstrapper: LibraryDatabaseBootstrapper
@@ -94,6 +108,7 @@ final class ImportedComicsImportService {
             in: &descriptors,
             selection: destinationSelection
         )
+        try validateImportDestination(destinationResolution.descriptor)
         let destinationAccessSession = try storageManager.makeAccessSession(
             for: destinationResolution.descriptor
         )
@@ -165,7 +180,8 @@ final class ImportedComicsImportService {
                 selection: .importedComics,
                 title: importedComicsLibraryName,
                 subtitle: "Managed import library. It will be created automatically if needed.",
-                detail: nil
+                detail: nil,
+                availability: .available
             )
         ]
 
@@ -173,11 +189,24 @@ final class ImportedComicsImportService {
             contentsOf: sortedDescriptors
                 .filter { $0.sourcePath != importedComicsRootPath }
                 .map { descriptor in
-                LibraryImportDestinationOption(
+                let accessSnapshot = storageManager.accessSnapshot(
+                    for: descriptor,
+                    inspector: SQLiteDatabaseInspector()
+                )
+                let availability = importAvailability(
+                    for: descriptor,
+                    accessSnapshot: accessSnapshot
+                )
+                return LibraryImportDestinationOption(
                     selection: .library(descriptor.id),
                     title: descriptor.name,
-                    subtitle: "Copy imported comics into this library and refresh it automatically.",
-                    detail: descriptor.sourcePath
+                    subtitle: importSubtitle(
+                        for: descriptor,
+                        accessSnapshot: accessSnapshot,
+                        availability: availability
+                    ),
+                    detail: descriptor.sourcePath,
+                    availability: availability
                 )
             }
         )
@@ -205,6 +234,20 @@ final class ImportedComicsImportService {
             }
 
             return (descriptor, false)
+        }
+    }
+
+    private func validateImportDestination(_ descriptor: LibraryDescriptor) throws {
+        if descriptor.storageMode == .mirrored {
+            throw ImportDestinationValidationError.destinationLibraryMirrored(descriptor.name)
+        }
+
+        let accessSnapshot = storageManager.accessSnapshot(
+            for: descriptor,
+            inspector: SQLiteDatabaseInspector()
+        )
+        guard accessSnapshot.sourceWritable else {
+            throw ImportDestinationValidationError.destinationLibraryNotWritable(descriptor.name)
         }
     }
 
@@ -237,6 +280,42 @@ final class ImportedComicsImportService {
                 sourceRootURL: accessSession.sourceURL,
                 databaseURL: databaseURL
             )
+        }
+    }
+
+    private func importAvailability(
+        for descriptor: LibraryDescriptor,
+        accessSnapshot: LibraryAccessSnapshot
+    ) -> LibraryImportDestinationOption.Availability {
+        if descriptor.storageMode == .mirrored {
+            return .unavailable("Mirrored desktop library. Keep using it for browsing, not direct imports.")
+        }
+
+        if !accessSnapshot.sourceWritable {
+            return .unavailable("Currently read-only on this device.")
+        }
+
+        return .available
+    }
+
+    private func importSubtitle(
+        for descriptor: LibraryDescriptor,
+        accessSnapshot: LibraryAccessSnapshot,
+        availability: LibraryImportDestinationOption.Availability
+    ) -> String {
+        switch availability {
+        case .available:
+            return "Copy imported comics into this library and refresh it automatically."
+        case .unavailable:
+            if descriptor.storageMode == .mirrored {
+                return "Compatible for reading and metadata mirroring, but not as a direct import target."
+            }
+
+            if !accessSnapshot.sourceWritable {
+                return "This library is readable, but its source folder is currently read-only."
+            }
+
+            return "This library cannot receive imports right now."
         }
     }
 
