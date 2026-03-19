@@ -13,8 +13,8 @@ struct ReaderThumbnailBrowserSheet: View {
     @FocusState private var isPageNumberFieldFocused: Bool
     @State private var pageNumberText = ""
 
-    private let thumbnailWidth: CGFloat = 112
-    private let thumbnailHeight: CGFloat = 156
+    private let thumbnailWidth: CGFloat = 118
+    private let thumbnailHeight: CGFloat = 166
 
     private var pageCount: Int {
         document.pageCount ?? 0
@@ -33,30 +33,36 @@ struct ReaderThumbnailBrowserSheet: View {
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                VStack(spacing: 0) {
-                    jumpHeader(proxy: proxy)
+                ZStack {
+                    Color(.systemGroupedBackground)
+                        .ignoresSafeArea()
 
                     ScrollView {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: thumbnailWidth, maximum: thumbnailWidth), spacing: 16)],
-                            spacing: 18
-                        ) {
-                            ForEach(0..<pageCount, id: \.self) { pageIndex in
-                                ReaderThumbnailCell(
-                                    document: document,
-                                    pageIndex: pageIndex,
-                                    isCurrentPage: pageIndex == currentPageIndex,
-                                    width: thumbnailWidth,
-                                    height: thumbnailHeight
-                                ) {
-                                    openPage(at: pageIndex)
+                        VStack(alignment: .leading, spacing: 22) {
+                            pageOverviewCard(proxy: proxy)
+
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: thumbnailWidth, maximum: thumbnailWidth), spacing: 16)],
+                                spacing: 18
+                            ) {
+                                ForEach(0..<pageCount, id: \.self) { pageIndex in
+                                    ReaderThumbnailCell(
+                                        document: document,
+                                        pageIndex: pageIndex,
+                                        isCurrentPage: pageIndex == currentPageIndex,
+                                        width: thumbnailWidth,
+                                        height: thumbnailHeight
+                                    ) {
+                                        openPage(at: pageIndex)
+                                    }
+                                    .id(pageIndex)
                                 }
-                                .id(pageIndex)
                             }
+                            .padding(.horizontal, 20)
                         }
-                        .padding(20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 28)
                     }
-                    .background(Color(.systemGroupedBackground))
                 }
                 .navigationTitle("Pages")
                 .navigationBarTitleDisplayMode(.inline)
@@ -64,6 +70,13 @@ struct ReaderThumbnailBrowserSheet: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Done") {
                             dismiss()
+                        }
+                    }
+
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Current") {
+                            isPageNumberFieldFocused = false
+                            scrollToPage(currentPageIndex, using: proxy, animated: true)
                         }
                     }
                 }
@@ -97,43 +110,73 @@ struct ReaderThumbnailBrowserSheet: View {
         "\(document.fileURL.path)#\(currentPageIndex)#\(pageCount)"
     }
 
-    private func jumpHeader(proxy: ScrollViewProxy) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                TextField("Page", text: $pageNumberText)
-                    .keyboardType(.numberPad)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isPageNumberFieldFocused)
-                    .submitLabel(.go)
-                    .frame(maxWidth: 120)
-                    .onSubmit {
-                        openSelectedPage()
-                    }
+    private func pageOverviewCard(proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Browse Pages")
+                    .font(.title3.weight(.semibold))
 
-                Button("Open") {
-                    openSelectedPage()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(normalizedSelectedPageIndex == nil)
-
-                Button("Current") {
-                    isPageNumberFieldFocused = false
-                    scrollToPage(currentPageIndex, using: proxy, animated: true)
-                }
-                .buttonStyle(.bordered)
-
-                Spacer(minLength: 0)
-            }
-
-            if pageCount > 0 {
-                Text("Current page \(currentPageIndex + 1) of \(pageCount)")
-                    .font(.footnote.monospacedDigit())
+                Text("Jump quickly, compare nearby pages, or return to where you left off.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+
+            HStack(spacing: 12) {
+                ReaderThumbnailStatChip(
+                    title: "Current",
+                    value: "\(currentPageIndex + 1)"
+                )
+
+                ReaderThumbnailStatChip(
+                    title: "Total",
+                    value: "\(pageCount)"
+                )
+            }
+
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Open page")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+
+                    TextField("Page", text: $pageNumberText)
+                        .keyboardType(.numberPad)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isPageNumberFieldFocused)
+                        .submitLabel(.go)
+                        .frame(maxWidth: 132)
+                        .onSubmit {
+                            openSelectedPage()
+                        }
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 10) {
+                    Button("Open") {
+                        openSelectedPage()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(normalizedSelectedPageIndex == nil)
+
+                    Button("Current") {
+                        isPageNumberFieldFocused = false
+                        scrollToPage(currentPageIndex, using: proxy, animated: true)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
         }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.secondarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        )
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(Color(.secondarySystemGroupedBackground))
     }
 
     private func openSelectedPage() {
@@ -184,8 +227,14 @@ private struct ReaderThumbnailCell: View {
                     .font(.footnote.monospacedDigit())
                     .foregroundStyle(isCurrentPage ? Color.accentColor : Color.primary)
                     .lineLimit(1)
+
+                if isCurrentPage {
+                    Text("Current")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
             }
-            .padding(10)
+            .padding(12)
             .frame(width: width + 20, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -198,8 +247,36 @@ private struct ReaderThumbnailCell: View {
                         lineWidth: isCurrentPage ? 2 : 1
                     )
             }
+            .shadow(
+                color: isCurrentPage ? Color.accentColor.opacity(0.12) : Color.black.opacity(0.04),
+                radius: 10,
+                y: 4
+            )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ReaderThumbnailStatChip: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.headline.monospacedDigit())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.66))
+        )
     }
 }
 
