@@ -246,6 +246,7 @@ struct ReaderChromeButtonShell<Content: View>: View {
 
     var body: some View {
         content()
+            .foregroundStyle(.white)
             .frame(
                 minWidth: ReaderChromeMetrics.buttonSize,
                 minHeight: ReaderChromeMetrics.buttonSize
@@ -287,10 +288,10 @@ struct ReaderPageIndicatorChip: View {
                 .font(.footnote.monospacedDigit().weight(.semibold))
                 .lineLimit(1)
         }
-        .foregroundStyle(.primary)
+        .foregroundStyle(.white)
         .padding(.horizontal, 14)
         .frame(maxWidth: .infinity, minHeight: ReaderChromeMetrics.buttonSize)
-        .background(Color.primary.opacity(0.08), in: Capsule())
+        .background(Color.white.opacity(0.12), in: Capsule())
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReaderPageJumpOverlay: View {
     @Binding var pageNumberText: String
@@ -9,6 +10,26 @@ struct ReaderPageJumpOverlay: View {
     let onJump: () -> Void
 
     @FocusState private var isPageFieldFocused: Bool
+    @State private var selectedPageNumber: Double
+    @State private var keyboardLift: CGFloat = 0
+
+    init(
+        pageNumberText: Binding<String>,
+        currentPageNumber: Int,
+        pageCount: Int,
+        onCancel: @escaping () -> Void,
+        onJump: @escaping () -> Void
+    ) {
+        self._pageNumberText = pageNumberText
+        self.currentPageNumber = currentPageNumber
+        self.pageCount = pageCount
+        self.onCancel = onCancel
+        self.onJump = onJump
+
+        let normalizedMaximum = max(pageCount, 1)
+        let initialSelection = Int(pageNumberText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)) ?? currentPageNumber
+        _selectedPageNumber = State(initialValue: Double(min(max(initialSelection, 1), normalizedMaximum)))
+    }
 
     private var isValidPageNumber: Bool {
         guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
@@ -18,21 +39,25 @@ struct ReaderPageJumpOverlay: View {
         return (1...pageCount).contains(pageNumber)
     }
 
+    private var maximumPageCount: Int {
+        max(pageCount, 1)
+    }
+
     private var clampedCurrentPage: Int {
-        min(max(currentPageNumber, 1), max(pageCount, 1))
+        min(max(currentPageNumber, 1), maximumPageCount)
+    }
+
+    private var clampedSelectedPage: Int {
+        min(max(Int(selectedPageNumber.rounded()), 1), maximumPageCount)
     }
 
     private var progressValue: Double {
-        guard pageCount > 0 else {
-            return 0
-        }
-
-        return Double(clampedCurrentPage) / Double(pageCount)
+        Double(clampedSelectedPage) / Double(maximumPageCount)
     }
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.3)
+            Color.black.opacity(0.26)
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 16) {
@@ -77,16 +102,27 @@ struct ReaderPageJumpOverlay: View {
 
                         Spacer()
 
-                        Text("Page \(clampedCurrentPage) / \(max(pageCount, 1))")
+                        Text("Page \(clampedSelectedPage) / \(maximumPageCount)")
                             .font(.footnote.monospacedDigit().weight(.semibold))
                             .foregroundStyle(.white)
                     }
 
-                    ProgressView(value: progressValue)
-                        .tint(.white)
-                        .progressViewStyle(.linear)
+                    Slider(
+                        value: $selectedPageNumber,
+                        in: 1...Double(maximumPageCount),
+                        step: 1
+                    )
+                    .tint(.white)
 
-                    Text("\(Int((progressValue * 100).rounded()))% complete")
+                    HStack {
+                        Text("1")
+                        Spacer()
+                        Text("\(maximumPageCount)")
+                    }
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(Color.white.opacity(0.72))
+
+                    Text("\(Int((progressValue * 100).rounded()))% of this comic")
                         .font(.caption)
                         .foregroundStyle(Color.white.opacity(0.72))
                 }
@@ -117,7 +153,7 @@ struct ReaderPageJumpOverlay: View {
                         .disabled(!isValidPageNumber)
                 }
 
-                Text("Valid range: 1-\(pageCount)")
+                Text("Valid range: 1-\(maximumPageCount)")
                     .font(.caption)
                     .foregroundStyle(Color.white.opacity(0.72))
             }
@@ -133,6 +169,7 @@ struct ReaderPageJumpOverlay: View {
             )
             .shadow(color: .black.opacity(0.18), radius: 22, y: 10)
             .padding(.horizontal, 24)
+            .offset(y: -keyboardLift)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -148,7 +185,49 @@ struct ReaderPageJumpOverlay: View {
                     isPageFieldFocused = true
                 }
             }
+            .onChange(of: selectedPageNumber) { _, _ in
+                pageNumberText = "\(clampedSelectedPage)"
+            }
+            .onChange(of: pageNumberText) { _, _ in
+                synchronizeSelectionFromText()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                updateKeyboardLift(from: notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
+                updateKeyboardLift(from: notification)
+            }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
+
+    private func synchronizeSelectionFromText() {
+        guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)),
+              (1...maximumPageCount).contains(pageNumber)
+        else {
+            return
+        }
+
+        let normalizedSelection = Double(pageNumber)
+        guard abs(selectedPageNumber - normalizedSelection) > 0.001 else {
+            return
+        }
+
+        selectedPageNumber = normalizedSelection
+    }
+
+    private func updateKeyboardLift(from notification: Notification) {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return
+        }
+
+        let screenHeight = UIScreen.main.bounds.height
+        let overlap = max(0, screenHeight - endFrame.minY)
+        let targetLift = overlap > 0 ? min(140, overlap * 0.36) : 0
+        let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+
+        withAnimation(.easeOut(duration: duration)) {
+            keyboardLift = targetLift
+        }
     }
 }

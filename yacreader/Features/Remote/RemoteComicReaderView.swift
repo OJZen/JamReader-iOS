@@ -443,22 +443,8 @@ struct RemoteComicReaderView: View {
         ReaderTopBar(
             title: displayName,
             subtitle: nil,
-            onBack: dismiss.callAsFunction,
-            onTrailingAction: {
-                Task {
-                    await refreshRemoteCopy()
-                }
-            },
-            isTrailingDisabled: isRefreshingRemoteCopy
-        ) {
-            if isRefreshingRemoteCopy {
-                ProgressView()
-                    .tint(.primary)
-            } else {
-                Image(systemName: "arrow.clockwise")
-                    .font(.headline)
-            }
-        }
+            onBack: dismiss.callAsFunction
+        )
     }
 
     @ViewBuilder
