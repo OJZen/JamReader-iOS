@@ -23,19 +23,30 @@ final class ReaderSessionController: ObservableObject {
         case .goToPage(let pageIndex):
             let lastPageIndex = max(state.descriptor.pageCount - 1, 0)
             state.currentPageIndex = min(max(pageIndex, 0), lastPageIndex)
+        case .syncVisiblePage(let pageIndex):
+            state.currentPageIndex = clampedPageIndex(pageIndex, pageCount: state.descriptor.pageCount)
         case .toggleChrome:
             state.isChromeVisible.toggle()
+        case .hideChrome:
+            state.isChromeVisible = false
         case .setChromeVisible(let isVisible):
             state.isChromeVisible = isVisible
         case .setLayout(let layout):
             state.layout = layout
         case .setPageJumpPresented(let isPresented):
             state.isPageJumpPresented = isPresented
+        case .presentPageJump(let defaultPageNumber):
+            state.pendingPageNumberText = "\(max(defaultPageNumber, 1))"
+            state.isPageJumpPresented = true
+        case .dismissPageJump:
+            state.isPageJumpPresented = false
+        case .updatePendingPageNumberText(let text):
+            state.pendingPageNumberText = text
         }
     }
 
     func syncVisiblePageIndex(_ pageIndex: Int) {
-        state.currentPageIndex = clampedPageIndex(pageIndex, pageCount: state.descriptor.pageCount)
+        apply(.syncVisiblePage(pageIndex))
     }
 
     func updateDescriptor(
@@ -51,7 +62,7 @@ final class ReaderSessionController: ObservableObject {
     }
 
     func updateCurrentPage(_ pageIndex: Int) {
-        state.currentPageIndex = clampedPageIndex(pageIndex, pageCount: state.descriptor.pageCount)
+        apply(.goToPage(pageIndex))
     }
 
     func updateLayout(_ layout: ReaderDisplayLayout) {
@@ -66,28 +77,27 @@ final class ReaderSessionController: ObservableObject {
     }
 
     func toggleChrome() {
-        state.isChromeVisible.toggle()
+        apply(.toggleChrome)
     }
 
     func setChromeVisible(_ isVisible: Bool) {
-        state.isChromeVisible = isVisible
+        apply(.setChromeVisible(isVisible))
     }
 
     func hideChrome() {
-        state.isChromeVisible = false
+        apply(.hideChrome)
     }
 
     func presentPageJump(defaultPageNumber: Int) {
-        state.pendingPageNumberText = "\(max(defaultPageNumber, 1))"
-        state.isPageJumpPresented = true
+        apply(.presentPageJump(defaultPageNumber: defaultPageNumber))
     }
 
     func dismissPageJump() {
-        state.isPageJumpPresented = false
+        apply(.dismissPageJump)
     }
 
     func updatePendingPageNumberText(_ text: String) {
-        state.pendingPageNumberText = text
+        apply(.updatePendingPageNumberText(text))
     }
 
     private func clampedPageIndex(_ pageIndex: Int, pageCount: Int) -> Int {

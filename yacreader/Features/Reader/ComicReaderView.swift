@@ -80,7 +80,7 @@ struct ComicReaderView: View {
                     pageNumberText: pageJumpTextBinding,
                     currentPageNumber: viewModel.currentPageNumber ?? 1,
                     pageCount: viewModel.pageCount ?? 1,
-                    onCancel: readerSession.dismissPageJump,
+                    onCancel: { readerSession.apply(.dismissPageJump) },
                     onJump: submitPageJump
                 )
             }
@@ -123,7 +123,7 @@ struct ComicReaderView: View {
                 return
             }
 
-            readerSession.updateCurrentPage(newValue)
+            readerSession.apply(.syncVisiblePage(newValue))
             hideReaderChrome()
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
@@ -174,7 +174,7 @@ struct ComicReaderView: View {
         }
         .onChange(of: isShowingReaderControls) { _, isPresented in
             if isPresented {
-                readerSession.setChromeVisible(true)
+                readerSession.apply(.setChromeVisible(true))
                 return
             }
 
@@ -294,12 +294,12 @@ struct ComicReaderView: View {
             onSetRating: viewModel.setRating,
             onGoToBookmark: { pageIndex in
                 viewModel.goToBookmark(pageIndex: pageIndex)
-                readerSession.updateCurrentPage(pageIndex)
+                readerSession.apply(.goToPage(pageIndex))
                 isShowingReaderControls = false
             },
             onGoToPageNumber: { pageNumber in
                 viewModel.goToPage(number: pageNumber)
-                readerSession.updateCurrentPage(pageNumber - 1)
+                readerSession.apply(.goToPage(pageNumber - 1))
                 isShowingReaderControls = false
             },
             onSetFitMode: { fitMode in
@@ -389,7 +389,7 @@ struct ComicReaderView: View {
 
     private func toggleReaderChrome() {
         withAnimation(.easeInOut(duration: 0.2)) {
-            readerSession.toggleChrome()
+            readerSession.apply(.toggleChrome)
         }
     }
 
@@ -399,7 +399,7 @@ struct ComicReaderView: View {
         }
 
         withAnimation(.easeInOut(duration: 0.2)) {
-            readerSession.hideChrome()
+            readerSession.apply(.hideChrome)
         }
     }
 
@@ -425,17 +425,17 @@ struct ComicReaderView: View {
     private var pageJumpTextBinding: Binding<String> {
         Binding(
             get: { readerSession.state.pendingPageNumberText },
-            set: { readerSession.updatePendingPageNumberText($0) }
+            set: { readerSession.apply(.updatePendingPageNumberText($0)) }
         )
     }
 
     private func handleVisiblePageChange(to pageIndex: Int) {
-        readerSession.updateCurrentPage(pageIndex)
+        readerSession.apply(.syncVisiblePage(pageIndex))
         viewModel.updateCurrentPage(to: pageIndex)
     }
 
     private func updateVisiblePage(to pageIndex: Int) {
-        readerSession.updateCurrentPage(pageIndex)
+        readerSession.apply(.goToPage(pageIndex))
         viewModel.updateCurrentPage(to: pageIndex)
     }
 
@@ -444,7 +444,7 @@ struct ComicReaderView: View {
             return
         }
 
-        readerSession.presentPageJump(defaultPageNumber: currentPageNumber)
+        readerSession.apply(.presentPageJump(defaultPageNumber: currentPageNumber))
     }
 
     private func submitPageJump() {
@@ -463,7 +463,7 @@ struct ComicReaderView: View {
             return
         }
 
-        readerSession.dismissPageJump()
+        readerSession.apply(.dismissPageJump)
         updateVisiblePage(to: pageIndex)
     }
 

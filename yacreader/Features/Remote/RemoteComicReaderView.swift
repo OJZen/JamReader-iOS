@@ -188,7 +188,7 @@ struct RemoteComicReaderView: View {
                     pageNumberText: pageJumpTextBinding,
                     currentPageNumber: currentPageNumber ?? 1,
                     pageCount: document?.pageCount ?? 1,
-                    onCancel: readerSession.dismissPageJump,
+                    onCancel: { readerSession.apply(.dismissPageJump) },
                     onJump: submitPageJump
                 )
             }
@@ -535,7 +535,7 @@ struct RemoteComicReaderView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             switch region {
             case .center, .leading, .trailing:
-                readerSession.toggleChrome()
+                readerSession.apply(.toggleChrome)
             }
         }
     }
@@ -546,7 +546,7 @@ struct RemoteComicReaderView: View {
         }
 
         withAnimation(.easeInOut(duration: 0.2)) {
-            readerSession.hideChrome()
+            readerSession.apply(.hideChrome)
         }
     }
 
@@ -564,9 +564,9 @@ struct RemoteComicReaderView: View {
         }
 
         if let pageCount = document?.pageCount, pageCount > 0 {
-            readerSession.updateCurrentPage(min(pageIndex, pageCount - 1))
+            readerSession.apply(.goToPage(min(pageIndex, pageCount - 1)))
         } else {
-            readerSession.updateCurrentPage(pageIndex)
+            readerSession.apply(.goToPage(pageIndex))
         }
     }
 
@@ -587,7 +587,7 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        readerSession.presentPageJump(defaultPageNumber: currentPageNumber)
+        readerSession.apply(.presentPageJump(defaultPageNumber: currentPageNumber))
     }
 
     private func submitPageJump() {
@@ -607,7 +607,7 @@ struct RemoteComicReaderView: View {
         }
 
         updateVisiblePage(to: pageIndex)
-        readerSession.dismissPageJump()
+        readerSession.apply(.dismissPageJump)
         persistProgress(force: true)
     }
 
@@ -836,12 +836,12 @@ struct RemoteComicReaderView: View {
     private var pageJumpTextBinding: Binding<String> {
         Binding(
             get: { readerSession.state.pendingPageNumberText },
-            set: { readerSession.updatePendingPageNumberText($0) }
+            set: { readerSession.apply(.updatePendingPageNumberText($0)) }
         )
     }
 
     private func handleVisiblePageChange(to pageIndex: Int) {
-        readerSession.updateCurrentPage(pageIndex)
+        readerSession.apply(.syncVisiblePage(pageIndex))
     }
 
     private func updateVisiblePage(to pageIndex: Int) {
