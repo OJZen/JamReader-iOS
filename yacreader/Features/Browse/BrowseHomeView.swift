@@ -76,6 +76,10 @@ struct BrowseHomeView: View {
                 MetricPill(title: "Cache", value: viewModel.cacheSummaryText, tint: .orange)
             }
             .frame(maxWidth: .infinity)
+
+            Label(viewModel.thumbnailCacheSummaryText, systemImage: "photo.stack.fill")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.9))
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)

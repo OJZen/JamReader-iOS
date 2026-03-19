@@ -6,6 +6,7 @@ final class BrowseHomeViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var sessions: [RemoteComicReadingSession] = []
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
+    @Published private(set) var thumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @Published private(set) var isLoading = false
     @Published var alert: BrowseHomeAlert?
 
@@ -75,6 +76,10 @@ final class BrowseHomeViewModel: ObservableObject {
         cacheSummary.isEmpty ? "No downloaded remote comics" : cacheSummary.summaryText
     }
 
+    var thumbnailCacheSummaryText: String {
+        thumbnailCacheSummary.isEmpty ? "No saved thumbnails yet" : thumbnailCacheSummary.summaryText
+    }
+
     func loadIfNeeded() async {
         guard !hasLoaded else {
             return
@@ -98,11 +103,13 @@ final class BrowseHomeViewModel: ObservableObject {
             profiles = try remoteServerProfileStore.load()
             sessions = try remoteReadingProgressStore.loadSessions()
             cacheSummary = remoteServerBrowsingService.cacheSummary()
+            thumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
             alert = nil
         } catch {
             profiles = []
             sessions = []
             cacheSummary = .empty
+            thumbnailCacheSummary = .empty
             alert = BrowseHomeAlert(
                 title: "Browse Not Ready",
                 message: error.localizedDescription
