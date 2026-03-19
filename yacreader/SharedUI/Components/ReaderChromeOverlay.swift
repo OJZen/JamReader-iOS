@@ -1,11 +1,11 @@
 import SwiftUI
 
 private enum ReaderChromeMetrics {
-    static let horizontalPadding: CGFloat = 16
-    static let topSpacing: CGFloat = 8
-    static let bottomSpacing: CGFloat = 10
-    static let buttonSize: CGFloat = 44
-    static let dockItemSpacing: CGFloat = 10
+    static let horizontalPadding: CGFloat = 14
+    static let topSpacing: CGFloat = 4
+    static let bottomSpacing: CGFloat = 8
+    static let buttonSize: CGFloat = 40
+    static let dockItemSpacing: CGFloat = 8
 }
 
 struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay: View, ModalOverlay: View>: View {
@@ -66,8 +66,8 @@ private struct ReaderChromeBackdrop: View {
         VStack(spacing: 0) {
             LinearGradient(
                 colors: [
-                    Color.black.opacity(0.45),
-                    Color.black.opacity(0.14),
+                    Color.black.opacity(0.28),
+                    Color.black.opacity(0.08),
                     .clear
                 ],
                 startPoint: .top,
@@ -80,8 +80,8 @@ private struct ReaderChromeBackdrop: View {
             LinearGradient(
                 colors: [
                     .clear,
-                    Color.black.opacity(0.16),
-                    Color.black.opacity(0.52)
+                    Color.black.opacity(0.12),
+                    Color.black.opacity(0.28)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -211,14 +211,8 @@ private struct ReaderTopBarTitleCluster: View {
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
     }
 }
 
@@ -250,12 +244,11 @@ struct ReaderChromeButtonShell<Content: View>: View {
                 minWidth: ReaderChromeMetrics.buttonSize,
                 minHeight: ReaderChromeMetrics.buttonSize
             )
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(.ultraThinMaterial, in: Circle())
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                Circle()
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
     }
 }
 
@@ -266,13 +259,13 @@ struct ReaderBottomDock<Content: View>: View {
         HStack(spacing: ReaderChromeMetrics.dockItemSpacing) {
             content()
         }
-        .padding(6)
-        .background(.regularMaterial, in: Capsule())
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
-            Capsule()
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.2), radius: 18, y: 10)
     }
 }
 
@@ -289,9 +282,9 @@ struct ReaderPageIndicatorChip: View {
                 .lineLimit(1)
         }
         .foregroundStyle(.primary)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .frame(maxWidth: .infinity, minHeight: ReaderChromeMetrics.buttonSize)
-        .background(Color.white.opacity(0.14), in: Capsule())
+        .background(Color.primary.opacity(0.08), in: Capsule())
     }
 }
 
@@ -302,11 +295,10 @@ struct ReaderStatusBadge<Content: View>: View {
         content()
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(.regularMaterial, in: Capsule())
+            .background(.thinMaterial, in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.1), radius: 8, y: 3)
     }
 }

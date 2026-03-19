@@ -20,7 +20,7 @@ struct ReaderPageJumpOverlay: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.42)
+            Color.black.opacity(0.3)
                 .ignoresSafeArea()
 
             VStack(spacing: 18) {
@@ -63,7 +63,7 @@ struct ReaderPageJumpOverlay: View {
                         .padding(.vertical, 14)
                         .background(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(.secondarySystemGroupedBackground))
+                                .fill(Color(.tertiarySystemGroupedBackground))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -88,12 +88,15 @@ struct ReaderPageJumpOverlay: View {
             }
             .padding(22)
             .frame(maxWidth: 360)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color(.systemGroupedBackground))
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.24), radius: 26, y: 14)
+            .shadow(color: .black.opacity(0.12), radius: 20, y: 10)
             .padding(.horizontal, 24)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -133,7 +136,7 @@ private struct ReaderPageJumpContextChip: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.08))
+                .fill(Color(.secondarySystemGroupedBackground))
         )
     }
 }
