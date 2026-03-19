@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 enum RemoteAlertPrimaryAction {
-    case openLibrary(UUID)
+    case openLibrary(UUID, Int64)
 
     var title: String {
         switch self {

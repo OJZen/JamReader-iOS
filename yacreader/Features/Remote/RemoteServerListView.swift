@@ -1142,8 +1142,8 @@ struct RemoteServerBrowserView: View {
 
     private func handleRemoteAlertPrimaryAction(_ action: RemoteAlertPrimaryAction) {
         switch action {
-        case .openLibrary(let libraryID):
-            AppNavigationRouter.openLibrary(libraryID)
+        case .openLibrary(let libraryID, let folderID):
+            AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
         }
     }
 }

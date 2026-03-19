@@ -6,6 +6,7 @@ struct LibraryHomeView: View {
 
     @AppStorage("libraryHome.selectedLibraryID") private var storedSelectedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
+    @AppStorage(AppNavigationStorageKeys.pendingFocusedFolderID) private var pendingFocusedFolderID = ""
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
@@ -18,6 +19,8 @@ struct LibraryHomeView: View {
     @State private var libraryInfoItem: LibraryListItem?
     @State private var pendingLibraryAction: PendingLibraryAction?
     @State private var compactNavigationPath: [UUID] = []
+    @State private var focusedLibraryIDOverride: UUID?
+    @State private var focusedFolderIDOverride: Int64?
 
     var body: some View {
         Group {
@@ -55,6 +58,9 @@ struct LibraryHomeView: View {
             storedSelectedLibraryID = newValue?.uuidString ?? ""
         }
         .onChange(of: pendingFocusedLibraryID) { _, _ in
+            handlePendingLibraryFocusIfNeeded()
+        }
+        .onChange(of: pendingFocusedFolderID) { _, _ in
             handlePendingLibraryFocusIfNeeded()
         }
         .sheet(item: $libraryActionsItem) { item in
@@ -137,6 +143,7 @@ struct LibraryHomeView: View {
                     .id(item.id)
                     .onAppear {
                         selectedLibraryID = item.id
+                        consumeFocusedOverride(for: item.id)
                     }
                 } else {
                     ContentUnavailableView(
@@ -172,6 +179,9 @@ struct LibraryHomeView: View {
                         dependencies: dependencies
                     )
                     .id(selectedItem.id)
+                    .onAppear {
+                        consumeFocusedOverride(for: selectedItem.id)
+                    }
                 } else {
                     LibraryHomeDetailPlaceholder(
                         itemCount: viewModel.items.count,
@@ -252,6 +262,9 @@ struct LibraryHomeView: View {
             return
         }
 
+        focusedLibraryIDOverride = libraryID
+        focusedFolderIDOverride = Int64(pendingFocusedFolderID).map { max(1, $0) }
+
         selectedLibraryID = libraryID
 
         if usesSplitViewLayout {
@@ -261,10 +274,24 @@ struct LibraryHomeView: View {
         }
 
         pendingFocusedLibraryID = ""
+        pendingFocusedFolderID = ""
+    }
+
+    private func consumeFocusedOverride(for libraryID: UUID) {
+        guard focusedLibraryIDOverride == libraryID else {
+            return
+        }
+
+        focusedLibraryIDOverride = nil
+        focusedFolderIDOverride = nil
     }
 
     private func preferredFolderID(for item: LibraryListItem) -> Int64 {
-        LibraryBrowserView.lastOpenedFolderID(for: item.id)
+        if focusedLibraryIDOverride == item.id, let focusedFolderIDOverride {
+            return focusedFolderIDOverride
+        }
+
+        return LibraryBrowserView.lastOpenedFolderID(for: item.id)
     }
 
     private func presentLibraryFolderImporter() {
@@ -700,8 +727,8 @@ private func makeLibraryAlert(for alert: LibraryAlertState) -> Alert {
             message: Text(alert.message),
             primaryButton: .default(Text(primaryAction.title)) {
                 switch primaryAction {
-                case .openLibrary(let libraryID):
-                    AppNavigationRouter.openLibrary(libraryID)
+                case .openLibrary(let libraryID, let folderID):
+                    AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
                 }
             },
             secondaryButton: .cancel(Text("Not Now"))

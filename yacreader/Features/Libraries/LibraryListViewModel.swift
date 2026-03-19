@@ -14,7 +14,7 @@ struct LibraryListItem: Identifiable, Equatable {
 
 struct LibraryAlertState: Identifiable {
     enum PrimaryAction {
-        case openLibrary(UUID)
+        case openLibrary(UUID, Int64)
 
         var title: String {
             switch self {
@@ -289,7 +289,7 @@ final class LibraryListViewModel: ObservableObject {
                 title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
                 message: messageLines.joined(separator: "\n"),
                 primaryAction: (result.createdLibrary || result.hasImportedAnyComics)
-                    ? .openLibrary(result.importedDestinationID)
+                    ? .openLibrary(result.importedDestinationID, 1)
                     : nil
             )
         } catch {

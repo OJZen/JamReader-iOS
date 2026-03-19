@@ -21,13 +21,19 @@ enum AppRootTab: String, Hashable {
 enum AppNavigationStorageKeys {
     static let selectedTab = "appRoot.selectedTab"
     static let pendingFocusedLibraryID = "libraryHome.pendingFocusedLibraryID"
+    static let pendingFocusedFolderID = "libraryHome.pendingFocusedFolderID"
 }
 
 enum AppNavigationRouter {
     @MainActor
-    static func openLibrary(_ libraryID: UUID) {
+    static func openLibrary(_ libraryID: UUID, folderID: Int64? = nil) {
         let defaults = UserDefaults.standard
         defaults.set(AppRootTab.library.rawValue, forKey: AppNavigationStorageKeys.selectedTab)
         defaults.set(libraryID.uuidString, forKey: AppNavigationStorageKeys.pendingFocusedLibraryID)
+        if let folderID {
+            defaults.set(String(max(1, folderID)), forKey: AppNavigationStorageKeys.pendingFocusedFolderID)
+        } else {
+            defaults.removeObject(forKey: AppNavigationStorageKeys.pendingFocusedFolderID)
+        }
     }
 }
