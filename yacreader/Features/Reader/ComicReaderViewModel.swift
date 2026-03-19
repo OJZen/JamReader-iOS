@@ -98,9 +98,7 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     var bookmarkItems: [ReaderBookmarkItem] {
-        bookmarkPageIndices.map { pageIndex in
-            ReaderBookmarkItem(pageIndex: pageIndex, pageNumber: pageIndex + 1)
-        }
+        ReaderBookmarkSupport.items(from: bookmarkPageIndices)
     }
 
     var pageCount: Int? {
@@ -261,15 +259,14 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     func toggleBookmarkForCurrentPage() {
-        var updatedBookmarks = bookmarkPageIndices
-
-        if let existingIndex = updatedBookmarks.firstIndex(of: currentPageIndex) {
-            updatedBookmarks.remove(at: existingIndex)
-        } else {
-            updatedBookmarks.append(currentPageIndex)
-        }
-
-        applyBookmarks(updatedBookmarks)
+        applyBookmarks(
+            ReaderBookmarkSupport.toggled(
+                bookmarkPageIndices,
+                at: currentPageIndex,
+                pageCount: document?.pageCount,
+                maximumCount: 3
+            )
+        )
     }
 
     func toggleFavoriteStatus() {
@@ -547,14 +544,5 @@ final class ComicReaderViewModel: ObservableObject {
         }
 
         return min(max(Int(rating.rounded()), 0), 5)
-    }
-}
-
-struct ReaderBookmarkItem: Identifiable, Hashable {
-    let pageIndex: Int
-    let pageNumber: Int
-
-    var id: Int {
-        pageIndex
     }
 }

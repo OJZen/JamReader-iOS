@@ -280,9 +280,7 @@ struct RemoteComicReaderView: View {
     }
 
     private var bookmarkItems: [ReaderBookmarkItem] {
-        bookmarkPageIndices.map { pageIndex in
-            ReaderBookmarkItem(pageIndex: pageIndex, pageNumber: pageIndex + 1)
-        }
+        ReaderBookmarkSupport.items(from: bookmarkPageIndices)
     }
 
     private var pageIndicatorText: String? {
@@ -571,14 +569,11 @@ struct RemoteComicReaderView: View {
     }
 
     private func toggleBookmark() {
-        var updatedBookmarks = bookmarkPageIndices
-        if let existingIndex = updatedBookmarks.firstIndex(of: currentPageIndex) {
-            updatedBookmarks.remove(at: existingIndex)
-        } else {
-            updatedBookmarks.append(currentPageIndex)
-        }
-
-        bookmarkPageIndices = ReaderBookmarkNormalizer.normalized(updatedBookmarks)
+        bookmarkPageIndices = ReaderBookmarkSupport.toggled(
+            bookmarkPageIndices,
+            at: currentPageIndex,
+            pageCount: document?.pageCount
+        )
         persistProgress(force: true)
     }
 
