@@ -312,12 +312,6 @@ struct RemoteComicReaderView: View {
             switch pendingReaderAction {
             case .thumbnails:
                 isShowingThumbnailBrowser = true
-            case .pageJump:
-                presentPageJump()
-            case .refreshRemoteCopy:
-                Task {
-                    await refreshRemoteCopy()
-                }
             }
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
@@ -338,7 +332,6 @@ struct RemoteComicReaderView: View {
                 pageCount: document?.pageCount,
                 currentPageIsBookmarked: currentPageIsBookmarked,
                 bookmarkItems: bookmarkItems,
-                isRefreshingRemoteCopy: isRefreshingRemoteCopy,
                 supportsImageLayoutControls: supportsImageLayoutControls,
                 supportsDoublePageSpread: supportsDoublePageSpread,
                 supportsRotationControls: supportsRotationControls,
@@ -353,10 +346,6 @@ struct RemoteComicReaderView: View {
                     pendingReaderAction = .thumbnails
                     isShowingReaderControls = false
                 },
-                onOpenPageJump: {
-                    pendingReaderAction = .pageJump
-                    isShowingReaderControls = false
-                },
                 onToggleBookmark: toggleBookmark,
                 onGoToBookmark: { pageIndex in
                     updateVisiblePage(to: pageIndex)
@@ -366,10 +355,6 @@ struct RemoteComicReaderView: View {
                 onGoToPageNumber: { pageNumber in
                     updateVisiblePage(to: pageNumber - 1)
                     persistProgress(force: true)
-                    isShowingReaderControls = false
-                },
-                onRefreshRemoteCopy: {
-                    pendingReaderAction = .refreshRemoteCopy
                     isShowingReaderControls = false
                 },
                 onSetFitMode: setFitMode,
@@ -443,48 +428,28 @@ struct RemoteComicReaderView: View {
         ReaderTopBar(
             title: displayName,
             subtitle: nil,
-            onBack: dismiss.callAsFunction
-        )
+            onBack: dismiss.callAsFunction,
+            onTrailingAction: {
+                readerSession.apply(.setChromeVisible(true))
+                isShowingReaderControls = true
+            },
+            isTrailingDisabled: document == nil
+        ) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.headline)
+        }
     }
 
     @ViewBuilder
     private var readerBottomBar: some View {
         if let pageIndicatorText {
-            ReaderBottomDock {
-                Button {
-                    readerSession.apply(.setChromeVisible(true))
-                    isShowingReaderControls = true
-                } label: {
-                    ReaderChromeButtonShell {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.headline)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(document == nil)
+            HStack {
+                Spacer(minLength: 0)
 
                 Button(action: presentPageJump) {
                     ReaderPageIndicatorChip(text: pageIndicatorText)
                 }
                 .buttonStyle(.plain)
-
-                Button {
-                    Task {
-                        await refreshRemoteCopy()
-                    }
-                } label: {
-                    ReaderChromeButtonShell {
-                        if isRefreshingRemoteCopy {
-                            ProgressView()
-                                .tint(.primary)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.headline)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(isRefreshingRemoteCopy)
             }
         }
     }
@@ -963,6 +928,4 @@ struct RemoteComicReaderView: View {
 
 private enum RemoteReaderSecondaryAction {
     case thumbnails
-    case pageJump
-    case refreshRemoteCopy
 }

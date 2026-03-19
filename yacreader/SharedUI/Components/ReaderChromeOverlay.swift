@@ -1,11 +1,77 @@
 import SwiftUI
+import UIKit
 
 private enum ReaderChromeMetrics {
-    static let horizontalPadding: CGFloat = 14
-    static let topSpacing: CGFloat = 0
-    static let bottomSpacing: CGFloat = 4
-    static let buttonSize: CGFloat = 40
-    static let dockItemSpacing: CGFloat = 8
+    static let horizontalPadding: CGFloat = 16
+    static let topContentSpacing: CGFloat = 8
+    static let bottomContentSpacing: CGFloat = 10
+    static let buttonSize: CGFloat = 42
+    static let compactButtonSize: CGFloat = 28
+    static let dockItemSpacing: CGFloat = 12
+    static let statusTopOffset: CGFloat = 78
+}
+
+private enum ReaderGlassKind {
+    case toolbar
+    case control
+    case label
+    case badge
+
+    @available(iOS 26.0, *)
+    var glass: Glass {
+        switch self {
+        case .toolbar, .label:
+            .clear
+        case .control, .badge:
+            .regular
+        }
+    }
+
+    var fallbackMaterial: Material {
+        switch self {
+        case .toolbar:
+            .thinMaterial
+        case .control, .label, .badge:
+            .ultraThinMaterial
+        }
+    }
+
+    var strokeOpacity: Double {
+        switch self {
+        case .toolbar:
+            0.07
+        case .control:
+            0.12
+        case .label:
+            0.08
+        case .badge:
+            0.10
+        }
+    }
+
+    var shadowOpacity: Double {
+        switch self {
+        case .toolbar:
+            0.12
+        case .control:
+            0.14
+        case .label:
+            0.10
+        case .badge:
+            0.12
+        }
+    }
+
+    var shadowRadius: CGFloat {
+        switch self {
+        case .toolbar:
+            16
+        case .control:
+            12
+        case .label, .badge:
+            10
+        }
+    }
 }
 
 struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay: View, ModalOverlay: View>: View {
@@ -19,7 +85,7 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
 
     var body: some View {
         GeometryReader { proxy in
-            let safeAreaInsets = proxy.safeAreaInsets
+            let safeAreaInsets = ReaderSafeAreaResolver.resolvedInsets(from: proxy.safeAreaInsets)
 
             ZStack {
                 content()
@@ -53,8 +119,42 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
         .background(Color.black.ignoresSafeArea())
         .ignoresSafeArea(.keyboard)
+    }
+}
+
+private enum ReaderSafeAreaResolver {
+    static func resolvedInsets(from geometryInsets: EdgeInsets) -> EdgeInsets {
+        let windowInsets = currentWindowInsets
+        return EdgeInsets(
+            top: max(geometryInsets.top, windowInsets.top),
+            leading: max(geometryInsets.leading, windowInsets.leading),
+            bottom: max(geometryInsets.bottom, windowInsets.bottom),
+            trailing: max(geometryInsets.trailing, windowInsets.trailing)
+        )
+    }
+
+    private static var currentWindowInsets: EdgeInsets {
+        guard
+            let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: {
+                    $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive
+                }),
+            let window = windowScene.windows.first(where: \.isKeyWindow) ?? windowScene.windows.first
+        else {
+            return EdgeInsets()
+        }
+
+        let insets = window.safeAreaInsets
+        return EdgeInsets(
+            top: insets.top,
+            leading: insets.left,
+            bottom: insets.bottom,
+            trailing: insets.right
+        )
     }
 }
 
@@ -66,27 +166,27 @@ private struct ReaderChromeBackdrop: View {
         VStack(spacing: 0) {
             LinearGradient(
                 colors: [
-                    Color.black.opacity(0.28),
-                    Color.black.opacity(0.08),
+                    Color.black.opacity(0.18),
+                    Color.black.opacity(0.05),
                     .clear
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: safeAreaInsets.top + 104)
+            .frame(height: safeAreaInsets.top + 88)
 
             Spacer(minLength: 0)
 
             LinearGradient(
                 colors: [
                     .clear,
-                    Color.black.opacity(0.12),
-                    Color.black.opacity(0.28)
+                    Color.black.opacity(0.06),
+                    Color.black.opacity(0.18)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: safeAreaInsets.bottom + 156)
+            .frame(height: safeAreaInsets.bottom + 112)
         }
         .opacity(isVisible ? 1 : 0)
         .animation(.easeInOut(duration: 0.2), value: isVisible)
@@ -104,7 +204,7 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
         VStack(spacing: 0) {
             if !isHidden {
                 topBar()
-                    .padding(.top, safeAreaInsets.top + ReaderChromeMetrics.topSpacing)
+                    .padding(.top, safeAreaInsets.top + ReaderChromeMetrics.topContentSpacing)
                     .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -114,12 +214,49 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
             if !isHidden {
                 bottomBar()
                     .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
-                    .padding(.bottom, max(safeAreaInsets.bottom, 6) + ReaderChromeMetrics.bottomSpacing)
+                    .padding(
+                        .bottom,
+                        max(safeAreaInsets.bottom, 8) + ReaderChromeMetrics.bottomContentSpacing
+                    )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.easeInOut(duration: 0.2), value: isHidden)
+    }
+}
+
+private struct ReaderGlassSurface<S: Shape>: View {
+    let shape: S
+    let kind: ReaderGlassKind
+    var shadowYOffset: CGFloat = 0
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(kind.glass, in: shape)
+                .overlay {
+                    shape
+                        .stroke(Color.white.opacity(kind.strokeOpacity), lineWidth: 1)
+                }
+                .shadow(
+                    color: Color.black.opacity(kind.shadowOpacity),
+                    radius: kind.shadowRadius,
+                    y: shadowYOffset
+                )
+        } else {
+            shape
+                .fill(kind.fallbackMaterial)
+                .overlay {
+                    shape
+                        .stroke(Color.white.opacity(kind.strokeOpacity), lineWidth: 1)
+                }
+                .shadow(
+                    color: Color.black.opacity(kind.shadowOpacity),
+                    radius: kind.shadowRadius,
+                    y: shadowYOffset
+                )
+        }
     }
 }
 
@@ -161,33 +298,30 @@ struct ReaderTopBar<TrailingLabel: View>: View {
     }
 
     var body: some View {
-        ZStack {
-            ReaderTopBarTitleCluster(title: title, subtitle: subtitle)
-                .padding(.horizontal, 56)
+        HStack(spacing: 12) {
+            Button(action: onBack) {
+                ReaderChromeButtonShell {
+                    Image(systemName: "chevron.backward")
+                        .font(.headline.weight(.semibold))
+                }
+            }
+            .buttonStyle(.plain)
 
-            HStack(spacing: 12) {
-                Button(action: onBack) {
+            ReaderTopBarTitleCluster(title: title, subtitle: subtitle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let onTrailingAction {
+                Button(action: onTrailingAction) {
                     ReaderChromeButtonShell {
-                        Image(systemName: "chevron.backward")
-                            .font(.headline.weight(.semibold))
+                        trailingLabel()
                     }
                 }
                 .buttonStyle(.plain)
-
-                Spacer(minLength: 0)
-
-                if let onTrailingAction {
-                    Button(action: onTrailingAction) {
-                        ReaderChromeButtonShell {
-                            trailingLabel()
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isTrailingDisabled)
-                    .opacity(isTrailingDisabled ? 0.72 : 1)
-                }
+                .disabled(isTrailingDisabled)
+                .opacity(isTrailingDisabled ? 0.72 : 1)
             }
         }
+        .frame(minHeight: ReaderChromeMetrics.buttonSize)
     }
 }
 
@@ -201,23 +335,23 @@ private struct ReaderTopBarTitleCluster: View {
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(.white)
                 .lineLimit(1)
+                .minimumScaleFactor(0.82)
 
             if let subtitle {
                 Text(subtitle)
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(Color.white.opacity(0.78))
+                    .foregroundStyle(Color.white.opacity(0.72))
                     .lineLimit(1)
             }
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 14)
+        .multilineTextAlignment(.leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
+        .background {
+            ReaderGlassSurface(shape: Capsule(), kind: .label)
+                .opacity(0.72)
+        }
     }
 }
 
@@ -233,7 +367,7 @@ struct ReaderTopStatusStack<Content: View>: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .padding(.top, safeAreaInsets.top + 56)
+        .padding(.top, safeAreaInsets.top + ReaderChromeMetrics.statusTopOffset)
         .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: isChromeHidden)
@@ -241,20 +375,24 @@ struct ReaderTopStatusStack<Content: View>: View {
 }
 
 struct ReaderChromeButtonShell<Content: View>: View {
+    var size: CGFloat = ReaderChromeMetrics.buttonSize
+    var showsBackground = true
     @ViewBuilder let content: () -> Content
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: size * 0.34, style: .continuous)
+    }
 
     var body: some View {
         content()
             .foregroundStyle(.white)
-            .frame(
-                minWidth: ReaderChromeMetrics.buttonSize,
-                minHeight: ReaderChromeMetrics.buttonSize
-            )
-            .background(.ultraThinMaterial, in: Circle())
-            .overlay(
-                Circle()
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
+            .frame(minWidth: size, minHeight: size)
+            .background {
+                if showsBackground {
+                    ReaderGlassSurface(shape: shape, kind: .control)
+                }
+            }
+            .contentShape(shape)
     }
 }
 
@@ -265,13 +403,13 @@ struct ReaderBottomDock<Content: View>: View {
         HStack(spacing: ReaderChromeMetrics.dockItemSpacing) {
             content()
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(0.06), lineWidth: 1)
-        )
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ReaderGlassSurface(shape: Capsule(), kind: .toolbar)
+                .opacity(0.92)
+        }
     }
 }
 
@@ -288,9 +426,63 @@ struct ReaderPageIndicatorChip: View {
                 .lineLimit(1)
         }
         .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .frame(maxWidth: .infinity, minHeight: ReaderChromeMetrics.buttonSize)
-        .background(Color.white.opacity(0.12), in: Capsule())
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background {
+            ReaderGlassSurface(shape: Capsule(), kind: .control)
+                .opacity(0.92)
+        }
+        .contentShape(Capsule())
+    }
+}
+
+struct ReaderContextNavigator: View {
+    let positionText: String
+    let canGoPrevious: Bool
+    let canGoNext: Bool
+    let onGoPrevious: () -> Void
+    let onGoNext: () -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Button(action: onGoPrevious) {
+                ReaderChromeButtonShell(
+                    size: ReaderChromeMetrics.compactButtonSize,
+                    showsBackground: false
+                ) {
+                    Image(systemName: "chevron.left")
+                        .font(.caption.weight(.bold))
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(!canGoPrevious)
+            .opacity(canGoPrevious ? 1 : 0.5)
+
+            Text(positionText)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.white.opacity(0.88))
+                .lineLimit(1)
+                .padding(.horizontal, 4)
+
+            Button(action: onGoNext) {
+                ReaderChromeButtonShell(
+                    size: ReaderChromeMetrics.compactButtonSize,
+                    showsBackground: false
+                ) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(!canGoNext)
+            .opacity(canGoNext ? 1 : 0.5)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background {
+            ReaderGlassSurface(shape: Capsule(), kind: .label)
+                .opacity(0.6)
+        }
     }
 }
 
@@ -300,11 +492,9 @@ struct ReaderStatusBadge<Content: View>: View {
     var body: some View {
         content()
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.thinMaterial, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
+            .padding(.vertical, 7)
+            .background {
+                ReaderGlassSurface(shape: Capsule(), kind: .badge)
+            }
     }
 }

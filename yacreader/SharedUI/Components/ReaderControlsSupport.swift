@@ -69,7 +69,6 @@ struct ReaderNavigationControlsSection: View {
     let currentPageNumber: Int?
     let pageCount: Int?
     let onOpenThumbnails: () -> Void
-    let onOpenPageJump: () -> Void
     let onGoToPageNumber: (Int) -> Void
 
     @State private var selectedPageNumber: Double
@@ -79,14 +78,12 @@ struct ReaderNavigationControlsSection: View {
         currentPageNumber: Int?,
         pageCount: Int?,
         onOpenThumbnails: @escaping () -> Void,
-        onOpenPageJump: @escaping () -> Void,
         onGoToPageNumber: @escaping (Int) -> Void
     ) {
         self.pageIndicatorText = pageIndicatorText
         self.currentPageNumber = currentPageNumber
         self.pageCount = pageCount
         self.onOpenThumbnails = onOpenThumbnails
-        self.onOpenPageJump = onOpenPageJump
         self.onGoToPageNumber = onGoToPageNumber
         _selectedPageNumber = State(initialValue: Double(currentPageNumber ?? 1))
     }
@@ -114,10 +111,6 @@ struct ReaderNavigationControlsSection: View {
 
                 Button(action: onOpenThumbnails) {
                     Label("Browse Thumbnails", systemImage: "square.grid.3x2")
-                }
-
-                Button(action: onOpenPageJump) {
-                    Label("Go to Page", systemImage: "number.square")
                 }
 
                 if canUsePageSlider, let pageCount {

@@ -193,8 +193,6 @@ struct ComicReaderView: View {
                 isShowingOrganizationSheet = true
             case .thumbnails:
                 isShowingThumbnailBrowser = true
-            case .pageJump:
-                presentPageJump()
             }
         }
     }
@@ -287,10 +285,6 @@ struct ComicReaderView: View {
                 pendingReaderAction = .thumbnails
                 isShowingReaderControls = false
             },
-            onOpenPageJump: {
-                pendingReaderAction = .pageJump
-                isShowingReaderControls = false
-            },
             onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
             onSetRating: viewModel.setRating,
             onGoToBookmark: { pageIndex in
@@ -341,55 +335,31 @@ struct ComicReaderView: View {
     private var readerTopBar: some View {
         ReaderTopBar(
             title: viewModel.navigationTitle,
-            subtitle: viewModel.readerContextPositionText,
-            onBack: dismiss.callAsFunction
-        )
+            subtitle: nil,
+            onBack: dismiss.callAsFunction,
+            onTrailingAction: {
+                readerSession.setChromeVisible(true)
+                isShowingReaderControls = true
+            },
+            isTrailingDisabled: viewModel.document == nil
+        ) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.headline)
+        }
     }
 
     @ViewBuilder
     private var readerBottomBar: some View {
-        if viewModel.pageIndicatorText != nil || viewModel.hasReaderNavigationContext {
-            ReaderBottomDock {
+        if let pageIndicatorText = viewModel.pageIndicatorText {
+            HStack {
+                Spacer(minLength: 0)
+
                 Button {
-                    readerSession.setChromeVisible(true)
-                    isShowingReaderControls = true
+                    presentPageJump()
                 } label: {
-                    ReaderChromeButtonShell {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.headline)
-                    }
+                    ReaderPageIndicatorChip(text: pageIndicatorText)
                 }
                 .buttonStyle(.plain)
-                .disabled(viewModel.document == nil)
-
-                if let pageIndicatorText = viewModel.pageIndicatorText {
-                    Button {
-                        presentPageJump()
-                    } label: {
-                        ReaderPageIndicatorChip(text: pageIndicatorText)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if viewModel.hasReaderNavigationContext {
-                    Button(action: viewModel.openPreviousComic) {
-                        ReaderChromeButtonShell {
-                            Image(systemName: "chevron.left")
-                                .font(.headline)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!viewModel.canOpenPreviousComic)
-
-                    Button(action: viewModel.openNextComic) {
-                        ReaderChromeButtonShell {
-                            Image(systemName: "chevron.right")
-                                .font(.headline)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!viewModel.canOpenNextComic)
-                }
             }
         }
     }
@@ -499,7 +469,6 @@ private enum ReaderSecondaryAction {
     case metadata
     case organization
     case thumbnails
-    case pageJump
 }
 
 private struct ReaderControlsSheet: View {
@@ -527,7 +496,6 @@ private struct ReaderControlsSheet: View {
     let onOpenMetadata: () -> Void
     let onOpenOrganization: () -> Void
     let onOpenThumbnails: () -> Void
-    let onOpenPageJump: () -> Void
     let onToggleBookmark: () -> Void
     let onSetRating: (Int) -> Void
     let onGoToBookmark: (Int) -> Void
@@ -555,7 +523,6 @@ private struct ReaderControlsSheet: View {
                 currentPageNumber: currentPageNumber,
                 pageCount: pageCount,
                 onOpenThumbnails: onOpenThumbnails,
-                onOpenPageJump: onOpenPageJump,
                 onGoToPageNumber: onGoToPageNumber
             )
 

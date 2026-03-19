@@ -6,7 +6,6 @@ struct RemoteReaderControlsSheet: View {
     let pageCount: Int?
     let currentPageIsBookmarked: Bool
     let bookmarkItems: [ReaderBookmarkItem]
-    let isRefreshingRemoteCopy: Bool
     let supportsImageLayoutControls: Bool
     let supportsDoublePageSpread: Bool
     let supportsRotationControls: Bool
@@ -18,11 +17,9 @@ struct RemoteReaderControlsSheet: View {
     let rotation: ReaderRotationAngle
     let onDone: () -> Void
     let onOpenThumbnails: () -> Void
-    let onOpenPageJump: () -> Void
     let onToggleBookmark: () -> Void
     let onGoToBookmark: (Int) -> Void
     let onGoToPageNumber: (Int) -> Void
-    let onRefreshRemoteCopy: () -> Void
     let onSetFitMode: (ReaderFitMode) -> Void
     let onSetPagingMode: (ReaderPagingMode) -> Void
     let onSetSpreadMode: (ReaderSpreadMode) -> Void
@@ -39,7 +36,6 @@ struct RemoteReaderControlsSheet: View {
                 currentPageNumber: currentPageNumber,
                 pageCount: pageCount,
                 onOpenThumbnails: onOpenThumbnails,
-                onOpenPageJump: onOpenPageJump,
                 onGoToPageNumber: onGoToPageNumber
             )
 
@@ -56,16 +52,6 @@ struct RemoteReaderControlsSheet: View {
                 bookmarkItems: bookmarkItems,
                 onGoToBookmark: onGoToBookmark
             )
-
-            Section("Remote") {
-                Button(action: onRefreshRemoteCopy) {
-                    Label(
-                        isRefreshingRemoteCopy ? "Refreshing Remote Copy..." : "Refresh Remote Copy",
-                        systemImage: "arrow.clockwise"
-                    )
-                }
-                .disabled(isRefreshingRemoteCopy)
-            }
 
             ReaderDisplaySettingsControlsSection(
                 supportsImageLayoutControls: supportsImageLayoutControls,
