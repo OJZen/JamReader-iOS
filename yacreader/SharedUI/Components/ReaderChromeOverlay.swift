@@ -103,9 +103,12 @@ struct ReaderTopStatusStack<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            content()
+            if !isChromeHidden {
+                content()
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .padding(.top, isChromeHidden ? 12 : 88)
+        .padding(.top, 88)
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: isChromeHidden)

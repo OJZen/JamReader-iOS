@@ -88,6 +88,7 @@ struct ComicReaderView: View {
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .task {
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
             viewModel.loadIfNeeded()

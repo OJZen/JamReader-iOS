@@ -17,21 +17,12 @@ enum RemoteComicAccessState: Equatable {
         }
     }
 
-    var persistentStatusText: String? {
+    var transientNoticeMessage: String? {
         switch self {
         case .liveRemoteCopy:
             return nil
         case .cachedCurrent:
-            return "Using Downloaded Copy"
-        case .cachedFallback:
-            return "Offline Fallback Copy"
-        }
-    }
-
-    var transientNoticeMessage: String? {
-        switch self {
-        case .liveRemoteCopy, .cachedCurrent:
-            return nil
+            return "Opened the downloaded copy saved on this device."
         case .cachedFallback(let message):
             return message
         }
@@ -264,6 +255,7 @@ struct RemoteComicReaderView: View {
         .navigationTitle(displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
         .task {
             await loadIfNeeded()
             updateIdleTimerState()
@@ -298,6 +290,13 @@ struct RemoteComicReaderView: View {
         .onChange(of: currentPageIndex) { _, _ in
             persistProgress()
             hideReaderChrome()
+        }
+        .onChange(of: transientNoticeMessage) { _, message in
+            guard message != nil else {
+                return
+            }
+
+            scheduleNoticeDismissalIfNeeded()
         }
         .onChange(of: isShowingReaderControls) { _, isPresented in
             if isPresented {
@@ -496,14 +495,6 @@ struct RemoteComicReaderView: View {
             ReaderStatusBadge {
                 ProgressView("Refreshing Remote Copy")
                     .font(.caption.weight(.semibold))
-            }
-        }
-
-        if let persistentStatusText = accessState.persistentStatusText {
-            ReaderStatusBadge {
-                Text(persistentStatusText)
-                    .font(.caption.weight(.semibold))
-                    .multilineTextAlignment(.center)
             }
         }
 
