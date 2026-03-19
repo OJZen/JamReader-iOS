@@ -18,85 +18,120 @@ struct ReaderPageJumpOverlay: View {
         return (1...pageCount).contains(pageNumber)
     }
 
+    private var clampedCurrentPage: Int {
+        min(max(currentPageNumber, 1), max(pageCount, 1))
+    }
+
+    private var progressValue: Double {
+        guard pageCount > 0 else {
+            return 0
+        }
+
+        return Double(clampedCurrentPage) / Double(pageCount)
+    }
+
     var body: some View {
         ZStack {
             Color.black.opacity(0.3)
                 .ignoresSafeArea()
 
-            VStack(spacing: 18) {
-                Capsule()
-                    .fill(Color.secondary.opacity(0.35))
-                    .frame(width: 36, height: 5)
-
-                VStack(spacing: 8) {
-                    Text("Go to Page")
-                        .font(.headline)
-
-                    Text("Jump directly to a page without leaving the reader.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-
+            VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 12) {
-                    ReaderPageJumpContextChip(
-                        title: "Current",
-                        value: "\(currentPageNumber)"
-                    )
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.12))
 
-                    ReaderPageJumpContextChip(
-                        title: "Range",
-                        value: "1-\(pageCount)"
-                    )
+                        Image(systemName: "book.pages")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 36, height: 36)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Go to Page")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+
+                        Text("Jump without leaving the page.")
+                            .font(.footnote)
+                            .foregroundStyle(Color.white.opacity(0.78))
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Color.white.opacity(0.12), in: Circle())
+                    }
+                    .buttonStyle(.plain)
                 }
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Page Number")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Text("Progress")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Color.white.opacity(0.8))
 
-                    TextField("Enter page", text: $pageNumberText)
+                        Spacer()
+
+                        Text("Page \(clampedCurrentPage) / \(max(pageCount, 1))")
+                            .font(.footnote.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+
+                    ProgressView(value: progressValue)
+                        .tint(.white)
+                        .progressViewStyle(.linear)
+
+                    Text("\(Int((progressValue * 100).rounded()))% complete")
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.72))
+                }
+
+                HStack(spacing: 10) {
+                    TextField("Page", text: $pageNumberText)
                         .keyboardType(.numberPad)
                         .textContentType(.oneTimeCode)
                         .font(.title3.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(.tertiarySystemGroupedBackground))
-                        )
+                        .frame(height: 48)
+                        .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(
-                                    isPageFieldFocused ? Color.accentColor : Color.black.opacity(0.08),
-                                    lineWidth: isPageFieldFocused ? 2 : 1
+                                    isPageFieldFocused ? Color.white.opacity(0.9) : Color.white.opacity(0.16),
+                                    lineWidth: isPageFieldFocused ? 1.5 : 1
                                 )
                         )
                         .focused($isPageFieldFocused)
-                }
-
-                HStack(spacing: 12) {
-                    Button("Cancel", action: onCancel)
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
 
                     Button("Jump", action: onJump)
                         .buttonStyle(.borderedProminent)
+                        .tint(.white.opacity(0.92))
+                        .foregroundStyle(.black)
                         .controlSize(.large)
                         .disabled(!isValidPageNumber)
                 }
+
+                Text("Valid range: 1-\(pageCount)")
+                    .font(.caption)
+                    .foregroundStyle(Color.white.opacity(0.72))
             }
-            .padding(22)
-            .frame(maxWidth: 360)
+            .padding(20)
+            .frame(maxWidth: 332)
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color(.systemGroupedBackground))
+                    .fill(.ultraThinMaterial)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.12), radius: 20, y: 10)
+            .shadow(color: .black.opacity(0.18), radius: 22, y: 10)
             .padding(.horizontal, 24)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -115,28 +150,5 @@ struct ReaderPageJumpOverlay: View {
             }
         }
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
-    }
-}
-
-private struct ReaderPageJumpContextChip: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-
-            Text(value)
-                .font(.subheadline.monospacedDigit().weight(.semibold))
-                .foregroundStyle(.primary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemGroupedBackground))
-        )
     }
 }

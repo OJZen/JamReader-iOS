@@ -200,19 +200,25 @@ private struct ReaderTopBarTitleCluster: View {
         VStack(spacing: subtitle == nil ? 0 : 2) {
             Text(title)
                 .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
                 .lineLimit(1)
 
             if let subtitle {
                 Text(subtitle)
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.white.opacity(0.78))
                     .lineLimit(1)
             }
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        )
     }
 }
 
