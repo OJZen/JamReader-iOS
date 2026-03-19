@@ -189,14 +189,8 @@ final class ImportedComicsImportService {
             contentsOf: sortedDescriptors
                 .filter { $0.sourcePath != importedComicsRootPath }
                 .map { descriptor in
-                let accessSnapshot = storageManager.accessSnapshot(
-                    for: descriptor,
-                    inspector: SQLiteDatabaseInspector()
-                )
-                let availability = importAvailability(
-                    for: descriptor,
-                    accessSnapshot: accessSnapshot
-                )
+                let accessSnapshot = sourceAccessSnapshot(for: descriptor)
+                let availability = importAvailability(for: descriptor, accessSnapshot: accessSnapshot)
                 return LibraryImportDestinationOption(
                     selection: .library(descriptor.id),
                     title: descriptor.name,
@@ -212,6 +206,13 @@ final class ImportedComicsImportService {
         )
 
         return options
+    }
+
+    func importAvailability(for descriptor: LibraryDescriptor) -> LibraryImportDestinationOption.Availability {
+        importAvailability(
+            for: descriptor,
+            accessSnapshot: sourceAccessSnapshot(for: descriptor)
+        )
     }
 
     private func resolveDestinationLibrary(
@@ -242,10 +243,7 @@ final class ImportedComicsImportService {
             throw ImportDestinationValidationError.destinationLibraryMirrored(descriptor.name)
         }
 
-        let accessSnapshot = storageManager.accessSnapshot(
-            for: descriptor,
-            inspector: SQLiteDatabaseInspector()
-        )
+        let accessSnapshot = sourceAccessSnapshot(for: descriptor)
         guard accessSnapshot.sourceWritable else {
             throw ImportDestinationValidationError.destinationLibraryNotWritable(descriptor.name)
         }
@@ -317,6 +315,13 @@ final class ImportedComicsImportService {
 
             return "This library cannot receive imports right now."
         }
+    }
+
+    private func sourceAccessSnapshot(for descriptor: LibraryDescriptor) -> LibraryAccessSnapshot {
+        storageManager.accessSnapshot(
+            for: descriptor,
+            inspector: SQLiteDatabaseInspector()
+        )
     }
 
     private func importResource(

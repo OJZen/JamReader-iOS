@@ -40,6 +40,14 @@ struct LibraryImportDestinationOption: Identifiable, Hashable {
     enum Availability: Hashable {
         case available
         case unavailable(String)
+
+        var isSelectable: Bool {
+            if case .available = self {
+                return true
+            }
+
+            return false
+        }
     }
 
     let selection: LibraryImportDestinationSelection
@@ -53,10 +61,6 @@ struct LibraryImportDestinationOption: Identifiable, Hashable {
     }
 
     var isSelectable: Bool {
-        if case .available = availability {
-            return true
-        }
-
-        return false
+        availability.isSelectable
     }
 }

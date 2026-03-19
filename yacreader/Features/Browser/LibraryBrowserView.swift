@@ -46,7 +46,8 @@ struct LibraryBrowserView: View {
                 databaseBootstrapper: dependencies.libraryDatabaseBootstrapper,
                 libraryScanner: dependencies.libraryScanner,
                 coverLocator: dependencies.libraryCoverLocator,
-                comicInfoImportService: dependencies.comicInfoImportService
+                comicInfoImportService: dependencies.comicInfoImportService,
+                importedComicsImportService: dependencies.importedComicsImportService
             )
         )
     }
@@ -1353,10 +1354,33 @@ struct LibraryBrowserView: View {
                     scanProgressPanel(scanProgress)
                 }
 
+                if let libraryImportCompatibilityNotice = viewModel.libraryImportCompatibilityNotice {
+                    libraryImportCompatibilityPanel(message: libraryImportCompatibilityNotice)
+                }
+
                 localFolderControls(content)
             }
             .padding(.vertical, 8)
         }
+    }
+
+    private func libraryImportCompatibilityPanel(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "externaldrive.badge.exclamationmark")
+                .font(.headline)
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Direct Imports Unavailable")
+                    .font(.subheadline.weight(.semibold))
+
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder

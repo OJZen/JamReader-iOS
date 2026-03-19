@@ -30,6 +30,7 @@ final class LibraryBrowserViewModel: ObservableObject {
     private let libraryScanner: LibraryScanner
     private let coverLocator: LibraryCoverLocator
     private let comicInfoImportService: ComicInfoImportService
+    private let importedComicsImportService: ImportedComicsImportService
 
     private let metadataRootURL: URL
     private let databaseURL: URL
@@ -53,7 +54,8 @@ final class LibraryBrowserViewModel: ObservableObject {
         databaseBootstrapper: LibraryDatabaseBootstrapper,
         libraryScanner: LibraryScanner,
         coverLocator: LibraryCoverLocator,
-        comicInfoImportService: ComicInfoImportService
+        comicInfoImportService: ComicInfoImportService,
+        importedComicsImportService: ImportedComicsImportService
     ) {
         self.descriptor = descriptor
         self.folderID = folderID
@@ -64,6 +66,7 @@ final class LibraryBrowserViewModel: ObservableObject {
         self.libraryScanner = libraryScanner
         self.coverLocator = coverLocator
         self.comicInfoImportService = comicInfoImportService
+        self.importedComicsImportService = importedComicsImportService
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         configureSearch()
@@ -110,7 +113,20 @@ final class LibraryBrowserViewModel: ObservableObject {
     }
 
     var canImportComicFiles: Bool {
-        content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+        content != nil && databaseExists && supportsDirectLibraryImports && !isInitializingLibrary && !isRefreshingLibrary
+    }
+
+    var libraryImportCompatibilityNotice: String? {
+        switch importedComicsImportService.importAvailability(for: descriptor) {
+        case .available:
+            return nil
+        case .unavailable(let message):
+            return message
+        }
+    }
+
+    var supportsDirectLibraryImports: Bool {
+        importedComicsImportService.importAvailability(for: descriptor).isSelectable
     }
 
     var hasActiveSearch: Bool {
@@ -634,6 +650,12 @@ final class LibraryBrowserViewModel: ObservableObject {
 
     func importComicFiles(from urls: [URL]) {
         guard canImportComicFiles else {
+            if let libraryImportCompatibilityNotice {
+                alert = LibraryAlertState(
+                    title: "Import Unavailable",
+                    message: libraryImportCompatibilityNotice
+                )
+            }
             return
         }
 
