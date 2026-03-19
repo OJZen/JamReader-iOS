@@ -26,7 +26,7 @@ final class ComicReaderViewModel: ObservableObject {
     private let databaseURL: URL
     private var accessSession: LibraryAccessSession?
     private var hasLoaded = false
-    private var lastPersistedPageIndex: Int?
+    private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     private var pendingProgressPersistenceTask: Task<Void, Never>?
 
     init(
@@ -48,7 +48,10 @@ final class ComicReaderViewModel: ObservableObject {
         self.onComicUpdated = onComicUpdated
         self.navigationContext = navigationContext
         self.databaseURL = storageManager.databaseURL(for: descriptor)
-        self.bookmarkPageIndices = comic.bookmarkPageIndices.filter { $0 >= 0 }.sorted()
+        self.bookmarkPageIndices = ReaderBookmarkNormalizer.normalized(
+            comic.bookmarkPageIndices,
+            maximumCount: 3
+        )
         self.readerLayout = readerLayoutPreferencesStore.loadLayout(for: comic.type)
         self.isFavorite = comic.isFavorite
         self.rating = Self.normalizedRatingValue(from: comic.rating)
@@ -397,22 +400,25 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     private func persistProgress(force: Bool = false) {
-        guard document?.pageCount != nil else {
+        guard let pageCount = document?.pageCount else {
             return
         }
 
-        if !force, lastPersistedPageIndex == currentPageIndex {
+        let requestedSnapshot = ReaderProgressFactory.snapshot(
+            pageIndex: currentPageIndex,
+            pageCount: pageCount
+        )
+        if !force, lastPersistedProgressSnapshot == requestedSnapshot {
             return
         }
 
         pendingProgressPersistenceTask?.cancel()
 
         if force {
-            writeProgress(for: currentPageIndex)
+            writeProgress(for: requestedSnapshot, pageCount: pageCount)
             return
         }
 
-        let requestedPageIndex = currentPageIndex
         pendingProgressPersistenceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 350_000_000)
 
@@ -420,27 +426,21 @@ final class ComicReaderViewModel: ObservableObject {
                 return
             }
 
-            self?.writeProgress(for: requestedPageIndex)
+            self?.writeProgress(for: requestedSnapshot, pageCount: pageCount)
         }
     }
 
-    private func writeProgress(for pageIndex: Int) {
-        guard let pageCount = document?.pageCount else {
+    private func writeProgress(
+        for snapshot: ReaderProgressPersistenceSnapshot,
+        pageCount: Int
+    ) {
+        guard lastPersistedProgressSnapshot != snapshot else {
             return
         }
 
-        let clampedPageIndex = min(max(pageIndex, 0), max(pageCount - 1, 0))
-        guard lastPersistedPageIndex != clampedPageIndex else {
-            return
-        }
-
-        let currentPage = max(1, clampedPageIndex + 1)
-        let progress = ComicReadingProgress(
-            currentPage: currentPage,
-            pageCount: pageCount,
-            hasBeenOpened: true,
-            read: currentPage >= pageCount,
-            lastTimeOpened: Date()
+        let progress = ReaderProgressFactory.progress(
+            forPageIndex: snapshot.pageIndex,
+            pageCount: pageCount
         )
 
         do {
@@ -449,7 +449,7 @@ final class ComicReaderViewModel: ObservableObject {
                 progress: progress,
                 in: databaseURL
             )
-            lastPersistedPageIndex = clampedPageIndex
+            lastPersistedProgressSnapshot = snapshot
             publishComicUpdate(comic.updatingReadingProgress(progress))
         } catch {
             alert = LibraryAlertState(title: "Failed to Save Progress", message: error.localizedDescription)
@@ -467,11 +467,14 @@ final class ComicReaderViewModel: ObservableObject {
         comic = newComic
         document = nil
         currentPageIndex = 0
-        bookmarkPageIndices = newComic.bookmarkPageIndices.filter { $0 >= 0 }.sorted()
+        bookmarkPageIndices = ReaderBookmarkNormalizer.normalized(
+            newComic.bookmarkPageIndices,
+            maximumCount: 3
+        )
         readerLayout = readerLayoutPreferencesStore.loadLayout(for: newComic.type)
         isFavorite = newComic.isFavorite
         rating = Self.normalizedRatingValue(from: newComic.rating)
-        lastPersistedPageIndex = nil
+        lastPersistedProgressSnapshot = nil
 
         load()
     }
@@ -485,13 +488,10 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     private func applyBookmarks(_ pageIndices: [Int]) {
-        let normalizedBookmarks = Array(
-            Set(pageIndices.filter { $0 >= 0 })
+        let bookmarkArray = ReaderBookmarkNormalizer.normalized(
+            pageIndices,
+            maximumCount: 3
         )
-        .sorted()
-        .prefix(3)
-
-        let bookmarkArray = Array(normalizedBookmarks)
         do {
             try databaseWriter.updateBookmarks(
                 for: comic.id,
@@ -506,19 +506,11 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     private func normalizeBookmarks(for pageCount: Int?) {
-        let filteredBookmarks = bookmarkPageIndices.filter { pageIndex in
-            guard pageIndex >= 0 else {
-                return false
-            }
-
-            if let pageCount {
-                return pageIndex < pageCount
-            }
-
-            return true
-        }
-
-        let normalizedBookmarks = Array(Set(filteredBookmarks)).sorted()
+        let normalizedBookmarks = ReaderBookmarkNormalizer.normalized(
+            bookmarkPageIndices,
+            pageCount: pageCount,
+            maximumCount: 3
+        )
         if normalizedBookmarks != bookmarkPageIndices {
             applyBookmarks(normalizedBookmarks)
         } else {

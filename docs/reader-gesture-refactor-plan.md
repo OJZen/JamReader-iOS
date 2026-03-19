@@ -417,7 +417,8 @@ chrome 需要和内容分离。
 
 - 已开始实现，基础文件已落地：`ReaderSessionState`、`ReaderCommand`、`ReaderContentDescriptor`、`ReaderSessionController`
 - 已把本地 / 远程阅读壳的 `currentPage / chrome / pageJump / layout` 运行期状态接到 `ReaderSessionController` 过渡层
-- 当前仍未把所有业务写回与导航命令完全迁入 runtime；这一阶段已完成“外层状态先并轨”，下一步是继续收拢持久化和阅读命令
+- 已补上 `ReaderSessionSupport` 与 `ReaderPersistenceSupport`，开始把页码显示、跳页解析、阅读进度快照、书签归一化等共享语义从本地 / 远程阅读壳抽离
+- 当前仍未把所有业务写回与导航命令完全迁入 runtime；这一阶段已完成“外层状态先并轨”，并开始继续收拢持久化和阅读命令
 
 任务：
 
@@ -565,7 +566,8 @@ chrome 需要和内容分离。
 
 - 已完成远程阅读对新分页宿主的接线
 - 远程阅读外层 UI 已与本地阅读并轨到同一套 `ReaderSurface`
-- 当前仍保留远程特有的刷新、缓存回退提示与进度持久化逻辑，后续继续往 runtime 统一接口收敛
+- 远程阅读进度 / 书签持久化已经开始复用共享 `ReaderPersistenceSupport`
+- 当前仍保留远程特有的刷新、缓存回退提示与部分存储后端逻辑，后续继续往 runtime 统一接口收敛
 
 任务：
 

@@ -121,8 +121,7 @@ struct RemoteComicReaderView: View {
     @State private var isShowingThumbnailBrowser = false
     @State private var bookmarkPageIndices: [Int]
     @State private var alert: RemoteAlertState?
-    @State private var lastPersistedPageIndex: Int?
-    @State private var lastPersistedBookmarkPageIndices: [Int]
+    @State private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     @State private var pendingProgressPersistenceTask: Task<Void, Never>?
     @State private var transientNoticeMessage: String?
 
@@ -150,8 +149,9 @@ struct RemoteComicReaderView: View {
             layout: initialLayout
         )
         _transientNoticeMessage = State(initialValue: noticeMessage)
-        _bookmarkPageIndices = State(initialValue: Self.normalizedBookmarkPageIndices(storedProgress?.bookmarkPageIndices ?? []))
-        _lastPersistedBookmarkPageIndices = State(initialValue: [])
+        _bookmarkPageIndices = State(
+            initialValue: ReaderBookmarkNormalizer.normalized(storedProgress?.bookmarkPageIndices ?? [])
+        )
         _readerSession = StateObject(
             wrappedValue: ReaderSessionController(descriptor: initialDescriptor)
         )
@@ -578,7 +578,7 @@ struct RemoteComicReaderView: View {
             updatedBookmarks.append(currentPageIndex)
         }
 
-        bookmarkPageIndices = Self.normalizedBookmarkPageIndices(updatedBookmarks)
+        bookmarkPageIndices = ReaderBookmarkNormalizer.normalized(updatedBookmarks)
         persistProgress(force: true)
     }
 
@@ -682,25 +682,26 @@ struct RemoteComicReaderView: View {
     }
 
     private func persistProgress(force: Bool = false) {
-        guard document?.pageCount != nil else {
+        guard let pageCount = document?.pageCount else {
             return
         }
 
-        if !force,
-           lastPersistedPageIndex == currentPageIndex,
-           lastPersistedBookmarkPageIndices == bookmarkPageIndices {
+        let requestedSnapshot = ReaderProgressFactory.snapshot(
+            pageIndex: currentPageIndex,
+            pageCount: pageCount,
+            bookmarkPageIndices: bookmarkPageIndices
+        )
+        if !force, lastPersistedProgressSnapshot == requestedSnapshot {
             return
         }
 
         pendingProgressPersistenceTask?.cancel()
 
         if force {
-            writeProgress(for: currentPageIndex, bookmarkPageIndices: bookmarkPageIndices)
+            writeProgress(for: requestedSnapshot, pageCount: pageCount)
             return
         }
 
-        let requestedPageIndex = currentPageIndex
-        let requestedBookmarkPageIndices = bookmarkPageIndices
         pendingProgressPersistenceTask = Task {
             try? await Task.sleep(nanoseconds: 350_000_000)
 
@@ -709,32 +710,22 @@ struct RemoteComicReaderView: View {
             }
 
             await MainActor.run {
-                writeProgress(for: requestedPageIndex, bookmarkPageIndices: requestedBookmarkPageIndices)
+                writeProgress(for: requestedSnapshot, pageCount: pageCount)
             }
         }
     }
 
-    private func writeProgress(for pageIndex: Int, bookmarkPageIndices: [Int]) {
-        guard let pageCount = document?.pageCount else {
+    private func writeProgress(
+        for snapshot: ReaderProgressPersistenceSnapshot,
+        pageCount: Int
+    ) {
+        guard lastPersistedProgressSnapshot != snapshot else {
             return
         }
 
-        let clampedPageIndex = min(max(pageIndex, 0), max(pageCount - 1, 0))
-        let normalizedBookmarks = Self.normalizedBookmarkPageIndices(bookmarkPageIndices)
-            .filter { $0 < pageCount }
-        guard lastPersistedPageIndex != clampedPageIndex
-                || lastPersistedBookmarkPageIndices != normalizedBookmarks
-        else {
-            return
-        }
-
-        let currentPage = max(1, clampedPageIndex + 1)
-        let progress = ComicReadingProgress(
-            currentPage: currentPage,
-            pageCount: pageCount,
-            hasBeenOpened: true,
-            read: currentPage >= pageCount,
-            lastTimeOpened: Date()
+        let progress = ReaderProgressFactory.progress(
+            forPageIndex: snapshot.pageIndex,
+            pageCount: pageCount
         )
 
         do {
@@ -742,10 +733,9 @@ struct RemoteComicReaderView: View {
                 progress,
                 for: reference,
                 profile: profile,
-                bookmarkPageIndices: normalizedBookmarks
+                bookmarkPageIndices: snapshot.bookmarkPageIndices
             )
-            lastPersistedPageIndex = clampedPageIndex
-            lastPersistedBookmarkPageIndices = normalizedBookmarks
+            lastPersistedProgressSnapshot = snapshot
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Save Remote Progress",
@@ -869,19 +859,12 @@ struct RemoteComicReaderView: View {
     }
 
     private func normalizeBookmarks(for pageCount: Int?) {
-        guard let pageCount, pageCount > 0 else {
-            bookmarkPageIndices = Self.normalizedBookmarkPageIndices(bookmarkPageIndices)
-            return
-        }
-
-        let normalizedBookmarks = Self.normalizedBookmarkPageIndices(bookmarkPageIndices)
-            .filter { $0 < pageCount }
+        let normalizedBookmarks = ReaderBookmarkNormalizer.normalized(
+            bookmarkPageIndices,
+            pageCount: pageCount
+        )
         if normalizedBookmarks != bookmarkPageIndices {
             bookmarkPageIndices = normalizedBookmarks
         }
-    }
-
-    private static func normalizedBookmarkPageIndices(_ pageIndices: [Int]) -> [Int] {
-        Array(Set(pageIndices.filter { $0 >= 0 })).sorted()
     }
 }

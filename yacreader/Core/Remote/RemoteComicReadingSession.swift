@@ -161,6 +161,6 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     }
 
     private static func normalizedBookmarkPageIndices(_ indices: [Int]) -> [Int] {
-        Array(Set(indices.filter { $0 >= 0 })).sorted()
+        ReaderBookmarkNormalizer.normalized(indices)
     }
 }
