@@ -577,7 +577,7 @@ struct RemoteServerBrowserView: View {
                         Button {
                             importRequest = .currentFolder
                         } label: {
-                            Label("Import This Folder Recursively", systemImage: "square.and.arrow.down.on.square")
+                            Label("Import From This Folder", systemImage: "square.and.arrow.down.on.square")
                         }
                     }
                 } label: {
@@ -611,14 +611,37 @@ struct RemoteServerBrowserView: View {
             )
         }
         .sheet(item: $importRequest) { request in
-            LibraryImportDestinationSheet(
-                title: request.destinationPickerTitle,
-                message: request.destinationPickerMessage,
-                dependencies: dependencies,
-                preferredSelection: nil
-            ) { selection in
-                Task {
-                    await performImport(request, destinationSelection: selection)
+            switch request {
+            case .comic:
+                LibraryImportDestinationSheet(
+                    title: request.destinationPickerTitle,
+                    message: request.destinationPickerMessage,
+                    dependencies: dependencies,
+                    preferredSelection: nil
+                ) { selection in
+                    Task {
+                        await performImport(
+                            request,
+                            destinationSelection: selection,
+                            scope: .currentFolderOnly
+                        )
+                    }
+                }
+            case .currentFolder, .directory:
+                RemoteImportOptionsSheet(
+                    title: request.destinationPickerTitle,
+                    message: request.destinationPickerMessage,
+                    confirmLabel: "Import",
+                    dependencies: dependencies,
+                    preferredSelection: nil
+                ) { selection, scope in
+                    Task {
+                        await performImport(
+                            request,
+                            destinationSelection: selection,
+                            scope: scope
+                        )
+                    }
                 }
             }
         }
@@ -1089,13 +1112,21 @@ struct RemoteServerBrowserView: View {
 
     private func performImport(
         _ request: RemoteBrowserImportRequest,
-        destinationSelection: LibraryImportDestinationSelection
+        destinationSelection: LibraryImportDestinationSelection,
+        scope: RemoteDirectoryImportScope
     ) async {
         switch request {
         case .currentFolder:
-            await viewModel.importCurrentFolderRecursively(destinationSelection: destinationSelection)
+            await viewModel.importCurrentFolder(
+                destinationSelection: destinationSelection,
+                scope: scope
+            )
         case .directory(let item):
-            await viewModel.importDirectory(item, destinationSelection: destinationSelection)
+            await viewModel.importDirectory(
+                item,
+                destinationSelection: destinationSelection,
+                scope: scope
+            )
         case .comic(let item):
             await viewModel.importComic(item, destinationSelection: destinationSelection)
         }
@@ -1152,9 +1183,9 @@ private enum RemoteBrowserImportRequest: Identifiable {
     var destinationPickerMessage: String {
         switch self {
         case .currentFolder:
-            return "Choose which local library should receive the supported comics found in this SMB folder and its subfolders."
+            return "Choose the import scope for this SMB folder, then pick which local library should receive the copied comics."
         case .directory(let item):
-            return "Choose which local library should receive the supported comics found in \(item.name) and its subfolders."
+            return "Choose the import scope for \(item.name), then pick which local library should receive the copied comics."
         case .comic(let item):
             return "Choose which local library should receive \(item.name)."
         }

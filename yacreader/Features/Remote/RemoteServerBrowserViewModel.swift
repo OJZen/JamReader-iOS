@@ -294,7 +294,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func importDirectory(
         _ item: RemoteDirectoryItem,
-        destinationSelection: LibraryImportDestinationSelection = .importedComics
+        destinationSelection: LibraryImportDestinationSelection = .importedComics,
+        scope: RemoteDirectoryImportScope = .includeSubfolders
     ) async {
         guard item.isDirectory else {
             alert = RemoteAlertState(
@@ -304,23 +305,25 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = "Scanning \(item.name)…"
+        activeImportDescription = scope == .includeSubfolders ? "Scanning \(item.name)…" : "Checking \(item.name)…"
         do {
-            let nestedComicFiles = try await browsingService.listComicFilesRecursively(
-                for: profile,
-                path: item.path
+            let importableItems = try await importableComicItems(
+                at: item.path,
+                scope: scope
             )
-            guard !nestedComicFiles.isEmpty else {
+            guard !importableItems.isEmpty else {
                 activeImportDescription = nil
                 alert = RemoteAlertState(
                     title: "Nothing to Import",
-                    message: "No supported comic files were found in \(item.name) or its subfolders."
+                    message: scope == .includeSubfolders
+                        ? "No supported comic files were found in \(item.name) or its subfolders."
+                        : "No supported comic files were found directly inside \(item.name)."
                 )
                 return
             }
 
             await importComicItems(
-                nestedComicFiles,
+                importableItems,
                 progressPrefix: "Importing \(item.name)",
                 successTitle: "Folder Imported to Library",
                 destinationSelection: destinationSelection
@@ -334,8 +337,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
-    func importCurrentFolderRecursively(
-        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    func importCurrentFolder(
+        destinationSelection: LibraryImportDestinationSelection = .importedComics,
+        scope: RemoteDirectoryImportScope = .includeSubfolders
     ) async {
         guard canImportCurrentFolderRecursively else {
             alert = RemoteAlertState(
@@ -345,23 +349,25 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = "Scanning \(navigationTitle)…"
+        activeImportDescription = scope == .includeSubfolders ? "Scanning \(navigationTitle)…" : "Checking \(navigationTitle)…"
         do {
-            let nestedComicFiles = try await browsingService.listComicFilesRecursively(
-                for: profile,
-                path: currentPath
+            let importableItems = try await importableComicItems(
+                at: currentPath,
+                scope: scope
             )
-            guard !nestedComicFiles.isEmpty else {
+            guard !importableItems.isEmpty else {
                 activeImportDescription = nil
                 alert = RemoteAlertState(
                     title: "Nothing to Import",
-                    message: "No supported comic files were found in this remote folder or its subfolders."
+                    message: scope == .includeSubfolders
+                        ? "No supported comic files were found in this remote folder or its subfolders."
+                        : "No supported comic files were found directly inside this remote folder."
                 )
                 return
             }
 
             await importComicItems(
-                nestedComicFiles,
+                importableItems,
                 progressPrefix: "Importing \(navigationTitle)",
                 successTitle: "Folder Imported to Library",
                 destinationSelection: destinationSelection
@@ -576,6 +582,23 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             alert = RemoteAlertState(
                 title: "Folder Import Failed",
                 message: error.localizedDescription
+            )
+        }
+    }
+
+    private func importableComicItems(
+        at path: String,
+        scope: RemoteDirectoryImportScope
+    ) async throws -> [RemoteDirectoryItem] {
+        switch scope {
+        case .currentFolderOnly:
+            return try await browsingService
+                .listDirectory(for: profile, path: path)
+                .filter(\.canOpenAsComic)
+        case .includeSubfolders:
+            return try await browsingService.listComicFilesRecursively(
+                for: profile,
+                path: path
             )
         }
     }
