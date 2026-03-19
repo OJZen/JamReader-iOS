@@ -156,26 +156,31 @@ struct RemoteComicReaderView: View {
     }
 
     var body: some View {
-        Group {
-            if isLoading {
-                ProgressView("Opening Remote Comic")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let document {
-                readerContent(for: document)
-            } else {
-                ContentUnavailableView(
-                    "Comic Unavailable",
-                    systemImage: "book.closed",
-                    description: Text("The downloaded remote comic could not be opened.")
-                )
+        ReaderSurface(
+            isInteractionLocked: isShowingPageJumpSheet,
+            isChromeHidden: isReaderChromeHidden
+        ) {
+            Group {
+                if isLoading {
+                    ProgressView("Opening Remote Comic")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let document {
+                    readerContent(for: document)
+                } else {
+                    ContentUnavailableView(
+                        "Comic Unavailable",
+                        systemImage: "book.closed",
+                        description: Text("The downloaded remote comic could not be opened.")
+                    )
+                }
             }
-        }
-        .allowsHitTesting(!isShowingPageJumpSheet)
-        .overlay {
-            readerChromeOverlay
-                .allowsHitTesting(!isShowingPageJumpSheet)
-        }
-        .overlay {
+        } topBar: {
+            readerTopBar
+        } bottomBar: {
+            readerBottomBar
+        } statusOverlay: {
+            readerStatusOverlay
+        } modalOverlay: {
             if isShowingPageJumpSheet {
                 ReaderPageJumpOverlay(
                     pageNumberText: $pendingPageNumberText,
@@ -186,32 +191,9 @@ struct RemoteComicReaderView: View {
                 )
             }
         }
-        .ignoresSafeArea(.keyboard)
         .navigationTitle(displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
-        .overlay(alignment: .top) {
-            VStack(spacing: 8) {
-                if isRefreshingRemoteCopy {
-                    ProgressView("Refreshing Remote Copy")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
-
-                if let transientNoticeMessage {
-                    Text(transientNoticeMessage)
-                        .font(.caption.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
-            }
-            .padding(.top, isReaderChromeHidden ? 12 : 88)
-            .padding(.horizontal, 16)
-        }
         .task {
             await loadIfNeeded()
             updateIdleTimerState()
@@ -308,154 +290,163 @@ struct RemoteComicReaderView: View {
         return "\(visiblePages.first ?? min(currentPageIndex + 1, pageCount)) / \(pageCount)"
     }
 
-    @ViewBuilder
-    private var readerChromeOverlay: some View {
-        ReaderChromeOverlay(isHidden: isReaderChromeHidden) {
-            ReaderChromeBar {
-                HStack(spacing: 12) {
-                    Button(action: dismiss.callAsFunction) {
-                        Image(systemName: "chevron.backward")
-                            .font(.headline.weight(.semibold))
-                    }
-
-                    Text(displayName)
+    private var readerTopBar: some View {
+        ReaderTopBar(
+            title: displayName,
+            subtitle: nil,
+            onBack: dismiss.callAsFunction
+        ) {
+            Button {
+                Task {
+                    await refreshRemoteCopy()
+                }
+            } label: {
+                if isRefreshingRemoteCopy {
+                    ProgressView()
+                } else {
+                    Image(systemName: "arrow.clockwise")
                         .font(.headline)
-                        .lineLimit(1)
+                }
+            }
+            .disabled(isRefreshingRemoteCopy)
+        }
+    }
+
+    @ViewBuilder
+    private var readerBottomBar: some View {
+        if let pageIndicatorText {
+            ReaderChromeBar {
+                HStack(spacing: 16) {
+                    Menu {
+                        if let document, document.pageCount ?? 0 > 1 {
+                            Section("Navigation") {
+                                Button {
+                                    isShowingThumbnailBrowser = true
+                                } label: {
+                                    Label("Page Browser", systemImage: "rectangle.grid.2x2")
+                                }
+
+                                Button(action: presentPageJump) {
+                                    Label("Go to Page", systemImage: "number")
+                                }
+                            }
+                        }
+
+                        Section("Remote") {
+                            Button {
+                                Task {
+                                    await refreshRemoteCopy()
+                                }
+                            } label: {
+                                Label("Refresh Remote Copy", systemImage: "arrow.clockwise")
+                            }
+                            .disabled(isRefreshingRemoteCopy)
+                        }
+
+                        Section("Reading Status") {
+                            Button(action: toggleBookmark) {
+                                Label(
+                                    currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
+                                    systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
+                                )
+                            }
+                        }
+
+                        if !bookmarkItems.isEmpty {
+                            Section("Bookmarks") {
+                                ForEach(bookmarkItems) { bookmark in
+                                    Button {
+                                        updateCurrentPage(to: bookmark.pageIndex)
+                                        persistProgress(force: true)
+                                    } label: {
+                                        Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
+                                    }
+                                }
+                            }
+                        }
+
+                        if supportsImageLayoutControls {
+                            Section("Paging") {
+                                ForEach(ReaderPagingMode.allCases, id: \.self) { pagingMode in
+                                    layoutOptionButton(
+                                        title: pagingMode.title,
+                                        isSelected: effectiveReaderLayout.pagingMode == pagingMode
+                                    ) {
+                                        setPagingMode(pagingMode)
+                                    }
+                                }
+                            }
+
+                            Section("Fit") {
+                                ForEach(ReaderFitMode.allCases, id: \.self) { fitMode in
+                                    layoutOptionButton(
+                                        title: fitMode.title,
+                                        isSelected: effectiveReaderLayout.fitMode == fitMode
+                                    ) {
+                                        setFitMode(fitMode)
+                                    }
+                                }
+                            }
+
+                            if effectiveReaderLayout.pagingMode == .paged {
+                                Section("Direction") {
+                                    ForEach(ReaderReadingDirection.allCases, id: \.self) { direction in
+                                        layoutOptionButton(
+                                            title: direction.title,
+                                            isSelected: effectiveReaderLayout.readingDirection == direction
+                                        ) {
+                                            setReadingDirection(direction)
+                                        }
+                                    }
+                                }
+
+                                if supportsDoublePageSpread {
+                                    Section("Spread") {
+                                        ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
+                                            layoutOptionButton(
+                                                title: spreadMode.title,
+                                                isSelected: effectiveReaderLayout.spreadMode == spreadMode
+                                            ) {
+                                                setSpreadMode(spreadMode)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.headline)
+                    }
 
                     Spacer(minLength: 0)
 
-                    Button {
-                        Task {
-                            await refreshRemoteCopy()
-                        }
-                    } label: {
-                        if isRefreshingRemoteCopy {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.headline)
+                    Button(action: presentPageJump) {
+                        ReaderChromePill {
+                            Text(pageIndicatorText)
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .disabled(isRefreshingRemoteCopy)
                 }
             }
-        } bottomBar: {
-            if let pageIndicatorText {
-                ReaderChromeBar {
-                    HStack(spacing: 16) {
-                        Menu {
-                            if let document, document.pageCount ?? 0 > 1 {
-                                Section("Navigation") {
-                                    Button {
-                                        isShowingThumbnailBrowser = true
-                                    } label: {
-                                        Label("Page Browser", systemImage: "rectangle.grid.2x2")
-                                    }
+        }
+    }
 
-                                    Button(action: presentPageJump) {
-                                        Label("Go to Page", systemImage: "number")
-                                    }
-                                }
-                            }
+    @ViewBuilder
+    private var readerStatusOverlay: some View {
+        if isRefreshingRemoteCopy {
+            ReaderStatusBadge {
+                ProgressView("Refreshing Remote Copy")
+                    .font(.caption.weight(.semibold))
+            }
+        }
 
-                            Section("Remote") {
-                                Button {
-                                    Task {
-                                        await refreshRemoteCopy()
-                                    }
-                                } label: {
-                                    Label("Refresh Remote Copy", systemImage: "arrow.clockwise")
-                                }
-                                .disabled(isRefreshingRemoteCopy)
-                            }
-
-                            Section("Reading Status") {
-                                Button(action: toggleBookmark) {
-                                    Label(
-                                        currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
-                                        systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
-                                    )
-                                }
-                            }
-
-                            if !bookmarkItems.isEmpty {
-                                Section("Bookmarks") {
-                                    ForEach(bookmarkItems) { bookmark in
-                                        Button {
-                                            updateCurrentPage(to: bookmark.pageIndex)
-                                            persistProgress(force: true)
-                                        } label: {
-                                            Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
-                                        }
-                                    }
-                                }
-                            }
-
-                            if supportsImageLayoutControls {
-                                Section("Paging") {
-                                    ForEach(ReaderPagingMode.allCases, id: \.self) { pagingMode in
-                                        layoutOptionButton(
-                                            title: pagingMode.title,
-                                            isSelected: effectiveReaderLayout.pagingMode == pagingMode
-                                        ) {
-                                            setPagingMode(pagingMode)
-                                        }
-                                    }
-                                }
-
-                                Section("Fit") {
-                                    ForEach(ReaderFitMode.allCases, id: \.self) { fitMode in
-                                        layoutOptionButton(
-                                            title: fitMode.title,
-                                            isSelected: effectiveReaderLayout.fitMode == fitMode
-                                        ) {
-                                            setFitMode(fitMode)
-                                        }
-                                    }
-                                }
-
-                                if effectiveReaderLayout.pagingMode == .paged {
-                                    Section("Direction") {
-                                        ForEach(ReaderReadingDirection.allCases, id: \.self) { direction in
-                                            layoutOptionButton(
-                                                title: direction.title,
-                                                isSelected: effectiveReaderLayout.readingDirection == direction
-                                            ) {
-                                                setReadingDirection(direction)
-                                            }
-                                        }
-                                    }
-
-                                    if supportsDoublePageSpread {
-                                        Section("Spread") {
-                                            ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
-                                                layoutOptionButton(
-                                                    title: spreadMode.title,
-                                                    isSelected: effectiveReaderLayout.spreadMode == spreadMode
-                                                ) {
-                                                    setSpreadMode(spreadMode)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.headline)
-                        }
-
-                        Spacer(minLength: 0)
-
-                        Button(action: presentPageJump) {
-                            ReaderChromePill {
-                                Text(pageIndicatorText)
-                                    .font(.footnote.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
+        if let transientNoticeMessage {
+            ReaderStatusBadge {
+                Text(transientNoticeMessage)
+                    .font(.caption.weight(.semibold))
+                    .multilineTextAlignment(.center)
             }
         }
     }
@@ -851,58 +842,5 @@ struct RemoteComicReaderView: View {
 
     private static func normalizedBookmarkPageIndices(_ pageIndices: [Int]) -> [Int] {
         Array(Set(pageIndices.filter { $0 >= 0 })).sorted()
-    }
-}
-
-private struct RemoteReaderPageJumpSheet: View {
-    @Binding var pageNumberText: String
-
-    let currentPageNumber: Int
-    let pageCount: Int
-    let onCancel: () -> Void
-    let onJump: () -> Void
-
-    @FocusState private var isFocused: Bool
-
-    private var isValidPageNumber: Bool {
-        guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return false
-        }
-
-        return (1...pageCount).contains(pageNumber)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Page") {
-                    TextField("Page number", text: $pageNumberText)
-                        .keyboardType(.numberPad)
-                        .focused($isFocused)
-
-                    Text("Current page: \(currentPageNumber)")
-                        .foregroundStyle(.secondary)
-
-                    Text("Valid range: 1-\(pageCount)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Go to Page")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Jump", action: onJump)
-                        .disabled(!isValidPageNumber)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        .onAppear {
-            isFocused = true
-        }
     }
 }

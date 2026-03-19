@@ -117,6 +117,8 @@
 - 已补齐远程阅读状态主链路：远程单本漫画现在会本地持久化阅读进度与最近打开记录，支持从上次页码恢复，并在首页 `Remote Access`、服务器列表与远程目录内展示继续阅读反馈，同时加入断线时的缓存回退、缓存统计与手动清理入口；远程阅读器现已补齐“重新拉取远程副本”“缩略图页浏览”和“直接跳页”
 - 已确认分页图片阅读器存在架构性 viewport / gesture 稳定性问题，后续不再继续在旧容器上叠加补丁，已立项专项重构计划，详见 [reader-gesture-refactor-plan.md](/Volumes/Ju/Projects/ios/yacreader/docs/reader-gesture-refactor-plan.md)
 - 已启动阅读器专项重构的第一批落地：新增 `ReaderKernel` 基础类型与 `ZoomableImagePageView`，并已把分页页内旧 `UIScrollView` 逻辑替换为新页视图，同时移除本地 / 远程阅读器外层那条 `120ms / 520ms` 的历史 viewport 校准补丁，避免首次进入后的补丁式二次跳变
+- 已完成分页图片阅读宿主切换：`ImageSequenceReaderContainerView` 现已改为基于 `UICollectionView` 的横向分页宿主，旧 `UIPageViewController` 主路径已退场，并开始清理相关遗留代码
+- 已开始围绕新分页宿主整理阅读器外层结构：本地与远程阅读器现共用 `ReaderSurface`、`ReaderTopBar` 与状态提示层，明确分离内容层、chrome 层、提示层与跳页弹层，降低后续 UI / 手势迭代的重复改动成本
 - 本文档持续按实现进度迭代
 
 总体进度估计：

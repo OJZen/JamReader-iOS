@@ -1,6 +1,6 @@
 # 阅读器与手势系统重构计划
 
-更新时间：2026-03-18
+更新时间：2026-03-19
 
 ## 1. 背景判断
 
@@ -464,6 +464,12 @@ chrome 需要和内容分离。
 
 - 用 `UICollectionView` 重建分页
 
+当前状态：
+
+- 已完成主链路切换：[ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/ImageSequenceReaderContainerView.swift) 现已由横向 `UICollectionView` 分页宿主承载 `ComicImageSpreadViewController`
+- 旧 `UIPageViewController` 分页路线已退出主链路，并开始删除遗留代码
+- 当前分页阅读器已通过“首次进入、再次进入、连续翻页、跳页弹窗后恢复”等核心手测
+
 任务：
 
 - 横向分页 collection view
@@ -506,6 +512,12 @@ chrome 需要和内容分离。
 
 - 让新内核具备完整可用性
 
+当前状态：
+
+- 已把本地 / 远程阅读器外层整理为共享 `ReaderSurface`
+- 已抽出共享 `ReaderTopBar`、`ReaderTopStatusStack`、`ReaderStatusBadge`
+- `ReaderPageJumpOverlay` 继续作为统一跳页入口，避免再回到 sheet 驱动的布局干扰
+
 任务：
 
 - chrome overlay child VC
@@ -525,6 +537,11 @@ chrome 需要和内容分离。
 
 - 优先稳定本地主链路
 
+当前状态：
+
+- 已完成“本地图像分页阅读接新分页宿主 + 共享外层 chrome 壳”的第一版落地
+- 当前剩余工作主要集中在把页码、书签、布局偏好进一步往 `ReaderSessionController` 归拢
+
 任务：
 
 - `ComicReaderView` 接新 host
@@ -542,6 +559,12 @@ chrome 需要和内容分离。
 目标：
 
 - 清理本地与远程重复实现
+
+当前状态：
+
+- 已完成远程阅读对新分页宿主的接线
+- 远程阅读外层 UI 已与本地阅读并轨到同一套 `ReaderSurface`
+- 当前仍保留远程特有的刷新、缓存回退提示与进度持久化逻辑，后续继续往 runtime 统一接口收敛
 
 任务：
 

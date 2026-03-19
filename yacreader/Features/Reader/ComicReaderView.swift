@@ -40,26 +40,31 @@ struct ComicReaderView: View {
     }
 
     var body: some View {
-        Group {
-            if viewModel.isLoading {
-                ProgressView("Opening Comic")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if let document = viewModel.document {
-                readerContent(for: document)
-            } else {
-                ContentUnavailableView(
-                    "Comic Unavailable",
-                    systemImage: "book.closed",
-                    description: Text("The selected comic could not be opened.")
-                )
+        ReaderSurface(
+            isInteractionLocked: viewModel.isShowingPageJumpSheet,
+            isChromeHidden: isReaderChromeHidden
+        ) {
+            Group {
+                if viewModel.isLoading {
+                    ProgressView("Opening Comic")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let document = viewModel.document {
+                    readerContent(for: document)
+                } else {
+                    ContentUnavailableView(
+                        "Comic Unavailable",
+                        systemImage: "book.closed",
+                        description: Text("The selected comic could not be opened.")
+                    )
+                }
             }
-        }
-        .allowsHitTesting(!viewModel.isShowingPageJumpSheet)
-        .overlay {
-            readerChromeOverlay
-                .allowsHitTesting(!viewModel.isShowingPageJumpSheet)
-        }
-        .overlay {
+        } topBar: {
+            readerTopBar
+        } bottomBar: {
+            readerBottomBar
+        } statusOverlay: {
+            EmptyView()
+        } modalOverlay: {
             if viewModel.isShowingPageJumpSheet {
                 ReaderPageJumpOverlay(
                     pageNumberText: $viewModel.pendingPageNumberText,
@@ -70,7 +75,6 @@ struct ComicReaderView: View {
                 )
             }
         }
-        .ignoresSafeArea(.keyboard)
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
@@ -287,67 +291,51 @@ struct ComicReaderView: View {
         )
     }
 
+    private var readerTopBar: some View {
+        ReaderTopBar(
+            title: viewModel.navigationTitle,
+            subtitle: viewModel.readerContextPositionText,
+            onBack: dismiss.callAsFunction
+        ) {
+            EmptyView()
+        }
+    }
+
     @ViewBuilder
-    private var readerChromeOverlay: some View {
-        ReaderChromeOverlay(isHidden: isReaderChromeHidden) {
+    private var readerBottomBar: some View {
+        if viewModel.pageIndicatorText != nil || viewModel.hasReaderNavigationContext {
             ReaderChromeBar {
-                HStack(spacing: 12) {
-                    Button(action: dismiss.callAsFunction) {
-                        Image(systemName: "chevron.backward")
-                            .font(.headline.weight(.semibold))
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(viewModel.navigationTitle)
+                HStack(spacing: 16) {
+                    Button {
+                        isReaderChromeHidden = false
+                        isShowingReaderControls = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
                             .font(.headline)
-                            .lineLimit(1)
-
-                        if let contextPositionText = viewModel.readerContextPositionText {
-                            Text(contextPositionText)
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
                     }
+                    .disabled(viewModel.document == nil)
 
                     Spacer(minLength: 0)
-                }
-            }
-        } bottomBar: {
-            if viewModel.pageIndicatorText != nil || viewModel.hasReaderNavigationContext {
-                ReaderChromeBar {
-                    HStack(spacing: 16) {
-                        Button {
-                            isReaderChromeHidden = false
-                            isShowingReaderControls = true
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.headline)
-                        }
-                        .disabled(viewModel.document == nil)
 
-                        Spacer(minLength: 0)
-
-                        Button(action: viewModel.openPreviousComic) {
-                            Image(systemName: "chevron.left")
-                                .font(.headline)
-                        }
-                        .disabled(!viewModel.canOpenPreviousComic)
-
-                        if let pageIndicatorText = viewModel.pageIndicatorText {
-                            ReaderChromePill {
-                                Text(pageIndicatorText)
-                                    .font(.footnote.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        Button(action: viewModel.openNextComic) {
-                            Image(systemName: "chevron.right")
-                                .font(.headline)
-                        }
-                        .disabled(!viewModel.canOpenNextComic)
+                    Button(action: viewModel.openPreviousComic) {
+                        Image(systemName: "chevron.left")
+                            .font(.headline)
                     }
+                    .disabled(!viewModel.canOpenPreviousComic)
+
+                    if let pageIndicatorText = viewModel.pageIndicatorText {
+                        ReaderChromePill {
+                            Text(pageIndicatorText)
+                                .font(.footnote.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button(action: viewModel.openNextComic) {
+                        Image(systemName: "chevron.right")
+                            .font(.headline)
+                    }
+                    .disabled(!viewModel.canOpenNextComic)
                 }
             }
         }
@@ -418,59 +406,6 @@ private struct ReaderRotationHost<Content: View>: View {
                 .position(x: outerSize.width * 0.5, y: outerSize.height * 0.5)
         }
         .clipped()
-    }
-}
-
-private struct ReaderPageJumpSheet: View {
-    @Binding var pageNumberText: String
-
-    let currentPageNumber: Int
-    let pageCount: Int
-    let onCancel: () -> Void
-    let onJump: () -> Void
-
-    @FocusState private var isFocused: Bool
-
-    private var isValidPageNumber: Bool {
-        guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return false
-        }
-
-        return (1...pageCount).contains(pageNumber)
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Page") {
-                    TextField("Page number", text: $pageNumberText)
-                        .keyboardType(.numberPad)
-                        .focused($isFocused)
-
-                    Text("Current page: \(currentPageNumber)")
-                        .foregroundStyle(.secondary)
-
-                    Text("Valid range: 1-\(pageCount)")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Go to Page")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: onCancel)
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Jump", action: onJump)
-                        .disabled(!isValidPageNumber)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-        .onAppear {
-            isFocused = true
-        }
     }
 }
 
