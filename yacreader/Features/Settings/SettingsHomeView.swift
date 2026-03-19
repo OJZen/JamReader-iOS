@@ -10,7 +10,9 @@ struct SettingsHomeView: View {
     @State private var remoteServerCount = 0
     @State private var remoteSessionCount = 0
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
+    @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var isShowingClearRemoteDownloadsConfirmation = false
+    @State private var isShowingClearRemoteThumbnailsConfirmation = false
     @State private var alert: SettingsAlertState?
 
     var body: some View {
@@ -34,7 +36,7 @@ struct SettingsHomeView: View {
                     ReaderDefaultSummaryRow(title: "Webcomics", layout: webcomicLayout)
                 }
 
-                Section("Remote Downloads") {
+                Section("Remote Browse Cache") {
                     LabeledContent("Saved SMB Servers", value: "\(remoteServerCount)")
                     LabeledContent("Recent Remote Sessions", value: "\(remoteSessionCount)")
 
@@ -49,6 +51,20 @@ struct SettingsHomeView: View {
                             isShowingClearRemoteDownloadsConfirmation = true
                         } label: {
                             Label("Clear Remote Downloads", systemImage: "trash")
+                        }
+                    }
+
+                    if remoteThumbnailCacheSummary.isEmpty {
+                        Text("Remote comic thumbnails are generated on demand and currently do not have any saved disk cache on this device.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        LabeledContent("Thumbnail Cache", value: remoteThumbnailCacheSummary.summaryText)
+
+                        Button(role: .destructive) {
+                            isShowingClearRemoteThumbnailsConfirmation = true
+                        } label: {
+                            Label("Clear Thumbnail Cache", systemImage: "photo.stack")
                         }
                     }
                 }
@@ -74,7 +90,7 @@ struct SettingsHomeView: View {
                     )
                     SettingsStatusRow(
                         title: "SMB Browse",
-                        detail: "Core browsing and direct reading are already available. Thumbnail-driven remote browsing is the next major UI step.",
+                        detail: "Core browsing, thumbnail-driven remote directories, direct reading, and recursive folder import are already available.",
                         tint: .orange
                     )
                 }
@@ -98,6 +114,18 @@ struct SettingsHomeView: View {
             } message: {
                 Text("Saved SMB servers and reading progress stay intact. Only downloaded remote copies on this device are removed.")
             }
+            .confirmationDialog(
+                "Clear cached remote thumbnails?",
+                isPresented: $isShowingClearRemoteThumbnailsConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear Thumbnails", role: .destructive) {
+                    clearRemoteThumbnails()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This only removes generated remote cover thumbnails. Remote downloads and reading progress stay intact.")
+            }
             .alert(item: $alert) { alert in
                 Alert(
                     title: Text(alert.title),
@@ -115,6 +143,7 @@ struct SettingsHomeView: View {
         remoteServerCount = ((try? dependencies.remoteServerProfileStore.load()) ?? []).count
         remoteSessionCount = ((try? dependencies.remoteReadingProgressStore.loadSessions()) ?? []).count
         remoteCacheSummary = dependencies.remoteServerBrowsingService.cacheSummary()
+        remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
     }
 
     private func clearRemoteDownloads() {
@@ -124,6 +153,18 @@ struct SettingsHomeView: View {
         } catch {
             alert = SettingsAlertState(
                 title: "Failed to Clear Downloads",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func clearRemoteThumbnails() {
+        do {
+            try RemoteComicThumbnailPipeline.shared.clearCache()
+            refresh()
+        } catch {
+            alert = SettingsAlertState(
+                title: "Failed to Clear Thumbnails",
                 message: error.localizedDescription
             )
         }
