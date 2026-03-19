@@ -63,27 +63,11 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     var pageIndicatorText: String? {
-        guard let pageCount = document?.pageCount, pageCount > 0 else {
-            return nil
-        }
-
-        guard let document, case .imageSequence = document else {
-            return "\(min(currentPageIndex + 1, pageCount)) / \(pageCount)"
-        }
-
-        let spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: pageCount, layout: effectiveReaderLayout)
-        guard let spreadIndex = ReaderSpreadDescriptor.spreadIndex(containing: currentPageIndex, in: spreads),
-              spreads.indices.contains(spreadIndex)
-        else {
-            return "\(min(currentPageIndex + 1, pageCount)) / \(pageCount)"
-        }
-
-        let visiblePages = spreads[spreadIndex].pageIndices.map { $0 + 1 }
-        if visiblePages.count == 2, let firstPage = visiblePages.first, let lastPage = visiblePages.last {
-            return "\(firstPage)-\(lastPage) / \(pageCount)"
-        }
-
-        return "\(visiblePages.first ?? min(currentPageIndex + 1, pageCount)) / \(pageCount)"
+        ReaderPageIndicatorFormatter.text(
+            for: document,
+            currentPageIndex: currentPageIndex,
+            layout: effectiveReaderLayout
+        )
     }
 
     var supportsImageLayoutControls: Bool {

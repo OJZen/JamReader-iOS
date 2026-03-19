@@ -452,41 +452,29 @@ struct ComicReaderView: View {
             return
         }
 
-        let trimmedValue = readerSession.state.pendingPageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let pageNumber = Int(trimmedValue), (1...pageCount).contains(pageNumber) else {
+        guard let pageIndex = ReaderPageJumpResolver.pageIndex(
+            from: readerSession.state.pendingPageNumberText,
+            pageCount: pageCount
+        ) else {
             viewModel.alert = LibraryAlertState(
                 title: "Invalid Page Number",
-                message: "Enter a page between 1 and \(pageCount)."
+                message: ReaderPageJumpResolver.validationMessage(pageCount: pageCount)
             )
             return
         }
 
         readerSession.dismissPageJump()
-        updateVisiblePage(to: pageNumber - 1)
+        updateVisiblePage(to: pageIndex)
     }
 
     private func synchronizeReaderSession() {
-        let resolvedLayout = viewModel.effectiveReaderLayout
-        if let document = viewModel.document {
-            readerSession.updateDescriptor(
-                .resolved(
-                    document: document,
-                    currentPageIndex: viewModel.currentPageIndex,
-                    layout: resolvedLayout
-                ),
-                preferredPageIndex: viewModel.currentPageIndex
-            )
-        } else {
-            readerSession.updateDescriptor(
-                .placeholder(
-                    documentURL: URL(fileURLWithPath: viewModel.descriptor.sourcePath, isDirectory: true),
-                    pageCount: max(viewModel.comic.pageCount ?? max(viewModel.comic.currentPage, 1), 1),
-                    initialPageIndex: viewModel.currentPageIndex,
-                    layout: resolvedLayout
-                ),
-                preferredPageIndex: viewModel.currentPageIndex
-            )
-        }
+        readerSession.synchronize(
+            document: viewModel.document,
+            fallbackDocumentURL: URL(fileURLWithPath: viewModel.descriptor.sourcePath, isDirectory: true),
+            fallbackPageCount: max(viewModel.comic.pageCount ?? max(viewModel.comic.currentPage, 1), 1),
+            currentPageIndex: viewModel.currentPageIndex,
+            layout: viewModel.effectiveReaderLayout
+        )
     }
 
     private func updateIdleTimerState() {

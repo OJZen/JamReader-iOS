@@ -286,27 +286,11 @@ struct RemoteComicReaderView: View {
     }
 
     private var pageIndicatorText: String? {
-        guard let pageCount = document?.pageCount, pageCount > 0 else {
-            return nil
-        }
-
-        guard let document, case .imageSequence = document else {
-            return "\(min(currentPageIndex + 1, pageCount)) / \(pageCount)"
-        }
-
-        let spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: pageCount, layout: effectiveReaderLayout)
-        guard let spreadIndex = ReaderSpreadDescriptor.spreadIndex(containing: currentPageIndex, in: spreads),
-              spreads.indices.contains(spreadIndex)
-        else {
-            return "\(min(currentPageIndex + 1, pageCount)) / \(pageCount)"
-        }
-
-        let visiblePages = spreads[spreadIndex].pageIndices.map { $0 + 1 }
-        if visiblePages.count == 2, let firstPage = visiblePages.first, let lastPage = visiblePages.last {
-            return "\(firstPage)-\(lastPage) / \(pageCount)"
-        }
-
-        return "\(visiblePages.first ?? min(currentPageIndex + 1, pageCount)) / \(pageCount)"
+        ReaderPageIndicatorFormatter.text(
+            for: document,
+            currentPageIndex: currentPageIndex,
+            layout: effectiveReaderLayout
+        )
     }
 
     private var readerTopBar: some View {
@@ -611,16 +595,18 @@ struct RemoteComicReaderView: View {
             return
         }
 
-        let trimmedValue = readerSession.state.pendingPageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let pageNumber = Int(trimmedValue), (1...pageCount).contains(pageNumber) else {
+        guard let pageIndex = ReaderPageJumpResolver.pageIndex(
+            from: readerSession.state.pendingPageNumberText,
+            pageCount: pageCount
+        ) else {
             alert = RemoteAlertState(
                 title: "Invalid Page Number",
-                message: "Enter a page between 1 and \(pageCount)."
+                message: ReaderPageJumpResolver.validationMessage(pageCount: pageCount)
             )
             return
         }
 
-        updateVisiblePage(to: pageNumber - 1)
+        updateVisiblePage(to: pageIndex)
         readerSession.dismissPageJump()
         persistProgress(force: true)
     }
@@ -873,26 +859,13 @@ struct RemoteComicReaderView: View {
     }
 
     private func synchronizeReaderSession() {
-        if let document {
-            readerSession.updateDescriptor(
-                .resolved(
-                    document: document,
-                    currentPageIndex: currentPageIndex,
-                    layout: effectiveReaderLayout
-                ),
-                preferredPageIndex: currentPageIndex
-            )
-        } else {
-            readerSession.updateDescriptor(
-                .placeholder(
-                    documentURL: fileURL,
-                    pageCount: max(initialStoredProgress?.pageCount ?? 1, 1),
-                    initialPageIndex: currentPageIndex,
-                    layout: effectiveReaderLayout
-                ),
-                preferredPageIndex: currentPageIndex
-            )
-        }
+        readerSession.synchronize(
+            document: document,
+            fallbackDocumentURL: fileURL,
+            fallbackPageCount: max(initialStoredProgress?.pageCount ?? 1, 1),
+            currentPageIndex: currentPageIndex,
+            layout: effectiveReaderLayout
+        )
     }
 
     private func normalizeBookmarks(for pageCount: Int?) {
