@@ -331,10 +331,13 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         let rawIndex = Int(round(collectionView.contentOffset.x / collectionView.bounds.width))
         let spreadIndex = min(max(rawIndex, 0), spreads.count - 1)
         let spread = spreads[spreadIndex]
+        let previousSpreadIndex = currentSpreadIndex
 
         currentSpreadIndex = spreadIndex
         currentPageIndex = spread.primaryPageIndex
-        controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
+        if spreadIndex != previousSpreadIndex {
+            controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
+        }
         notifyPageChangedIfNeeded(spread.primaryPageIndex)
         trimCache(around: spreadIndex)
         prefetchAround(spreadIndex: spreadIndex)
