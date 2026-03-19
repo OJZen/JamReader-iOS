@@ -515,6 +515,9 @@ struct RemoteServerBrowserView: View {
     @StateObject private var viewModel: RemoteServerBrowserViewModel
     @State private var displayMode: LibraryComicDisplayMode = .list
     @State private var hasConfiguredDisplayMode = false
+    @State private var sortMode: RemoteDirectorySortMode = .nameAscending
+    @State private var hasConfiguredSortMode = false
+    @State private var searchText = ""
     @State private var importRequest: RemoteBrowserImportRequest?
 
     init(
@@ -565,6 +568,23 @@ struct RemoteServerBrowserView: View {
                         }
                     }
 
+                    Section("Sort") {
+                        ForEach(RemoteDirectorySortMode.allCases) { mode in
+                            Button {
+                                applySortMode(mode)
+                            } label: {
+                                HStack {
+                                    Label(mode.title, systemImage: mode.systemImageName)
+
+                                    if sortMode == mode {
+                                        Spacer()
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     if viewModel.canImportCurrentFolderRecursively {
                         Button {
                             importRequest = .currentFolder
@@ -586,10 +606,16 @@ struct RemoteServerBrowserView: View {
         .onAppear {
             viewModel.refreshProgressState()
             configureDisplayModeIfNeeded()
+            configureSortModeIfNeeded()
         }
         .refreshable {
             await viewModel.load()
         }
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Filter this SMB folder"
+        )
         .safeAreaInset(edge: .bottom) {
             if let activeImportDescription = viewModel.activeImportDescription {
                 RemoteBrowserImportProgressView(description: activeImportDescription)
@@ -693,10 +719,18 @@ struct RemoteServerBrowserView: View {
             }
             .font(.caption)
 
+            Text(browserSummaryText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
             HStack(spacing: 8) {
                 StatusBadge(title: viewModel.capabilities.providerKind.title, tint: viewModel.capabilities.providerKind.tintColor)
                 StatusBadge(title: displayMode.title, tint: .blue)
-                StatusBadge(title: "Online Read", tint: .green)
+                StatusBadge(title: sortMode.shortTitle, tint: .teal)
+                if !trimmedSearchText.isEmpty {
+                    StatusBadge(title: "Filtering", tint: .orange)
+                }
             }
 
             Text("Client: \(viewModel.capabilities.plannedClientLibrary)")
@@ -782,10 +816,19 @@ struct RemoteServerBrowserView: View {
                 )
                 .padding(.vertical, 24)
             }
+        } else if !hasVisibleItems {
+            Section {
+                ContentUnavailableView(
+                    "No Matches",
+                    systemImage: "magnifyingglass",
+                    description: Text(browserSummaryText)
+                )
+                .padding(.vertical, 24)
+            }
         } else {
-            if !viewModel.directories.isEmpty {
+            if !displayedDirectories.isEmpty {
                 Section("Folders") {
-                    ForEach(viewModel.directories) { item in
+                    ForEach(displayedDirectories) { item in
                         NavigationLink {
                             RemoteServerBrowserView(
                                 profile: viewModel.profile,
@@ -813,9 +856,9 @@ struct RemoteServerBrowserView: View {
                 }
             }
 
-            if !viewModel.comicFiles.isEmpty {
+            if !displayedComicFiles.isEmpty {
                 Section {
-                    ForEach(viewModel.comicFiles) { item in
+                    ForEach(displayedComicFiles) { item in
                         NavigationLink {
                             RemoteComicLoadingView(
                                 profile: viewModel.profile,
@@ -843,8 +886,8 @@ struct RemoteServerBrowserView: View {
                 } header: {
                     Text("Comic Files")
                 } footer: {
-                    if viewModel.unsupportedFileCount > 0 {
-                        Text("\(viewModel.unsupportedFileCount) unsupported remote files are hidden in this folder.")
+                    if displayedUnsupportedFileCount > 0 {
+                        Text("\(displayedUnsupportedFileCount) unsupported remote files are hidden in this folder.")
                     }
                 }
             }
@@ -868,24 +911,32 @@ struct RemoteServerBrowserView: View {
             ContentUnavailableView(
                 "No Remote Comics Yet",
                 systemImage: "folder",
-                description: Text(viewModel.summaryText)
+                description: Text(browserSummaryText)
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        } else if !hasVisibleItems {
+            ContentUnavailableView(
+                "No Matches",
+                systemImage: "magnifyingglass",
+                description: Text(browserSummaryText)
             )
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
         } else {
-            if !viewModel.directories.isEmpty {
-                remoteGridSection(title: "Folders", items: viewModel.directories) { item in
+            if !displayedDirectories.isEmpty {
+                remoteGridSection(title: "Folders", items: displayedDirectories) { item in
                     importRequest = .directory(item)
                 }
             }
 
-            if !viewModel.comicFiles.isEmpty {
-                remoteGridSection(title: "Comic Files", items: viewModel.comicFiles) { item in
+            if !displayedComicFiles.isEmpty {
+                remoteGridSection(title: "Comic Files", items: displayedComicFiles) { item in
                     importRequest = .comic(item)
                 }
 
-                if viewModel.unsupportedFileCount > 0 {
-                    Text("\(viewModel.unsupportedFileCount) unsupported remote files are hidden in this folder.")
+                if displayedUnsupportedFileCount > 0 {
+                    Text("\(displayedUnsupportedFileCount) unsupported remote files are hidden in this folder.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -1072,13 +1123,22 @@ struct RemoteServerBrowserView: View {
         )
     }
 
+    private func configureSortModeIfNeeded() {
+        guard !hasConfiguredSortMode else {
+            return
+        }
+
+        hasConfiguredSortMode = true
+        sortMode = Self.loadStoredSortMode()
+    }
+
     private var thumbnailPreheatRequestID: String {
-        let candidateIDs = viewModel.comicFiles.prefix(displayMode == .grid ? 18 : 12).map(\.id).joined(separator: "|")
-        return "\(viewModel.profile.id.uuidString)#\(displayMode.rawValue)#\(Int(displayScale * 100))#\(candidateIDs)"
+        let candidateIDs = displayedComicFiles.prefix(displayMode == .grid ? 18 : 12).map(\.id).joined(separator: "|")
+        return "\(viewModel.profile.id.uuidString)#\(displayMode.rawValue)#\(sortMode.rawValue)#\(trimmedSearchText)#\(Int(displayScale * 100))#\(candidateIDs)"
     }
 
     private func preheatVisibleThumbnails() {
-        guard !viewModel.isLoading, !viewModel.comicFiles.isEmpty else {
+        guard !viewModel.isLoading, !displayedComicFiles.isEmpty else {
             return
         }
 
@@ -1089,13 +1149,81 @@ struct RemoteServerBrowserView: View {
         Task {
             await RemoteComicThumbnailPipeline.shared.preheat(
             for: viewModel.profile,
-            items: viewModel.comicFiles,
+            items: displayedComicFiles,
             browsingService: dependencies.remoteServerBrowsingService,
             maxPixelSize: maxPixelSize,
             limit: limit,
             concurrency: displayMode == .grid ? 4 : 3
             )
         }
+    }
+
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var displayedDirectories: [RemoteDirectoryItem] {
+        filteredAndSorted(viewModel.directories)
+    }
+
+    private var displayedComicFiles: [RemoteDirectoryItem] {
+        filteredAndSorted(viewModel.comicFiles)
+    }
+
+    private var displayedUnsupportedFileCount: Int {
+        filteredItems(viewModel.items).reduce(into: 0) { count, item in
+            if item.kind == .unsupportedFile {
+                count += 1
+            }
+        }
+    }
+
+    private var hasVisibleItems: Bool {
+        !displayedDirectories.isEmpty || !displayedComicFiles.isEmpty
+    }
+
+    private var browserSummaryText: String {
+        if let loadIssue = viewModel.loadIssue {
+            return loadIssue.message
+        }
+
+        if viewModel.items.isEmpty {
+            return viewModel.summaryText
+        }
+
+        if hasVisibleItems {
+            let folderCount = displayedDirectories.count
+            let comicCount = displayedComicFiles.count
+            let hiddenCount = displayedUnsupportedFileCount
+            let prefix: String
+            if trimmedSearchText.isEmpty {
+                prefix = "\(folderCount) folders and \(comicCount) comic files are visible here."
+            } else {
+                prefix = "\(folderCount) folders and \(comicCount) comic files match \"\(trimmedSearchText)\"."
+            }
+
+            if hiddenCount > 0 {
+                return "\(prefix) \(hiddenCount) unsupported files are hidden."
+            }
+
+            return prefix
+        }
+
+        return "No folders or supported comic files in this SMB folder match \"\(trimmedSearchText)\"."
+    }
+
+    private func filteredItems(_ items: [RemoteDirectoryItem]) -> [RemoteDirectoryItem] {
+        guard !trimmedSearchText.isEmpty else {
+            return items
+        }
+
+        return items.filter { item in
+            item.name.localizedStandardContains(trimmedSearchText)
+        }
+    }
+
+    private func filteredAndSorted(_ items: [RemoteDirectoryItem]) -> [RemoteDirectoryItem] {
+        filteredItems(items).sorted(using: sortMode)
     }
 
     private func performImport(
@@ -1125,6 +1253,11 @@ struct RemoteServerBrowserView: View {
         Self.persistDisplayMode(mode)
     }
 
+    private func applySortMode(_ mode: RemoteDirectorySortMode) {
+        sortMode = mode
+        Self.persistSortMode(mode)
+    }
+
     private static func loadStoredDisplayMode(defaultMode: LibraryComicDisplayMode) -> LibraryComicDisplayMode {
         let userDefaults = UserDefaults.standard
         let storageKey = "remoteServerBrowser.displayMode"
@@ -1138,6 +1271,20 @@ struct RemoteServerBrowserView: View {
 
     private static func persistDisplayMode(_ mode: LibraryComicDisplayMode) {
         UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.displayMode")
+    }
+
+    private static func loadStoredSortMode() -> RemoteDirectorySortMode {
+        let storageKey = "remoteServerBrowser.sortMode"
+        if let rawValue = UserDefaults.standard.string(forKey: storageKey),
+           let mode = RemoteDirectorySortMode(rawValue: rawValue) {
+            return mode
+        }
+
+        return .nameAscending
+    }
+
+    private static func persistSortMode(_ mode: RemoteDirectorySortMode) {
+        UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.sortMode")
     }
 
     private func handleRemoteAlertPrimaryAction(_ action: RemoteAlertPrimaryAction) {
