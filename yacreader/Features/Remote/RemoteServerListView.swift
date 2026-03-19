@@ -515,9 +515,13 @@ private struct RemoteServerEditorSheet: View {
 }
 
 struct RemoteServerBrowserView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     private let dependencies: AppDependencies
 
     @StateObject private var viewModel: RemoteServerBrowserViewModel
+    @State private var displayMode: LibraryComicDisplayMode = .list
+    @State private var hasConfiguredDisplayMode = false
 
     init(
         profile: RemoteServerProfile,
@@ -530,167 +534,54 @@ struct RemoteServerBrowserView: View {
                 profile: profile,
                 currentPath: currentPath,
                 browsingService: dependencies.remoteServerBrowsingService,
-                readingProgressStore: dependencies.remoteReadingProgressStore
+                readingProgressStore: dependencies.remoteReadingProgressStore,
+                importedComicsImportService: dependencies.importedComicsImportService
             )
         )
     }
 
     var body: some View {
-        List {
-            summarySection
-
-            if !viewModel.isAtRootPath {
-                Section {
-                    if let parentPath = viewModel.parentPath {
-                        NavigationLink {
-                            RemoteServerBrowserView(
-                                profile: viewModel.profile,
-                                currentPath: parentPath,
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            Label("Up One Level", systemImage: "arrow.up")
-                        }
-                    }
-
-                    if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
-                        NavigationLink {
-                            RemoteServerBrowserView(
-                                profile: viewModel.profile,
-                                currentPath: viewModel.rootPath,
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            Label("Return to Session Root", systemImage: "arrow.up.left.and.arrow.down.right")
-                        }
-                    }
-                } header: {
-                    Text("Navigation")
-                } footer: {
-                    Text("Resume from the last browsed folder, move up one level, or jump straight back to the saved base directory.")
-                }
-            }
-
-            if viewModel.isLoading {
-                Section {
-                    HStack {
-                        Spacer()
-                        ProgressView("Connecting to SMB Share")
-                            .padding(.vertical, 20)
-                        Spacer()
-                    }
-                }
-            } else if let loadErrorMessage = viewModel.loadErrorMessage {
-                Section {
-                    VStack(spacing: 16) {
-                        ContentUnavailableView(
-                            "Remote Browser Not Ready Yet",
-                            systemImage: "wifi.exclamationmark",
-                            description: Text(loadErrorMessage)
-                        )
-
-                        HStack(spacing: 12) {
-                            Button {
-                                Task {
-                                    await viewModel.load()
-                                }
-                            } label: {
-                                Label("Try Again", systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(.borderedProminent)
-
-                            if let parentPath = viewModel.parentPath {
-                                NavigationLink {
-                                    RemoteServerBrowserView(
-                                        profile: viewModel.profile,
-                                        currentPath: parentPath,
-                                        dependencies: dependencies
-                                    )
-                                } label: {
-                                    Label("Up One Level", systemImage: "arrow.up")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-
-                            if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
-                                NavigationLink {
-                                    RemoteServerBrowserView(
-                                        profile: viewModel.profile,
-                                        currentPath: viewModel.rootPath,
-                                        dependencies: dependencies
-                                    )
-                                } label: {
-                                    Label("Session Root", systemImage: "arrow.uturn.backward")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                    .padding(.vertical, 24)
-                    .frame(maxWidth: .infinity)
-                }
-            } else if viewModel.items.isEmpty {
-                Section {
-                    ContentUnavailableView(
-                        "No Remote Comics Yet",
-                        systemImage: "folder",
-                        description: Text(viewModel.summaryText)
-                    )
-                    .padding(.vertical, 24)
-                }
+        Group {
+            if displayMode == .grid {
+                gridBody
             } else {
-                if !viewModel.directories.isEmpty {
-                    Section("Folders") {
-                        ForEach(viewModel.directories) { item in
-                            NavigationLink {
-                                RemoteServerBrowserView(
-                                    profile: viewModel.profile,
-                                    currentPath: item.path,
-                                    dependencies: dependencies
-                                )
-                            } label: {
-                                RemoteDirectoryItemRow(item: item, readingSession: nil)
-                            }
-                        }
-                    }
-                }
-
-                if !viewModel.comicFiles.isEmpty {
-                    Section {
-                        ForEach(viewModel.comicFiles) { item in
-                            NavigationLink {
-                                RemoteComicLoadingView(
-                                    profile: viewModel.profile,
-                                    item: item,
-                                    dependencies: dependencies
-                                )
-                            } label: {
-                                RemoteDirectoryItemRow(
-                                    item: item,
-                                    readingSession: viewModel.progress(for: item)
-                                )
-                            }
-                        }
-                    } header: {
-                        Text("Comic Files")
-                    } footer: {
-                        if viewModel.unsupportedFileCount > 0 {
-                            Text("\(viewModel.unsupportedFileCount) unsupported remote files are hidden in this folder.")
-                        }
-                    }
-                }
+                listBody
             }
         }
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task {
-                        await viewModel.load()
+                Menu {
+                    Button {
+                        Task {
+                            await viewModel.load()
+                        }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+
+                    Section("Display") {
+                        ForEach(LibraryComicDisplayMode.allCases) { mode in
+                            Button {
+                                applyDisplayMode(mode)
+                            } label: {
+                                Label(mode.title, systemImage: mode.systemImageName)
+                            }
+                        }
+                    }
+
+                    if !viewModel.comicFiles.isEmpty {
+                        Button {
+                            Task {
+                                await viewModel.importCurrentFolderComics()
+                            }
+                        } label: {
+                            Label("Import This Folder to Library", systemImage: "square.and.arrow.down.on.square")
+                        }
                     }
                 } label: {
-                    Image(systemName: "arrow.clockwise")
+                    Image(systemName: displayMode.systemImageName)
                 }
             }
         }
@@ -699,9 +590,15 @@ struct RemoteServerBrowserView: View {
         }
         .onAppear {
             viewModel.refreshProgressState()
+            configureDisplayModeIfNeeded()
         }
         .refreshable {
             await viewModel.load()
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let activeImportDescription = viewModel.activeImportDescription {
+                RemoteBrowserImportProgressView(description: activeImportDescription)
+            }
         }
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -712,73 +609,376 @@ struct RemoteServerBrowserView: View {
         }
     }
 
-    private var summarySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(viewModel.profile.name)
-                    .font(.headline)
+    private var listBody: some View {
+        List {
+            summarySection
 
-                Text(viewModel.connectionDetailText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-
-                LabeledContent("Current Folder") {
-                    Text(viewModel.currentPathDisplayText)
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption)
-
-                HStack(spacing: 8) {
-                    StatusBadge(title: viewModel.capabilities.providerKind.title, tint: viewModel.capabilities.providerKind.tintColor)
-                    StatusBadge(title: "Browse Directories", tint: .blue)
-                    StatusBadge(title: "Single Comic Files", tint: .green)
-                }
-
-                Text("Client: \(viewModel.capabilities.plannedClientLibrary)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if !viewModel.isAtRootPath {
+                navigationSection
             }
-            .padding(.vertical, 6)
+
+            listContentSections
         }
     }
-}
 
-private struct RemoteDirectoryItemRow: View {
-    let item: RemoteDirectoryItem
-    let readingSession: RemoteComicReadingSession?
+    private var gridBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                summaryCard
 
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: item.isDirectory ? "folder.fill" : "doc.richtext.fill")
-                .foregroundStyle(item.isDirectory ? .blue : .green)
-                .frame(width: 24, height: 24)
+                if !viewModel.isAtRootPath {
+                    navigationCard
+                }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.name)
-                    .font(.body)
+                gridContentSections
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 18)
+        }
+        .background(Color(.systemGroupedBackground))
+    }
 
-                HStack(spacing: 8) {
-                    if let readingSession {
-                        Label(readingSession.progressText, systemImage: "bookmark")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(readingSession.read ? .green : .orange)
+    private var summarySection: some View {
+        Section {
+            summaryContent
+        }
+    }
+
+    private var summaryCard: some View {
+        summaryContent
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private var summaryContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(viewModel.profile.name)
+                .font(.headline)
+
+            Text(viewModel.connectionDetailText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+
+            LabeledContent("Current Folder") {
+                Text(viewModel.currentPathDisplayText)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+
+            HStack(spacing: 8) {
+                StatusBadge(title: viewModel.capabilities.providerKind.title, tint: viewModel.capabilities.providerKind.tintColor)
+                StatusBadge(title: displayMode.title, tint: .blue)
+                StatusBadge(title: "Online Read", tint: .green)
+            }
+
+            Text("Client: \(viewModel.capabilities.plannedClientLibrary)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var navigationSection: some View {
+        Section {
+            navigationLinks
+        } header: {
+            Text("Navigation")
+        } footer: {
+            Text("Resume from the last browsed folder, move up one level, or jump straight back to the saved base directory.")
+        }
+    }
+
+    private var navigationCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Navigation")
+                .font(.headline)
+
+            navigationLinks
+
+            Text("Resume from the last browsed folder, move up one level, or jump straight back to the saved base directory.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var navigationLinks: some View {
+        if let parentPath = viewModel.parentPath {
+            NavigationLink {
+                RemoteServerBrowserView(
+                    profile: viewModel.profile,
+                    currentPath: parentPath,
+                    dependencies: dependencies
+                )
+            } label: {
+                Label("Up One Level", systemImage: "arrow.up")
+            }
+        }
+
+        if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
+            NavigationLink {
+                RemoteServerBrowserView(
+                    profile: viewModel.profile,
+                    currentPath: viewModel.rootPath,
+                    dependencies: dependencies
+                )
+            } label: {
+                Label("Return to Session Root", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var listContentSections: some View {
+        if viewModel.isLoading {
+            Section {
+                HStack {
+                    Spacer()
+                    ProgressView("Connecting to SMB Share")
+                        .padding(.vertical, 20)
+                    Spacer()
+                }
+            }
+        } else if let loadErrorMessage = viewModel.loadErrorMessage {
+            Section {
+                remoteErrorContent(loadErrorMessage)
+            }
+        } else if viewModel.items.isEmpty {
+            Section {
+                ContentUnavailableView(
+                    "No Remote Comics Yet",
+                    systemImage: "folder",
+                    description: Text(viewModel.summaryText)
+                )
+                .padding(.vertical, 24)
+            }
+        } else {
+            if !viewModel.directories.isEmpty {
+                Section("Folders") {
+                    ForEach(viewModel.directories) { item in
+                        NavigationLink {
+                            RemoteServerBrowserView(
+                                profile: viewModel.profile,
+                                currentPath: item.path,
+                                dependencies: dependencies
+                            )
+                        } label: {
+                            RemoteDirectoryItemListRow(
+                                item: item,
+                                readingSession: nil,
+                                profile: viewModel.profile,
+                                browsingService: dependencies.remoteServerBrowsingService
+                            )
+                        }
                     }
+                }
+            }
 
-                    if let fileSize = item.fileSize, !item.isDirectory {
-                        Text(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+            if !viewModel.comicFiles.isEmpty {
+                Section {
+                    ForEach(viewModel.comicFiles) { item in
+                        NavigationLink {
+                            RemoteComicLoadingView(
+                                profile: viewModel.profile,
+                                item: item,
+                                dependencies: dependencies
+                            )
+                        } label: {
+                            RemoteDirectoryItemListRow(
+                                item: item,
+                                readingSession: viewModel.progress(for: item),
+                                profile: viewModel.profile,
+                                browsingService: dependencies.remoteServerBrowsingService
+                            )
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                Task {
+                                    await viewModel.importComic(item)
+                                }
+                            } label: {
+                                Label("Import", systemImage: "square.and.arrow.down")
+                            }
+                            .tint(.blue)
+                        }
                     }
-
-                    if let modifiedAt = item.modifiedAt {
-                        Text(modifiedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                } header: {
+                    Text("Comic Files")
+                } footer: {
+                    if viewModel.unsupportedFileCount > 0 {
+                        Text("\(viewModel.unsupportedFileCount) unsupported remote files are hidden in this folder.")
                     }
                 }
             }
         }
-        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var gridContentSections: some View {
+        if viewModel.isLoading {
+            HStack {
+                Spacer()
+                ProgressView("Connecting to SMB Share")
+                    .padding(.vertical, 20)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        } else if let loadErrorMessage = viewModel.loadErrorMessage {
+            remoteErrorContent(loadErrorMessage)
+                .frame(maxWidth: .infinity)
+        } else if viewModel.items.isEmpty {
+            ContentUnavailableView(
+                "No Remote Comics Yet",
+                systemImage: "folder",
+                description: Text(viewModel.summaryText)
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+        } else {
+            if !viewModel.directories.isEmpty {
+                remoteGridSection(title: "Folders", items: viewModel.directories, allowsImport: false)
+            }
+
+            if !viewModel.comicFiles.isEmpty {
+                remoteGridSection(title: "Comic Files", items: viewModel.comicFiles, allowsImport: true)
+
+                if viewModel.unsupportedFileCount > 0 {
+                    Text("\(viewModel.unsupportedFileCount) unsupported remote files are hidden in this folder.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func remoteGridSection(
+        title: String,
+        items: [RemoteDirectoryItem],
+        allowsImport: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 168, maximum: 220), spacing: 16)],
+                spacing: 16
+            ) {
+                ForEach(items) { item in
+                    NavigationLink {
+                        if item.isDirectory {
+                            RemoteServerBrowserView(
+                                profile: viewModel.profile,
+                                currentPath: item.path,
+                                dependencies: dependencies
+                            )
+                        } else {
+                            RemoteComicLoadingView(
+                                profile: viewModel.profile,
+                                item: item,
+                                dependencies: dependencies
+                            )
+                        }
+                    } label: {
+                        RemoteDirectoryGridCard(
+                            item: item,
+                            readingSession: viewModel.progress(for: item),
+                            profile: viewModel.profile,
+                            browsingService: dependencies.remoteServerBrowsingService,
+                            onImport: allowsImport ? {
+                                Task {
+                                    await viewModel.importComic(item)
+                                }
+                            } : nil
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func remoteErrorContent(_ loadErrorMessage: String) -> some View {
+        VStack(spacing: 16) {
+            ContentUnavailableView(
+                "Remote Browser Not Ready Yet",
+                systemImage: "wifi.exclamationmark",
+                description: Text(loadErrorMessage)
+            )
+
+            HStack(spacing: 12) {
+                Button {
+                    Task {
+                        await viewModel.load()
+                    }
+                } label: {
+                    Label("Try Again", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
+
+                if let parentPath = viewModel.parentPath {
+                    NavigationLink {
+                        RemoteServerBrowserView(
+                            profile: viewModel.profile,
+                            currentPath: parentPath,
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        Label("Up One Level", systemImage: "arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
+                    NavigationLink {
+                        RemoteServerBrowserView(
+                            profile: viewModel.profile,
+                            currentPath: viewModel.rootPath,
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        Label("Session Root", systemImage: "arrow.uturn.backward")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func configureDisplayModeIfNeeded() {
+        guard !hasConfiguredDisplayMode else {
+            return
+        }
+
+        hasConfiguredDisplayMode = true
+        displayMode = Self.loadStoredDisplayMode(
+            defaultMode: horizontalSizeClass == .regular ? .grid : .list
+        )
+    }
+
+    private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
+        displayMode = mode
+        Self.persistDisplayMode(mode)
+    }
+
+    private static func loadStoredDisplayMode(defaultMode: LibraryComicDisplayMode) -> LibraryComicDisplayMode {
+        let userDefaults = UserDefaults.standard
+        let storageKey = "remoteServerBrowser.displayMode"
+        if let rawValue = userDefaults.string(forKey: storageKey),
+           let mode = LibraryComicDisplayMode(rawValue: rawValue) {
+            return mode
+        }
+
+        return defaultMode
+    }
+
+    private static func persistDisplayMode(_ mode: LibraryComicDisplayMode) {
+        UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.displayMode")
     }
 }

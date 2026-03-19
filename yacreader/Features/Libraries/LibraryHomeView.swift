@@ -163,7 +163,13 @@ struct LibraryHomeView: View {
                 Button {
                     presentComicFileImporter()
                 } label: {
-                    Label("Import Comic Files", systemImage: "square.and.arrow.down")
+                    Label("Import Comic Files", systemImage: "doc.badge.plus")
+                }
+
+                Button {
+                    presentComicFolderImporter()
+                } label: {
+                    Label("Import Comic Folder", systemImage: "folder.badge.plus")
                 }
             } label: {
                 Label("Add", systemImage: "plus")
@@ -217,6 +223,10 @@ struct LibraryHomeView: View {
         queueImporterPresentation(for: .comicFiles)
     }
 
+    private func presentComicFolderImporter() {
+        queueImporterPresentation(for: .comicFolder)
+    }
+
     private var activeImportRouteBinding: Binding<Bool> {
         Binding(
             get: { activeImportRoute != nil },
@@ -231,6 +241,8 @@ struct LibraryHomeView: View {
     private var activeImportContentTypes: [UTType] {
         switch activeImportRoute {
         case .libraryFolder:
+            return [.folder]
+        case .comicFolder:
             return [.folder]
         case .comicFiles, .none:
             return [.data]
@@ -249,8 +261,12 @@ struct LibraryHomeView: View {
         }
 
         switch route {
-        case .libraryFolder, .comicFiles:
-            viewModel.importLibraries(from: urls)
+        case .libraryFolder:
+            viewModel.addLibraryFolders(from: urls)
+        case .comicFiles:
+            viewModel.importComicFiles(from: urls)
+        case .comicFolder:
+            viewModel.importComicDirectories(from: urls)
         case .none:
             viewModel.presentImportError(
                 NSError(
@@ -309,7 +325,7 @@ struct LibraryHomeView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text("Add an existing library folder, or import comic archives from Files into Imported Comics.")
+                    Text("Add an existing library folder, or import comic files and comic folders into Imported Comics.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -323,10 +339,20 @@ struct LibraryHomeView: View {
                     }
                     .buttonStyle(.bordered)
 
-                    Button {
-                        presentComicFileImporter()
+                    Menu {
+                        Button {
+                            presentComicFileImporter()
+                        } label: {
+                            Label("Import Comic Files", systemImage: "doc.badge.plus")
+                        }
+
+                        Button {
+                            presentComicFolderImporter()
+                        } label: {
+                            Label("Import Comic Folder", systemImage: "folder.badge.plus")
+                        }
                     } label: {
-                        Label("Import From Files", systemImage: "square.and.arrow.down")
+                        Label("Import Comics", systemImage: "square.and.arrow.down")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.borderedProminent)
@@ -342,7 +368,7 @@ struct LibraryHomeView: View {
                 ContentUnavailableView(
                     "No Libraries Yet",
                     systemImage: "books.vertical",
-                    description: Text("Choose a library folder, or select comic files (zip/rar/cbz/cbr/pdf) to import into Imported Comics.")
+                    description: Text("Choose a library folder, or import comic files and comic folders into Imported Comics.")
                 )
                 .padding(.vertical, 24)
             } else {
@@ -409,7 +435,7 @@ struct LibraryHomeView: View {
                 ContentUnavailableView(
                     "No Libraries Yet",
                     systemImage: "books.vertical",
-                    description: Text("Add a library folder, or import comic files into Imported Comics.")
+                    description: Text("Add a library folder, or import comic files and comic folders into Imported Comics.")
                 )
                 .padding(.vertical, 24)
             } else {
@@ -448,6 +474,7 @@ struct LibraryHomeView: View {
 private enum LibraryHomeImportRoute {
     case libraryFolder
     case comicFiles
+    case comicFolder
 }
 
 private struct LibraryRowView: View {
@@ -590,7 +617,7 @@ private struct LibraryHomeDetailPlaceholder: View {
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Import a YACReader library folder, or select comic files from Files to build your Imported Comics library."
+            return "Import a YACReader library folder, or select comic files and comic folders to build your Imported Comics library."
         }
 
         return "Keep your libraries in the sidebar, browse the folder tree on the right, and move into reading without losing navigation context."

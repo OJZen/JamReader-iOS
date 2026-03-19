@@ -10,6 +10,7 @@ struct AppDependencies {
     let libraryDatabaseWriter: LibraryDatabaseWriter
     let libraryDatabaseBootstrapper: LibraryDatabaseBootstrapper
     let libraryScanner: LibraryScanner
+    let importedComicsImportService: ImportedComicsImportService
     let comicDocumentLoader: ComicDocumentLoader
     let libraryCoverLocator: LibraryCoverLocator
     let comicInfoImportService: ComicInfoImportService
@@ -18,20 +19,29 @@ struct AppDependencies {
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
 
     static func makeDefault() -> AppDependencies {
+        let descriptorStore = LibraryDescriptorStore()
         let storageManager = LibraryStorageManager()
         let databaseWriter = LibraryDatabaseWriter()
+        let databaseBootstrapper = LibraryDatabaseBootstrapper()
+        let libraryScanner = LibraryScanner()
         let remoteServerCredentialStore = RemoteServerCredentialStore()
         let remoteReadingProgressStore = RemoteReadingProgressStore()
         return AppDependencies(
-            libraryDescriptorStore: LibraryDescriptorStore(),
+            libraryDescriptorStore: descriptorStore,
             remoteServerProfileStore: RemoteServerProfileStore(),
             remoteServerCredentialStore: remoteServerCredentialStore,
             libraryStorageManager: storageManager,
             databaseInspector: SQLiteDatabaseInspector(),
             libraryDatabaseReader: LibraryDatabaseReader(),
             libraryDatabaseWriter: databaseWriter,
-            libraryDatabaseBootstrapper: LibraryDatabaseBootstrapper(),
-            libraryScanner: LibraryScanner(),
+            libraryDatabaseBootstrapper: databaseBootstrapper,
+            libraryScanner: libraryScanner,
+            importedComicsImportService: ImportedComicsImportService(
+                store: descriptorStore,
+                storageManager: storageManager,
+                databaseBootstrapper: databaseBootstrapper,
+                libraryScanner: libraryScanner
+            ),
             comicDocumentLoader: ComicDocumentLoader(),
             libraryCoverLocator: LibraryCoverLocator(),
             comicInfoImportService: ComicInfoImportService(

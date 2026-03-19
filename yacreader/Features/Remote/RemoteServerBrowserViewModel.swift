@@ -9,6 +9,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     @Published private(set) var progressByItemID: [String: RemoteComicReadingSession] = [:]
     @Published private(set) var isLoading = false
     @Published private(set) var loadErrorMessage: String?
+    @Published private(set) var activeImportDescription: String?
     @Published var alert: RemoteAlertState?
 
     let profile: RemoteServerProfile
@@ -17,19 +18,22 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
+    private let importedComicsImportService: ImportedComicsImportService
     private var hasLoaded = false
 
     init(
         profile: RemoteServerProfile,
         currentPath: String? = nil,
         browsingService: RemoteServerBrowsingService,
-        readingProgressStore: RemoteReadingProgressStore
+        readingProgressStore: RemoteReadingProgressStore,
+        importedComicsImportService: ImportedComicsImportService
     ) {
         self.profile = profile
         self.currentPath = Self.initialPath(for: profile, explicitPath: currentPath)
         self.capabilities = browsingService.capabilities(for: profile.providerKind)
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
+        self.importedComicsImportService = importedComicsImportService
     }
 
     var navigationTitle: String {
@@ -165,6 +169,113 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         progressByItemID[item.id]
     }
 
+    func importComic(_ item: RemoteDirectoryItem) async {
+        guard item.canOpenAsComic else {
+            alert = RemoteAlertState(
+                title: "Import Unavailable",
+                message: "Only supported remote comic files can be imported."
+            )
+            return
+        }
+
+        guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+            alert = RemoteAlertState(
+                title: "Import Unavailable",
+                message: "This remote comic could not be prepared for import."
+            )
+            return
+        }
+
+        activeImportDescription = "Importing \(item.name)…"
+        defer {
+            activeImportDescription = nil
+        }
+
+        do {
+            let downloadResult = try await browsingService.downloadComicFile(
+                for: profile,
+                reference: reference
+            )
+            let importResult = try importedComicsImportService.importComicResources(
+                from: [downloadResult.localFileURL],
+                traverseDirectories: false,
+                accessSecurityScopedResources: false
+            )
+            presentImportResult(
+                importResult,
+                extraFailedItemNames: [],
+                successTitle: "Imported to Library"
+            )
+        } catch {
+            alert = RemoteAlertState(
+                title: "Failed to Import Comic",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func importCurrentFolderComics() async {
+        let comicFiles = self.comicFiles
+        guard !comicFiles.isEmpty else {
+            alert = RemoteAlertState(
+                title: "Nothing to Import",
+                message: "There are no supported comic files in this remote folder yet."
+            )
+            return
+        }
+
+        activeImportDescription = "Importing \(comicFiles.count) comics…"
+        defer {
+            activeImportDescription = nil
+        }
+
+        var downloadedFileURLs: [URL] = []
+        var failedDownloadNames: [String] = []
+
+        for item in comicFiles {
+            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+                failedDownloadNames.append(item.name)
+                continue
+            }
+
+            do {
+                let downloadResult = try await browsingService.downloadComicFile(
+                    for: profile,
+                    reference: reference
+                )
+                downloadedFileURLs.append(downloadResult.localFileURL)
+            } catch {
+                failedDownloadNames.append(item.name)
+            }
+        }
+
+        guard !downloadedFileURLs.isEmpty else {
+            alert = RemoteAlertState(
+                title: "Folder Import Failed",
+                message: "No remote comics could be downloaded for import."
+            )
+            return
+        }
+
+        do {
+            let importResult = try importedComicsImportService.importComicResources(
+                from: downloadedFileURLs,
+                traverseDirectories: false,
+                accessSecurityScopedResources: false
+            )
+            presentImportResult(
+                importResult,
+                extraFailedItemNames: failedDownloadNames,
+                successTitle: "Folder Imported to Library"
+            )
+        } catch {
+            alert = RemoteAlertState(
+                title: "Folder Import Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
     static func lastBrowsedPath(for profile: RemoteServerProfile) -> String {
         initialPath(for: profile, explicitPath: nil)
     }
@@ -231,5 +342,24 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     private static func lastBrowsedPathStorageKey(for serverID: UUID) -> String {
         "\(lastBrowsedPathKeyPrefix)\(serverID.uuidString)"
+    }
+
+    private func presentImportResult(
+        _ result: ImportedComicsImportResult,
+        extraFailedItemNames: [String],
+        successTitle: String
+    ) {
+        let messageLines = result.completionMessageLines(
+            extraFailedItemNames: extraFailedItemNames
+        )
+
+        guard !messageLines.isEmpty else {
+            return
+        }
+
+        alert = RemoteAlertState(
+            title: result.importedComicCount > 0 ? successTitle : "Import Finished with Warnings",
+            message: messageLines.joined(separator: "\n")
+        )
     }
 }
