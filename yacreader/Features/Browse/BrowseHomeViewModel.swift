@@ -52,10 +52,6 @@ final class BrowseHomeViewModel: ObservableObject {
         return "Browse remote folders directly, jump back into a comic you were reading, or import folders into your local library without leaving this tab."
     }
 
-    var canShowContinueReading: Bool {
-        continueReadingSession != nil && continueReadingProfile != nil
-    }
-
     var continueReadingSession: RemoteComicReadingSession? {
         sessions.first
     }
@@ -66,14 +62,6 @@ final class BrowseHomeViewModel: ObservableObject {
         }
 
         return profile(for: session.serverID)
-    }
-
-    var featuredBrowseProfile: RemoteServerProfile? {
-        if let continueReadingProfile {
-            return continueReadingProfile
-        }
-
-        return profiles.first
     }
 
     var serverCountText: String {
@@ -155,10 +143,6 @@ final class BrowseHomeViewModel: ObservableObject {
 
     func profile(for serverID: UUID) -> RemoteServerProfile? {
         profiles.first { $0.id == serverID }
-    }
-
-    func lastBrowsedPath(for profile: RemoteServerProfile) -> String {
-        RemoteServerBrowserViewModel.lastBrowsedPath(for: profile)
     }
 
     private func resolvedShortcutEntries(

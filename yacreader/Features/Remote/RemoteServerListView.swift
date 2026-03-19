@@ -25,7 +25,6 @@ struct RemoteServerListView: View {
     var body: some View {
         List {
             summarySection
-            continueReadingSection
 
             if viewModel.profiles.isEmpty {
                 Section {
@@ -153,6 +152,11 @@ struct RemoteServerListView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
+                Text("Browse home handles Continue Reading, Offline Shelf, and Saved Folders. This page stays focused on server setup and maintenance.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack(spacing: 8) {
                     StatusBadge(title: "SMB", tint: .blue)
                     StatusBadge(title: "Single Comic Files", tint: .green)
@@ -173,28 +177,6 @@ struct RemoteServerListView: View {
                 }
             }
             .padding(.vertical, 6)
-        }
-    }
-
-    @ViewBuilder
-    private var continueReadingSection: some View {
-        if let session = viewModel.mostRecentSession,
-           let profile = viewModel.profile(for: session.serverID) {
-            Section {
-                NavigationLink {
-                    RemoteComicLoadingView(
-                        profile: profile,
-                        item: session.directoryItem,
-                        dependencies: dependencies
-                    )
-                } label: {
-                    RemoteContinueReadingRow(session: session)
-                }
-            } header: {
-                Text("Continue Reading")
-            } footer: {
-                Text("Resume the most recent remote comic without re-browsing the SMB folder tree first.")
-            }
         }
     }
 }
@@ -241,47 +223,6 @@ private struct RemoteServerRow: View {
         }
         .padding(.vertical, 4)
         .padding(.trailing, trailingAccessoryReservedWidth)
-    }
-}
-
-private struct RemoteContinueReadingRow: View {
-    let session: RemoteComicReadingSession
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "book.closed.fill")
-                    .font(.title3)
-                    .foregroundStyle(.green)
-                    .frame(width: 28, height: 28)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(session.displayName)
-                        .font(.headline)
-
-                    Text(session.serverName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 12)
-
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.blue)
-            }
-
-            HStack(spacing: 8) {
-                StatusBadge(title: session.providerKind.title, tint: session.providerKind.tintColor)
-                StatusBadge(title: session.progressText, tint: session.read ? .green : .orange)
-            }
-
-            Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 4)
     }
 }
 
@@ -566,15 +507,6 @@ struct RemoteServerBrowserView: View {
                         Label("Refresh", systemImage: "arrow.clockwise")
                     }
 
-                    Button {
-                        viewModel.toggleCurrentFolderShortcut()
-                    } label: {
-                        Label(
-                            viewModel.isCurrentFolderSaved ? "Remove Folder Shortcut" : "Save Folder Shortcut",
-                            systemImage: viewModel.isCurrentFolderSaved ? "star.slash" : "star"
-                        )
-                    }
-
                     Section("Display") {
                         ForEach(LibraryComicDisplayMode.allCases) { mode in
                             Button {
@@ -610,7 +542,7 @@ struct RemoteServerBrowserView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: displayMode.systemImageName)
+                    Image(systemName: "ellipsis.circle")
                 }
             }
         }

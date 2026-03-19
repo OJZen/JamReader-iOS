@@ -17,11 +17,10 @@ struct BrowseHomeView: View {
             ScrollView {
                 LazyVStack(spacing: 18) {
                     heroSection
-                    quickActionsSection
                     continueReadingSection
+                    browseToolsSection
                     offlineReadySection
                     savedFoldersSection
-                    savedServersSection
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 18)
@@ -103,9 +102,9 @@ struct BrowseHomeView: View {
         }
     }
 
-    private var quickActionsSection: some View {
+    private var browseToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Quick Actions", subtitle: "Jump into the SMB flows without crowding the rest of the app.")
+            sectionHeader("Browse Tools", subtitle: "Keep the home focused on entry points. Server setup, saved folders, and offline reading each get their own destination.")
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 155, maximum: 240), spacing: 12)],
@@ -116,49 +115,40 @@ struct BrowseHomeView: View {
                 } label: {
                     ActionCard(
                         title: "Manage Servers",
-                        subtitle: "Add, edit, or clean up saved SMB servers.",
+                        subtitle: "Add, edit, or clean up saved SMB connections.",
                         systemImage: "server.rack",
                         tint: .blue
                     )
                 }
                 .buttonStyle(.plain)
 
-                if let profile = viewModel.featuredBrowseProfile {
-                    NavigationLink {
-                        RemoteServerBrowserView(
-                            profile: profile,
-                            currentPath: viewModel.lastBrowsedPath(for: profile),
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        ActionCard(
-                            title: "Open Last Folder",
-                            subtitle: profile.connectionDisplayPath,
-                            systemImage: "folder.fill",
-                            tint: .teal
-                        )
-                    }
-                    .buttonStyle(.plain)
+                NavigationLink {
+                    SavedRemoteFoldersView(dependencies: dependencies)
+                } label: {
+                    ActionCard(
+                        title: "Saved Folders",
+                        subtitle: viewModel.shortcutEntries.isEmpty
+                            ? "Pin frequently used SMB directories for one-tap access."
+                            : "\(viewModel.shortcutEntries.count) saved SMB folders are ready to open.",
+                        systemImage: "star.fill",
+                        tint: .teal
+                    )
                 }
+                .buttonStyle(.plain)
 
-                if let profile = viewModel.continueReadingProfile,
-                   let session = viewModel.continueReadingSession {
-                    NavigationLink {
-                        RemoteComicLoadingView(
-                            profile: profile,
-                            item: session.directoryItem,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        ActionCard(
-                            title: "Continue Reading",
-                            subtitle: "\(session.displayName) · \(session.progressText)",
-                            systemImage: "book.closed.fill",
-                            tint: .green
-                        )
-                    }
-                    .buttonStyle(.plain)
+                NavigationLink {
+                    RemoteOfflineShelfView(dependencies: dependencies)
+                } label: {
+                    ActionCard(
+                        title: "Offline Shelf",
+                        subtitle: viewModel.offlineReadySessions.isEmpty
+                            ? "Open downloaded remote comics without waiting for SMB."
+                            : "\(viewModel.offlineReadySessions.count) downloaded remote comics are ready offline.",
+                        systemImage: "arrow.down.circle.fill",
+                        tint: .green
+                    )
                 }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -246,7 +236,7 @@ struct BrowseHomeView: View {
         if !shortcutEntries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .top) {
-                    sectionHeader("Saved Folders", subtitle: "Keep your most-used SMB directories one tap away from the Browse home.")
+                    sectionHeader("Saved Folders", subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page.")
 
                     Spacer(minLength: 12)
 
@@ -273,56 +263,6 @@ struct BrowseHomeView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                }
-            }
-        }
-    }
-
-    private var savedServersSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Saved Servers", subtitle: "A small preview of the SMB sources you have already configured.")
-
-            if viewModel.profiles.isEmpty {
-                ContentUnavailableView(
-                    "No SMB Servers Yet",
-                    systemImage: "server.rack",
-                    description: Text("Add a server to browse remote folders, open comics directly, or import content later.")
-                )
-                .padding(.vertical, 18)
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(Array(viewModel.profiles.prefix(3))) { profile in
-                        NavigationLink {
-                            RemoteServerBrowserView(
-                                profile: profile,
-                                currentPath: viewModel.lastBrowsedPath(for: profile),
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            SavedServerCard(
-                                profile: profile,
-                                latestSession: viewModel.sessions.first { $0.serverID == profile.id }
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    NavigationLink {
-                        RemoteServerListView(dependencies: dependencies)
-                    } label: {
-                        HStack {
-                            Label("See All Servers", systemImage: "arrow.right.circle.fill")
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text("\(viewModel.profiles.count)")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -491,59 +431,6 @@ private struct ContinueReadingCard: View {
             Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
-        }
-    }
-}
-
-private struct SavedServerCard: View {
-    let profile: RemoteServerProfile
-    let latestSession: RemoteComicReadingSession?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: profile.providerKind.systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(profile.providerKind.tintColor)
-                    .frame(width: 30, height: 30)
-                    .background(profile.providerKind.tintColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.name)
-                        .font(.headline)
-
-                    Text(profile.connectionDisplayPath)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            }
-
-            HStack(spacing: 8) {
-                StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
-                StatusBadge(title: profile.authenticationMode.title, tint: profile.authenticationMode == .guest ? .orange : .green)
-            }
-
-            if let latestSession {
-                Text("\(latestSession.displayName) · \(latestSession.progressText)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
