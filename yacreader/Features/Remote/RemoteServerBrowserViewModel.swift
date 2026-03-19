@@ -79,6 +79,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         items.filter(\.canOpenAsComic)
     }
 
+    var canImportCurrentFolderRecursively: Bool {
+        !comicFiles.isEmpty || !directories.isEmpty
+    }
+
     var unsupportedFileCount: Int {
         items.reduce(into: 0) { count, item in
             if item.kind == .unsupportedFile {
@@ -214,61 +218,75 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
-    func importCurrentFolderComics() async {
-        let comicFiles = self.comicFiles
-        guard !comicFiles.isEmpty else {
+    func importDirectory(_ item: RemoteDirectoryItem) async {
+        guard item.isDirectory else {
             alert = RemoteAlertState(
-                title: "Nothing to Import",
-                message: "There are no supported comic files in this remote folder yet."
+                title: "Import Unavailable",
+                message: "Only remote folders can be imported recursively."
             )
             return
         }
 
-        activeImportDescription = "Importing \(comicFiles.count) comics…"
-        defer {
-            activeImportDescription = nil
-        }
-
-        var downloadedFileURLs: [URL] = []
-        var failedDownloadNames: [String] = []
-
-        for item in comicFiles {
-            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
-                failedDownloadNames.append(item.name)
-                continue
-            }
-
-            do {
-                let downloadResult = try await browsingService.downloadComicFile(
-                    for: profile,
-                    reference: reference
-                )
-                downloadedFileURLs.append(downloadResult.localFileURL)
-            } catch {
-                failedDownloadNames.append(item.name)
-            }
-        }
-
-        guard !downloadedFileURLs.isEmpty else {
-            alert = RemoteAlertState(
-                title: "Folder Import Failed",
-                message: "No remote comics could be downloaded for import."
-            )
-            return
-        }
-
+        activeImportDescription = "Scanning \(item.name)…"
         do {
-            let importResult = try importedComicsImportService.importComicResources(
-                from: downloadedFileURLs,
-                traverseDirectories: false,
-                accessSecurityScopedResources: false
+            let nestedComicFiles = try await browsingService.listComicFilesRecursively(
+                for: profile,
+                path: item.path
             )
-            presentImportResult(
-                importResult,
-                extraFailedItemNames: failedDownloadNames,
+            guard !nestedComicFiles.isEmpty else {
+                activeImportDescription = nil
+                alert = RemoteAlertState(
+                    title: "Nothing to Import",
+                    message: "No supported comic files were found in \(item.name) or its subfolders."
+                )
+                return
+            }
+
+            await importComicItems(
+                nestedComicFiles,
+                progressPrefix: "Importing \(item.name)",
                 successTitle: "Folder Imported to Library"
             )
         } catch {
+            activeImportDescription = nil
+            alert = RemoteAlertState(
+                title: "Folder Import Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func importCurrentFolderRecursively() async {
+        guard canImportCurrentFolderRecursively else {
+            alert = RemoteAlertState(
+                title: "Nothing to Import",
+                message: "There are no supported comic files in this remote folder or its subfolders yet."
+            )
+            return
+        }
+
+        activeImportDescription = "Scanning \(navigationTitle)…"
+        do {
+            let nestedComicFiles = try await browsingService.listComicFilesRecursively(
+                for: profile,
+                path: currentPath
+            )
+            guard !nestedComicFiles.isEmpty else {
+                activeImportDescription = nil
+                alert = RemoteAlertState(
+                    title: "Nothing to Import",
+                    message: "No supported comic files were found in this remote folder or its subfolders."
+                )
+                return
+            }
+
+            await importComicItems(
+                nestedComicFiles,
+                progressPrefix: "Importing \(navigationTitle)",
+                successTitle: "Folder Imported to Library"
+            )
+        } catch {
+            activeImportDescription = nil
             alert = RemoteAlertState(
                 title: "Folder Import Failed",
                 message: error.localizedDescription
@@ -361,5 +379,67 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             title: result.importedComicCount > 0 ? successTitle : "Import Finished with Warnings",
             message: messageLines.joined(separator: "\n")
         )
+    }
+
+    private func importComicItems(
+        _ items: [RemoteDirectoryItem],
+        progressPrefix: String,
+        successTitle: String
+    ) async {
+        let sortedItems = items.sorted { lhs, rhs in
+            lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
+        }
+
+        var downloadedFileURLs: [URL] = []
+        var failedDownloadNames: [String] = []
+
+        for (index, item) in sortedItems.enumerated() {
+            activeImportDescription = "\(progressPrefix)… \(index + 1) of \(sortedItems.count)"
+
+            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+                failedDownloadNames.append(item.name)
+                continue
+            }
+
+            do {
+                let downloadResult = try await browsingService.downloadComicFile(
+                    for: profile,
+                    reference: reference
+                )
+                downloadedFileURLs.append(downloadResult.localFileURL)
+            } catch {
+                failedDownloadNames.append(item.name)
+            }
+        }
+
+        defer {
+            activeImportDescription = nil
+        }
+
+        guard !downloadedFileURLs.isEmpty else {
+            alert = RemoteAlertState(
+                title: "Folder Import Failed",
+                message: "No remote comics could be downloaded for import."
+            )
+            return
+        }
+
+        do {
+            let importResult = try importedComicsImportService.importComicResources(
+                from: downloadedFileURLs,
+                traverseDirectories: false,
+                accessSecurityScopedResources: false
+            )
+            presentImportResult(
+                importResult,
+                extraFailedItemNames: failedDownloadNames,
+                successTitle: successTitle
+            )
+        } catch {
+            alert = RemoteAlertState(
+                title: "Folder Import Failed",
+                message: error.localizedDescription
+            )
+        }
     }
 }

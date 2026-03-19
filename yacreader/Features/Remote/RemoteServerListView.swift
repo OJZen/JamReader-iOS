@@ -571,13 +571,13 @@ struct RemoteServerBrowserView: View {
                         }
                     }
 
-                    if !viewModel.comicFiles.isEmpty {
+                    if viewModel.canImportCurrentFolderRecursively {
                         Button {
                             Task {
-                                await viewModel.importCurrentFolderComics()
+                                await viewModel.importCurrentFolderRecursively()
                             }
                         } label: {
-                            Label("Import This Folder to Library", systemImage: "square.and.arrow.down.on.square")
+                            Label("Import This Folder Recursively", systemImage: "square.and.arrow.down.on.square")
                         }
                     }
                 } label: {
@@ -774,6 +774,16 @@ struct RemoteServerBrowserView: View {
                                 browsingService: dependencies.remoteServerBrowsingService
                             )
                         }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                Task {
+                                    await viewModel.importDirectory(item)
+                                }
+                            } label: {
+                                Label("Import", systemImage: "square.and.arrow.down")
+                            }
+                            .tint(.blue)
+                        }
                     }
                 }
             }
@@ -840,11 +850,19 @@ struct RemoteServerBrowserView: View {
             .padding(.vertical, 24)
         } else {
             if !viewModel.directories.isEmpty {
-                remoteGridSection(title: "Folders", items: viewModel.directories, allowsImport: false)
+                remoteGridSection(title: "Folders", items: viewModel.directories) { item in
+                    Task {
+                        await viewModel.importDirectory(item)
+                    }
+                }
             }
 
             if !viewModel.comicFiles.isEmpty {
-                remoteGridSection(title: "Comic Files", items: viewModel.comicFiles, allowsImport: true)
+                remoteGridSection(title: "Comic Files", items: viewModel.comicFiles) { item in
+                    Task {
+                        await viewModel.importComic(item)
+                    }
+                }
 
                 if viewModel.unsupportedFileCount > 0 {
                     Text("\(viewModel.unsupportedFileCount) unsupported remote files are hidden in this folder.")
@@ -858,7 +876,7 @@ struct RemoteServerBrowserView: View {
     private func remoteGridSection(
         title: String,
         items: [RemoteDirectoryItem],
-        allowsImport: Bool
+        importAction: ((RemoteDirectoryItem) -> Void)?
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
@@ -889,11 +907,9 @@ struct RemoteServerBrowserView: View {
                             readingSession: viewModel.progress(for: item),
                             profile: viewModel.profile,
                             browsingService: dependencies.remoteServerBrowsingService,
-                            onImport: allowsImport ? {
-                                Task {
-                                    await viewModel.importComic(item)
-                                }
-                            } : nil
+                            onImport: importAction.map { action in
+                                { action(item) }
+                            }
                         )
                     }
                     .buttonStyle(.plain)

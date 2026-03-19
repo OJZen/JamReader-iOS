@@ -221,6 +221,24 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    func listComicFilesRecursively(
+        for profile: RemoteServerProfile,
+        path: String? = nil
+    ) async throws -> [RemoteDirectoryItem] {
+        guard validateProfile(profile).allSatisfy({ $0.severity != .error }) else {
+            throw RemoteServerBrowsingError.invalidProfile("The SMB server profile is incomplete.")
+        }
+
+        let requestedPath = normalizeDisplayPath(path ?? profile.normalizedBaseDirectoryPath)
+        return try await withConnectedClient(for: profile) { client in
+            try await recursivelyListComicFiles(
+                with: client,
+                for: profile,
+                displayPath: requestedPath
+            )
+        }
+    }
+
     func downloadComicFile(
         for profile: RemoteServerProfile,
         reference: RemoteComicFileReference,
@@ -402,6 +420,61 @@ final class RemoteServerBrowsingService {
                 remotePath: profile.connectionDisplayPath
             )
         }
+    }
+
+    private func recursivelyListComicFiles(
+        with client: SMBClient,
+        for profile: RemoteServerProfile,
+        displayPath: String
+    ) async throws -> [RemoteDirectoryItem] {
+        let shareRelativePath = shareRelativePath(forDisplayPath: displayPath)
+
+        let entries: [File]
+        do {
+            entries = try await client.listDirectory(path: shareRelativePath)
+        } catch {
+            throw normalizeBrowsingError(
+                error,
+                profile: profile,
+                remotePath: displayPath.isEmpty ? profile.connectionDisplayPath : displayPath
+            )
+        }
+
+        var comicFiles: [RemoteDirectoryItem] = []
+
+        for entry in entries {
+            guard !isSkippableDirectoryEntry(entry.name) else {
+                continue
+            }
+
+            let fullPath = appendPathComponent(entry.name, to: displayPath)
+            if entry.isDirectory {
+                let nestedComicFiles = try await recursivelyListComicFiles(
+                    with: client,
+                    for: profile,
+                    displayPath: fullPath
+                )
+                comicFiles.append(contentsOf: nestedComicFiles)
+                continue
+            }
+
+            guard supportsComicFile(named: entry.name) else {
+                continue
+            }
+
+            comicFiles.append(
+                classifyDirectoryEntry(
+                    named: entry.name,
+                    fullPath: fullPath,
+                    isDirectory: false,
+                    in: profile,
+                    fileSize: Int64(clamping: entry.size),
+                    modifiedAt: entry.lastWriteTime
+                )
+            )
+        }
+
+        return comicFiles
     }
 
     private func resolvedCredentials(
