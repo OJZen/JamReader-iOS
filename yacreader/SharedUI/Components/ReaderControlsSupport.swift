@@ -7,9 +7,16 @@ struct ReaderControlsContainer<Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                content()
+            VStack(spacing: 0) {
+                ReaderControlsHeader(title: title)
+
+                Form {
+                    content()
+                }
+                .scrollContentBackground(.hidden)
+                .background(Color(.systemGroupedBackground))
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -18,8 +25,42 @@ struct ReaderControlsContainer<Content: View>: View {
                 }
             }
         }
+        .presentationBackground(Color(.systemGroupedBackground))
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+}
+
+private struct ReaderControlsHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+
+                Image(systemName: "book.pages.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(width: 48, height: 48)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+
+                Text("Adjust navigation, reading layout, and library actions without leaving the page.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color(.systemGroupedBackground))
     }
 }
 

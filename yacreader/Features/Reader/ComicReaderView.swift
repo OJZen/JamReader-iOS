@@ -343,45 +343,51 @@ struct ComicReaderView: View {
             title: viewModel.navigationTitle,
             subtitle: viewModel.readerContextPositionText,
             onBack: dismiss.callAsFunction
-        ) {
-            EmptyView()
-        }
+        )
     }
 
     @ViewBuilder
     private var readerBottomBar: some View {
         if viewModel.pageIndicatorText != nil || viewModel.hasReaderNavigationContext {
-            ReaderChromeBar {
-                HStack(spacing: 16) {
-                    Button {
-                        readerSession.setChromeVisible(true)
-                        isShowingReaderControls = true
-                    } label: {
+            ReaderBottomDock {
+                Button {
+                    readerSession.setChromeVisible(true)
+                    isShowingReaderControls = true
+                } label: {
+                    ReaderChromeButtonShell {
                         Image(systemName: "slider.horizontal.3")
                             .font(.headline)
                     }
-                    .disabled(viewModel.document == nil)
+                }
+                .buttonStyle(.plain)
+                .disabled(viewModel.document == nil)
 
-                    Spacer(minLength: 0)
-
-                    Button(action: viewModel.openPreviousComic) {
-                        Image(systemName: "chevron.left")
-                            .font(.headline)
+                if let pageIndicatorText = viewModel.pageIndicatorText {
+                    Button {
+                        presentPageJump()
+                    } label: {
+                        ReaderPageIndicatorChip(text: pageIndicatorText)
                     }
-                    .disabled(!viewModel.canOpenPreviousComic)
+                    .buttonStyle(.plain)
+                }
 
-                    if let pageIndicatorText = viewModel.pageIndicatorText {
-                        ReaderChromePill {
-                            Text(pageIndicatorText)
-                                .font(.footnote.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                if viewModel.hasReaderNavigationContext {
+                    Button(action: viewModel.openPreviousComic) {
+                        ReaderChromeButtonShell {
+                            Image(systemName: "chevron.left")
+                                .font(.headline)
                         }
                     }
+                    .buttonStyle(.plain)
+                    .disabled(!viewModel.canOpenPreviousComic)
 
                     Button(action: viewModel.openNextComic) {
-                        Image(systemName: "chevron.right")
-                            .font(.headline)
+                        ReaderChromeButtonShell {
+                            Image(systemName: "chevron.right")
+                                .font(.headline)
+                        }
                     }
+                    .buttonStyle(.plain)
                     .disabled(!viewModel.canOpenNextComic)
                 }
             }

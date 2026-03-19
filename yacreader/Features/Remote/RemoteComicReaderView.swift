@@ -443,48 +443,62 @@ struct RemoteComicReaderView: View {
         ReaderTopBar(
             title: displayName,
             subtitle: nil,
-            onBack: dismiss.callAsFunction
-        ) {
-            Button {
+            onBack: dismiss.callAsFunction,
+            onTrailingAction: {
                 Task {
                     await refreshRemoteCopy()
                 }
-            } label: {
-                if isRefreshingRemoteCopy {
-                    ProgressView()
-                } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.headline)
-                }
+            },
+            isTrailingDisabled: isRefreshingRemoteCopy
+        ) {
+            if isRefreshingRemoteCopy {
+                ProgressView()
+                    .tint(.primary)
+            } else {
+                Image(systemName: "arrow.clockwise")
+                    .font(.headline)
             }
-            .disabled(isRefreshingRemoteCopy)
         }
     }
 
     @ViewBuilder
     private var readerBottomBar: some View {
         if let pageIndicatorText {
-            ReaderChromeBar {
-                HStack(spacing: 16) {
-                    Button {
-                        readerSession.apply(.setChromeVisible(true))
-                        isShowingReaderControls = true
-                    } label: {
+            ReaderBottomDock {
+                Button {
+                    readerSession.apply(.setChromeVisible(true))
+                    isShowingReaderControls = true
+                } label: {
+                    ReaderChromeButtonShell {
                         Image(systemName: "slider.horizontal.3")
                             .font(.headline)
                     }
-                    .disabled(document == nil)
+                }
+                .buttonStyle(.plain)
+                .disabled(document == nil)
 
-                    Spacer(minLength: 0)
+                Button(action: presentPageJump) {
+                    ReaderPageIndicatorChip(text: pageIndicatorText)
+                }
+                .buttonStyle(.plain)
 
-                    Button(action: presentPageJump) {
-                        ReaderChromePill {
-                            Text(pageIndicatorText)
-                                .font(.footnote.monospacedDigit())
-                                .foregroundStyle(.secondary)
+                Button {
+                    Task {
+                        await refreshRemoteCopy()
+                    }
+                } label: {
+                    ReaderChromeButtonShell {
+                        if isRefreshingRemoteCopy {
+                            ProgressView()
+                                .tint(.primary)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.headline)
                         }
                     }
                 }
+                .buttonStyle(.plain)
+                .disabled(isRefreshingRemoteCopy)
             }
         }
     }
