@@ -32,6 +32,11 @@ struct BrowseHomeView: View {
             .task {
                 await viewModel.loadIfNeeded()
             }
+            .onAppear {
+                Task {
+                    await viewModel.refreshIfLoaded()
+                }
+            }
             .refreshable {
                 await viewModel.load()
             }
@@ -240,10 +245,23 @@ struct BrowseHomeView: View {
 
         if !shortcutEntries.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Saved Folders", subtitle: "Keep your most-used SMB directories one tap away from the Browse home.")
+                HStack(alignment: .top) {
+                    sectionHeader("Saved Folders", subtitle: "Keep your most-used SMB directories one tap away from the Browse home.")
+
+                    Spacer(minLength: 12)
+
+                    NavigationLink {
+                        SavedRemoteFoldersView(dependencies: dependencies)
+                    } label: {
+                        Text("See All")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
 
                 VStack(spacing: 12) {
-                    ForEach(Array(shortcutEntries.prefix(4))) { entry in
+                    ForEach(Array(shortcutEntries.prefix(3))) { entry in
                         NavigationLink {
                             RemoteServerBrowserView(
                                 profile: entry.profile,

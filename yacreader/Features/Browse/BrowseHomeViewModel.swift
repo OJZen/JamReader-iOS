@@ -115,6 +115,14 @@ final class BrowseHomeViewModel: ObservableObject {
         await load()
     }
 
+    func refreshIfLoaded() async {
+        guard hasLoaded else {
+            return
+        }
+
+        await load()
+    }
+
     func load() async {
         guard !isLoading else {
             return

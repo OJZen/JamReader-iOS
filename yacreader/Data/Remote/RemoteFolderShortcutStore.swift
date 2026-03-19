@@ -83,6 +83,23 @@ final class RemoteFolderShortcutStore {
         try save(shortcuts)
     }
 
+    func removeShortcut(id: UUID) throws {
+        var shortcuts = try load()
+        shortcuts.removeAll { $0.id == id }
+        try save(shortcuts)
+    }
+
+    func renameShortcut(id: UUID, title: String) throws {
+        var shortcuts = try load()
+        guard let index = shortcuts.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        shortcuts[index].title = title
+        shortcuts[index].updatedAt = Date()
+        try save(shortcuts)
+    }
+
     func removeShortcuts(for serverID: UUID) throws {
         var shortcuts = try load()
         shortcuts.removeAll { $0.serverID == serverID }
