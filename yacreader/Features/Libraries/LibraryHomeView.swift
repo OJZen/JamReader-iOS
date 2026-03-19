@@ -9,8 +9,7 @@ struct LibraryHomeView: View {
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
-    @State private var isLibraryFolderImporterPresented = false
-    @State private var isComicFileImporterPresented = false
+    @State private var activeImportRoute: LibraryHomeImportRoute?
     @State private var selectedLibraryID: UUID?
     @State private var libraryActionsItem: LibraryListItem?
     @State private var renamingLibraryItem: LibraryListItem?
@@ -27,25 +26,16 @@ struct LibraryHomeView: View {
             }
         }
         .fileImporter(
-            isPresented: $isLibraryFolderImporterPresented,
-            allowedContentTypes: [.folder],
+            isPresented: activeImportRouteBinding,
+            allowedContentTypes: activeImportContentTypes,
             allowsMultipleSelection: true
         ) { result in
+            let importRoute = activeImportRoute
+            activeImportRoute = nil
+
             switch result {
             case .success(let urls):
-                viewModel.importLibraries(from: urls)
-            case .failure(let error):
-                viewModel.presentImportError(error)
-            }
-        }
-        .fileImporter(
-            isPresented: $isComicFileImporterPresented,
-            allowedContentTypes: [.data],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                viewModel.importLibraries(from: urls)
+                handleImportSelection(urls, for: importRoute)
             case .failure(let error):
                 viewModel.presentImportError(error)
             }
@@ -230,11 +220,56 @@ struct LibraryHomeView: View {
     }
 
     private func presentLibraryFolderImporter() {
-        isLibraryFolderImporterPresented = true
+        queueImporterPresentation(for: .libraryFolder)
     }
 
     private func presentComicFileImporter() {
-        isComicFileImporterPresented = true
+        queueImporterPresentation(for: .comicFiles)
+    }
+
+    private var activeImportRouteBinding: Binding<Bool> {
+        Binding(
+            get: { activeImportRoute != nil },
+            set: { isPresented in
+                if !isPresented {
+                    activeImportRoute = nil
+                }
+            }
+        )
+    }
+
+    private var activeImportContentTypes: [UTType] {
+        switch activeImportRoute {
+        case .libraryFolder:
+            return [.folder]
+        case .comicFiles, .none:
+            return [.data]
+        }
+    }
+
+    private func queueImporterPresentation(for route: LibraryHomeImportRoute) {
+        DispatchQueue.main.async {
+            activeImportRoute = route
+        }
+    }
+
+    private func handleImportSelection(_ urls: [URL], for route: LibraryHomeImportRoute?) {
+        guard !urls.isEmpty else {
+            return
+        }
+
+        switch route {
+        case .libraryFolder, .comicFiles:
+            viewModel.importLibraries(from: urls)
+        case .none:
+            viewModel.presentImportError(
+                NSError(
+                    domain: "LibraryHomeImportRoute",
+                    code: 0,
+                    userInfo: [NSLocalizedDescriptionKey: "The selected import action could not be resolved."]
+                )
+            )
+        }
     }
 
     private var overviewSection: some View {
@@ -444,6 +479,11 @@ struct LibraryHomeView: View {
         let sessions = (try? dependencies.remoteReadingProgressStore.loadSessions()) ?? []
         latestRemoteSession = sessions.first { activeServerIDs.contains($0.serverID) }
     }
+}
+
+private enum LibraryHomeImportRoute {
+    case libraryFolder
+    case comicFiles
 }
 
 private struct LibraryRowView: View {

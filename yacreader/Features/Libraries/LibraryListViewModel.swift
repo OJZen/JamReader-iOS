@@ -268,6 +268,11 @@ final class LibraryListViewModel: ObservableObject {
     }
 
     func presentImportError(_ error: Error) {
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSUserCancelledError {
+            return
+        }
+
         alert = LibraryAlertState(title: "Import Failed", message: error.localizedDescription)
     }
 
