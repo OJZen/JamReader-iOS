@@ -129,12 +129,26 @@ final class LibraryListViewModel: ObservableObject {
         )
     }
 
-    func importComicFiles(from urls: [URL]) {
-        importComicResources(from: urls, traverseDirectories: false)
+    func importComicFiles(
+        from urls: [URL],
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    ) {
+        importComicResources(
+            from: urls,
+            traverseDirectories: false,
+            destinationSelection: destinationSelection
+        )
     }
 
-    func importComicDirectories(from urls: [URL]) {
-        importComicResources(from: urls, traverseDirectories: true)
+    func importComicDirectories(
+        from urls: [URL],
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    ) {
+        importComicResources(
+            from: urls,
+            traverseDirectories: true,
+            destinationSelection: destinationSelection
+        )
     }
 
     func removeLibraries(at offsets: IndexSet) {
@@ -200,12 +214,17 @@ final class LibraryListViewModel: ObservableObject {
         alert = LibraryAlertState(title: "Import Failed", message: error.localizedDescription)
     }
 
-    private func importComicResources(from urls: [URL], traverseDirectories: Bool) {
+    private func importComicResources(
+        from urls: [URL],
+        traverseDirectories: Bool,
+        destinationSelection: LibraryImportDestinationSelection
+    ) {
         do {
             let result = try importedComicsImportService.importComicResources(
                 from: urls,
                 traverseDirectories: traverseDirectories,
-                accessSecurityScopedResources: true
+                accessSecurityScopedResources: true,
+                destinationSelection: destinationSelection
             )
             reload()
 
@@ -220,19 +239,19 @@ final class LibraryListViewModel: ObservableObject {
             var messageLines: [String] = []
 
             if result.createdLibrary {
-                messageLines.append("Added Imported Comics.")
+                messageLines.append("Added \(result.importedDestinationName).")
             }
 
             if result.importedComicCount > 0 {
                 let comicWord = result.importedComicCount == 1 ? "comic file" : "comic files"
-                messageLines.append("Imported \(result.importedComicCount) \(comicWord) into Imported Comics.")
+                messageLines.append("Imported \(result.importedComicCount) \(comicWord) into \(result.importedDestinationName).")
             }
 
             if let scanSummary = result.scanSummary {
                 messageLines.append(scanSummary.indexedSummaryLine + ".")
             } else if let scanErrorMessage = result.scanErrorMessage {
                 messageLines.append("Automatic indexing failed: \(scanErrorMessage)")
-                messageLines.append("Open Imported Comics and run Refresh to index the new files.")
+                messageLines.append("Open \(result.importedDestinationName) and run Refresh to index the new files.")
             }
 
             if !result.unsupportedItemNames.isEmpty {

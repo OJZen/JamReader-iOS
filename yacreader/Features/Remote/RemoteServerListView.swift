@@ -523,6 +523,7 @@ struct RemoteServerBrowserView: View {
     @StateObject private var viewModel: RemoteServerBrowserViewModel
     @State private var displayMode: LibraryComicDisplayMode = .list
     @State private var hasConfiguredDisplayMode = false
+    @State private var importRequest: RemoteBrowserImportRequest?
 
     init(
         profile: RemoteServerProfile,
@@ -574,9 +575,7 @@ struct RemoteServerBrowserView: View {
 
                     if viewModel.canImportCurrentFolderRecursively {
                         Button {
-                            Task {
-                                await viewModel.importCurrentFolderRecursively()
-                            }
+                            importRequest = .currentFolder
                         } label: {
                             Label("Import This Folder Recursively", systemImage: "square.and.arrow.down.on.square")
                         }
@@ -610,6 +609,18 @@ struct RemoteServerBrowserView: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .sheet(item: $importRequest) { request in
+            LibraryImportDestinationSheet(
+                title: request.destinationPickerTitle,
+                message: request.destinationPickerMessage,
+                dependencies: dependencies,
+                preferredSelection: nil
+            ) { selection in
+                Task {
+                    await performImport(request, destinationSelection: selection)
+                }
+            }
         }
     }
 
@@ -781,9 +792,7 @@ struct RemoteServerBrowserView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
-                                Task {
-                                    await viewModel.importDirectory(item)
-                                }
+                                importRequest = .directory(item)
                             } label: {
                                 Label("Import", systemImage: "square.and.arrow.down")
                             }
@@ -813,9 +822,7 @@ struct RemoteServerBrowserView: View {
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button {
-                                Task {
-                                    await viewModel.importComic(item)
-                                }
+                                importRequest = .comic(item)
                             } label: {
                                 Label("Import", systemImage: "square.and.arrow.down")
                             }
@@ -857,17 +864,13 @@ struct RemoteServerBrowserView: View {
         } else {
             if !viewModel.directories.isEmpty {
                 remoteGridSection(title: "Folders", items: viewModel.directories) { item in
-                    Task {
-                        await viewModel.importDirectory(item)
-                    }
+                    importRequest = .directory(item)
                 }
             }
 
             if !viewModel.comicFiles.isEmpty {
                 remoteGridSection(title: "Comic Files", items: viewModel.comicFiles) { item in
-                    Task {
-                        await viewModel.importComic(item)
-                    }
+                    importRequest = .comic(item)
                 }
 
                 if viewModel.unsupportedFileCount > 0 {
@@ -1084,6 +1087,20 @@ struct RemoteServerBrowserView: View {
         }
     }
 
+    private func performImport(
+        _ request: RemoteBrowserImportRequest,
+        destinationSelection: LibraryImportDestinationSelection
+    ) async {
+        switch request {
+        case .currentFolder:
+            await viewModel.importCurrentFolderRecursively(destinationSelection: destinationSelection)
+        case .directory(let item):
+            await viewModel.importDirectory(item, destinationSelection: destinationSelection)
+        case .comic(let item):
+            await viewModel.importComic(item, destinationSelection: destinationSelection)
+        }
+    }
+
     private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
         displayMode = mode
         Self.persistDisplayMode(mode)
@@ -1102,5 +1119,44 @@ struct RemoteServerBrowserView: View {
 
     private static func persistDisplayMode(_ mode: LibraryComicDisplayMode) {
         UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.displayMode")
+    }
+}
+
+private enum RemoteBrowserImportRequest: Identifiable {
+    case currentFolder
+    case directory(RemoteDirectoryItem)
+    case comic(RemoteDirectoryItem)
+
+    var id: String {
+        switch self {
+        case .currentFolder:
+            return "currentFolder"
+        case .directory(let item):
+            return "directory:\(item.id)"
+        case .comic(let item):
+            return "comic:\(item.id)"
+        }
+    }
+
+    var destinationPickerTitle: String {
+        switch self {
+        case .currentFolder:
+            return "Import Remote Folder"
+        case .directory:
+            return "Import Remote Directory"
+        case .comic:
+            return "Import Remote Comic"
+        }
+    }
+
+    var destinationPickerMessage: String {
+        switch self {
+        case .currentFolder:
+            return "Choose which local library should receive the supported comics found in this SMB folder and its subfolders."
+        case .directory(let item):
+            return "Choose which local library should receive the supported comics found in \(item.name) and its subfolders."
+        case .comic(let item):
+            return "Choose which local library should receive \(item.name)."
+        }
     }
 }

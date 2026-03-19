@@ -243,7 +243,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         cacheAvailabilityByItemID[item.id] ?? .unavailable
     }
 
-    func importComic(_ item: RemoteDirectoryItem) async {
+    func importComic(
+        _ item: RemoteDirectoryItem,
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    ) async {
         guard item.canOpenAsComic else {
             alert = RemoteAlertState(
                 title: "Import Unavailable",
@@ -273,7 +276,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             let importResult = try importedComicsImportService.importComicResources(
                 from: [downloadResult.localFileURL],
                 traverseDirectories: false,
-                accessSecurityScopedResources: false
+                accessSecurityScopedResources: false,
+                destinationSelection: destinationSelection
             )
             presentImportResult(
                 importResult,
@@ -288,7 +292,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
-    func importDirectory(_ item: RemoteDirectoryItem) async {
+    func importDirectory(
+        _ item: RemoteDirectoryItem,
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    ) async {
         guard item.isDirectory else {
             alert = RemoteAlertState(
                 title: "Import Unavailable",
@@ -315,7 +322,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             await importComicItems(
                 nestedComicFiles,
                 progressPrefix: "Importing \(item.name)",
-                successTitle: "Folder Imported to Library"
+                successTitle: "Folder Imported to Library",
+                destinationSelection: destinationSelection
             )
         } catch {
             activeImportDescription = nil
@@ -326,7 +334,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
-    func importCurrentFolderRecursively() async {
+    func importCurrentFolderRecursively(
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    ) async {
         guard canImportCurrentFolderRecursively else {
             alert = RemoteAlertState(
                 title: "Nothing to Import",
@@ -353,7 +363,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             await importComicItems(
                 nestedComicFiles,
                 progressPrefix: "Importing \(navigationTitle)",
-                successTitle: "Folder Imported to Library"
+                successTitle: "Folder Imported to Library",
+                destinationSelection: destinationSelection
             )
         } catch {
             activeImportDescription = nil
@@ -508,7 +519,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private func importComicItems(
         _ items: [RemoteDirectoryItem],
         progressPrefix: String,
-        successTitle: String
+        successTitle: String,
+        destinationSelection: LibraryImportDestinationSelection
     ) async {
         let sortedItems = items.sorted { lhs, rhs in
             lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
@@ -552,7 +564,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             let importResult = try importedComicsImportService.importComicResources(
                 from: downloadedFileURLs,
                 traverseDirectories: false,
-                accessSecurityScopedResources: false
+                accessSecurityScopedResources: false,
+                destinationSelection: destinationSelection
             )
             presentImportResult(
                 importResult,

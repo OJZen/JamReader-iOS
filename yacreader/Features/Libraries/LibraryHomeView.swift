@@ -9,6 +9,8 @@ struct LibraryHomeView: View {
     let dependencies: AppDependencies
 
     @State private var activeImportRoute: LibraryHomeImportRoute?
+    @State private var importDestinationRoute: LibraryHomeImportRoute?
+    @State private var pendingImportDestinationSelection: LibraryImportDestinationSelection = .importedComics
     @State private var selectedLibraryID: UUID?
     @State private var libraryActionsItem: LibraryListItem?
     @State private var renamingLibraryItem: LibraryListItem?
@@ -71,6 +73,17 @@ struct LibraryHomeView: View {
         }
         .sheet(item: $libraryInfoItem) { item in
             LibraryInfoSheet(item: item)
+        }
+        .sheet(item: $importDestinationRoute) { route in
+            LibraryImportDestinationSheet(
+                title: route.destinationPickerTitle,
+                message: route.destinationPickerMessage,
+                dependencies: dependencies,
+                preferredSelection: preferredImportDestinationSelection
+            ) { selection in
+                pendingImportDestinationSelection = selection
+                queueImporterPresentation(for: route)
+            }
         }
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -220,11 +233,11 @@ struct LibraryHomeView: View {
     }
 
     private func presentComicFileImporter() {
-        queueImporterPresentation(for: .comicFiles)
+        importDestinationRoute = .comicFiles
     }
 
     private func presentComicFolderImporter() {
-        queueImporterPresentation(for: .comicFolder)
+        importDestinationRoute = .comicFolder
     }
 
     private var activeImportRouteBinding: Binding<Bool> {
@@ -236,6 +249,18 @@ struct LibraryHomeView: View {
                 }
             }
         )
+    }
+
+    private var preferredImportDestinationSelection: LibraryImportDestinationSelection? {
+        if let selectedLibraryID {
+            return .library(selectedLibraryID)
+        }
+
+        if let resumeLibraryItem {
+            return .library(resumeLibraryItem.id)
+        }
+
+        return .importedComics
     }
 
     private var activeImportContentTypes: [UTType] {
@@ -264,9 +289,15 @@ struct LibraryHomeView: View {
         case .libraryFolder:
             viewModel.addLibraryFolders(from: urls)
         case .comicFiles:
-            viewModel.importComicFiles(from: urls)
+            viewModel.importComicFiles(
+                from: urls,
+                destinationSelection: pendingImportDestinationSelection
+            )
         case .comicFolder:
-            viewModel.importComicDirectories(from: urls)
+            viewModel.importComicDirectories(
+                from: urls,
+                destinationSelection: pendingImportDestinationSelection
+            )
         case .none:
             viewModel.presentImportError(
                 NSError(
@@ -325,7 +356,7 @@ struct LibraryHomeView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text("Add an existing library folder, or import comic files and comic folders into Imported Comics.")
+                    Text("Add an existing library folder, or import comic files and comic folders into any local library.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -365,11 +396,11 @@ struct LibraryHomeView: View {
     private var compactLibrariesSection: some View {
         Section("Libraries") {
             if viewModel.items.isEmpty {
-                ContentUnavailableView(
-                    "No Libraries Yet",
-                    systemImage: "books.vertical",
-                    description: Text("Choose a library folder, or import comic files and comic folders into Imported Comics.")
-                )
+                    ContentUnavailableView(
+                        "No Libraries Yet",
+                        systemImage: "books.vertical",
+                        description: Text("Choose a library folder, or import comic files and comic folders into a local library.")
+                    )
                 .padding(.vertical, 24)
             } else {
                 ForEach(viewModel.items) { item in
@@ -432,11 +463,11 @@ struct LibraryHomeView: View {
     private var splitLibrariesSection: some View {
         Section("Libraries") {
             if viewModel.items.isEmpty {
-                ContentUnavailableView(
-                    "No Libraries Yet",
-                    systemImage: "books.vertical",
-                    description: Text("Add a library folder, or import comic files and comic folders into Imported Comics.")
-                )
+                    ContentUnavailableView(
+                        "No Libraries Yet",
+                        systemImage: "books.vertical",
+                        description: Text("Add a library folder, or import comic files and comic folders into a local library.")
+                    )
                 .padding(.vertical, 24)
             } else {
                 ForEach(viewModel.items) { item in
@@ -471,10 +502,43 @@ struct LibraryHomeView: View {
     }
 }
 
-private enum LibraryHomeImportRoute {
+private enum LibraryHomeImportRoute: Identifiable {
     case libraryFolder
     case comicFiles
     case comicFolder
+
+    var id: String {
+        switch self {
+        case .libraryFolder:
+            return "libraryFolder"
+        case .comicFiles:
+            return "comicFiles"
+        case .comicFolder:
+            return "comicFolder"
+        }
+    }
+
+    var destinationPickerTitle: String {
+        switch self {
+        case .libraryFolder:
+            return "Choose Import Destination"
+        case .comicFiles:
+            return "Import Comic Files"
+        case .comicFolder:
+            return "Import Comic Folder"
+        }
+    }
+
+    var destinationPickerMessage: String {
+        switch self {
+        case .libraryFolder:
+            return "Choose where imported comics should be copied."
+        case .comicFiles:
+            return "Choose which local library should receive the selected comic files."
+        case .comicFolder:
+            return "Choose which local library should receive the comic files found in the selected folder."
+        }
+    }
 }
 
 private struct LibraryRowView: View {

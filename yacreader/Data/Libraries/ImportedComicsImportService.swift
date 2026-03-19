@@ -1,6 +1,7 @@
 import Foundation
 
 struct ImportedComicsImportResult {
+    let importedDestinationName: String
     let createdLibrary: Bool
     let importedComicCount: Int
     let scanSummary: LibraryScanSummary?
@@ -12,10 +13,7 @@ struct ImportedComicsImportResult {
         importedComicCount > 0
     }
 
-    func completionMessageLines(
-        importedDestinationName: String = "Imported Comics",
-        extraFailedItemNames: [String] = []
-    ) -> [String] {
+    func completionMessageLines(extraFailedItemNames: [String] = []) -> [String] {
         var messageLines: [String] = []
 
         if createdLibrary {
@@ -88,43 +86,49 @@ final class ImportedComicsImportService {
     func importComicResources(
         from urls: [URL],
         traverseDirectories: Bool,
-        accessSecurityScopedResources: Bool
+        accessSecurityScopedResources: Bool,
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
     ) throws -> ImportedComicsImportResult {
         var descriptors = try store.load()
-        let importedLibraryResolution = try ensureImportedComicsLibrary(in: &descriptors)
-        let destinationDirectoryURL = URL(
-            fileURLWithPath: importedLibraryResolution.descriptor.sourcePath,
-            isDirectory: true
+        let destinationResolution = try resolveDestinationLibrary(
+            in: &descriptors,
+            selection: destinationSelection
         )
-
-        if !fileManager.fileExists(atPath: destinationDirectoryURL.path) {
-            try fileManager.createDirectory(
-                at: destinationDirectoryURL,
-                withIntermediateDirectories: true
-            )
-        }
+        let destinationAccessSession = try storageManager.makeAccessSession(
+            for: destinationResolution.descriptor
+        )
+        let destinationDirectoryURL = destinationAccessSession.sourceURL.standardizedFileURL
 
         var importedComicCount = 0
         var unsupportedItemNames: [String] = []
         var failedItemNames: [String] = []
 
-        for url in urls {
-            try importResource(
-                at: url.standardizedFileURL,
-                into: destinationDirectoryURL,
-                traverseDirectories: traverseDirectories,
-                accessSecurityScopedResources: accessSecurityScopedResources,
-                importedComicCount: &importedComicCount,
-                unsupportedItemNames: &unsupportedItemNames,
-                failedItemNames: &failedItemNames
-            )
+        try withExtendedLifetime(destinationAccessSession) {
+            if !fileManager.fileExists(atPath: destinationDirectoryURL.path) {
+                try fileManager.createDirectory(
+                    at: destinationDirectoryURL,
+                    withIntermediateDirectories: true
+                )
+            }
+
+            for url in urls {
+                try importResource(
+                    at: url.standardizedFileURL,
+                    into: destinationDirectoryURL,
+                    traverseDirectories: traverseDirectories,
+                    accessSecurityScopedResources: accessSecurityScopedResources,
+                    importedComicCount: &importedComicCount,
+                    unsupportedItemNames: &unsupportedItemNames,
+                    failedItemNames: &failedItemNames
+                )
+            }
         }
 
         let scanSummary: LibraryScanSummary?
         let scanErrorMessage: String?
         if importedComicCount > 0 {
             do {
-                scanSummary = try ensureIndexedLibrary(for: importedLibraryResolution.descriptor)
+                scanSummary = try ensureIndexedLibrary(for: destinationResolution.descriptor)
                 scanErrorMessage = nil
             } catch {
                 scanSummary = nil
@@ -136,13 +140,72 @@ final class ImportedComicsImportService {
         }
 
         return ImportedComicsImportResult(
-            createdLibrary: importedLibraryResolution.wasCreated,
+            importedDestinationName: destinationResolution.descriptor.name,
+            createdLibrary: destinationResolution.wasCreated,
             importedComicCount: importedComicCount,
             scanSummary: scanSummary,
             scanErrorMessage: scanErrorMessage,
             unsupportedItemNames: unsupportedItemNames.sorted(),
             failedItemNames: failedItemNames.sorted()
         )
+    }
+
+    func availableDestinationOptions() throws -> [LibraryImportDestinationOption] {
+        let descriptors = try store.load()
+        let importedComicsRootPath = try storageManager
+            .ensureImportedComicsLibraryRootURL()
+            .standardizedFileURL
+            .path
+        let sortedDescriptors = descriptors.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+
+        var options: [LibraryImportDestinationOption] = [
+            LibraryImportDestinationOption(
+                selection: .importedComics,
+                title: importedComicsLibraryName,
+                subtitle: "Managed import library. It will be created automatically if needed.",
+                detail: nil
+            )
+        ]
+
+        options.append(
+            contentsOf: sortedDescriptors
+                .filter { $0.sourcePath != importedComicsRootPath }
+                .map { descriptor in
+                LibraryImportDestinationOption(
+                    selection: .library(descriptor.id),
+                    title: descriptor.name,
+                    subtitle: "Copy imported comics into this library and refresh it automatically.",
+                    detail: descriptor.sourcePath
+                )
+            }
+        )
+
+        return options
+    }
+
+    private func resolveDestinationLibrary(
+        in descriptors: inout [LibraryDescriptor]
+        ,
+        selection: LibraryImportDestinationSelection
+    ) throws -> (descriptor: LibraryDescriptor, wasCreated: Bool) {
+        switch selection {
+        case .importedComics:
+            return try ensureImportedComicsLibrary(in: &descriptors)
+        case .library(let libraryID):
+            guard let descriptor = descriptors.first(where: { $0.id == libraryID }) else {
+                throw NSError(
+                    domain: "LibraryImportDestinationSelection",
+                    code: 1,
+                    userInfo: [
+                        NSLocalizedDescriptionKey: "The selected destination library is no longer available."
+                    ]
+                )
+            }
+
+            return (descriptor, false)
+        }
     }
 
     private func ensureImportedComicsLibrary(
