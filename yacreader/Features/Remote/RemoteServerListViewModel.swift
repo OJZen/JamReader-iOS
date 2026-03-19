@@ -58,7 +58,6 @@ struct RemoteServerEditorDraft: Identifiable {
 @MainActor
 final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
-    @Published private(set) var mostRecentSession: RemoteComicReadingSession?
     @Published private(set) var latestSessionsByServerID: [UUID: RemoteComicReadingSession] = [:]
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
     @Published var alert: RemoteAlertState?
@@ -329,15 +328,9 @@ final class RemoteServerListViewModel: ObservableObject {
 
             result[session.serverID] = session
         }
-
-        mostRecentSession = allSessions.first { activeServerIDs.contains($0.serverID) }
     }
 
     func latestSession(for profile: RemoteServerProfile) -> RemoteComicReadingSession? {
         latestSessionsByServerID[profile.id]
-    }
-
-    func profile(for serverID: UUID) -> RemoteServerProfile? {
-        profiles.first { $0.id == serverID }
     }
 }

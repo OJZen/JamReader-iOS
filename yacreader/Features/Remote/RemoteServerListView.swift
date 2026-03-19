@@ -499,14 +499,6 @@ struct RemoteServerBrowserView: View {
                 }
 
                 Menu {
-                    Button {
-                        Task {
-                            await viewModel.load()
-                        }
-                    } label: {
-                        Label("Refresh", systemImage: "arrow.clockwise")
-                    }
-
                     Section("Display") {
                         ForEach(LibraryComicDisplayMode.allCases) { mode in
                             Button {
@@ -531,14 +523,6 @@ struct RemoteServerBrowserView: View {
                                     }
                                 }
                             }
-                        }
-                    }
-
-                    if viewModel.canImportCurrentFolderRecursively {
-                        Button {
-                            importRequest = .currentFolder
-                        } label: {
-                            Label("Import From This Folder", systemImage: "square.and.arrow.down.on.square")
                         }
                     }
                 } label: {
@@ -614,11 +598,6 @@ struct RemoteServerBrowserView: View {
     private var listBody: some View {
         List {
             summarySection
-
-            if !viewModel.isAtRootPath {
-                navigationSection
-            }
-
             listContentSections
         }
     }
@@ -627,11 +606,6 @@ struct RemoteServerBrowserView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 summaryCard
-
-                if !viewModel.isAtRootPath {
-                    navigationCard
-                }
-
                 gridContentSections
             }
             .padding(.horizontal, 16)
@@ -689,58 +663,28 @@ struct RemoteServerBrowserView: View {
             Text("Client: \(viewModel.capabilities.plannedClientLibrary)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        }
-    }
 
-    private var navigationSection: some View {
-        Section {
-            navigationLinks
-        } header: {
-            Text("Navigation")
-        } footer: {
-            Text("Resume from the last browsed folder, move up one level, or jump straight back to the saved base directory.")
-        }
-    }
+            if showsFolderActionCluster {
+                Divider()
+                    .padding(.vertical, 2)
 
-    private var navigationCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Navigation")
-                .font(.headline)
+                Text("Folder Actions")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
 
-            navigationLinks
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) {
+                        upOneLevelButton
+                        sessionRootButton
+                        importCurrentFolderButton
+                    }
 
-            Text("Resume from the last browsed folder, move up one level, or jump straight back to the saved base directory.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var navigationLinks: some View {
-        if let parentPath = viewModel.parentPath {
-            NavigationLink {
-                RemoteServerBrowserView(
-                    profile: viewModel.profile,
-                    currentPath: parentPath,
-                    dependencies: dependencies
-                )
-            } label: {
-                Label("Up One Level", systemImage: "arrow.up")
-            }
-        }
-
-        if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
-            NavigationLink {
-                RemoteServerBrowserView(
-                    profile: viewModel.profile,
-                    currentPath: viewModel.rootPath,
-                    dependencies: dependencies
-                )
-            } label: {
-                Label("Return to Session Root", systemImage: "arrow.up.left.and.arrow.down.right")
+                    VStack(alignment: .leading, spacing: 10) {
+                        upOneLevelButton
+                        sessionRootButton
+                        importCurrentFolderButton
+                    }
+                }
             }
         }
     }
@@ -1033,6 +977,10 @@ struct RemoteServerBrowserView: View {
         }
     }
 
+    private var showsFolderActionCluster: Bool {
+        viewModel.parentPath != nil || viewModel.canImportCurrentFolderRecursively
+    }
+
     @ViewBuilder
     private var upOneLevelButton: some View {
         if let parentPath = viewModel.parentPath {
@@ -1044,6 +992,18 @@ struct RemoteServerBrowserView: View {
                 )
             } label: {
                 Label("Up One Level", systemImage: "arrow.up")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var importCurrentFolderButton: some View {
+        if viewModel.canImportCurrentFolderRecursively {
+            Button {
+                importRequest = .currentFolder
+            } label: {
+                Label("Import This Folder", systemImage: "square.and.arrow.down.on.square")
             }
             .buttonStyle(.bordered)
         }
