@@ -288,6 +288,38 @@ final class RemoteComicThumbnailPipeline {
         try fileManager.removeItem(at: thumbnailCacheRootURL)
     }
 
+    func preheat(
+        for profile: RemoteServerProfile,
+        items: [RemoteDirectoryItem],
+        browsingService: RemoteServerBrowsingService,
+        maxPixelSize: Int,
+        limit: Int
+    ) {
+        let candidates = Array(items.filter(\.canOpenAsComic).prefix(max(0, limit)))
+        guard !candidates.isEmpty else {
+            return
+        }
+
+        Task(priority: .utility) { [weak self] in
+            guard let self else {
+                return
+            }
+
+            for item in candidates {
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                _ = await self.image(
+                    for: profile,
+                    item: item,
+                    browsingService: browsingService,
+                    maxPixelSize: maxPixelSize
+                )
+            }
+        }
+    }
+
     private static func cacheKey(
         for reference: RemoteComicFileReference,
         maxPixelSize: Int

@@ -515,6 +515,7 @@ private struct RemoteServerEditorSheet: View {
 }
 
 struct RemoteServerBrowserView: View {
+    @Environment(\.displayScale) private var displayScale
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -587,6 +588,9 @@ struct RemoteServerBrowserView: View {
         }
         .task {
             await viewModel.loadIfNeeded()
+        }
+        .task(id: thumbnailPreheatRequestID) {
+            preheatVisibleThumbnails()
         }
         .onAppear {
             viewModel.refreshProgressState()
@@ -743,9 +747,9 @@ struct RemoteServerBrowserView: View {
                     Spacer()
                 }
             }
-        } else if let loadErrorMessage = viewModel.loadErrorMessage {
+        } else if viewModel.loadIssue != nil {
             Section {
-                remoteErrorContent(loadErrorMessage)
+                remoteErrorContent()
             }
         } else if viewModel.items.isEmpty {
             Section {
@@ -837,8 +841,8 @@ struct RemoteServerBrowserView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-        } else if let loadErrorMessage = viewModel.loadErrorMessage {
-            remoteErrorContent(loadErrorMessage)
+        } else if viewModel.loadIssue != nil {
+            remoteErrorContent()
                 .frame(maxWidth: .infinity)
         } else if viewModel.items.isEmpty {
             ContentUnavailableView(
@@ -918,53 +922,126 @@ struct RemoteServerBrowserView: View {
         }
     }
 
-    private func remoteErrorContent(_ loadErrorMessage: String) -> some View {
-        VStack(spacing: 16) {
+    private func remoteErrorContent() -> some View {
+        let loadIssue = viewModel.loadIssue
+
+        return VStack(alignment: .leading, spacing: 16) {
             ContentUnavailableView(
-                "Remote Browser Not Ready Yet",
+                loadIssue?.title ?? "Remote Browser Not Ready Yet",
                 systemImage: "wifi.exclamationmark",
-                description: Text(loadErrorMessage)
+                description: Text(loadIssue?.message ?? "The remote folder could not be opened.")
             )
 
-            HStack(spacing: 12) {
-                Button {
-                    Task {
-                        await viewModel.load()
-                    }
-                } label: {
-                    Label("Try Again", systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.borderedProminent)
+            if let recoverySuggestion = loadIssue?.recoverySuggestion {
+                Label(recoverySuggestion, systemImage: "lightbulb")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
 
-                if let parentPath = viewModel.parentPath {
-                    NavigationLink {
-                        RemoteServerBrowserView(
-                            profile: viewModel.profile,
-                            currentPath: parentPath,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        Label("Up One Level", systemImage: "arrow.up")
+            VStack(alignment: .leading, spacing: 12) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        retryButton
+                        manageServersButton(loadIssue: loadIssue)
+                        continueReadingButton
                     }
-                    .buttonStyle(.bordered)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        retryButton
+                        manageServersButton(loadIssue: loadIssue)
+                        continueReadingButton
+                    }
                 }
 
-                if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
-                    NavigationLink {
-                        RemoteServerBrowserView(
-                            profile: viewModel.profile,
-                            currentPath: viewModel.rootPath,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        Label("Session Root", systemImage: "arrow.uturn.backward")
+                if loadIssue?.prefersPathRecoveryActions == true {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) {
+                            upOneLevelButton
+                            sessionRootButton
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            upOneLevelButton
+                            sessionRootButton
+                        }
                     }
-                    .buttonStyle(.bordered)
                 }
             }
         }
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
+    }
+
+    private var retryButton: some View {
+        Button {
+            Task {
+                await viewModel.load()
+            }
+        } label: {
+            Label("Try Again", systemImage: "arrow.clockwise")
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
+    @ViewBuilder
+    private func manageServersButton(loadIssue: RemoteBrowserLoadIssue?) -> some View {
+        if loadIssue?.showsManageServersAction == true {
+            NavigationLink {
+                RemoteServerListView(dependencies: dependencies)
+            } label: {
+                Label("Manage Servers", systemImage: "slider.horizontal.3")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var continueReadingButton: some View {
+        if let recoverySession = viewModel.recoverySession,
+           let loadIssue = viewModel.loadIssue,
+           loadIssue.allowsOfflineRecovery {
+            NavigationLink {
+                RemoteComicLoadingView(
+                    profile: viewModel.profile,
+                    item: recoverySession.directoryItem,
+                    dependencies: dependencies
+                )
+            } label: {
+                Label("Open Last Comic", systemImage: "book.closed")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var upOneLevelButton: some View {
+        if let parentPath = viewModel.parentPath {
+            NavigationLink {
+                RemoteServerBrowserView(
+                    profile: viewModel.profile,
+                    currentPath: parentPath,
+                    dependencies: dependencies
+                )
+            } label: {
+                Label("Up One Level", systemImage: "arrow.up")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var sessionRootButton: some View {
+        if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
+            NavigationLink {
+                RemoteServerBrowserView(
+                    profile: viewModel.profile,
+                    currentPath: viewModel.rootPath,
+                    dependencies: dependencies
+                )
+            } label: {
+                Label("Session Root", systemImage: "arrow.uturn.backward")
+            }
+            .buttonStyle(.bordered)
+        }
     }
 
     private func configureDisplayModeIfNeeded() {
@@ -975,6 +1052,29 @@ struct RemoteServerBrowserView: View {
         hasConfiguredDisplayMode = true
         displayMode = Self.loadStoredDisplayMode(
             defaultMode: horizontalSizeClass == .regular ? .grid : .list
+        )
+    }
+
+    private var thumbnailPreheatRequestID: String {
+        let candidateIDs = viewModel.comicFiles.prefix(displayMode == .grid ? 18 : 12).map(\.id).joined(separator: "|")
+        return "\(viewModel.profile.id.uuidString)#\(displayMode.rawValue)#\(Int(displayScale * 100))#\(candidateIDs)"
+    }
+
+    private func preheatVisibleThumbnails() {
+        guard !viewModel.isLoading, !viewModel.comicFiles.isEmpty else {
+            return
+        }
+
+        let maxDimension: CGFloat = displayMode == .grid ? 208 : 76
+        let maxPixelSize = Int(maxDimension * max(displayScale, 1))
+        let limit = displayMode == .grid ? 18 : 12
+
+        RemoteComicThumbnailPipeline.shared.preheat(
+            for: viewModel.profile,
+            items: viewModel.comicFiles,
+            browsingService: dependencies.remoteServerBrowsingService,
+            maxPixelSize: maxPixelSize,
+            limit: limit
         )
     }
 

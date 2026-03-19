@@ -1,14 +1,58 @@
 import Combine
 import Foundation
 
+struct RemoteBrowserLoadIssue: Hashable {
+    enum Kind: Hashable {
+        case authentication
+        case connection
+        case shareUnavailable
+        case remotePathUnavailable
+        case accessDenied
+        case generic
+    }
+
+    let kind: Kind
+    let title: String
+    let message: String
+    let recoverySuggestion: String
+
+    var showsManageServersAction: Bool {
+        switch kind {
+        case .authentication, .shareUnavailable, .accessDenied:
+            return true
+        case .connection, .remotePathUnavailable, .generic:
+            return false
+        }
+    }
+
+    var prefersPathRecoveryActions: Bool {
+        switch kind {
+        case .remotePathUnavailable, .accessDenied:
+            return true
+        case .authentication, .connection, .shareUnavailable, .generic:
+            return false
+        }
+    }
+
+    var allowsOfflineRecovery: Bool {
+        switch kind {
+        case .connection, .shareUnavailable, .authentication, .generic:
+            return true
+        case .remotePathUnavailable, .accessDenied:
+            return false
+        }
+    }
+}
+
 @MainActor
 final class RemoteServerBrowserViewModel: ObservableObject {
     private static let lastBrowsedPathKeyPrefix = "remoteServerBrowser.lastPath."
 
     @Published private(set) var items: [RemoteDirectoryItem] = []
     @Published private(set) var progressByItemID: [String: RemoteComicReadingSession] = [:]
+    @Published private(set) var recentSessions: [RemoteComicReadingSession] = []
     @Published private(set) var isLoading = false
-    @Published private(set) var loadErrorMessage: String?
+    @Published private(set) var loadIssue: RemoteBrowserLoadIssue?
     @Published private(set) var activeImportDescription: String?
     @Published var alert: RemoteAlertState?
 
@@ -92,8 +136,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     var summaryText: String {
-        if let loadErrorMessage {
-            return loadErrorMessage
+        if let loadIssue {
+            return loadIssue.message
         }
 
         if items.isEmpty {
@@ -113,6 +157,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     var connectionDetailText: String {
         profile.connectionDisplayPath
+    }
+
+    var loadErrorMessage: String? {
+        loadIssue?.message
+    }
+
+    var recoverySession: RemoteComicReadingSession? {
+        recentSessions.first
     }
 
     func loadIfNeeded() async {
@@ -147,12 +199,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
             refreshProgressState()
-            loadErrorMessage = nil
+            recentSessions = recentSessionsForProfile()
+            loadIssue = nil
             Self.rememberLastBrowsedPath(currentPath, for: profile)
         } catch {
             items = []
             progressByItemID = [:]
-            loadErrorMessage = error.localizedDescription
+            recentSessions = recentSessionsForProfile()
+            loadIssue = makeLoadIssue(from: error)
         }
     }
 
@@ -379,6 +433,60 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             title: result.importedComicCount > 0 ? successTitle : "Import Finished with Warnings",
             message: messageLines.joined(separator: "\n")
         )
+    }
+
+    private func recentSessionsForProfile() -> [RemoteComicReadingSession] {
+        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.serverID == profile.id }
+    }
+
+    private func makeLoadIssue(from error: Error) -> RemoteBrowserLoadIssue {
+        let normalizedError = error as? RemoteServerBrowsingError
+
+        switch normalizedError {
+        case .authenticationFailed:
+            return RemoteBrowserLoadIssue(
+                kind: .authentication,
+                title: "Sign-in Failed",
+                message: error.localizedDescription,
+                recoverySuggestion: "Open the server settings and verify the username or password, then try again."
+            )
+        case .connectionFailed:
+            return RemoteBrowserLoadIssue(
+                kind: .connection,
+                title: "Server Unreachable",
+                message: error.localizedDescription,
+                recoverySuggestion: "Make sure this device can reach the SMB server on the current network. You can still try opening a recently cached comic below."
+            )
+        case .shareUnavailable:
+            return RemoteBrowserLoadIssue(
+                kind: .shareUnavailable,
+                title: "Share Unavailable",
+                message: error.localizedDescription,
+                recoverySuggestion: "The share name may have changed or gone offline. Review the saved SMB server settings, then refresh."
+            )
+        case .remotePathUnavailable:
+            return RemoteBrowserLoadIssue(
+                kind: .remotePathUnavailable,
+                title: "Folder Not Found",
+                message: error.localizedDescription,
+                recoverySuggestion: "This folder may have been moved or deleted on the server. Try going up one level or return to the saved root folder."
+            )
+        case .accessDenied:
+            return RemoteBrowserLoadIssue(
+                kind: .accessDenied,
+                title: "Access Denied",
+                message: error.localizedDescription,
+                recoverySuggestion: "The current credentials or permissions do not allow this folder. Try a different location or review the saved SMB server settings."
+            )
+        case .invalidProfile, .providerIntegrationUnavailable, .unsupportedComicFile,
+             .missingCredentials, .cacheMaintenanceFailed, .operationFailed, .none:
+            return RemoteBrowserLoadIssue(
+                kind: .generic,
+                title: "Remote Browser Not Ready Yet",
+                message: error.localizedDescription,
+                recoverySuggestion: "Try refreshing this folder again. If the problem keeps coming back, return to the SMB server list and review the saved connection."
+            )
+        }
     }
 
     private func importComicItems(
