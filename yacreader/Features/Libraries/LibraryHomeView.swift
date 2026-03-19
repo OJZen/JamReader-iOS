@@ -3,7 +3,6 @@ import UniformTypeIdentifiers
 
 struct LibraryHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.scenePhase) private var scenePhase
 
     @AppStorage("libraryHome.selectedLibraryID") private var storedSelectedLibraryID = ""
     @ObservedObject var viewModel: LibraryListViewModel
@@ -15,7 +14,6 @@ struct LibraryHomeView: View {
     @State private var renamingLibraryItem: LibraryListItem?
     @State private var libraryInfoItem: LibraryListItem?
     @State private var pendingLibraryAction: PendingLibraryAction?
-    @State private var latestRemoteSession: RemoteComicReadingSession?
 
     var body: some View {
         Group {
@@ -43,18 +41,12 @@ struct LibraryHomeView: View {
         .onAppear {
             viewModel.reload()
             synchronizeSelection()
-            refreshRemoteAccessSummary()
         }
         .onChange(of: viewModel.items) { _, _ in
             synchronizeSelection()
         }
         .onChange(of: selectedLibraryID) { _, newValue in
             storedSelectedLibraryID = newValue?.uuidString ?? ""
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                refreshRemoteAccessSummary()
-            }
         }
         .sheet(item: $libraryActionsItem) { item in
             LibraryHomeLibraryActionsSheet(
@@ -110,10 +102,9 @@ struct LibraryHomeView: View {
         NavigationStack {
             List {
                 overviewSection
-                compactRemoteAccessSection
                 compactLibrariesSection
             }
-            .navigationTitle("YACReader")
+            .navigationTitle("Library")
             .toolbar {
                 addLibraryToolbarItem
             }
@@ -127,10 +118,9 @@ struct LibraryHomeView: View {
         NavigationSplitView {
             List(selection: $selectedLibraryID) {
                 sidebarOverviewSection
-                splitRemoteAccessSection
                 splitLibrariesSection
             }
-            .navigationTitle("YACReader")
+            .navigationTitle("Library")
             .listStyle(.sidebar)
             .toolbar {
                 addLibraryToolbarItem
@@ -297,7 +287,7 @@ struct LibraryHomeView: View {
                                     Text(resumeLibraryItem.descriptor.name)
                                         .font(.subheadline.weight(.semibold))
 
-                                    Text("Resume your last-used workspace without starting from the library root again.")
+                                    Text("Resume your last-used local library workspace without starting from the root again.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -319,7 +309,7 @@ struct LibraryHomeView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text("Add an existing library folder, or import comic archives into Imported Comics.")
+                    Text("Add an existing library folder, or import comic archives from Files into Imported Comics.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -328,7 +318,7 @@ struct LibraryHomeView: View {
                     Button {
                         presentLibraryFolderImporter()
                     } label: {
-                        Label("Add Library", systemImage: "folder.badge.plus")
+                        Label("Add Library Folder", systemImage: "folder.badge.plus")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.bordered)
@@ -336,7 +326,7 @@ struct LibraryHomeView: View {
                     Button {
                         presentComicFileImporter()
                     } label: {
-                        Label("Import Comics", systemImage: "square.and.arrow.down")
+                        Label("Import From Files", systemImage: "square.and.arrow.down")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.borderedProminent)
@@ -376,16 +366,6 @@ struct LibraryHomeView: View {
                     .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
                 }
                 .onDelete(perform: viewModel.removeLibraries)
-            }
-        }
-    }
-
-    private var compactRemoteAccessSection: some View {
-        Section("Remote Access") {
-            NavigationLink {
-                RemoteServerListView(dependencies: dependencies)
-            } label: {
-                RemoteAccessRow(compact: true, latestSession: latestRemoteSession)
             }
         }
     }
@@ -449,16 +429,6 @@ struct LibraryHomeView: View {
         }
     }
 
-    private var splitRemoteAccessSection: some View {
-        Section("Remote Access") {
-            NavigationLink {
-                RemoteServerListView(dependencies: dependencies)
-            } label: {
-                RemoteAccessRow(compact: false, latestSession: latestRemoteSession)
-            }
-        }
-    }
-
     private var compactLibraryActionReservedWidth: CGFloat {
         88
     }
@@ -472,12 +442,6 @@ struct LibraryHomeView: View {
     private func queueLibraryAction(_ action: PendingLibraryAction) {
         pendingLibraryAction = action
         libraryActionsItem = nil
-    }
-
-    private func refreshRemoteAccessSummary() {
-        let activeServerIDs = Set(((try? dependencies.remoteServerProfileStore.load()) ?? []).map(\.id))
-        let sessions = (try? dependencies.remoteReadingProgressStore.loadSessions()) ?? []
-        latestRemoteSession = sessions.first { activeServerIDs.contains($0.serverID) }
     }
 }
 
@@ -626,55 +590,10 @@ private struct LibraryHomeDetailPlaceholder: View {
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Import a YACReader library folder, or select comic files (zip/rar/cbz/cbr/pdf) to build your Imported Comics library."
+            return "Import a YACReader library folder, or select comic files from Files to build your Imported Comics library."
         }
 
         return "Keep your libraries in the sidebar, browse the folder tree on the right, and move into reading without losing navigation context."
-    }
-}
-
-private struct RemoteAccessRow: View {
-    let compact: Bool
-    let latestSession: RemoteComicReadingSession?
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "server.rack")
-                .font(.title3)
-                .foregroundStyle(.blue)
-                .frame(width: 28, height: 28)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Remote SMB Servers")
-                    .font(.headline)
-
-                Text(descriptionText)
-                    .font(compact ? .caption : .footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(compact ? 3 : 2)
-
-                if let latestSession {
-                    Label(
-                        "Last remote comic: \(latestSession.displayName) · \(latestSession.progressText)",
-                        systemImage: "book.closed"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(compact ? 2 : 1)
-                }
-
-                HStack(spacing: 6) {
-                    StatusBadge(title: "SMB", tint: .blue)
-                    StatusBadge(title: "Single Comics", tint: .green)
-                    StatusBadge(title: "On-Demand", tint: .orange)
-                }
-            }
-        }
-        .padding(.vertical, compact ? 4 : 6)
-    }
-
-    private var descriptionText: String {
-        "Connect to an SMB share, browse remote folders, and open a single comic file without importing an entire library."
     }
 }
 

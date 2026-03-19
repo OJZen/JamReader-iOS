@@ -12,6 +12,6 @@ struct ContentView: View {
     let dependencies: AppDependencies
 
     var body: some View {
-        LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
+        AppRootView(viewModel: viewModel, dependencies: dependencies)
     }
 }
