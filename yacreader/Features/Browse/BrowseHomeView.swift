@@ -3,9 +3,418 @@ import SwiftUI
 struct BrowseHomeView: View {
     let dependencies: AppDependencies
 
+    @StateObject private var viewModel: BrowseHomeViewModel
+
+    init(dependencies: AppDependencies) {
+        self.dependencies = dependencies
+        _viewModel = StateObject(
+            wrappedValue: BrowseHomeViewModel(dependencies: dependencies)
+        )
+    }
+
     var body: some View {
         NavigationStack {
-            RemoteServerListView(dependencies: dependencies)
+            ScrollView {
+                LazyVStack(spacing: 18) {
+                    heroSection
+                    quickActionsSection
+                    continueReadingSection
+                    savedServersSection
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+            }
+            .background(background)
+            .navigationTitle("Browse")
+            .navigationBarTitleDisplayMode(.large)
+            .task {
+                await viewModel.loadIfNeeded()
+            }
+            .refreshable {
+                await viewModel.load()
+            }
+            .alert(item: $viewModel.alert) { alert in
+                Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
+    }
+
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(viewModel.summaryTitle)
+                        .font(.largeTitle.bold())
+
+                    Text(viewModel.summaryText)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "square.grid.2x2.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(14)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+
+            HStack(spacing: 8) {
+                StatusBadge(title: "SMB", tint: .blue)
+                StatusBadge(title: "Direct Read", tint: .green)
+                StatusBadge(title: "Import", tint: .orange)
+            }
+
+            HStack(spacing: 12) {
+                MetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
+                MetricPill(title: "Sessions", value: viewModel.sessionCountText, tint: .green)
+                MetricPill(title: "Cache", value: viewModel.cacheSummaryText, tint: .orange)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(.white)
+        .background(heroBackground, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+        }
+    }
+
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Quick Actions", subtitle: "Jump into the SMB flows without crowding the rest of the app.")
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 155, maximum: 240), spacing: 12)],
+                spacing: 12
+            ) {
+                NavigationLink {
+                    RemoteServerListView(dependencies: dependencies)
+                } label: {
+                    ActionCard(
+                        title: "Manage Servers",
+                        subtitle: "Add, edit, or clean up saved SMB servers.",
+                        systemImage: "server.rack",
+                        tint: .blue
+                    )
+                }
+                .buttonStyle(.plain)
+
+                if let profile = viewModel.featuredBrowseProfile {
+                    NavigationLink {
+                        RemoteServerBrowserView(
+                            profile: profile,
+                            currentPath: viewModel.lastBrowsedPath(for: profile),
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        ActionCard(
+                            title: "Open Last Folder",
+                            subtitle: profile.connectionDisplayPath,
+                            systemImage: "folder.fill",
+                            tint: .teal
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if let profile = viewModel.continueReadingProfile,
+                   let session = viewModel.continueReadingSession {
+                    NavigationLink {
+                        RemoteComicLoadingView(
+                            profile: profile,
+                            item: session.directoryItem,
+                            dependencies: dependencies
+                        )
+                    } label: {
+                        ActionCard(
+                            title: "Continue Reading",
+                            subtitle: "\(session.displayName) · \(session.progressText)",
+                            systemImage: "book.closed.fill",
+                            tint: .green
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var continueReadingSection: some View {
+        if let profile = viewModel.continueReadingProfile,
+           let session = viewModel.continueReadingSession {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Continue Reading", subtitle: "Pick up the last remote comic without re-browsing the folder tree.")
+
+                NavigationLink {
+                    RemoteComicLoadingView(
+                        profile: profile,
+                        item: session.directoryItem,
+                        dependencies: dependencies
+                    )
+                } label: {
+                    ContinueReadingCard(
+                        session: session,
+                        profile: profile
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var savedServersSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("Saved Servers", subtitle: "A small preview of the SMB sources you have already configured.")
+
+            if viewModel.profiles.isEmpty {
+                ContentUnavailableView(
+                    "No SMB Servers Yet",
+                    systemImage: "server.rack",
+                    description: Text("Add a server to browse remote folders, open comics directly, or import content later.")
+                )
+                .padding(.vertical, 18)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(Array(viewModel.profiles.prefix(3))) { profile in
+                        NavigationLink {
+                            RemoteServerBrowserView(
+                                profile: profile,
+                                currentPath: viewModel.lastBrowsedPath(for: profile),
+                                dependencies: dependencies
+                            )
+                        } label: {
+                            SavedServerCard(
+                                profile: profile,
+                                latestSession: viewModel.sessions.first { $0.serverID == profile.id }
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    NavigationLink {
+                        RemoteServerListView(dependencies: dependencies)
+                    } label: {
+                        HStack {
+                            Label("See All Servers", systemImage: "arrow.right.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text("\(viewModel.profiles.count)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var background: some View {
+        LinearGradient(
+            colors: [
+                Color(.systemBackground),
+                Color(.secondarySystemBackground).opacity(0.7),
+                Color(.systemBackground)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    private var heroBackground: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                Color(red: 0.14, green: 0.28, blue: 0.58),
+                Color(red: 0.11, green: 0.53, blue: 0.60),
+                Color(red: 0.15, green: 0.68, blue: 0.49)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
+
+private struct ActionCard: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 38, height: 38)
+                .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
+        }
+    }
+}
+
+private struct ContinueReadingCard: View {
+    let session: RemoteComicReadingSession
+    let profile: RemoteServerProfile
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "book.closed.fill")
+                    .font(.title3)
+                    .foregroundStyle(.green)
+                    .frame(width: 30, height: 30)
+                    .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.displayName)
+                        .font(.headline)
+
+                    Text(profile.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 10)
+
+                Image(systemName: "arrow.right.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.blue)
+            }
+
+            HStack(spacing: 8) {
+                StatusBadge(title: session.progressText, tint: session.read ? .green : .orange)
+                StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
+            }
+
+            Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
+        }
+    }
+}
+
+private struct SavedServerCard: View {
+    let profile: RemoteServerProfile
+    let latestSession: RemoteComicReadingSession?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: profile.providerKind.systemImage)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(profile.providerKind.tintColor)
+                    .frame(width: 30, height: 30)
+                    .background(profile.providerKind.tintColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.name)
+                        .font(.headline)
+
+                    Text(profile.connectionDisplayPath)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+
+            HStack(spacing: 8) {
+                StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
+                StatusBadge(title: profile.authenticationMode.title, tint: profile.authenticationMode == .guest ? .orange : .green)
+            }
+
+            if let latestSession {
+                Text("\(latestSession.displayName) · \(latestSession.progressText)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
+        }
+    }
+}
+
+private struct MetricPill: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value)
+                .font(.headline.weight(.semibold))
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary.opacity(0.9))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
