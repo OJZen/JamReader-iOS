@@ -530,10 +530,22 @@ struct RemoteComicReaderView: View {
     }
 
     private func handleReaderTap(_ region: ReaderTapRegion) {
+        let action = ReaderTapRouter.action(
+            for: region,
+            isChromeVisible: readerSession.state.isChromeVisible,
+            configuration: .remoteSingleComic
+        )
+
         withAnimation(.easeInOut(duration: 0.2)) {
-            switch region {
-            case .center, .leading, .trailing:
+            switch action {
+            case .none:
+                break
+            case .toggleChrome:
                 readerSession.apply(.toggleChrome)
+            case .hideChrome:
+                readerSession.apply(.hideChrome)
+            case .invokeLeadingEdgeAction, .invokeTrailingEdgeAction:
+                break
             }
         }
     }

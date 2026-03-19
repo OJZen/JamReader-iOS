@@ -2,12 +2,6 @@ import SwiftUI
 import ImageIO
 import UIKit
 
-enum ReaderTapRegion {
-    case leading
-    case center
-    case trailing
-}
-
 struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int

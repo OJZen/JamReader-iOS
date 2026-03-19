@@ -404,21 +404,26 @@ struct ComicReaderView: View {
     }
 
     private func handleReaderTap(_ tapRegion: ReaderTapRegion) {
-        switch tapRegion {
-        case .center:
+        let action = ReaderTapRouter.action(
+            for: tapRegion,
+            isChromeVisible: readerSession.state.isChromeVisible,
+            configuration: .localLibrary(
+                canOpenLeadingEdge: viewModel.canOpenPreviousComic,
+                canOpenTrailingEdge: viewModel.canOpenNextComic
+            )
+        )
+
+        switch action {
+        case .none:
+            break
+        case .toggleChrome:
             toggleReaderChrome()
-        case .leading:
-            if readerSession.state.isChromeVisible {
-                hideReaderChrome()
-            } else if viewModel.canOpenPreviousComic {
-                viewModel.openPreviousComic()
-            }
-        case .trailing:
-            if readerSession.state.isChromeVisible {
-                hideReaderChrome()
-            } else if viewModel.canOpenNextComic {
-                viewModel.openNextComic()
-            }
+        case .hideChrome:
+            hideReaderChrome()
+        case .invokeLeadingEdgeAction:
+            viewModel.openPreviousComic()
+        case .invokeTrailingEdgeAction:
+            viewModel.openNextComic()
         }
     }
 
