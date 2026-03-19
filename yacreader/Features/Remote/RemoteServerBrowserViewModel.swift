@@ -50,6 +50,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     @Published private(set) var items: [RemoteDirectoryItem] = []
     @Published private(set) var progressByItemID: [String: RemoteComicReadingSession] = [:]
+    @Published private(set) var cacheAvailabilityByItemID: [String: RemoteComicCachedAvailability] = [:]
     @Published private(set) var recentSessions: [RemoteComicReadingSession] = []
     @Published private(set) var isLoading = false
     @Published private(set) var loadIssue: RemoteBrowserLoadIssue?
@@ -164,7 +165,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     var recoverySession: RemoteComicReadingSession? {
-        recentSessions.first
+        recentSessions.first { browsingService.cachedAvailability(for: $0.comicFileReference).hasLocalCopy }
     }
 
     func loadIfNeeded() async {
@@ -205,6 +206,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         } catch {
             items = []
             progressByItemID = [:]
+            cacheAvailabilityByItemID = [:]
             recentSessions = recentSessionsForProfile()
             loadIssue = makeLoadIssue(from: error)
         }
@@ -221,10 +223,24 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
             result[item.id] = progress
         }
+
+        cacheAvailabilityByItemID = items.reduce(into: [:]) { result, item in
+            guard item.canOpenAsComic,
+                  let reference = try? browsingService.makeComicFileReference(from: item)
+            else {
+                return
+            }
+
+            result[item.id] = browsingService.cachedAvailability(for: reference)
+        }
     }
 
     func progress(for item: RemoteDirectoryItem) -> RemoteComicReadingSession? {
         progressByItemID[item.id]
+    }
+
+    func cacheAvailability(for item: RemoteDirectoryItem) -> RemoteComicCachedAvailability {
+        cacheAvailabilityByItemID[item.id] ?? .unavailable
     }
 
     func importComic(_ item: RemoteDirectoryItem) async {

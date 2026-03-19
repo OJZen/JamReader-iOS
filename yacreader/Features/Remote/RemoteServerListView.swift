@@ -774,6 +774,7 @@ struct RemoteServerBrowserView: View {
                             RemoteDirectoryItemListRow(
                                 item: item,
                                 readingSession: nil,
+                                cacheAvailability: .unavailable,
                                 profile: viewModel.profile,
                                 browsingService: dependencies.remoteServerBrowsingService
                             )
@@ -805,6 +806,7 @@ struct RemoteServerBrowserView: View {
                             RemoteDirectoryItemListRow(
                                 item: item,
                                 readingSession: viewModel.progress(for: item),
+                                cacheAvailability: viewModel.cacheAvailability(for: item),
                                 profile: viewModel.profile,
                                 browsingService: dependencies.remoteServerBrowsingService
                             )
@@ -909,6 +911,7 @@ struct RemoteServerBrowserView: View {
                         RemoteDirectoryGridCard(
                             item: item,
                             readingSession: viewModel.progress(for: item),
+                            cacheAvailability: viewModel.cacheAvailability(for: item),
                             profile: viewModel.profile,
                             browsingService: dependencies.remoteServerBrowsingService,
                             onImport: importAction.map { action in
@@ -1069,13 +1072,16 @@ struct RemoteServerBrowserView: View {
         let maxPixelSize = Int(maxDimension * max(displayScale, 1))
         let limit = displayMode == .grid ? 18 : 12
 
-        RemoteComicThumbnailPipeline.shared.preheat(
+        Task {
+            await RemoteComicThumbnailPipeline.shared.preheat(
             for: viewModel.profile,
             items: viewModel.comicFiles,
             browsingService: dependencies.remoteServerBrowsingService,
             maxPixelSize: maxPixelSize,
-            limit: limit
-        )
+            limit: limit,
+            concurrency: displayMode == .grid ? 4 : 3
+            )
+        }
     }
 
     private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {

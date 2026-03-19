@@ -93,6 +93,33 @@ struct RemoteComicCacheSummary: Hashable {
     }
 }
 
+struct RemoteComicCachedAvailability: Hashable {
+    enum Kind: Hashable {
+        case unavailable
+        case current
+        case stale
+    }
+
+    let kind: Kind
+
+    static let unavailable = RemoteComicCachedAvailability(kind: .unavailable)
+
+    var hasLocalCopy: Bool {
+        kind != .unavailable
+    }
+
+    var badgeTitle: String? {
+        switch kind {
+        case .unavailable:
+            return nil
+        case .current:
+            return "Offline Ready"
+        case .stale:
+            return "Older Local Copy"
+        }
+    }
+}
+
 final class RemoteServerBrowsingService {
     private let supportedComicFileExtensions: Set<String> = [
         "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf"
@@ -339,6 +366,19 @@ final class RemoteServerBrowsingService {
                 "The downloaded remote comic cache could not be cleared. \(error.localizedDescription)"
             )
         }
+    }
+
+    func cachedAvailability(for reference: RemoteComicFileReference) -> RemoteComicCachedAvailability {
+        let destinationURL = cachedFileURL(for: reference)
+        guard fileManager.fileExists(atPath: destinationURL.path) else {
+            return .unavailable
+        }
+
+        if isCachedComicCurrent(at: destinationURL, reference: reference) {
+            return RemoteComicCachedAvailability(kind: .current)
+        }
+
+        return RemoteComicCachedAvailability(kind: .stale)
     }
 
     func classifyDirectoryEntry(

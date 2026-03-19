@@ -293,29 +293,50 @@ final class RemoteComicThumbnailPipeline {
         items: [RemoteDirectoryItem],
         browsingService: RemoteServerBrowsingService,
         maxPixelSize: Int,
-        limit: Int
-    ) {
+        limit: Int,
+        concurrency: Int
+    ) async {
         let candidates = Array(items.filter(\.canOpenAsComic).prefix(max(0, limit)))
         guard !candidates.isEmpty else {
             return
         }
 
-        Task(priority: .utility) { [weak self] in
-            guard let self else {
-                return
-            }
+        let maximumConcurrency = max(1, min(concurrency, candidates.count))
+        var nextIndex = 0
 
-            for item in candidates {
-                guard !Task.isCancelled else {
+        await withTaskGroup(of: Void.self) { group in
+            func enqueueNextIfNeeded() {
+                guard nextIndex < candidates.count else {
                     return
                 }
 
-                _ = await self.image(
-                    for: profile,
-                    item: item,
-                    browsingService: browsingService,
-                    maxPixelSize: maxPixelSize
-                )
+                let item = candidates[nextIndex]
+                nextIndex += 1
+                group.addTask { [weak self] in
+                    guard let self else {
+                        return
+                    }
+
+                    _ = await self.image(
+                        for: profile,
+                        item: item,
+                        browsingService: browsingService,
+                        maxPixelSize: maxPixelSize
+                    )
+                }
+            }
+
+            for _ in 0..<maximumConcurrency {
+                enqueueNextIfNeeded()
+            }
+
+            while await group.next() != nil {
+                guard !Task.isCancelled else {
+                    group.cancelAll()
+                    return
+                }
+
+                enqueueNextIfNeeded()
             }
         }
     }

@@ -1,6 +1,43 @@
 import SwiftUI
 import UIKit
 
+enum RemoteComicAccessState: Equatable {
+    case liveRemoteCopy
+    case cachedCurrent
+    case cachedFallback(String)
+
+    init(source: RemoteComicDownloadResult.Source) {
+        switch source {
+        case .downloaded:
+            self = .liveRemoteCopy
+        case .cachedCurrent:
+            self = .cachedCurrent
+        case .cachedFallback(let message):
+            self = .cachedFallback(message)
+        }
+    }
+
+    var persistentStatusText: String? {
+        switch self {
+        case .liveRemoteCopy:
+            return nil
+        case .cachedCurrent:
+            return "Using Downloaded Copy"
+        case .cachedFallback:
+            return "Offline Fallback Copy"
+        }
+    }
+
+    var transientNoticeMessage: String? {
+        switch self {
+        case .liveRemoteCopy, .cachedCurrent:
+            return nil
+        case .cachedFallback(let message):
+            return message
+        }
+    }
+}
+
 struct RemoteComicLoadingView: View {
     private let profile: RemoteServerProfile
     private let item: RemoteDirectoryItem
@@ -11,6 +48,7 @@ struct RemoteComicLoadingView: View {
     @State private var isLoading = false
     @State private var loadErrorMessage: String?
     @State private var noticeMessage: String?
+    @State private var accessState: RemoteComicAccessState = .liveRemoteCopy
 
     init(
         profile: RemoteServerProfile,
@@ -31,6 +69,7 @@ struct RemoteComicLoadingView: View {
                     reference: reference,
                     fileURL: localFileURL,
                     displayName: item.name,
+                    accessState: accessState,
                     noticeMessage: noticeMessage,
                     dependencies: dependencies
                 )
@@ -88,12 +127,9 @@ struct RemoteComicLoadingView: View {
                 reference: reference
             )
             localFileURL = result.localFileURL
-            switch result.source {
-            case .downloaded, .cachedCurrent:
-                noticeMessage = nil
-            case .cachedFallback(let message):
-                noticeMessage = message
-            }
+            let resolvedAccessState = RemoteComicAccessState(source: result.source)
+            accessState = resolvedAccessState
+            noticeMessage = resolvedAccessState.transientNoticeMessage
         } catch {
             loadErrorMessage = error.localizedDescription
         }
@@ -125,6 +161,7 @@ struct RemoteComicReaderView: View {
     @State private var alert: RemoteAlertState?
     @State private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     @State private var pendingProgressPersistenceTask: Task<Void, Never>?
+    @State private var accessState: RemoteComicAccessState
     @State private var transientNoticeMessage: String?
 
     init(
@@ -132,6 +169,7 @@ struct RemoteComicReaderView: View {
         reference: RemoteComicFileReference,
         fileURL: URL,
         displayName: String,
+        accessState: RemoteComicAccessState,
         noticeMessage: String?,
         dependencies: AppDependencies
     ) {
@@ -150,6 +188,7 @@ struct RemoteComicReaderView: View {
             initialPageIndex: Self.initialPageIndex(from: storedProgress),
             layout: initialLayout
         )
+        _accessState = State(initialValue: accessState)
         _transientNoticeMessage = State(initialValue: noticeMessage)
         _bookmarkPageIndices = State(
             initialValue: ReaderBookmarkNormalizer.normalized(storedProgress?.bookmarkPageIndices ?? [])
@@ -430,6 +469,14 @@ struct RemoteComicReaderView: View {
             ReaderStatusBadge {
                 ProgressView("Refreshing Remote Copy")
                     .font(.caption.weight(.semibold))
+            }
+        }
+
+        if let persistentStatusText = accessState.persistentStatusText {
+            ReaderStatusBadge {
+                Text(persistentStatusText)
+                    .font(.caption.weight(.semibold))
+                    .multilineTextAlignment(.center)
             }
         }
 
@@ -842,10 +889,13 @@ struct RemoteComicReaderView: View {
 
             switch result.source {
             case .downloaded:
+                accessState = .liveRemoteCopy
                 transientNoticeMessage = "Remote copy refreshed."
             case .cachedCurrent:
+                accessState = .cachedCurrent
                 transientNoticeMessage = "The local copy is already current."
             case .cachedFallback(let message):
+                accessState = .cachedFallback(message)
                 transientNoticeMessage = message
             }
             scheduleNoticeDismissalIfNeeded()

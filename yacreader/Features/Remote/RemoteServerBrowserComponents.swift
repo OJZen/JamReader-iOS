@@ -3,6 +3,7 @@ import SwiftUI
 struct RemoteDirectoryItemListRow: View {
     let item: RemoteDirectoryItem
     let readingSession: RemoteComicReadingSession?
+    let cacheAvailability: RemoteComicCachedAvailability
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
 
@@ -20,6 +21,12 @@ struct RemoteDirectoryItemListRow: View {
                         Label(readingSession.progressText, systemImage: "bookmark")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(readingSession.read ? .green : .orange)
+                    }
+
+                    if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+                        Text(cacheBadgeTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(cacheAvailability.kind == .current ? .blue : .orange)
                     }
 
                     if let fileSize = item.fileSize, item.canOpenAsComic {
@@ -65,6 +72,7 @@ struct RemoteDirectoryItemListRow: View {
 struct RemoteDirectoryGridCard: View {
     let item: RemoteDirectoryItem
     let readingSession: RemoteComicReadingSession?
+    let cacheAvailability: RemoteComicCachedAvailability
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
     let onImport: (() -> Void)?
@@ -97,6 +105,10 @@ struct RemoteDirectoryGridCard: View {
                     Text(readingSession.progressText)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(readingSession.read ? .green : .orange)
+                } else if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+                    Text(cacheBadgeTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(cacheAvailability.kind == .current ? .blue : .orange)
                 } else if let fileSize = item.fileSize, item.canOpenAsComic {
                     Text(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
                         .font(.caption)
