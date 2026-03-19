@@ -2,8 +2,8 @@ import SwiftUI
 
 private enum ReaderChromeMetrics {
     static let horizontalPadding: CGFloat = 14
-    static let topSpacing: CGFloat = 4
-    static let bottomSpacing: CGFloat = 8
+    static let topSpacing: CGFloat = 0
+    static let bottomSpacing: CGFloat = 4
     static let buttonSize: CGFloat = 40
     static let dockItemSpacing: CGFloat = 8
 }
@@ -161,32 +161,31 @@ struct ReaderTopBar<TrailingLabel: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onBack) {
-                ReaderChromeButtonShell {
-                    Image(systemName: "chevron.backward")
-                        .font(.headline.weight(.semibold))
-                }
-            }
-            .buttonStyle(.plain)
-
+        ZStack {
             ReaderTopBarTitleCluster(title: title, subtitle: subtitle)
+                .padding(.horizontal, 56)
 
-            if let onTrailingAction {
-                Button(action: onTrailingAction) {
+            HStack(spacing: 12) {
+                Button(action: onBack) {
                     ReaderChromeButtonShell {
-                        trailingLabel()
+                        Image(systemName: "chevron.backward")
+                            .font(.headline.weight(.semibold))
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(isTrailingDisabled)
-                .opacity(isTrailingDisabled ? 0.72 : 1)
-            } else {
-                Color.clear
-                    .frame(
-                        width: ReaderChromeMetrics.buttonSize,
-                        height: ReaderChromeMetrics.buttonSize
-                    )
+
+                Spacer(minLength: 0)
+
+                if let onTrailingAction {
+                    Button(action: onTrailingAction) {
+                        ReaderChromeButtonShell {
+                            trailingLabel()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isTrailingDisabled)
+                    .opacity(isTrailingDisabled ? 0.72 : 1)
+                }
             }
         }
     }
@@ -213,7 +212,7 @@ private struct ReaderTopBarTitleCluster: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -234,7 +233,7 @@ struct ReaderTopStatusStack<Content: View>: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .padding(.top, safeAreaInsets.top + 64)
+        .padding(.top, safeAreaInsets.top + 56)
         .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: isChromeHidden)
