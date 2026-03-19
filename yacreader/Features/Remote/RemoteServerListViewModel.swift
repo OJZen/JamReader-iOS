@@ -64,6 +64,7 @@ final class RemoteServerListViewModel: ObservableObject {
     @Published var alert: RemoteAlertState?
 
     private let profileStore: RemoteServerProfileStore
+    private let folderShortcutStore: RemoteFolderShortcutStore
     private let credentialStore: RemoteServerCredentialStore
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
@@ -71,11 +72,13 @@ final class RemoteServerListViewModel: ObservableObject {
 
     init(
         profileStore: RemoteServerProfileStore,
+        folderShortcutStore: RemoteFolderShortcutStore,
         credentialStore: RemoteServerCredentialStore,
         browsingService: RemoteServerBrowsingService,
         readingProgressStore: RemoteReadingProgressStore
     ) {
         self.profileStore = profileStore
+        self.folderShortcutStore = folderShortcutStore
         self.credentialStore = credentialStore
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
@@ -266,6 +269,7 @@ final class RemoteServerListViewModel: ObservableObject {
 
             try? browsingService.clearCachedComics(for: profile)
             try? readingProgressStore.deleteSessions(for: profile.id)
+            try? folderShortcutStore.removeShortcuts(for: profile.id)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             profiles = updatedProfiles.sorted {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending

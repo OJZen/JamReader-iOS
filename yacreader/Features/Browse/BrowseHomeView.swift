@@ -20,6 +20,7 @@ struct BrowseHomeView: View {
                     quickActionsSection
                     continueReadingSection
                     offlineReadySection
+                    savedFoldersSection
                     savedServersSection
                 }
                 .padding(.horizontal, 16)
@@ -73,6 +74,7 @@ struct BrowseHomeView: View {
 
             HStack(spacing: 12) {
                 MetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
+                MetricPill(title: "Folders", value: viewModel.shortcutCountText, tint: .teal)
                 MetricPill(title: "Recent", value: viewModel.sessionCountText, tint: .green)
                 MetricPill(title: "Offline", value: viewModel.offlineReadyCountText, tint: .orange)
             }
@@ -232,6 +234,32 @@ struct BrowseHomeView: View {
         }
     }
 
+    @ViewBuilder
+    private var savedFoldersSection: some View {
+        let shortcutEntries = viewModel.shortcutEntries
+
+        if !shortcutEntries.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Saved Folders", subtitle: "Keep your most-used SMB directories one tap away from the Browse home.")
+
+                VStack(spacing: 12) {
+                    ForEach(Array(shortcutEntries.prefix(4))) { entry in
+                        NavigationLink {
+                            RemoteServerBrowserView(
+                                profile: entry.profile,
+                                currentPath: entry.shortcut.path,
+                                dependencies: dependencies
+                            )
+                        } label: {
+                            SavedFolderShortcutCard(entry: entry)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
     private var savedServersSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionHeader("Saved Servers", subtitle: "A small preview of the SMB sources you have already configured.")
@@ -317,6 +345,56 @@ struct BrowseHomeView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+}
+
+private struct SavedFolderShortcutCard: View {
+    let entry: BrowseHomeViewModel.ShortcutEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "star.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.yellow)
+                    .frame(width: 30, height: 30)
+                    .background(.yellow.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.shortcut.title)
+                        .font(.headline)
+
+                    Text(entry.profile.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Text(entry.shortcut.path.isEmpty ? "/" : entry.shortcut.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+
+            HStack(spacing: 8) {
+                StatusBadge(title: entry.profile.providerKind.title, tint: entry.profile.providerKind.tintColor)
+                StatusBadge(title: "Folder Shortcut", tint: .yellow)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
+        }
     }
 }
 

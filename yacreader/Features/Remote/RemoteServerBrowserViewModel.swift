@@ -55,6 +55,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var loadIssue: RemoteBrowserLoadIssue?
     @Published private(set) var activeImportDescription: String?
+    @Published private(set) var isCurrentFolderSaved = false
     @Published var alert: RemoteAlertState?
 
     let profile: RemoteServerProfile
@@ -64,6 +65,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
     private let importedComicsImportService: ImportedComicsImportService
+    private let folderShortcutStore: RemoteFolderShortcutStore
     private var hasLoaded = false
 
     init(
@@ -71,7 +73,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         currentPath: String? = nil,
         browsingService: RemoteServerBrowsingService,
         readingProgressStore: RemoteReadingProgressStore,
-        importedComicsImportService: ImportedComicsImportService
+        importedComicsImportService: ImportedComicsImportService,
+        folderShortcutStore: RemoteFolderShortcutStore
     ) {
         self.profile = profile
         self.currentPath = Self.initialPath(for: profile, explicitPath: currentPath)
@@ -79,6 +82,11 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
         self.importedComicsImportService = importedComicsImportService
+        self.folderShortcutStore = folderShortcutStore
+        self.isCurrentFolderSaved = folderShortcutStore.containsShortcut(
+            for: profile.id,
+            path: Self.normalizedShortcutPath(currentPath ?? Self.initialPath(for: profile, explicitPath: currentPath))
+        )
     }
 
     var navigationTitle: String {
@@ -160,6 +168,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         profile.connectionDisplayPath
     }
 
+    var currentFolderShortcutTitle: String {
+        if currentPath == rootPath || currentPath.isEmpty {
+            return "\(profile.name) Root"
+        }
+
+        return navigationTitle
+    }
+
     var loadErrorMessage: String? {
         loadIssue?.message
     }
@@ -203,12 +219,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             recentSessions = recentSessionsForProfile()
             loadIssue = nil
             Self.rememberLastBrowsedPath(currentPath, for: profile)
+            refreshShortcutState()
         } catch {
             items = []
             progressByItemID = [:]
             cacheAvailabilityByItemID = [:]
             recentSessions = recentSessionsForProfile()
             loadIssue = makeLoadIssue(from: error)
+            refreshShortcutState()
         }
     }
 
@@ -241,6 +259,38 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func cacheAvailability(for item: RemoteDirectoryItem) -> RemoteComicCachedAvailability {
         cacheAvailabilityByItemID[item.id] ?? .unavailable
+    }
+
+    func toggleCurrentFolderShortcut() {
+        let normalizedPath = Self.normalizedShortcutPath(currentPath)
+
+        do {
+            if isCurrentFolderSaved {
+                try folderShortcutStore.removeShortcut(
+                    serverID: profile.id,
+                    path: normalizedPath
+                )
+            } else {
+                try folderShortcutStore.upsertShortcut(
+                    serverID: profile.id,
+                    path: normalizedPath,
+                    title: currentFolderShortcutTitle
+                )
+            }
+            refreshShortcutState()
+        } catch {
+            alert = RemoteAlertState(
+                title: isCurrentFolderSaved ? "Failed to Remove Shortcut" : "Failed to Save Shortcut",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func refreshShortcutState() {
+        isCurrentFolderSaved = folderShortcutStore.containsShortcut(
+            for: profile.id,
+            path: Self.normalizedShortcutPath(currentPath)
+        )
     }
 
     func importComic(
@@ -437,6 +487,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         return "/" + collapsedPath
+    }
+
+    private static func normalizedShortcutPath(_ rawPath: String) -> String {
+        normalizedPath(rawPath)
     }
 
     private static func pathComponents(for path: String) -> [String] {

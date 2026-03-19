@@ -14,6 +14,7 @@ struct RemoteServerListView: View {
         _viewModel = StateObject(
             wrappedValue: RemoteServerListViewModel(
                 profileStore: dependencies.remoteServerProfileStore,
+                folderShortcutStore: dependencies.remoteFolderShortcutStore,
                 credentialStore: dependencies.remoteServerCredentialStore,
                 browsingService: dependencies.remoteServerBrowsingService,
                 readingProgressStore: dependencies.remoteReadingProgressStore
@@ -532,7 +533,8 @@ struct RemoteServerBrowserView: View {
                 currentPath: currentPath,
                 browsingService: dependencies.remoteServerBrowsingService,
                 readingProgressStore: dependencies.remoteReadingProgressStore,
-                importedComicsImportService: dependencies.importedComicsImportService
+                importedComicsImportService: dependencies.importedComicsImportService,
+                folderShortcutStore: dependencies.remoteFolderShortcutStore
             )
         )
     }
@@ -548,7 +550,13 @@ struct RemoteServerBrowserView: View {
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    viewModel.toggleCurrentFolderShortcut()
+                } label: {
+                    Image(systemName: viewModel.isCurrentFolderSaved ? "star.fill" : "star")
+                }
+
                 Menu {
                     Button {
                         Task {
@@ -556,6 +564,15 @@ struct RemoteServerBrowserView: View {
                         }
                     } label: {
                         Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+
+                    Button {
+                        viewModel.toggleCurrentFolderShortcut()
+                    } label: {
+                        Label(
+                            viewModel.isCurrentFolderSaved ? "Remove Folder Shortcut" : "Save Folder Shortcut",
+                            systemImage: viewModel.isCurrentFolderSaved ? "star.slash" : "star"
+                        )
                     }
 
                     Section("Display") {
@@ -605,6 +622,7 @@ struct RemoteServerBrowserView: View {
         }
         .onAppear {
             viewModel.refreshProgressState()
+            viewModel.refreshShortcutState()
             configureDisplayModeIfNeeded()
             configureSortModeIfNeeded()
         }
@@ -728,6 +746,9 @@ struct RemoteServerBrowserView: View {
                 StatusBadge(title: viewModel.capabilities.providerKind.title, tint: viewModel.capabilities.providerKind.tintColor)
                 StatusBadge(title: displayMode.title, tint: .blue)
                 StatusBadge(title: sortMode.shortTitle, tint: .teal)
+                if viewModel.isCurrentFolderSaved {
+                    StatusBadge(title: "Saved", tint: .yellow)
+                }
                 if !trimmedSearchText.isEmpty {
                     StatusBadge(title: "Filtering", tint: .orange)
                 }

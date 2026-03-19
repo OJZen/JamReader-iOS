@@ -3,20 +3,32 @@ import Foundation
 
 @MainActor
 final class BrowseHomeViewModel: ObservableObject {
+    struct ShortcutEntry: Identifiable {
+        let shortcut: RemoteFolderShortcut
+        let profile: RemoteServerProfile
+
+        var id: UUID {
+            shortcut.id
+        }
+    }
+
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var sessions: [RemoteComicReadingSession] = []
+    @Published private(set) var shortcutEntries: [ShortcutEntry] = []
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
     @Published private(set) var thumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @Published private(set) var isLoading = false
     @Published var alert: BrowseHomeAlert?
 
     private let remoteServerProfileStore: RemoteServerProfileStore
+    private let remoteFolderShortcutStore: RemoteFolderShortcutStore
     private let remoteReadingProgressStore: RemoteReadingProgressStore
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private var hasLoaded = false
 
     init(dependencies: AppDependencies) {
         self.remoteServerProfileStore = dependencies.remoteServerProfileStore
+        self.remoteFolderShortcutStore = dependencies.remoteFolderShortcutStore
         self.remoteReadingProgressStore = dependencies.remoteReadingProgressStore
         self.remoteServerBrowsingService = dependencies.remoteServerBrowsingService
     }
@@ -68,6 +80,10 @@ final class BrowseHomeViewModel: ObservableObject {
         "\(profiles.count)"
     }
 
+    var shortcutCountText: String {
+        "\(shortcutEntries.count)"
+    }
+
     var sessionCountText: String {
         "\(sessions.count)"
     }
@@ -111,12 +127,14 @@ final class BrowseHomeViewModel: ObservableObject {
 
         do {
             profiles = try remoteServerProfileStore.load()
+            shortcutEntries = resolvedShortcutEntries(for: try remoteFolderShortcutStore.load(), profiles: profiles)
             sessions = try remoteReadingProgressStore.loadSessions()
             cacheSummary = remoteServerBrowsingService.cacheSummary()
             thumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
             alert = nil
         } catch {
             profiles = []
+            shortcutEntries = []
             sessions = []
             cacheSummary = .empty
             thumbnailCacheSummary = .empty
@@ -133,6 +151,19 @@ final class BrowseHomeViewModel: ObservableObject {
 
     func lastBrowsedPath(for profile: RemoteServerProfile) -> String {
         RemoteServerBrowserViewModel.lastBrowsedPath(for: profile)
+    }
+
+    private func resolvedShortcutEntries(
+        for shortcuts: [RemoteFolderShortcut],
+        profiles: [RemoteServerProfile]
+    ) -> [ShortcutEntry] {
+        shortcuts.compactMap { shortcut in
+            guard let profile = profiles.first(where: { $0.id == shortcut.serverID }) else {
+                return nil
+            }
+
+            return ShortcutEntry(shortcut: shortcut, profile: profile)
+        }
     }
 }
 

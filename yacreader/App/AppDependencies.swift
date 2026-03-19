@@ -3,6 +3,7 @@ import Foundation
 struct AppDependencies {
     let libraryDescriptorStore: LibraryDescriptorStore
     let remoteServerProfileStore: RemoteServerProfileStore
+    let remoteFolderShortcutStore: RemoteFolderShortcutStore
     let remoteServerCredentialStore: RemoteServerCredentialStore
     let libraryStorageManager: LibraryStorageManager
     let databaseInspector: SQLiteDatabaseInspector
@@ -31,6 +32,7 @@ struct AppDependencies {
         return AppDependencies(
             libraryDescriptorStore: descriptorStore,
             remoteServerProfileStore: RemoteServerProfileStore(),
+            remoteFolderShortcutStore: RemoteFolderShortcutStore(),
             remoteServerCredentialStore: remoteServerCredentialStore,
             libraryStorageManager: storageManager,
             databaseInspector: SQLiteDatabaseInspector(),
