@@ -3,14 +3,19 @@ import SwiftUI
 
 struct SavedRemoteFoldersView: View {
     let dependencies: AppDependencies
+    let focusedProfile: RemoteServerProfile?
 
     @StateObject private var viewModel: SavedRemoteFoldersViewModel
     @State private var searchText = ""
     @State private var renameEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
     @State private var pendingRemovalEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
 
-    init(dependencies: AppDependencies) {
+    init(
+        dependencies: AppDependencies,
+        focusedProfile: RemoteServerProfile? = nil
+    ) {
         self.dependencies = dependencies
+        self.focusedProfile = focusedProfile
         _viewModel = StateObject(
             wrappedValue: SavedRemoteFoldersViewModel(dependencies: dependencies)
         )
@@ -107,12 +112,19 @@ struct SavedRemoteFoldersView: View {
     }
 
     private var filteredEntries: [SavedRemoteFoldersViewModel.ShortcutEntry] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            return viewModel.entries
+        let scopedEntries: [SavedRemoteFoldersViewModel.ShortcutEntry]
+        if let focusedProfile {
+            scopedEntries = viewModel.entries.filter { $0.profile.id == focusedProfile.id }
+        } else {
+            scopedEntries = viewModel.entries
         }
 
-        return viewModel.entries.filter { entry in
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return scopedEntries
+        }
+
+        return scopedEntries.filter { entry in
             entry.shortcut.title.localizedCaseInsensitiveContains(query)
                 || entry.profile.name.localizedCaseInsensitiveContains(query)
                 || entry.shortcut.path.localizedCaseInsensitiveContains(query)
@@ -122,10 +134,10 @@ struct SavedRemoteFoldersView: View {
     private var summarySection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Text(viewModel.summaryTitle)
+                Text(summaryTitle)
                     .font(.headline)
 
-                Text(viewModel.summaryText)
+                Text(summaryText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -133,14 +145,54 @@ struct SavedRemoteFoldersView: View {
         }
     }
 
+    private var summaryTitle: String {
+        let count = focusedEntryCount
+        if let focusedProfile {
+            switch count {
+            case 0:
+                return "No saved folders for \(focusedProfile.name)"
+            case 1:
+                return "1 saved folder for \(focusedProfile.name)"
+            default:
+                return "\(count) saved folders for \(focusedProfile.name)"
+            }
+        }
+
+        return viewModel.summaryTitle
+    }
+
+    private var summaryText: String {
+        if let focusedProfile {
+            if focusedEntryCount == 0 {
+                return "Save SMB directories from \(focusedProfile.name) to keep them one tap away without reopening the full server tree."
+            }
+
+            return "Open, rename, or remove the SMB folder shortcuts you saved from \(focusedProfile.name)."
+        }
+
+        return viewModel.summaryText
+    }
+
+    private var focusedEntryCount: Int {
+        if let focusedProfile {
+            return viewModel.entries.filter { $0.profile.id == focusedProfile.id }.count
+        }
+
+        return viewModel.entries.count
+    }
+
     @ViewBuilder
     private var emptyStateSection: some View {
         Section {
-            if viewModel.entries.isEmpty {
+            if focusedEntryCount == 0 {
                 ContentUnavailableView(
-                    "No Saved Folders Yet",
+                    focusedProfile == nil ? "No Saved Folders Yet" : "No Saved Folders for This Server",
                     systemImage: "star",
-                    description: Text("Save frequently used SMB directories from the remote browser to keep them one tap away.")
+                    description: Text(
+                        focusedProfile == nil
+                            ? "Save frequently used SMB directories from the remote browser to keep them one tap away."
+                            : "Save SMB directories from this server in the remote browser to keep them one tap away here."
+                    )
                 )
                 .padding(.vertical, 18)
             } else {

@@ -7,6 +7,7 @@ struct RemoteServerListView: View {
     @State private var editorDraft: RemoteServerEditorDraft?
     @State private var actionsProfile: RemoteServerProfile?
     @State private var pendingAction: PendingRemoteServerAction?
+    @State private var navigationRequest: RemoteServerListNavigationRequest?
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -47,6 +48,8 @@ struct RemoteServerListView: View {
                             RemoteServerRow(
                                 profile: profile,
                                 latestSession: viewModel.latestSession(for: profile),
+                                savedFolderCount: viewModel.shortcutCount(for: profile),
+                                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
                                 trailingAccessoryReservedWidth: 88
                             )
                         }
@@ -92,10 +95,20 @@ struct RemoteServerListView: View {
         .sheet(item: $actionsProfile) { profile in
             RemoteServerActionsSheet(
                 profile: profile,
+                savedFolderCount: viewModel.shortcutCount(for: profile),
+                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
                 cacheSummary: viewModel.cacheSummary(for: profile),
                 onDone: { actionsProfile = nil },
                 onEdit: {
                     pendingAction = .edit(profile)
+                    actionsProfile = nil
+                },
+                onOpenSavedFolders: {
+                    pendingAction = .openSavedFolders(profile)
+                    actionsProfile = nil
+                },
+                onOpenOfflineShelf: {
+                    pendingAction = .openOfflineShelf(profile)
                     actionsProfile = nil
                 },
                 onClearCache: {
@@ -111,6 +124,20 @@ struct RemoteServerListView: View {
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
         }
+        .navigationDestination(item: $navigationRequest) { request in
+            switch request {
+            case .savedFolders(let profile):
+                SavedRemoteFoldersView(
+                    dependencies: dependencies,
+                    focusedProfile: profile
+                )
+            case .offlineShelf(let profile):
+                RemoteOfflineShelfView(
+                    dependencies: dependencies,
+                    focusedProfile: profile
+                )
+            }
+        }
         .onChange(of: actionsProfile) { _, newValue in
             guard newValue == nil, let pendingAction else {
                 return
@@ -120,6 +147,10 @@ struct RemoteServerListView: View {
             switch pendingAction {
             case .edit(let profile):
                 editorDraft = viewModel.makeEditDraft(for: profile)
+            case .openSavedFolders(let profile):
+                navigationRequest = .savedFolders(profile)
+            case .openOfflineShelf(let profile):
+                navigationRequest = .offlineShelf(profile)
             case .clearCache(let profile):
                 viewModel.clearCache(for: profile)
             case .delete(let profile):
@@ -171,6 +202,8 @@ struct RemoteServerListView: View {
 private struct RemoteServerRow: View {
     let profile: RemoteServerProfile
     let latestSession: RemoteComicReadingSession?
+    let savedFolderCount: Int
+    let offlineCopyCount: Int
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
@@ -200,6 +233,24 @@ private struct RemoteServerRow: View {
                 }
 
                 RemoteServerStatusBadgeRow(profile: profile)
+
+                if savedFolderCount > 0 || offlineCopyCount > 0 {
+                    HStack(spacing: 6) {
+                        if savedFolderCount > 0 {
+                            StatusBadge(
+                                title: savedFolderCount == 1 ? "1 saved folder" : "\(savedFolderCount) saved folders",
+                                tint: .teal
+                            )
+                        }
+
+                        if offlineCopyCount > 0 {
+                            StatusBadge(
+                                title: offlineCopyCount == 1 ? "1 offline copy" : "\(offlineCopyCount) offline copies",
+                                tint: .blue
+                            )
+                        }
+                    }
+                }
             }
         }
         .padding(.vertical, 4)
@@ -225,9 +276,13 @@ private struct RemoteServerManageButton: View {
 
 private struct RemoteServerActionsSheet: View {
     let profile: RemoteServerProfile
+    let savedFolderCount: Int
+    let offlineCopyCount: Int
     let cacheSummary: RemoteComicCacheSummary
     let onDone: () -> Void
     let onEdit: () -> Void
+    let onOpenSavedFolders: () -> Void
+    let onOpenOfflineShelf: () -> Void
     let onClearCache: () -> Void
     let onDelete: () -> Void
 
@@ -252,6 +307,32 @@ private struct RemoteServerActionsSheet: View {
                 Section("Manage") {
                     Button(action: onEdit) {
                         Label("Edit SMB Server", systemImage: "square.and.pencil")
+                    }
+                }
+
+                if savedFolderCount > 0 || offlineCopyCount > 0 {
+                    Section {
+                        if savedFolderCount > 0 {
+                            Button(action: onOpenSavedFolders) {
+                                Label(
+                                    savedFolderCount == 1 ? "Open Saved Folder" : "Open Saved Folders",
+                                    systemImage: "star"
+                                )
+                            }
+                        }
+
+                        if offlineCopyCount > 0 {
+                            Button(action: onOpenOfflineShelf) {
+                                Label(
+                                    offlineCopyCount == 1 ? "Open Offline Copy" : "Open Offline Shelf",
+                                    systemImage: "arrow.down.circle"
+                                )
+                            }
+                        }
+                    } header: {
+                        Text("Browse")
+                    } footer: {
+                        Text("Jump straight into the saved SMB folders and downloaded comics that belong to this server.")
                     }
                 }
 
@@ -334,8 +415,24 @@ private struct RemoteServerStatusBadgeRow: View {
 
 private enum PendingRemoteServerAction {
     case edit(RemoteServerProfile)
+    case openSavedFolders(RemoteServerProfile)
+    case openOfflineShelf(RemoteServerProfile)
     case clearCache(RemoteServerProfile)
     case delete(RemoteServerProfile)
+}
+
+private enum RemoteServerListNavigationRequest: Identifiable, Hashable {
+    case savedFolders(RemoteServerProfile)
+    case offlineShelf(RemoteServerProfile)
+
+    var id: String {
+        switch self {
+        case .savedFolders(let profile):
+            return "saved:\(profile.id.uuidString)"
+        case .offlineShelf(let profile):
+            return "offline:\(profile.id.uuidString)"
+        }
+    }
 }
 
 private struct RemoteServerEditorSheet: View {

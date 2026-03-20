@@ -275,6 +275,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
 struct RemoteOfflineShelfView: View {
     let dependencies: AppDependencies
+    let focusedProfile: RemoteServerProfile?
 
     @StateObject private var viewModel: RemoteOfflineShelfViewModel
     @State private var searchText = ""
@@ -286,8 +287,12 @@ struct RemoteOfflineShelfView: View {
     @State private var pendingServerClearProfile: RemoteServerProfile?
     @State private var pendingServerClearCount = 0
 
-    init(dependencies: AppDependencies) {
+    init(
+        dependencies: AppDependencies,
+        focusedProfile: RemoteServerProfile? = nil
+    ) {
         self.dependencies = dependencies
+        self.focusedProfile = focusedProfile
         _viewModel = StateObject(
             wrappedValue: RemoteOfflineShelfViewModel(dependencies: dependencies)
         )
@@ -301,12 +306,16 @@ struct RemoteOfflineShelfView: View {
                     .listRowBackground(Color.clear)
             }
 
-            if viewModel.entries.isEmpty, !viewModel.isLoading {
+            if scopedEntries.isEmpty, !viewModel.isLoading {
                 Section {
                     ContentUnavailableView(
-                        "No Offline Comics",
+                        focusedProfile == nil ? "No Offline Comics" : "No Offline Comics for This Server",
                         systemImage: "arrow.down.circle",
-                        description: Text("Browse a remote server and open a comic once to keep a downloaded copy ready on this device.")
+                        description: Text(
+                            focusedProfile == nil
+                                ? "Browse a remote server and open a comic once to keep a downloaded copy ready on this device."
+                                : "Browse this SMB server and save a comic offline to keep a downloaded copy ready on this device."
+                        )
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
@@ -364,7 +373,9 @@ struct RemoteOfflineShelfView: View {
                             }
                         }
                     } header: {
-                        sectionHeader(for: section)
+                        if focusedProfile == nil {
+                            sectionHeader(for: section)
+                        }
                     }
                 }
             }
@@ -507,9 +518,9 @@ struct RemoteOfflineShelfView: View {
     private var displayedEntries: [RemoteOfflineComicEntry] {
         let filtered: [RemoteOfflineComicEntry]
         if trimmedSearchText.isEmpty {
-            filtered = viewModel.entries
+            filtered = scopedEntries
         } else {
-            filtered = viewModel.entries.filter { entry in
+            filtered = scopedEntries.filter { entry in
                 entry.session.displayName.localizedStandardContains(trimmedSearchText)
                     || entry.profile.name.localizedStandardContains(trimmedSearchText)
                     || entry.session.path.localizedStandardContains(trimmedSearchText)
@@ -536,6 +547,14 @@ struct RemoteOfflineShelfView: View {
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var scopedEntries: [RemoteOfflineComicEntry] {
+        if let focusedProfile {
+            return viewModel.entries.filter { $0.profile.id == focusedProfile.id }
+        }
+
+        return viewModel.entries
     }
 
     private var emptyResultsTitle: String {
@@ -570,10 +589,10 @@ struct RemoteOfflineShelfView: View {
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(viewModel.summaryTitle)
+            Text(summaryTitle)
                 .font(.title2.bold())
 
-            Text(viewModel.summaryText)
+            Text(summaryText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -623,6 +642,34 @@ struct RemoteOfflineShelfView: View {
             .buttonStyle(.borderless)
         }
         .textCase(nil)
+    }
+
+    private var summaryTitle: String {
+        let count = scopedEntries.count
+        if let focusedProfile {
+            switch count {
+            case 0:
+                return "No offline comics for \(focusedProfile.name)"
+            case 1:
+                return "1 offline comic for \(focusedProfile.name)"
+            default:
+                return "\(count) offline comics for \(focusedProfile.name)"
+            }
+        }
+
+        return viewModel.summaryTitle
+    }
+
+    private var summaryText: String {
+        if let focusedProfile {
+            if scopedEntries.isEmpty {
+                return "Downloaded remote comics from \(focusedProfile.name) appear here once they are saved on this device."
+            }
+
+            return "These downloaded comics from \(focusedProfile.name) can open from local cache immediately, without waiting on the SMB server."
+        }
+
+        return viewModel.summaryText
     }
 
     private var background: some View {

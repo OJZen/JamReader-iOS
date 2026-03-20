@@ -87,6 +87,7 @@ struct RemoteServerEditorDraft: Identifiable {
 final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var latestSessionsByServerID: [UUID: RemoteComicReadingSession] = [:]
+    @Published private(set) var shortcutCountByServerID: [UUID: Int] = [:]
     @Published private(set) var shortcutCount = 0
     @Published var alert: RemoteAlertState?
 
@@ -328,6 +329,10 @@ final class RemoteServerListViewModel: ObservableObject {
         browsingService.cacheSummary(for: profile)
     }
 
+    func shortcutCount(for profile: RemoteServerProfile) -> Int {
+        shortcutCountByServerID[profile.id] ?? 0
+    }
+
     func clearCache(for profile: RemoteServerProfile) {
         do {
             try browsingService.clearCachedComics(for: profile)
@@ -361,6 +366,11 @@ final class RemoteServerListViewModel: ObservableObject {
     private func refreshShortcutCount() {
         let activeServerIDs = Set(profiles.map(\.id))
         let allShortcuts = (try? folderShortcutStore.load()) ?? []
-        shortcutCount = allShortcuts.filter { activeServerIDs.contains($0.serverID) }.count
+        let scopedShortcuts = allShortcuts.filter { activeServerIDs.contains($0.serverID) }
+        shortcutCount = scopedShortcuts.count
+        shortcutCountByServerID = Dictionary(
+            grouping: scopedShortcuts,
+            by: \.serverID
+        ).mapValues(\.count)
     }
 }
