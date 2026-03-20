@@ -104,7 +104,7 @@ struct BrowseHomeView: View {
 
     private var browseToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Browse Tools", subtitle: "Keep setup actions here, and let active SMB content live in its own sections below.")
+            sectionHeader("Browse Tools", subtitle: "Keep SMB connection setup here, and let reading and folder destinations stay in their own stable sections below.")
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 155, maximum: 240), spacing: 12)],
@@ -121,36 +121,6 @@ struct BrowseHomeView: View {
                     )
                 }
                 .buttonStyle(.plain)
-
-                if viewModel.shortcutEntries.isEmpty {
-                    NavigationLink {
-                        SavedRemoteFoldersView(dependencies: dependencies)
-                    } label: {
-                        ActionCard(
-                            title: "Saved Folders",
-                            subtitle: "Pin frequently used SMB directories for one-tap access.",
-                            systemImage: "star.fill",
-                            tint: .teal
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if viewModel.offlineShelfPreviewSessions.isEmpty {
-                    NavigationLink {
-                        RemoteOfflineShelfView(dependencies: dependencies)
-                    } label: {
-                        ActionCard(
-                            title: "Offline Shelf",
-                            subtitle: viewModel.offlineReadySessions.isEmpty
-                                ? "Open downloaded remote comics without waiting for SMB."
-                                : "\(viewModel.offlineReadySessions.count) downloaded remote comics are ready offline.",
-                            systemImage: "arrow.down.circle.fill",
-                            tint: .green
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
             }
         }
     }
@@ -183,23 +153,30 @@ struct BrowseHomeView: View {
     private var offlineReadySection: some View {
         let sessions = viewModel.offlineShelfPreviewSessions
 
-        if !sessions.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top) {
-                    sectionHeader("Offline Ready", subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.")
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeaderLink(
+                title: "Offline Ready",
+                subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.",
+                destinationLabel: sessions.isEmpty ? "Open Shelf" : "See All"
+            ) {
+                RemoteOfflineShelfView(dependencies: dependencies)
+            }
 
-                    Spacer(minLength: 12)
-
-                    NavigationLink {
-                        RemoteOfflineShelfView(dependencies: dependencies)
-                    } label: {
-                        Text("See All")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
+            if sessions.isEmpty {
+                NavigationLink {
+                    RemoteOfflineShelfView(dependencies: dependencies)
+                } label: {
+                    ActionCard(
+                        title: "Offline Shelf",
+                        subtitle: viewModel.offlineReadySessions.isEmpty
+                            ? "No downloaded remote comics yet. Open the shelf to manage offline copies as they appear."
+                            : "\(viewModel.offlineReadySessions.count) downloaded remote comics are ready offline.",
+                        systemImage: "arrow.down.circle.fill",
+                        tint: .green
+                    )
                 }
-
+                .buttonStyle(.plain)
+            } else {
                 VStack(spacing: 12) {
                     ForEach(Array(sessions.prefix(3))) { session in
                         if let profile = viewModel.profile(for: session.serverID) {
@@ -232,23 +209,28 @@ struct BrowseHomeView: View {
     private var savedFoldersSection: some View {
         let shortcutEntries = viewModel.shortcutEntries
 
-        if !shortcutEntries.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top) {
-                    sectionHeader("Saved Folders", subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page.")
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeaderLink(
+                title: "Saved Folders",
+                subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page.",
+                destinationLabel: shortcutEntries.isEmpty ? "Open" : "See All"
+            ) {
+                SavedRemoteFoldersView(dependencies: dependencies)
+            }
 
-                    Spacer(minLength: 12)
-
-                    NavigationLink {
-                        SavedRemoteFoldersView(dependencies: dependencies)
-                    } label: {
-                        Text("See All")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 4)
+            if shortcutEntries.isEmpty {
+                NavigationLink {
+                    SavedRemoteFoldersView(dependencies: dependencies)
+                } label: {
+                    ActionCard(
+                        title: "Saved Folders",
+                        subtitle: "Pin frequently used SMB directories from the remote browser to keep them one tap away here.",
+                        systemImage: "star.fill",
+                        tint: .teal
+                    )
                 }
-
+                .buttonStyle(.plain)
+            } else {
                 VStack(spacing: 12) {
                     ForEach(Array(shortcutEntries.prefix(3))) { entry in
                         NavigationLink {
@@ -276,6 +258,29 @@ struct BrowseHomeView: View {
             Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func sectionHeaderLink<Destination: View>(
+        title: String,
+        subtitle: String,
+        destinationLabel: String,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        HStack(alignment: .top) {
+            sectionHeader(title, subtitle: subtitle)
+
+            Spacer(minLength: 12)
+
+            NavigationLink {
+                destination()
+            } label: {
+                Text(destinationLabel)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
     }
 
