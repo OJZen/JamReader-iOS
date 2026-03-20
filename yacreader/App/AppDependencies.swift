@@ -19,6 +19,7 @@ struct AppDependencies {
     let comicInfoImportService: ComicInfoImportService
     let remoteServerBrowsingService: RemoteServerBrowsingService
     let remoteReadingProgressStore: RemoteReadingProgressStore
+    let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
 
@@ -32,9 +33,14 @@ struct AppDependencies {
         let remoteServerCredentialStore = RemoteServerCredentialStore()
         let remoteCachePolicyStore = RemoteCachePolicyStore()
         let remoteReadingProgressStore = RemoteReadingProgressStore()
+        let remoteServerProfileStore = RemoteServerProfileStore()
+        let remoteServerBrowsingService = RemoteServerBrowsingService(
+            credentialStore: remoteServerCredentialStore,
+            cachePolicyStore: remoteCachePolicyStore
+        )
         return AppDependencies(
             libraryDescriptorStore: descriptorStore,
-            remoteServerProfileStore: RemoteServerProfileStore(),
+            remoteServerProfileStore: remoteServerProfileStore,
             remoteFolderShortcutStore: RemoteFolderShortcutStore(),
             remoteServerCredentialStore: remoteServerCredentialStore,
             remoteCachePolicyStore: remoteCachePolicyStore,
@@ -58,11 +64,13 @@ struct AppDependencies {
                 storageManager: storageManager,
                 databaseWriter: databaseWriter
             ),
-            remoteServerBrowsingService: RemoteServerBrowsingService(
-                credentialStore: remoteServerCredentialStore,
-                cachePolicyStore: remoteCachePolicyStore
-            ),
+            remoteServerBrowsingService: remoteServerBrowsingService,
             remoteReadingProgressStore: remoteReadingProgressStore,
+            remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore(
+                remoteServerProfileStore: remoteServerProfileStore,
+                remoteReadingProgressStore: remoteReadingProgressStore,
+                remoteServerBrowsingService: remoteServerBrowsingService
+            ),
             remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore(),
             readerLayoutPreferencesStore: ReaderLayoutPreferencesStore()
         )

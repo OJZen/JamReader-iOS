@@ -41,7 +41,7 @@ private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
         }
     }
 
-    func sort(_ entries: [RemoteOfflineShelfViewModel.Entry]) -> [RemoteOfflineShelfViewModel.Entry] {
+    func sort(_ entries: [RemoteOfflineComicEntry]) -> [RemoteOfflineComicEntry] {
         switch self {
         case .recent:
             return entries.sorted { lhs, rhs in
@@ -82,7 +82,7 @@ private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
         }
     }
 
-    func includes(_ entry: RemoteOfflineShelfViewModel.Entry) -> Bool {
+    func includes(_ entry: RemoteOfflineComicEntry) -> Bool {
         switch self {
         case .all:
             return true
@@ -107,32 +107,18 @@ private enum RemoteOfflineShelfNavigationRequest: Identifiable, Hashable {
 
 @MainActor
 final class RemoteOfflineShelfViewModel: ObservableObject {
-    struct Entry: Identifiable, Hashable {
-        let session: RemoteComicReadingSession
-        let profile: RemoteServerProfile
-        let availability: RemoteComicCachedAvailability
-
-        var id: String {
-            session.id
-        }
-    }
-
-    @Published private(set) var entries: [Entry] = []
+    @Published private(set) var entries: [RemoteOfflineComicEntry] = []
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
     @Published private(set) var isLoading = false
     @Published var feedback: RemoteBrowserFeedbackState?
     @Published var alert: BrowseHomeAlert?
 
-    private let remoteServerProfileStore: RemoteServerProfileStore
-    private let remoteReadingProgressStore: RemoteReadingProgressStore
+    private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private var hasLoaded = false
-    private var profilesByID: [UUID: RemoteServerProfile] = [:]
-    private var sessions: [RemoteComicReadingSession] = []
 
     init(dependencies: AppDependencies) {
-        self.remoteServerProfileStore = dependencies.remoteServerProfileStore
-        self.remoteReadingProgressStore = dependencies.remoteReadingProgressStore
+        self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
         self.remoteServerBrowsingService = dependencies.remoteServerBrowsingService
     }
 
@@ -175,14 +161,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
 
         do {
-            let profiles = try remoteServerProfileStore.load()
-            profilesByID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-            sessions = try remoteReadingProgressStore.loadSessions()
-            rebuildEntries()
+            try rebuildEntries()
             alert = nil
         } catch {
-            profilesByID = [:]
-            sessions = []
             entries = []
             cacheSummary = .empty
             alert = BrowseHomeAlert(
@@ -192,7 +173,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
     }
 
-    func refreshDownloadedCopy(for entry: Entry) async {
+    func refreshDownloadedCopy(for entry: RemoteOfflineComicEntry) async {
         feedback = nil
 
         await activeOperation {
@@ -201,7 +182,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 reference: entry.session.comicFileReference,
                 forceRefresh: true
             )
-            rebuildEntries()
+            try rebuildEntries()
 
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Updated",
@@ -212,12 +193,12 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
     }
 
-    func removeDownloadedCopy(for entry: Entry) {
+    func removeDownloadedCopy(for entry: RemoteOfflineComicEntry) {
         feedback = nil
 
         do {
             try remoteServerBrowsingService.clearCachedComic(for: entry.session.comicFileReference)
-            rebuildEntries()
+            try rebuildEntries()
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Removed",
                 message: "\(entry.session.displayName) was removed from this device.",
@@ -237,7 +218,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
         do {
             try remoteServerBrowsingService.clearCachedComics(for: profile)
-            rebuildEntries()
+            try rebuildEntries()
             let copyWord = removedCount == 1 ? "copy" : "copies"
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copies Removed",
@@ -263,7 +244,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         do {
             try await operation()
         } catch {
-            rebuildEntries()
+            try? rebuildEntries()
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Action Failed",
                 message: error.localizedDescription
@@ -271,22 +252,14 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
     }
 
-    private func rebuildEntries() {
-        entries = sessions.compactMap { session in
-            let availability = remoteServerBrowsingService.cachedAvailability(for: session.comicFileReference)
-            guard availability.hasLocalCopy,
-                  let profile = profilesByID[session.serverID] else {
-                return nil
-            }
-
-            return Entry(session: session, profile: profile, availability: availability)
-        }
-
-        cacheSummary = remoteServerBrowsingService.cacheSummary()
+    private func rebuildEntries() throws {
+        let snapshot = try remoteOfflineLibrarySnapshotStore.loadSnapshot()
+        entries = snapshot.offlineEntries
+        cacheSummary = snapshot.cacheSummary
     }
 
     private func refreshFeedbackMessage(
-        for entry: Entry,
+        for entry: RemoteOfflineComicEntry,
         result: RemoteComicDownloadResult
     ) -> String {
         switch result.source {
@@ -309,7 +282,7 @@ struct RemoteOfflineShelfView: View {
     @State private var filterMode: RemoteOfflineShelfFilter = .all
     @State private var navigationRequest: RemoteOfflineShelfNavigationRequest?
     @State private var feedbackDismissTask: Task<Void, Never>?
-    @State private var pendingRemovalEntry: RemoteOfflineShelfViewModel.Entry?
+    @State private var pendingRemovalEntry: RemoteOfflineComicEntry?
     @State private var pendingServerClearProfile: RemoteServerProfile?
     @State private var pendingServerClearCount = 0
 
@@ -528,8 +501,8 @@ struct RemoteOfflineShelfView: View {
         }
     }
 
-    private var displayedEntries: [RemoteOfflineShelfViewModel.Entry] {
-        let filtered: [RemoteOfflineShelfViewModel.Entry]
+    private var displayedEntries: [RemoteOfflineComicEntry] {
+        let filtered: [RemoteOfflineComicEntry]
         if trimmedSearchText.isEmpty {
             filtered = viewModel.entries
         } else {
@@ -690,7 +663,7 @@ struct RemoteOfflineShelfView: View {
 }
 
 private struct RemoteOfflineShelfCard: View {
-    let entry: RemoteOfflineShelfViewModel.Entry
+    let entry: RemoteOfflineComicEntry
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     private var badgeTint: Color {
@@ -802,7 +775,7 @@ private struct RemoteOfflineShelfItemActionMenuButton: View {
 
 private struct RemoteOfflineShelfSection: Identifiable {
     let profile: RemoteServerProfile
-    let entries: [RemoteOfflineShelfViewModel.Entry]
+    let entries: [RemoteOfflineComicEntry]
 
     var id: UUID {
         profile.id

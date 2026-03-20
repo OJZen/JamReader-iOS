@@ -14,23 +14,20 @@ final class BrowseHomeViewModel: ObservableObject {
 
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var sessions: [RemoteComicReadingSession] = []
+    @Published private(set) var offlineEntries: [RemoteOfflineComicEntry] = []
     @Published private(set) var shortcutEntries: [ShortcutEntry] = []
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
     @Published private(set) var thumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @Published private(set) var isLoading = false
     @Published var alert: BrowseHomeAlert?
 
-    private let remoteServerProfileStore: RemoteServerProfileStore
     private let remoteFolderShortcutStore: RemoteFolderShortcutStore
-    private let remoteReadingProgressStore: RemoteReadingProgressStore
-    private let remoteServerBrowsingService: RemoteServerBrowsingService
+    private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private var hasLoaded = false
 
     init(dependencies: AppDependencies) {
-        self.remoteServerProfileStore = dependencies.remoteServerProfileStore
         self.remoteFolderShortcutStore = dependencies.remoteFolderShortcutStore
-        self.remoteReadingProgressStore = dependencies.remoteReadingProgressStore
-        self.remoteServerBrowsingService = dependencies.remoteServerBrowsingService
+        self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
     }
 
     var summaryTitle: String {
@@ -81,9 +78,7 @@ final class BrowseHomeViewModel: ObservableObject {
     }
 
     var offlineReadySessions: [RemoteComicReadingSession] {
-        sessions.filter {
-            remoteServerBrowsingService.cachedAvailability(for: $0.comicFileReference).hasLocalCopy
-        }
+        offlineEntries.map(\.session)
     }
 
     var offlineShelfPreviewSessions: [RemoteComicReadingSession] {
@@ -130,16 +125,19 @@ final class BrowseHomeViewModel: ObservableObject {
         }
 
         do {
-            profiles = try remoteServerProfileStore.load()
+            let offlineSnapshot = try remoteOfflineLibrarySnapshotStore.loadSnapshot()
+            profiles = offlineSnapshot.profiles
             shortcutEntries = resolvedShortcutEntries(for: try remoteFolderShortcutStore.load(), profiles: profiles)
-            sessions = try remoteReadingProgressStore.loadSessions()
-            cacheSummary = remoteServerBrowsingService.cacheSummary()
+            sessions = offlineSnapshot.sessions
+            offlineEntries = offlineSnapshot.offlineEntries
+            cacheSummary = offlineSnapshot.cacheSummary
             thumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
             alert = nil
         } catch {
             profiles = []
             shortcutEntries = []
             sessions = []
+            offlineEntries = []
             cacheSummary = .empty
             thumbnailCacheSummary = .empty
             alert = BrowseHomeAlert(
