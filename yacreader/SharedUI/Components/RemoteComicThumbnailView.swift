@@ -208,6 +208,16 @@ final class RemoteComicThumbnailPipeline {
 
         let task = Task<UIImage?, Never> {
             do {
+                if let remoteImage = await browsingService.fetchDirectThumbnail(
+                    for: profile,
+                    reference: reference,
+                    maxPixelSize: maxPixelSize
+                ) {
+                    try? self.storeCachedThumbnail(remoteImage, at: diskURL)
+                    try? self.trimCacheIfNeeded()
+                    return remoteImage
+                }
+
                 let downloadResult = try await browsingService.downloadComicFile(
                     for: profile,
                     reference: reference

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 enum RemoteServerBrowsingError: LocalizedError {
     case invalidProfile(String)
@@ -437,6 +438,31 @@ final class RemoteServerBrowsingService {
         }
 
         return destinationURL
+    }
+
+    func fetchDirectThumbnail(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference,
+        maxPixelSize: Int
+    ) async -> UIImage? {
+        let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
+        guard fileExtension == "cbz" || fileExtension == "zip" else {
+            return nil
+        }
+
+        return try? await withConnectedClient(for: profile) { client in
+            let reader = client.fileReader(path: shareRelativePath(forDisplayPath: reference.path))
+
+            do {
+                let image = try await RemoteZIPThumbnailExtractor(fileReader: reader)
+                    .extractThumbnail(maxPixelSize: maxPixelSize)
+                try? await reader.close()
+                return image
+            } catch {
+                try? await reader.close()
+                return nil
+            }
+        }
     }
 
     func classifyDirectoryEntry(
