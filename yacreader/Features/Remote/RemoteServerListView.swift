@@ -614,6 +614,8 @@ struct RemoteServerBrowserView: View {
                 title: request.destinationPickerTitle,
                 message: request.destinationPickerMessage,
                 confirmLabel: "Import",
+                availableScopes: availableImportScopes(for: request),
+                defaultScope: defaultImportScope(for: request),
                 dependencies: dependencies,
                 preferredSelection: nil
             ) { selection, scope in
@@ -1085,7 +1087,7 @@ struct RemoteServerBrowserView: View {
             Button {
                 importRequest = .currentFolder
             } label: {
-                Label("Import This Folder", systemImage: "square.and.arrow.down.on.square")
+                Label(importCurrentFolderButtonTitle, systemImage: "square.and.arrow.down.on.square")
             }
             .buttonStyle(.bordered)
         }
@@ -1245,10 +1247,17 @@ struct RemoteServerBrowserView: View {
     ) async {
         switch request {
         case .currentFolder:
-            await viewModel.importCurrentFolder(
-                destinationSelection: destinationSelection,
-                scope: scope
-            )
+            if scope == .visibleResults {
+                await viewModel.importVisibleComics(
+                    displayedComicFiles,
+                    destinationSelection: destinationSelection
+                )
+            } else {
+                await viewModel.importCurrentFolder(
+                    destinationSelection: destinationSelection,
+                    scope: scope
+                )
+            }
         case .directory(let item):
             await viewModel.importDirectory(
                 item,
@@ -1282,6 +1291,39 @@ struct RemoteServerBrowserView: View {
             return .grid
         case .grid:
             return .list
+        }
+    }
+
+    private var supportsVisibleResultsImportScope: Bool {
+        !trimmedSearchText.isEmpty && !displayedComicFiles.isEmpty
+    }
+
+    private var importCurrentFolderButtonTitle: String {
+        supportsVisibleResultsImportScope ? "Import Results" : "Import This Folder"
+    }
+
+    private func availableImportScopes(for request: RemoteBrowserImportRequest) -> [RemoteDirectoryImportScope] {
+        switch request {
+        case .currentFolder:
+            if supportsVisibleResultsImportScope {
+                return [.visibleResults, .currentFolderOnly, .includeSubfolders]
+            }
+            return [.currentFolderOnly, .includeSubfolders]
+        case .directory:
+            return [.currentFolderOnly, .includeSubfolders]
+        case .comic:
+            return [.currentFolderOnly]
+        }
+    }
+
+    private func defaultImportScope(for request: RemoteBrowserImportRequest) -> RemoteDirectoryImportScope {
+        switch request {
+        case .currentFolder:
+            return supportsVisibleResultsImportScope ? .visibleResults : .includeSubfolders
+        case .directory:
+            return .includeSubfolders
+        case .comic:
+            return .currentFolderOnly
         }
     }
 

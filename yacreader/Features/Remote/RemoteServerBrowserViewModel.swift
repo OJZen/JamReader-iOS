@@ -447,6 +447,29 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
+    func importVisibleComics(
+        _ items: [RemoteDirectoryItem],
+        destinationSelection: LibraryImportDestinationSelection = .importedComics
+    ) async {
+        feedback = nil
+
+        let visibleComics = items.filter(\.canOpenAsComic)
+        guard !visibleComics.isEmpty else {
+            alert = RemoteAlertState(
+                title: "Nothing to Import",
+                message: "There are no visible supported comic files in the current SMB results."
+            )
+            return
+        }
+
+        await importComicItems(
+            visibleComics,
+            progressPrefix: "Importing visible comics",
+            successTitle: "Visible Comics Imported",
+            destinationSelection: destinationSelection
+        )
+    }
+
     func saveComicForOffline(
         _ item: RemoteDirectoryItem,
         forceRefresh: Bool = false
@@ -835,6 +858,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         scope: RemoteDirectoryImportScope
     ) async throws -> [RemoteDirectoryItem] {
         switch scope {
+        case .visibleResults:
+            return try await browsingService
+                .listDirectory(for: profile, path: path)
+                .filter(\.canOpenAsComic)
         case .currentFolderOnly:
             return try await browsingService
                 .listDirectory(for: profile, path: path)

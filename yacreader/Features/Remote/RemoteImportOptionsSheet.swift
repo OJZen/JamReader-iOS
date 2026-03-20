@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
+    case visibleResults
     case currentFolderOnly
     case includeSubfolders
 
@@ -10,6 +11,8 @@ enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
 
     var title: String {
         switch self {
+        case .visibleResults:
+            return "Visible Comics Only"
         case .currentFolderOnly:
             return "This Folder Only"
         case .includeSubfolders:
@@ -19,6 +22,8 @@ enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .visibleResults:
+            return "Import only the comic files currently visible in this SMB browser, including search results."
         case .currentFolderOnly:
             return "Import only the supported comics that are directly inside this folder."
         case .includeSubfolders:
