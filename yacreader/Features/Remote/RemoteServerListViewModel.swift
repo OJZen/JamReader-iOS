@@ -112,17 +112,6 @@ final class RemoteServerListViewModel: ObservableObject {
         self.readingProgressStore = readingProgressStore
     }
 
-    var summaryText: String {
-        switch profiles.count {
-        case 0:
-            return "Save SMB servers here, then browse remote folders and open comic archives on demand."
-        case 1:
-            return "1 remote server is ready for SMB browsing."
-        default:
-            return "\(profiles.count) remote servers are ready for SMB browsing."
-        }
-    }
-
     var serverCountText: String {
         "\(profiles.count)"
     }

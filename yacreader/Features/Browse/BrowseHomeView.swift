@@ -50,61 +50,51 @@ struct BrowseHomeView: View {
     }
 
     private var heroSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        InsetCard(cornerRadius: 28, contentPadding: 18, strokeOpacity: 0.04) {
             HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(viewModel.summaryTitle)
-                        .font(.largeTitle.bold())
-
-                    Text(viewModel.summaryText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+                Text(viewModel.summaryTitle)
+                    .font(.title2.weight(.semibold))
 
                 Spacer(minLength: 8)
 
                 Image(systemName: "square.grid.2x2.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(14)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.blue)
+                    .frame(width: 52, height: 52)
+                    .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
 
-            HStack(spacing: 8) {
-                StatusBadge(title: "SMB", tint: .blue)
-                StatusBadge(title: "Direct Read", tint: .green)
-                StatusBadge(title: "Import", tint: .orange)
-            }
+            AdaptiveStatusBadgeGroup(
+                badges: [
+                    StatusBadgeItem(title: "SMB", tint: .blue),
+                    StatusBadgeItem(title: "Direct Read", tint: .green),
+                    StatusBadgeItem(title: "Import", tint: .orange)
+                ]
+            )
 
-            HStack(spacing: 12) {
-                MetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
-                MetricPill(title: "Folders", value: viewModel.shortcutCountText, tint: .teal)
-                MetricPill(title: "Recent", value: viewModel.sessionCountText, tint: .green)
-                MetricPill(title: "Offline", value: viewModel.offlineReadyCountText, tint: .orange)
-            }
-            .frame(maxWidth: .infinity)
+            SummaryMetricGroup(
+                metrics: [
+                    SummaryMetricItem(title: "Servers", value: viewModel.serverCountText, tint: .blue),
+                    SummaryMetricItem(title: "Folders", value: viewModel.shortcutCountText, tint: .teal),
+                    SummaryMetricItem(title: "Recent", value: viewModel.sessionCountText, tint: .green),
+                    SummaryMetricItem(title: "Offline", value: viewModel.offlineReadyCountText, tint: .orange)
+                ]
+            )
 
-            Label(viewModel.cacheSummaryText, systemImage: "arrow.down.circle.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
-
-            Label(viewModel.thumbnailCacheSummaryText, systemImage: "photo.stack.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
+            FormOverviewContent(items: browseOverviewItems)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(.white)
-        .background(heroBackground, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .strokeBorder(.white.opacity(0.18), lineWidth: 1)
-        }
+    }
+
+    private var browseOverviewItems: [FormOverviewItem] {
+        [
+            FormOverviewItem(title: "Downloads", value: viewModel.cacheSummaryText),
+            FormOverviewItem(title: "Thumbnails", value: viewModel.thumbnailCacheSummaryText)
+        ]
     }
 
     private var browseToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Browse Tools", subtitle: "Keep SMB connection setup here, and let reading and folder destinations stay in their own stable sections below.")
+            sectionHeader("Browse Tools")
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 155, maximum: 240), spacing: 12)],
@@ -115,7 +105,7 @@ struct BrowseHomeView: View {
                 } label: {
                     ActionCard(
                         title: "Manage Servers",
-                        subtitle: "Add, edit, or clean up saved SMB connections.",
+                        badges: manageServersBadges,
                         systemImage: "server.rack",
                         tint: .blue
                     )
@@ -130,7 +120,7 @@ struct BrowseHomeView: View {
         if let profile = viewModel.continueReadingProfile,
            let session = viewModel.continueReadingSession {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Continue Reading", subtitle: "Pick up the last remote comic without re-browsing the folder tree.")
+                sectionHeader("Continue Reading")
 
                 NavigationLink {
                     RemoteComicLoadingView(
@@ -155,14 +145,10 @@ struct BrowseHomeView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             if sessions.isEmpty {
-                sectionHeader(
-                    "Offline Ready",
-                    subtitle: "Open downloaded remote comics immediately, even before the SMB server responds."
-                )
+                sectionHeader("Offline Ready")
             } else {
                 sectionHeaderLink(
                     title: "Offline Ready",
-                    subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.",
                     destinationLabel: "See All"
                 ) {
                     RemoteOfflineShelfView(dependencies: dependencies)
@@ -175,9 +161,7 @@ struct BrowseHomeView: View {
                 } label: {
                     ActionCard(
                         title: "Offline Shelf",
-                        subtitle: viewModel.offlineReadySessions.isEmpty
-                            ? "No downloaded remote comics yet. Open the shelf to manage offline copies as they appear."
-                            : "\(viewModel.offlineReadySessions.count) downloaded remote comics are ready offline.",
+                        badges: offlineShelfActionBadges,
                         systemImage: "arrow.down.circle.fill",
                         tint: .green
                     )
@@ -218,14 +202,10 @@ struct BrowseHomeView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             if shortcutEntries.isEmpty {
-                sectionHeader(
-                    "Saved Folders",
-                    subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page."
-                )
+                sectionHeader("Saved Folders")
             } else {
                 sectionHeaderLink(
                     title: "Saved Folders",
-                    subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page.",
                     destinationLabel: "See All"
                 ) {
                     SavedRemoteFoldersView(dependencies: dependencies)
@@ -238,7 +218,7 @@ struct BrowseHomeView: View {
                 } label: {
                     ActionCard(
                         title: "Saved Folders",
-                        subtitle: "Pin frequently used SMB directories from the remote browser to keep them one tap away here.",
+                        badges: savedFoldersActionBadges,
                         systemImage: "star.fill",
                         tint: .teal
                     )
@@ -267,21 +247,23 @@ struct BrowseHomeView: View {
     }
 
     @ViewBuilder
-    private func sectionHeader(_ title: String, subtitle: String) -> some View {
+    private func sectionHeader(_ title: String, subtitle: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.headline)
 
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     @ViewBuilder
     private func sectionHeaderLink<Destination: View>(
         title: String,
-        subtitle: String,
+        subtitle: String? = nil,
         destinationLabel: String,
         @ViewBuilder destination: () -> Destination
     ) -> some View {
@@ -302,39 +284,66 @@ struct BrowseHomeView: View {
     }
 
     private var background: some View {
-        LinearGradient(
-            colors: [
-                Color(.systemBackground),
-                Color(.secondarySystemBackground).opacity(0.7),
-                Color(.systemBackground)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
     }
 
-    private var heroBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                Color(red: 0.14, green: 0.28, blue: 0.58),
-                Color(red: 0.11, green: 0.53, blue: 0.60),
-                Color(red: 0.15, green: 0.68, blue: 0.49)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    private var manageServersBadges: [StatusBadgeItem] {
+        let title = viewModel.profiles.isEmpty
+            ? "No Servers"
+            : "\(viewModel.profiles.count) servers"
+        return [StatusBadgeItem(title: title, tint: .blue)]
+    }
+
+    private var offlineShelfActionBadges: [StatusBadgeItem] {
+        if viewModel.offlineReadySessions.isEmpty {
+            return [StatusBadgeItem(title: "Empty", tint: .gray)]
+        }
+
+        let count = viewModel.offlineReadySessions.count
+        return [
+            StatusBadgeItem(
+                title: count == 1 ? "1 comic" : "\(count) comics",
+                tint: .green
+            )
+        ]
+    }
+
+    private var savedFoldersActionBadges: [StatusBadgeItem] {
+        if viewModel.profiles.isEmpty {
+            return [StatusBadgeItem(title: "No Servers", tint: .gray)]
+        }
+
+        let title = viewModel.profiles.count == 1
+            ? "1 server"
+            : "\(viewModel.profiles.count) servers"
+        return [StatusBadgeItem(title: title, tint: .teal)]
     }
 }
 
 private struct ActionCard: View {
     let title: String
-    let subtitle: String
+    let subtitle: String?
+    let badges: [StatusBadgeItem]
     let systemImage: String
     let tint: Color
 
+    init(
+        title: String,
+        subtitle: String? = nil,
+        badges: [StatusBadgeItem] = [],
+        systemImage: String,
+        tint: Color
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.badges = badges
+        self.systemImage = systemImage
+        self.tint = tint
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        InsetCard(contentPadding: 14) {
             Image(systemName: systemImage)
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(tint)
@@ -346,21 +355,27 @@ private struct ActionCard: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
 
-                Text(subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                AdaptiveStatusBadgeGroup(
+                    badges: badges,
+                    horizontalSpacing: 6,
+                    verticalSpacing: 6
+                )
             }
 
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
-        .padding(14)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
-        }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: subtitle == nil && badges.isEmpty ? 108 : 132,
+            alignment: .leading
+        )
     }
 }
 
@@ -369,7 +384,7 @@ private struct ContinueReadingCard: View {
     let profile: RemoteServerProfile
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        InsetCard {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "book.closed.fill")
                     .font(.title3)
@@ -399,37 +414,11 @@ private struct ContinueReadingCard: View {
                 StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
             }
 
-            Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            LabeledContent(
+                "Opened",
+                value: session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened)
+            )
+            .font(.caption)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
-        }
-    }
-}
-
-private struct MetricPill: View {
-    let title: String
-    let value: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value)
-                .font(.headline.weight(.semibold))
-
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary.opacity(0.9))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

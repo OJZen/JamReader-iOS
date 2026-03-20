@@ -31,10 +31,11 @@ struct RemoteSavedFolderCard: View {
     let shortcut: RemoteFolderShortcut
     let profile: RemoteServerProfile
     var showsNavigationIndicator = true
+    var showsServerName = true
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
-        RemoteBrowseCardShell(trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
+        InsetCard {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "star.fill")
                     .font(.title3.weight(.semibold))
@@ -45,16 +46,6 @@ struct RemoteSavedFolderCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(shortcut.title)
                         .font(.headline)
-
-                    Text(profile.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-
-                    Text(shortcut.path.isEmpty ? "/" : shortcut.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 8)
@@ -67,11 +58,48 @@ struct RemoteSavedFolderCard: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
-                StatusBadge(title: "Updated \(shortcut.updatedAt.formatted(date: .abbreviated, time: .omitted))", tint: .teal)
-            }
+            AdaptiveStatusBadgeGroup(
+                badges: shortcutBadges,
+                horizontalSpacing: 6,
+                verticalSpacing: 6
+            )
+
+            FormOverviewContent(items: shortcutOverviewItems)
         }
+        .padding(.trailing, trailingAccessoryReservedWidth)
+    }
+
+    private var shortcutBadges: [StatusBadgeItem] {
+        [
+            StatusBadgeItem(
+                title: profile.providerKind.title,
+                tint: profile.providerKind.tintColor
+            )
+        ]
+    }
+
+    private var shortcutOverviewItems: [FormOverviewItem] {
+        var items = [FormOverviewItem]()
+
+        if showsServerName {
+            items.append(FormOverviewItem(title: "Server", value: profile.name))
+        }
+
+        items.append(
+            FormOverviewItem(
+                title: "Path",
+                value: shortcut.path.isEmpty ? "/" : shortcut.path
+            )
+        )
+
+        items.append(
+            FormOverviewItem(
+                title: "Updated",
+                value: shortcut.updatedAt.formatted(date: .abbreviated, time: .omitted)
+            )
+        )
+
+        return items
     }
 }
 
@@ -80,6 +108,7 @@ struct RemoteOfflineComicCard: View {
     let profile: RemoteServerProfile
     let availability: RemoteComicCachedAvailability
     var showsNavigationIndicator = true
+    var showsServerName = true
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     private var availabilityTint: Color {
@@ -93,19 +122,19 @@ struct RemoteOfflineComicCard: View {
         }
     }
 
-    private var subtitleText: String {
+    private var availabilityStatusText: String {
         switch availability.kind {
         case .unavailable:
-            return "No downloaded copy available on this device."
+            return "No local copy"
         case .current:
-            return "Downloaded on this device and ready to open locally."
+            return "Ready on device"
         case .stale:
-            return "A downloaded copy is available locally, but the remote file may be newer."
+            return "Local copy may be older"
         }
     }
 
     var body: some View {
-        RemoteBrowseCardShell(trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
+        InsetCard {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(.title3)
@@ -116,11 +145,6 @@ struct RemoteOfflineComicCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.displayName)
                         .font(.headline)
-
-                    Text(profile.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
@@ -132,48 +156,49 @@ struct RemoteOfflineComicCard: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                if let badgeTitle = availability.badgeTitle {
-                    StatusBadge(title: badgeTitle, tint: availabilityTint)
-                }
+            AdaptiveStatusBadgeGroup(
+                badges: statusBadges,
+                horizontalSpacing: 6,
+                verticalSpacing: 6
+            )
 
-                StatusBadge(title: session.progressText, tint: session.read ? .green : .orange)
-            }
-
-            Text(subtitleText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            FormOverviewContent(items: overviewItems)
         }
-    }
-}
-
-private struct RemoteBrowseCardShell<Content: View>: View {
-    let trailingAccessoryReservedWidth: CGFloat
-    @ViewBuilder let content: Content
-
-    init(
-        trailingAccessoryReservedWidth: CGFloat = 0,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.trailingAccessoryReservedWidth = trailingAccessoryReservedWidth
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            content
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
         .padding(.trailing, trailingAccessoryReservedWidth)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
+    }
+
+    private var statusBadges: [StatusBadgeItem] {
+        var badges = [StatusBadgeItem]()
+
+        if let badgeTitle = availability.badgeTitle {
+            badges.append(StatusBadgeItem(title: badgeTitle, tint: availabilityTint))
         }
+
+        badges.append(
+            StatusBadgeItem(
+                title: session.progressText,
+                tint: session.read ? .green : .orange
+            )
+        )
+
+        return badges
+    }
+
+    private var overviewItems: [FormOverviewItem] {
+        var items = [FormOverviewItem]()
+
+        if showsServerName {
+            items.append(FormOverviewItem(title: "Server", value: profile.name))
+        }
+
+        items.append(FormOverviewItem(title: "Status", value: availabilityStatusText))
+        items.append(
+            FormOverviewItem(
+                title: "Opened",
+                value: session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened)
+            )
+        )
+
+        return items
     }
 }

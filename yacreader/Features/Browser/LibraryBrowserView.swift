@@ -787,12 +787,7 @@ struct LibraryBrowserView: View {
             Button {
                 action(policy)
             } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(policy.title)
-                    Text(policy.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(policy.title)
             }
         }
     }
@@ -812,18 +807,25 @@ struct LibraryBrowserView: View {
         let displayedComics = filteredSortedComics(content.comics, localQuery: folderSearchQuery)
 
         return List {
-            overviewSection(
-                content,
-                displayedSubfolders: displayedSubfolders,
-                displayedComics: displayedComics
-            )
+            Section {
+                overviewCard(
+                    content,
+                    displayedSubfolders: displayedSubfolders,
+                    displayedComics: displayedComics,
+                    titleFont: .headline
+                )
+                .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
+                .listRowBackground(Color.clear)
+            }
 
             if content.folder.isRoot && !hasActiveLocalFolderSearch {
-                continueReadingSection
-                recentAddedSection
-                favoritesSection
-                specialCollectionsSection
-                organizationSection
+                ForEach(rootPreviewKinds, id: \.self) { kind in
+                    collectionPreviewListSection(for: kind)
+                }
+
+                ForEach(dashboardShortcutSections) { section in
+                    shortcutListSection(section)
+                }
             }
 
             if content.subfolders.isEmpty, content.comics.isEmpty {
@@ -852,41 +854,21 @@ struct LibraryBrowserView: View {
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                gridOverviewCard(
+                overviewCard(
                     content,
                     displayedSubfolders: displayedSubfolders,
-                    displayedComics: displayedComics
+                    displayedComics: displayedComics,
+                    titleFont: .title2.weight(.semibold)
                 )
 
                 if content.folder.isRoot && !hasActiveLocalFolderSearch {
-                    continueReadingGridCard
-                    recentAddedGridSection
-                    favoritesGridSection
+                    ForEach(rootPreviewKinds, id: \.self) { kind in
+                        collectionPreviewGridSection(for: kind)
+                    }
 
-                    shortcutGridSection(
-                        title: "Collections",
-                        items: specialCollectionShortcutItems
-                    )
-
-                    shortcutGridSection(
-                        title: "Organize",
-                        items: LibraryOrganizationSectionKind.allCases.map { sectionKind in
-                            LibraryShortcutCardItem(
-                                id: sectionKind.id,
-                                title: sectionKind.title,
-                                subtitle: sectionKind.subtitle,
-                                systemImageName: sectionKind.systemImageName,
-                                tint: .orange,
-                                destination: AnyView(
-                                    LibraryOrganizationView(
-                                        descriptor: viewModel.descriptor,
-                                        sectionKind: sectionKind,
-                                        dependencies: dependencies
-                                    )
-                                )
-                            )
-                        }
-                    )
+                    ForEach(dashboardShortcutSections) { section in
+                        shortcutGridSection(section)
+                    }
                 }
 
                 if content.subfolders.isEmpty, content.comics.isEmpty {
@@ -915,9 +897,9 @@ struct LibraryBrowserView: View {
             LibraryShortcutCardItem(
                 id: kind.id,
                 title: kind.title,
-                subtitle: collectionSummarySubtitle(for: kind),
                 systemImageName: kind.systemImageName,
                 tint: .blue,
+                badgeTitle: collectionCountTitle(for: kind),
                 destination: AnyView(
                     LibrarySpecialCollectionView(
                         descriptor: viewModel.descriptor,
@@ -929,251 +911,213 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private var specialCollectionsSection: some View {
-        Section("Collections") {
-            ForEach(LibrarySpecialCollectionKind.allCases) { kind in
-                NavigationLink {
-                    LibrarySpecialCollectionView(
-                        descriptor: viewModel.descriptor,
-                        kind: kind,
-                        dependencies: dependencies
-                    )
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: kind.systemImageName)
-                            .font(.title3)
-                            .frame(width: 28, height: 28)
-                            .foregroundStyle(.blue)
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(kind.title)
-                                .font(.headline)
-
-                            Text(collectionSummarySubtitle(for: kind))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-
-                        Spacer(minLength: 12)
-
-                        StatusBadge(title: collectionCountTitle(for: kind), tint: .blue)
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var continueReadingSection: some View {
-        if let comic = viewModel.continueReadingComic {
-            Section("Continue Reading") {
-                NavigationLink {
-                    ComicReaderView(
-                        descriptor: viewModel.descriptor,
-                        comic: comic,
-                        navigationContext: ReaderNavigationContext(
-                            title: LibrarySpecialCollectionKind.reading.title,
-                            comics: viewModel.continueReadingComics
-                        ),
-                        onComicUpdated: handleReaderComicUpdate,
-                        dependencies: dependencies
-                    )
-                } label: {
-                    ContinueReadingRow(
-                        comic: comic,
-                        coverURL: viewModel.coverURL(for: comic),
-                        trailingAccessoryReservedWidth: 40
-                    )
-                }
-                .overlay(alignment: .trailing) {
-                    quickActionButton(for: comic)
-                        .padding(.trailing, 8)
-                }
-                .contextMenu {
-                    comicContextActions(for: comic)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    comicReadSwipeAction(for: comic)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    comicTrailingSwipeActions(for: comic)
-                }
-
-                NavigationLink {
-                    specialCollectionDestination(.reading)
-                } label: {
-                    collectionBrowseRow(
-                        title: "Browse Reading",
-                        subtitle: collectionSummarySubtitle(for: .reading)
-                    )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var recentAddedSection: some View {
-        if !viewModel.recentPreviewComics.isEmpty {
-            Section("Recently Added") {
-                ForEach(viewModel.recentPreviewComics) { comic in
-                    NavigationLink {
-                        ComicReaderView(
-                            descriptor: viewModel.descriptor,
-                            comic: comic,
-                            navigationContext: ReaderNavigationContext(
-                                title: LibrarySpecialCollectionKind.recent.title,
-                                comics: viewModel.recentComics
-                            ),
-                            onComicUpdated: handleReaderComicUpdate,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        LibraryComicRow(
-                            comic: comic,
-                            coverURL: viewModel.coverURL(for: comic),
-                            trailingAccessoryReservedWidth: 40
-                        )
-                    }
-                    .overlay(alignment: .trailing) {
-                        quickActionButton(for: comic)
-                            .padding(.trailing, 8)
-                    }
-                    .contextMenu {
-                        comicContextActions(for: comic)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        comicReadSwipeAction(for: comic)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        comicTrailingSwipeActions(for: comic)
-                    }
-                }
-
-                NavigationLink {
-                    specialCollectionDestination(.recent)
-                } label: {
-                    collectionBrowseRow(
-                        title: "Browse Recent",
-                        subtitle: collectionSummarySubtitle(for: .recent)
-                    )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var favoritesSection: some View {
-        if !viewModel.favoritesPreviewComics.isEmpty {
-            Section("Favorites") {
-                ForEach(viewModel.favoritesPreviewComics) { comic in
-                    NavigationLink {
-                        ComicReaderView(
-                            descriptor: viewModel.descriptor,
-                            comic: comic,
-                            navigationContext: ReaderNavigationContext(
-                                title: LibrarySpecialCollectionKind.favorites.title,
-                                comics: viewModel.favoritesComics
-                            ),
-                            onComicUpdated: handleReaderComicUpdate,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        LibraryComicRow(
-                            comic: comic,
-                            coverURL: viewModel.coverURL(for: comic),
-                            trailingAccessoryReservedWidth: 40
-                        )
-                    }
-                    .overlay(alignment: .trailing) {
-                        quickActionButton(for: comic)
-                            .padding(.trailing, 8)
-                    }
-                    .contextMenu {
-                        comicContextActions(for: comic)
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        comicReadSwipeAction(for: comic)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        comicTrailingSwipeActions(for: comic)
-                    }
-                }
-
-                NavigationLink {
-                    specialCollectionDestination(.favorites)
-                } label: {
-                    collectionBrowseRow(
-                        title: "Browse Favorites",
-                        subtitle: collectionSummarySubtitle(for: .favorites)
-                    )
-                }
-            }
-        }
-    }
-
-    private var organizationSection: some View {
-        Section("Organize") {
-            ForEach(LibraryOrganizationSectionKind.allCases) { sectionKind in
-                NavigationLink {
+    private var organizationShortcutItems: [LibraryShortcutCardItem] {
+        LibraryOrganizationSectionKind.allCases.map { sectionKind in
+            LibraryShortcutCardItem(
+                id: sectionKind.id,
+                title: sectionKind.title,
+                systemImageName: sectionKind.systemImageName,
+                tint: .orange,
+                destination: AnyView(
                     LibraryOrganizationView(
                         descriptor: viewModel.descriptor,
                         sectionKind: sectionKind,
                         dependencies: dependencies
                     )
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: sectionKind.systemImageName)
-                            .font(.title3)
-                            .frame(width: 28, height: 28)
-                            .foregroundStyle(.orange)
+                )
+            )
+        }
+    }
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(sectionKind.title)
-                                .font(.headline)
+    private var rootPreviewKinds: [LibrarySpecialCollectionKind] {
+        [.reading, .recent, .favorites]
+    }
 
-                            Text(sectionKind.subtitle)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
+    private var dashboardShortcutSections: [LibraryDashboardShortcutSection] {
+        [
+            LibraryDashboardShortcutSection(
+                title: "Collections",
+                items: specialCollectionShortcutItems
+            ),
+            LibraryDashboardShortcutSection(
+                title: "Organize",
+                items: organizationShortcutItems
+            )
+        ]
+    }
+
+    @ViewBuilder
+    private func collectionPreviewListSection(for kind: LibrarySpecialCollectionKind) -> some View {
+        let comics = previewComics(for: kind)
+
+        if !comics.isEmpty {
+            Section {
+                ForEach(comics) { comic in
+                    previewListNavigationLink(for: kind, comic: comic)
+                }
+            } header: {
+                collectionPreviewHeader(for: kind)
+                    .textCase(nil)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func collectionPreviewGridSection(for kind: LibrarySpecialCollectionKind) -> some View {
+        let comics = previewComics(for: kind)
+
+        if !comics.isEmpty {
+            gridSection {
+                collectionPreviewHeader(for: kind)
+            } content: {
+                if kind == .reading, let comic = comics.first {
+                    previewGridNavigationLink(for: kind, comic: comic)
+                } else {
+                    LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
+                        ForEach(comics) { comic in
+                            previewGridNavigationLink(for: kind, comic: comic)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
             }
         }
     }
 
-    private func gridOverviewCard(
+    private func previewComics(for kind: LibrarySpecialCollectionKind) -> [LibraryComic] {
+        switch kind {
+        case .reading:
+            return viewModel.continueReadingComic.map { [$0] } ?? []
+        case .recent:
+            return viewModel.recentPreviewComics
+        case .favorites:
+            return viewModel.favoritesPreviewComics
+        }
+    }
+
+    private func previewNavigationContext(for kind: LibrarySpecialCollectionKind) -> ReaderNavigationContext {
+        ReaderNavigationContext(
+            title: kind.title,
+            comics: previewNavigationComics(for: kind)
+        )
+    }
+
+    private func previewNavigationComics(for kind: LibrarySpecialCollectionKind) -> [LibraryComic] {
+        switch kind {
+        case .reading:
+            return viewModel.continueReadingComics
+        case .recent:
+            return viewModel.recentComics
+        case .favorites:
+            return viewModel.favoritesComics
+        }
+    }
+
+    private func previewSectionTitle(for kind: LibrarySpecialCollectionKind) -> String {
+        switch kind {
+        case .reading:
+            return "Continue Reading"
+        case .recent:
+            return "Recently Added"
+        case .favorites:
+            return "Favorites"
+        }
+    }
+
+    private func previewReaderDestination(
+        for kind: LibrarySpecialCollectionKind,
+        comic: LibraryComic
+    ) -> some View {
+        comicReaderDestination(
+            comic: comic,
+            navigationContext: previewNavigationContext(for: kind)
+        )
+    }
+
+    private func previewListNavigationLink(
+        for kind: LibrarySpecialCollectionKind,
+        comic: LibraryComic
+    ) -> some View {
+        interactiveComicListNavigationLink(comic: comic) {
+            previewReaderDestination(for: kind, comic: comic)
+        } label: {
+            previewListRow(for: kind, comic: comic)
+        }
+    }
+
+    @ViewBuilder
+    private func previewListRow(
+        for kind: LibrarySpecialCollectionKind,
+        comic: LibraryComic
+    ) -> some View {
+        if kind == .reading {
+            ContinueReadingRow(
+                comic: comic,
+                coverURL: viewModel.coverURL(for: comic),
+                trailingAccessoryReservedWidth: 40
+            )
+        } else {
+            LibraryComicRow(
+                comic: comic,
+                coverURL: viewModel.coverURL(for: comic),
+                trailingAccessoryReservedWidth: 40
+            )
+        }
+    }
+
+    private func previewGridNavigationLink(
+        for kind: LibrarySpecialCollectionKind,
+        comic: LibraryComic
+    ) -> some View {
+        interactiveComicGridNavigationLink(comic: comic) {
+            previewReaderDestination(for: kind, comic: comic)
+        } label: {
+            previewGridCard(for: kind, comic: comic)
+        }
+    }
+
+    @ViewBuilder
+    private func previewGridCard(
+        for kind: LibrarySpecialCollectionKind,
+        comic: LibraryComic
+    ) -> some View {
+        if kind == .reading {
+            ContinueReadingCard(
+                comic: comic,
+                coverURL: viewModel.coverURL(for: comic)
+            )
+        } else {
+            LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+        }
+    }
+
+    private func overviewCard(
         _ content: LibraryFolderContent,
         displayedSubfolders: [LibraryFolder],
-        displayedComics: [LibraryComic]
+        displayedComics: [LibraryComic],
+        titleFont: Font
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        InsetCard(cornerRadius: 20, contentPadding: 16, strokeOpacity: 0.04) {
             Text(content.folder.displayName)
-                .font(.title2.weight(.semibold))
+                .font(titleFont)
 
             Text(viewModel.folderPath)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            HStack(spacing: 8) {
-                StatusBadge(title: folderCountTitle(displayed: displayedSubfolders.count, total: content.subfolders.count), tint: .blue)
-                StatusBadge(title: comicCountTitle(displayed: displayedComics.count, total: content.comics.count), tint: .green)
-                StatusBadge(title: content.folder.type.title, tint: .orange)
-                if comicFilter != .all {
-                    StatusBadge(title: comicFilter.title, tint: .teal)
-                }
+            AdaptiveStatusBadgeGroup(
+                badges: overviewBadgeItems(
+                    content,
+                    displayedSubfolders: displayedSubfolders,
+                    displayedComics: displayedComics
+                )
+            )
+
+            FormOverviewContent(
+                items: overviewDetailItems(for: content)
+            ) {
+                maintenanceSummaryView
             }
-
-            Text("Database: \(viewModel.databasePath)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-
-            maintenanceSummaryView
 
             if let scanProgress = viewModel.scanProgress {
                 scanProgressPanel(scanProgress)
@@ -1185,180 +1129,28 @@ struct LibraryBrowserView: View {
 
             localFolderControls(content)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
     }
 
-    @ViewBuilder
-    private var continueReadingGridCard: some View {
-        if let comic = viewModel.continueReadingComic {
-            VStack(alignment: .leading, spacing: 14) {
-                collectionPreviewHeader(
-                    title: "Continue Reading",
-                    subtitle: collectionSummarySubtitle(for: .reading),
-                    kind: .reading
+    private func overviewDetailItems(
+        for content: LibraryFolderContent
+    ) -> [FormOverviewItem] {
+        var items = [
+            FormOverviewItem(
+                title: content.folder.isRoot ? "Location" : "Path",
+                value: viewModel.folderPath
+            )
+        ]
+
+        if content.folder.isRoot {
+            items.append(
+                FormOverviewItem(
+                    title: "Database",
+                    value: viewModel.databasePath
                 )
-
-                NavigationLink {
-                    ComicReaderView(
-                        descriptor: viewModel.descriptor,
-                        comic: comic,
-                        navigationContext: ReaderNavigationContext(
-                            title: LibrarySpecialCollectionKind.reading.title,
-                            comics: viewModel.continueReadingComics
-                        ),
-                        onComicUpdated: handleReaderComicUpdate,
-                        dependencies: dependencies
-                    )
-                } label: {
-                    ContinueReadingCard(
-                        comic: comic,
-                        coverURL: viewModel.coverURL(for: comic)
-                    )
-                }
-                .buttonStyle(.plain)
-                .overlay(alignment: .topTrailing) {
-                    quickActionButton(for: comic, compact: true)
-                        .padding(12)
-                }
-                .contextMenu {
-                    comicContextActions(for: comic)
-                }
-            }
+            )
         }
-    }
 
-    @ViewBuilder
-    private var recentAddedGridSection: some View {
-        if !viewModel.recentPreviewComics.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                collectionPreviewHeader(
-                    title: "Recently Added",
-                    subtitle: collectionSummarySubtitle(for: .recent),
-                    kind: .recent
-                )
-
-                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
-                    ForEach(viewModel.recentPreviewComics) { comic in
-                        NavigationLink {
-                            ComicReaderView(
-                                descriptor: viewModel.descriptor,
-                                comic: comic,
-                                navigationContext: ReaderNavigationContext(
-                                    title: LibrarySpecialCollectionKind.recent.title,
-                                    comics: viewModel.recentComics
-                                ),
-                                onComicUpdated: handleReaderComicUpdate,
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .topTrailing) {
-                            quickActionButton(for: comic, compact: true)
-                                .padding(12)
-                        }
-                        .contextMenu {
-                            comicContextActions(for: comic)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var favoritesGridSection: some View {
-        if !viewModel.favoritesPreviewComics.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                collectionPreviewHeader(
-                    title: "Favorites",
-                    subtitle: collectionSummarySubtitle(for: .favorites),
-                    kind: .favorites
-                )
-
-                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
-                    ForEach(viewModel.favoritesPreviewComics) { comic in
-                        NavigationLink {
-                            ComicReaderView(
-                                descriptor: viewModel.descriptor,
-                                comic: comic,
-                                navigationContext: ReaderNavigationContext(
-                                    title: LibrarySpecialCollectionKind.favorites.title,
-                                    comics: viewModel.favoritesComics
-                                ),
-                                onComicUpdated: handleReaderComicUpdate,
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .topTrailing) {
-                            quickActionButton(for: comic, compact: true)
-                                .padding(12)
-                        }
-                        .contextMenu {
-                            comicContextActions(for: comic)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func overviewSection(
-        _ content: LibraryFolderContent,
-        displayedSubfolders: [LibraryFolder],
-        displayedComics: [LibraryComic]
-    ) -> some View {
-        Section {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(content.folder.displayName)
-                    .font(.headline)
-
-                Text(viewModel.folderPath)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-
-                HStack(spacing: 8) {
-                    StatusBadge(title: folderCountTitle(displayed: displayedSubfolders.count, total: content.subfolders.count), tint: .blue)
-                    StatusBadge(title: comicCountTitle(displayed: displayedComics.count, total: content.comics.count), tint: .green)
-                    StatusBadge(title: content.folder.type.title, tint: .orange)
-                    if comicFilter != .all {
-                        StatusBadge(title: comicFilter.title, tint: .teal)
-                    }
-                }
-
-                Text("Database: \(viewModel.databasePath)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-
-                maintenanceSummaryView
-
-                if let scanProgress = viewModel.scanProgress {
-                    scanProgressPanel(scanProgress)
-                }
-
-                if let compatibilityPresentation = viewModel.compatibilityPresentation {
-                    libraryImportCompatibilityPanel(compatibilityPresentation)
-                }
-
-                localFolderControls(content)
-            }
-            .padding(.vertical, 8)
-        }
+        return items
     }
 
     private func libraryImportCompatibilityPanel(
@@ -1386,7 +1178,7 @@ struct LibraryBrowserView: View {
     private var maintenanceSummaryView: some View {
         if let maintenanceRecord = viewModel.maintenanceRecord {
             VStack(alignment: .leading, spacing: 2) {
-                Text(maintenanceRecord.summaryLine)
+                LabeledContent("Latest Scan", value: maintenanceRecord.summaryLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -1397,24 +1189,46 @@ struct LibraryBrowserView: View {
                 }
             }
         } else if let summary = viewModel.lastInitializationSummary {
-            Text("Latest scan: \(summary.summaryLine)")
+            LabeledContent("Latest Scan", value: summary.summaryLine)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
 
-    @ViewBuilder
-    private func shortcutGridSection(
-        title: String,
-        items: [LibraryShortcutCardItem]
-    ) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(title)
-                    .font(.headline)
+    private func overviewBadgeItems(
+        _ content: LibraryFolderContent,
+        displayedSubfolders: [LibraryFolder],
+        displayedComics: [LibraryComic]
+    ) -> [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: folderCountTitle(displayed: displayedSubfolders.count, total: content.subfolders.count),
+                tint: .blue
+            ),
+            StatusBadgeItem(
+                title: comicCountTitle(displayed: displayedComics.count, total: content.comics.count),
+                tint: .green
+            ),
+            StatusBadgeItem(title: content.folder.type.title, tint: .orange)
+        ]
 
+        if comicFilter != .all {
+            badges.append(StatusBadgeItem(title: comicFilter.title, tint: .teal))
+        }
+
+        if hasActiveLocalFolderSearch {
+            badges.append(StatusBadgeItem(title: "Searching", tint: .pink))
+        }
+
+        return badges
+    }
+
+    @ViewBuilder
+    private func shortcutGridSection(_ section: LibraryDashboardShortcutSection) -> some View {
+        if !section.items.isEmpty {
+            gridSection(title: section.title) {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
-                    ForEach(items) { item in
+                    ForEach(section.items) { item in
                         NavigationLink {
                             item.destination
                         } label: {
@@ -1428,19 +1242,26 @@ struct LibraryBrowserView: View {
     }
 
     @ViewBuilder
+    private func shortcutListSection(_ section: LibraryDashboardShortcutSection) -> some View {
+        if !section.items.isEmpty {
+            Section(section.title) {
+                ForEach(section.items) { item in
+                    NavigationLink {
+                        item.destination
+                    } label: {
+                        LibraryShortcutRow(item: item)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func foldersSection(_ folders: [LibraryFolder]) -> some View {
         if !folders.isEmpty {
             Section("Folders") {
                 ForEach(folders) { folder in
-                    NavigationLink {
-                        LibraryBrowserView(
-                            descriptor: viewModel.descriptor,
-                            folderID: folder.id,
-                            dependencies: dependencies
-                        )
-                    } label: {
-                        LibraryFolderRow(folder: folder, coverURL: viewModel.coverURL(for: folder))
-                    }
+                    folderListNavigationLink(for: folder)
                 }
             }
         }
@@ -1449,22 +1270,10 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func folderGridSection(_ folders: [LibraryFolder]) -> some View {
         if !folders.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Folders")
-                    .font(.headline)
-
+            gridSection(title: "Folders") {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
                     ForEach(folders) { folder in
-                        NavigationLink {
-                            LibraryBrowserView(
-                                descriptor: viewModel.descriptor,
-                                folderID: folder.id,
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            LibraryFolderCard(folder: folder, coverURL: viewModel.coverURL(for: folder))
-                        }
-                        .buttonStyle(.plain)
+                        folderGridNavigationLink(for: folder)
                     }
                 }
             }
@@ -1489,16 +1298,13 @@ struct LibraryBrowserView: View {
                         }
                         .buttonStyle(.plain)
                     } else {
-                        NavigationLink {
-                            ComicReaderView(
-                                descriptor: viewModel.descriptor,
+                        interactiveComicListNavigationLink(comic: comic) {
+                            comicReaderDestination(
                                 comic: comic,
                                 navigationContext: ReaderNavigationContext(
                                     title: content.folder.displayName,
                                     comics: displayedComics
-                                ),
-                                onComicUpdated: handleReaderComicUpdate,
-                                dependencies: dependencies
+                                )
                             )
                         } label: {
                             LibraryComicRow(
@@ -1506,19 +1312,6 @@ struct LibraryBrowserView: View {
                                 coverURL: viewModel.coverURL(for: comic),
                                 trailingAccessoryReservedWidth: 40
                             )
-                        }
-                        .overlay(alignment: .trailing) {
-                            quickActionButton(for: comic)
-                                .padding(.trailing, 8)
-                        }
-                        .contextMenu {
-                            comicContextActions(for: comic)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            comicReadSwipeAction(for: comic)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            comicTrailingSwipeActions(for: comic)
                         }
                     }
                 }
@@ -1529,10 +1322,7 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func comicGridSection(_ content: LibraryFolderContent, displayedComics: [LibraryComic]) -> some View {
         if !displayedComics.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Comics")
-                    .font(.headline)
-
+            gridSection(title: "Comics") {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
                     ForEach(displayedComics) { comic in
                         if isSelectionMode {
@@ -1548,32 +1338,126 @@ struct LibraryBrowserView: View {
                             }
                             .buttonStyle(.plain)
                         } else {
-                            NavigationLink {
-                                ComicReaderView(
-                                    descriptor: viewModel.descriptor,
+                            interactiveComicGridNavigationLink(comic: comic) {
+                                comicReaderDestination(
                                     comic: comic,
                                     navigationContext: ReaderNavigationContext(
                                         title: content.folder.displayName,
                                         comics: displayedComics
-                                    ),
-                                    onComicUpdated: handleReaderComicUpdate,
-                                    dependencies: dependencies
+                                    )
                                 )
                             } label: {
                                 LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-                            }
-                            .buttonStyle(.plain)
-                            .overlay(alignment: .topTrailing) {
-                                quickActionButton(for: comic, compact: true)
-                                    .padding(12)
-                            }
-                            .contextMenu {
-                                comicContextActions(for: comic)
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    private func gridSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        gridSection {
+            Text(title)
+                .font(.headline)
+        } content: {
+            content()
+        }
+    }
+
+    private func gridSection<Header: View, Content: View>(
+        @ViewBuilder header: () -> Header,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header()
+            content()
+        }
+    }
+
+    private func folderDestination(for folder: LibraryFolder) -> some View {
+        LibraryBrowserView(
+            descriptor: viewModel.descriptor,
+            folderID: folder.id,
+            dependencies: dependencies
+        )
+    }
+
+    private func folderListNavigationLink(for folder: LibraryFolder) -> some View {
+        NavigationLink {
+            folderDestination(for: folder)
+        } label: {
+            LibraryFolderRow(folder: folder, coverURL: viewModel.coverURL(for: folder))
+        }
+    }
+
+    private func folderGridNavigationLink(for folder: LibraryFolder) -> some View {
+        NavigationLink {
+            folderDestination(for: folder)
+        } label: {
+            LibraryFolderCard(folder: folder, coverURL: viewModel.coverURL(for: folder))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func comicReaderDestination(
+        comic: LibraryComic,
+        navigationContext: ReaderNavigationContext
+    ) -> some View {
+        ComicReaderView(
+            descriptor: viewModel.descriptor,
+            comic: comic,
+            navigationContext: navigationContext,
+            onComicUpdated: handleReaderComicUpdate,
+            dependencies: dependencies
+        )
+    }
+
+    private func interactiveComicListNavigationLink<Destination: View, Label: View>(
+        comic: LibraryComic,
+        @ViewBuilder destination: () -> Destination,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            label()
+        }
+        .overlay(alignment: .trailing) {
+            quickActionButton(for: comic)
+                .padding(.trailing, 8)
+        }
+        .contextMenu {
+            comicContextActions(for: comic)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            comicReadSwipeAction(for: comic)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            comicTrailingSwipeActions(for: comic)
+        }
+    }
+
+    private func interactiveComicGridNavigationLink<Destination: View, Label: View>(
+        comic: LibraryComic,
+        @ViewBuilder destination: () -> Destination,
+        @ViewBuilder label: () -> Label
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            quickActionButton(for: comic, compact: true)
+                .padding(12)
+        }
+        .contextMenu {
+            comicContextActions(for: comic)
         }
     }
 
@@ -1656,60 +1540,24 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private func collectionSummarySubtitle(for kind: LibrarySpecialCollectionKind) -> String {
-        kind.dashboardSubtitle(
-            count: viewModel.specialCollectionCount(for: kind),
-            recentDays: viewModel.currentRecentDays
-        )
-    }
-
     private func collectionCountTitle(for kind: LibrarySpecialCollectionKind) -> String {
         let count = viewModel.specialCollectionCount(for: kind)
         return count == 1 ? "1 comic" : "\(count) comics"
     }
 
-    private func collectionBrowseRow(title: String, subtitle: String) -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 12)
-
-            Image(systemName: "arrow.right.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.blue)
-        }
-        .padding(.vertical, 4)
-    }
-
     private func collectionPreviewHeader(
-        title: String,
-        subtitle: String,
-        kind: LibrarySpecialCollectionKind
+        for kind: LibrarySpecialCollectionKind
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+        HStack(spacing: 12) {
+            Text(previewSectionTitle(for: kind))
+                .font(.headline)
 
             Spacer(minLength: 12)
 
             NavigationLink {
                 specialCollectionDestination(kind)
             } label: {
-                Label("See All", systemImage: "arrow.right")
+                Text("See All")
                     .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.plain)
@@ -1990,39 +1838,7 @@ struct LibraryBrowserView: View {
 
     private var searchResultsView: some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Search")
-                        .font(.headline)
-
-                    Text("Query: \(viewModel.searchQuery)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    if let results = viewModel.searchResults {
-                        Text(results.summaryText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if !results.comics.isEmpty {
-                            Text(searchFilterSummaryText(totalCount: results.comics.count))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if viewModel.isSearching {
-                        Text("Searching library database...")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let results = viewModel.searchResults,
-                       !results.comics.isEmpty {
-                        LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                            comicFilter = selectedFilter
-                        }
-                    }
-                }
-                .padding(.vertical, 8)
-            }
+            searchResultsSummarySection
 
             if viewModel.isSearching {
                 Section {
@@ -2049,15 +1865,7 @@ struct LibraryBrowserView: View {
                     if !results.folders.isEmpty {
                         Section("Matching Folders") {
                             ForEach(results.folders) { folder in
-                                NavigationLink {
-                                    LibraryBrowserView(
-                                        descriptor: viewModel.descriptor,
-                                        folderID: folder.id,
-                                        dependencies: dependencies
-                                    )
-                                } label: {
-                                    LibraryFolderRow(folder: folder, coverURL: viewModel.coverURL(for: folder))
-                                }
+                                folderListNavigationLink(for: folder)
                             }
                         }
                     }
@@ -2065,16 +1873,13 @@ struct LibraryBrowserView: View {
                     if !displayedSearchComics.isEmpty {
                         Section("Matching Comics") {
                             ForEach(displayedSearchComics) { comic in
-                                NavigationLink {
-                                    ComicReaderView(
-                                        descriptor: viewModel.descriptor,
+                                interactiveComicListNavigationLink(comic: comic) {
+                                    comicReaderDestination(
                                         comic: comic,
                                         navigationContext: ReaderNavigationContext(
                                             title: "Search",
                                             comics: displayedSearchComics
-                                        ),
-                                        onComicUpdated: handleReaderComicUpdate,
-                                        dependencies: dependencies
+                                        )
                                     )
                                 } label: {
                                     LibraryComicRow(
@@ -2082,19 +1887,6 @@ struct LibraryBrowserView: View {
                                         coverURL: viewModel.coverURL(for: comic),
                                         trailingAccessoryReservedWidth: 40
                                     )
-                                }
-                                .overlay(alignment: .trailing) {
-                                    quickActionButton(for: comic)
-                                        .padding(.trailing, 8)
-                                }
-                                .contextMenu {
-                                    comicContextActions(for: comic)
-                                }
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    comicReadSwipeAction(for: comic)
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    comicTrailingSwipeActions(for: comic)
                                 }
                             }
                         }
@@ -2106,6 +1898,93 @@ struct LibraryBrowserView: View {
                 }
             }
         }
+    }
+
+    private var searchResultsSummarySection: some View {
+        Section {
+            SectionSummaryCard(
+                title: "Search",
+                badges: searchResultBadgeItems,
+                titleFont: .headline,
+                cornerRadius: 20,
+                contentPadding: 16,
+                strokeOpacity: 0.04
+            ) {
+                if let results = viewModel.searchResults {
+                    SummaryMetricGroup(
+                        metrics: searchResultMetrics(for: results),
+                        style: .compactValue
+                    )
+
+                    Text(results.summaryText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !results.comics.isEmpty {
+                        Text(searchFilterSummaryText(totalCount: results.comics.count))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
+                            comicFilter = selectedFilter
+                        }
+                    }
+                } else if viewModel.isSearching {
+                    Text("Searching library database...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
+            .listRowBackground(Color.clear)
+        }
+    }
+
+    private var searchResultBadgeItems: [StatusBadgeItem] {
+        guard let results = viewModel.searchResults else {
+            return viewModel.isSearching ? [StatusBadgeItem(title: "Searching", tint: .blue)] : []
+        }
+
+        var badges = [StatusBadgeItem]()
+
+        if comicFilter != .all, !results.comics.isEmpty {
+            badges.append(StatusBadgeItem(title: comicFilter.title, tint: .teal))
+        }
+
+        if results.isEmpty {
+            badges.append(StatusBadgeItem(title: "No Results", tint: .orange))
+        }
+
+        return badges
+    }
+
+    private func searchResultMetrics(
+        for results: LibrarySearchResults
+    ) -> [SummaryMetricItem] {
+        var metrics = [
+            SummaryMetricItem(
+                title: "Folders",
+                value: "\(results.folders.count)",
+                tint: .blue
+            ),
+            SummaryMetricItem(
+                title: "Comics",
+                value: "\(results.comics.count)",
+                tint: .green
+            )
+        ]
+
+        if comicFilter != .all, !results.comics.isEmpty {
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Visible",
+                    value: "\(visibleComics.count)",
+                    tint: .teal
+                )
+            )
+        }
+
+        return metrics
     }
 
     private func searchFilterSummaryText(totalCount: Int) -> String {
@@ -2153,10 +2032,45 @@ private enum LibraryBrowserDisplayMode: String, CaseIterable, Identifiable {
 private struct LibraryShortcutCardItem: Identifiable {
     let id: String
     let title: String
-    let subtitle: String
+    let subtitle: String?
     let systemImageName: String
     let tint: Color
+    let badgeTitle: String?
     let destination: AnyView
+
+    init(
+        id: String,
+        title: String,
+        subtitle: String? = nil,
+        systemImageName: String,
+        tint: Color,
+        badgeTitle: String? = nil,
+        destination: AnyView
+    ) {
+        self.id = id
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImageName = systemImageName
+        self.tint = tint
+        self.badgeTitle = badgeTitle
+        self.destination = destination
+    }
+}
+
+private struct LibraryDashboardShortcutSection: Identifiable {
+    let id: String
+    let title: String
+    let items: [LibraryShortcutCardItem]
+
+    init(
+        id: String? = nil,
+        title: String,
+        items: [LibraryShortcutCardItem]
+    ) {
+        self.id = id ?? title
+        self.title = title
+        self.items = items
+    }
 }
 
 private struct ScanCompletionBanner: View {
@@ -2208,12 +2122,14 @@ private struct LibraryFolderRow: View {
     let coverURL: URL?
 
     var body: some View {
-        HStack(spacing: 12) {
+        LibraryBrowserListRowShell {
+            EmptyView()
+        } thumbnail: {
             LocalCoverThumbnailView(
                 url: coverURL,
                 placeholderSystemName: "folder.fill"
             )
-
+        } content: {
             VStack(alignment: .leading, spacing: 6) {
                 Text(folder.displayName)
                     .font(.headline)
@@ -2230,20 +2146,11 @@ private struct LibraryFolderRow: View {
                         .lineLimit(1)
                 }
 
-                HStack(spacing: 8) {
-                    StatusBadge(title: folder.type.title, tint: .orange)
-
-                    if folder.finished {
-                        StatusBadge(title: "Finished", tint: .green)
-                    } else if folder.completed {
-                        StatusBadge(title: "Complete", tint: .blue)
-                    }
-                }
+                AdaptiveStatusBadgeGroup(badges: folder.browserBadgeItems)
             }
-
-            Spacer(minLength: 12)
+        } trailingAccessory: {
+            EmptyView()
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -2251,33 +2158,68 @@ private struct LibraryShortcutCard: View {
     let item: LibraryShortcutCardItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: item.systemImageName)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(item.tint)
+        InsetCard(cornerRadius: 18, contentPadding: 18, strokeOpacity: 0.06) {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.title)
+                        .font(.headline)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.title)
-                    .font(.headline)
+                    if let subtitle = item.subtitle {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+            } icon: {
+                Image(systemName: item.systemImageName)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(item.tint)
+            }
+            .labelStyle(.titleAndIcon)
 
-                Text(item.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
+            if let badgeTitle = item.badgeTitle {
+                StatusBadge(title: badgeTitle, tint: item.tint)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        .frame(maxWidth: .infinity, minHeight: item.subtitle == nil ? 108 : 132, alignment: .topLeading)
+    }
+}
+
+private struct LibraryShortcutRow: View {
+    let item: LibraryShortcutCardItem
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.title)
+                        .font(.headline)
+
+                    if let subtitle = item.subtitle {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            } icon: {
+                Image(systemName: item.systemImageName)
+                    .font(.title3)
+                    .frame(width: 28, height: 28)
+                    .foregroundStyle(item.tint)
+            }
+            .labelStyle(.titleAndIcon)
+
+            Spacer(minLength: 12)
+
+            if let badgeTitle = item.badgeTitle {
+                StatusBadge(title: badgeTitle, tint: item.tint)
+            }
         }
+        .padding(.vertical, 4)
     }
 }
 
@@ -2287,14 +2229,16 @@ private struct ContinueReadingRow: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 14) {
+        LibraryBrowserListRowShell(spacing: 14, trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
+            EmptyView()
+        } thumbnail: {
             LocalCoverThumbnailView(
                 url: coverURL,
                 placeholderSystemName: "book.closed.fill",
                 width: 64,
                 height: 92
             )
-
+        } content: {
             VStack(alignment: .leading, spacing: 8) {
                 Text(comic.displayTitle)
                     .font(.headline)
@@ -2305,22 +2249,12 @@ private struct ContinueReadingRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    StatusBadge(title: comic.progressText, tint: comic.read ? .green : .orange)
-
-                    if !comic.bookmarkPageIndices.isEmpty {
-                        StatusBadge(title: "\(comic.bookmarkPageIndices.count) bookmarks", tint: .blue)
-                    }
-                }
+                AdaptiveStatusBadgeGroup(badges: comic.continueReadingRowBadges)
             }
-
-            Spacer(minLength: 12)
-
+        } trailingAccessory: {
             Image(systemName: "play.fill")
                 .foregroundStyle(.blue)
         }
-        .padding(.vertical, 4)
-        .padding(.trailing, trailingAccessoryReservedWidth)
     }
 }
 
@@ -2329,47 +2263,36 @@ private struct ContinueReadingCard: View {
     let coverURL: URL?
 
     var body: some View {
-        HStack(spacing: 18) {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "book.closed.fill",
-                width: 104,
-                height: 148
-            )
+        LibraryBrowserContentCard(minHeight: 188, cornerRadius: 20, contentPadding: 20) {
+            HStack(spacing: 18) {
+                LocalCoverThumbnailView(
+                    url: coverURL,
+                    placeholderSystemName: "book.closed.fill",
+                    width: 104,
+                    height: 148
+                )
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(comic.displayTitle)
-                    .font(.title3.weight(.semibold))
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(comic.displayTitle)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(2)
 
-                Text(comic.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    Text(comic.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
 
-                HStack(spacing: 8) {
-                    StatusBadge(title: comic.progressText, tint: comic.read ? .green : .orange)
-                    StatusBadge(title: comic.type.title, tint: .gray)
+                    AdaptiveStatusBadgeGroup(badges: comic.continueReadingCardBadges)
+
+                    Spacer(minLength: 0)
+
+                    Label("Resume", systemImage: "play.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.blue)
                 }
 
                 Spacer(minLength: 0)
-
-                Label("Resume", systemImage: "play.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.blue)
             }
-
-            Spacer(minLength: 0)
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, minHeight: 188, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
     }
 }
@@ -2379,7 +2302,7 @@ private struct LibraryFolderCard: View {
     let coverURL: URL?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        LibraryBrowserContentCard(minHeight: 250) {
             LocalCoverThumbnailView(
                 url: coverURL,
                 placeholderSystemName: "folder.fill",
@@ -2397,26 +2320,8 @@ private struct LibraryFolderCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                HStack(spacing: 8) {
-                    StatusBadge(title: folder.type.title, tint: .orange)
-
-                    if folder.finished {
-                        StatusBadge(title: "Finished", tint: .green)
-                    } else if folder.completed {
-                        StatusBadge(title: "Complete", tint: .blue)
-                    }
-                }
+                AdaptiveStatusBadgeGroup(badges: folder.browserBadgeItems)
             }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
     }
 }
@@ -2429,18 +2334,20 @@ struct LibraryComicRow: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 12) {
+        LibraryBrowserListRowShell(trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
             if showsSelectionState {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
+            } else {
+                EmptyView()
             }
-
+        } thumbnail: {
             LocalCoverThumbnailView(
                 url: coverURL,
                 placeholderSystemName: "book.closed.fill"
             )
-
+        } content: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top, spacing: 8) {
                     Text(comic.displayTitle)
@@ -2459,22 +2366,11 @@ struct LibraryComicRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    StatusBadge(title: comic.progressText, tint: comic.read ? .green : .orange)
-                    StatusBadge(title: comic.type.title, tint: .gray)
-
-                    if comic.isFavorite {
-                        StatusBadge(title: "Favorite", tint: .yellow)
-                    }
-
-                    if !comic.bookmarkPageIndices.isEmpty {
-                        StatusBadge(title: "\(comic.bookmarkPageIndices.count) bookmarks", tint: .blue)
-                    }
-                }
+                AdaptiveStatusBadgeGroup(badges: comic.browserRowBadges)
             }
+        } trailingAccessory: {
+            EmptyView()
         }
-        .padding(.vertical, 4)
-        .padding(.trailing, trailingAccessoryReservedWidth)
     }
 }
 
@@ -2485,7 +2381,7 @@ struct LibraryComicCard: View {
     var isSelected = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        LibraryBrowserContentCard(minHeight: 330, isSelected: showsSelectionState && isSelected) {
             LocalCoverThumbnailView(
                 url: coverURL,
                 placeholderSystemName: "book.closed.fill",
@@ -2503,38 +2399,8 @@ struct LibraryComicCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                if let issueLabel = comic.issueLabel {
-                    StatusBadge(title: "#\(issueLabel)", tint: .blue)
-                }
-
-                HStack(spacing: 8) {
-                    StatusBadge(title: comic.progressText, tint: comic.read ? .green : .orange)
-                    StatusBadge(title: comic.type.title, tint: .gray)
-                }
-
-                HStack(spacing: 8) {
-                    if comic.isFavorite {
-                        StatusBadge(title: "Favorite", tint: .yellow)
-                    }
-
-                    if !comic.bookmarkPageIndices.isEmpty {
-                        StatusBadge(title: "\(comic.bookmarkPageIndices.count) bookmarks", tint: .blue)
-                    }
-                }
+                AdaptiveStatusBadgeGroup(badges: comic.browserCardBadges)
             }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, minHeight: 330, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(
-                    showsSelectionState && isSelected ? Color.accentColor : Color.black.opacity(0.06),
-                    lineWidth: showsSelectionState && isSelected ? 2 : 1
-                )
         }
         .overlay(alignment: .topTrailing) {
             if showsSelectionState {
@@ -2544,5 +2410,120 @@ struct LibraryComicCard: View {
                     .padding(14)
             }
         }
+    }
+}
+
+private struct LibraryBrowserContentCard<Content: View>: View {
+    let minHeight: CGFloat
+    var cornerRadius: CGFloat = 18
+    var contentPadding: CGFloat = 18
+    var strokeOpacity: Double = 0.06
+    var isSelected = false
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        InsetCard(
+            cornerRadius: cornerRadius,
+            contentPadding: contentPadding,
+            strokeOpacity: strokeOpacity
+        ) {
+            content()
+        }
+        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+        .overlay {
+            if isSelected {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color.accentColor, lineWidth: 2)
+            }
+        }
+    }
+}
+
+private struct LibraryBrowserListRowShell<
+    LeadingAccessory: View,
+    Thumbnail: View,
+    Content: View,
+    TrailingAccessory: View
+>: View {
+    var spacing: CGFloat = 12
+    var trailingAccessoryReservedWidth: CGFloat = 0
+    @ViewBuilder let leadingAccessory: () -> LeadingAccessory
+    @ViewBuilder let thumbnail: () -> Thumbnail
+    @ViewBuilder let content: () -> Content
+    @ViewBuilder let trailingAccessory: () -> TrailingAccessory
+
+    var body: some View {
+        HStack(spacing: spacing) {
+            leadingAccessory()
+            thumbnail()
+            content()
+            Spacer(minLength: 12)
+            trailingAccessory()
+        }
+        .padding(.vertical, 4)
+        .padding(.trailing, trailingAccessoryReservedWidth)
+    }
+}
+
+private extension LibraryFolder {
+    var browserBadgeItems: [StatusBadgeItem] {
+        var badges = [StatusBadgeItem(title: type.title, tint: .orange)]
+
+        if finished {
+            badges.append(StatusBadgeItem(title: "Finished", tint: .green))
+        } else if completed {
+            badges.append(StatusBadgeItem(title: "Complete", tint: .blue))
+        }
+
+        return badges
+    }
+}
+
+private extension LibraryComic {
+    var issueBadgeItem: StatusBadgeItem? {
+        issueLabel.map { StatusBadgeItem(title: "#\($0)", tint: .blue) }
+    }
+
+    var continueReadingRowBadges: [StatusBadgeItem] {
+        var badges = [StatusBadgeItem(title: progressText, tint: read ? .green : .orange)]
+
+        if !bookmarkPageIndices.isEmpty {
+            badges.append(StatusBadgeItem(title: "\(bookmarkPageIndices.count) bookmarks", tint: .blue))
+        }
+
+        return badges
+    }
+
+    var continueReadingCardBadges: [StatusBadgeItem] {
+        [
+            StatusBadgeItem(title: progressText, tint: read ? .green : .orange),
+            StatusBadgeItem(title: type.title, tint: .gray)
+        ]
+    }
+
+    var browserRowBadges: [StatusBadgeItem] {
+        var badges: [StatusBadgeItem] = []
+        badges.append(StatusBadgeItem(title: progressText, tint: read ? .green : .orange))
+        badges.append(StatusBadgeItem(title: type.title, tint: .gray))
+
+        if isFavorite {
+            badges.append(StatusBadgeItem(title: "Favorite", tint: .yellow))
+        }
+
+        if !bookmarkPageIndices.isEmpty {
+            badges.append(StatusBadgeItem(title: "\(bookmarkPageIndices.count) bookmarks", tint: .blue))
+        }
+
+        return badges
+    }
+
+    var browserCardBadges: [StatusBadgeItem] {
+        var badges = browserRowBadges
+
+        if let issueBadgeItem {
+            badges.insert(issueBadgeItem, at: 0)
+        }
+
+        return badges
     }
 }

@@ -30,7 +30,7 @@ struct yacreaderApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(viewModel: libraryListViewModel, dependencies: dependencies)
+            AppRootView(viewModel: libraryListViewModel, dependencies: dependencies)
         }
     }
 }

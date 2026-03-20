@@ -203,46 +203,17 @@ struct ComicReaderView: View {
 
     @ViewBuilder
     private func readerContent(for document: ComicDocument) -> some View {
-        switch document {
-        case .pdf(let pdf):
-            ReaderRotatedContentHost(rotation: readerSession.state.layout.rotation) {
-                PDFReaderContainerView(
-                    document: pdf.pdfDocument,
-                    requestedPageIndex: readerSession.state.currentPageIndex,
-                    rotation: readerSession.state.layout.rotation,
-                    onPageChanged: handleVisiblePageChange(to:),
-                    onReaderTap: handleReaderTap
-                )
-            }
-            .ignoresSafeArea()
-            .background(Color.black.ignoresSafeArea())
-        case .imageSequence(let imageSequence):
-            if readerSession.state.layout.pagingMode == .verticalContinuous {
-                VerticalImageSequenceReaderContainerView(
-                    document: imageSequence,
-                    initialPageIndex: readerSession.state.currentPageIndex,
-                    layout: readerSession.state.layout,
-                    onPageChanged: handleVisiblePageChange(to:),
-                    onReaderTap: handleReaderTap
-                )
-                .ignoresSafeArea()
-                .background(Color.black.ignoresSafeArea())
-            } else {
-                ImageSequenceReaderContainerView(
-                    document: imageSequence,
-                    initialPageIndex: readerSession.state.currentPageIndex,
-                    layout: readerSession.state.layout,
-                    onPageChanged: handleVisiblePageChange(to:),
-                    onReaderTap: handleReaderTap
-                )
-                .ignoresSafeArea()
-                .background(Color.black.ignoresSafeArea())
-            }
-        case .unsupported(let document):
+        ReaderDocumentContentView(
+            document: document,
+            pageIndex: readerSession.state.currentPageIndex,
+            layout: readerSession.state.layout,
+            onPageChanged: handleVisiblePageChange(to:),
+            onReaderTap: handleReaderTap
+        ) { unsupportedDocument in
             ContentUnavailableView(
                 "Reader Not Ready",
                 systemImage: "shippingbox",
-                description: Text("`. \(document.fileExtension)` files are already indexed by the library, but archive page extraction is still being ported.\n\n\(document.reason)")
+                description: Text("`. \(unsupportedDocument.fileExtension)` files are already indexed by the library, but archive page extraction is still being ported.\n\n\(unsupportedDocument.reason)")
             )
         }
     }
@@ -351,16 +322,7 @@ struct ComicReaderView: View {
     @ViewBuilder
     private var readerBottomBar: some View {
         if let pageIndicatorText = viewModel.pageIndicatorText {
-            HStack {
-                Spacer(minLength: 0)
-
-                Button {
-                    presentPageJump()
-                } label: {
-                    ReaderPageIndicatorChip(text: pageIndicatorText)
-                }
-                .buttonStyle(.plain)
-            }
+            ReaderPageJumpBar(pageIndicatorText: pageIndicatorText, onTap: presentPageJump)
         }
     }
 
@@ -469,134 +431,4 @@ private enum ReaderSecondaryAction {
     case metadata
     case organization
     case thumbnails
-}
-
-private struct ReaderControlsSheet: View {
-    let pageIndicatorText: String?
-    let currentPageNumber: Int?
-    let pageCount: Int?
-    let currentPageIsBookmarked: Bool
-    let bookmarkItems: [ReaderBookmarkItem]
-    let isFavorite: Bool
-    let isRead: Bool
-    let rating: Int
-    let supportsImageLayoutControls: Bool
-    let supportsDoublePageSpread: Bool
-    let supportsRotationControls: Bool
-    let fitMode: ReaderFitMode
-    let pagingMode: ReaderPagingMode
-    let spreadMode: ReaderSpreadMode
-    let readingDirection: ReaderReadingDirection
-    let coverAsSinglePage: Bool
-    let rotation: ReaderRotationAngle
-    let onDone: () -> Void
-    let onToggleFavorite: () -> Void
-    let onToggleReadStatus: () -> Void
-    let onOpenQuickMetadata: () -> Void
-    let onOpenMetadata: () -> Void
-    let onOpenOrganization: () -> Void
-    let onOpenThumbnails: () -> Void
-    let onToggleBookmark: () -> Void
-    let onSetRating: (Int) -> Void
-    let onGoToBookmark: (Int) -> Void
-    let onGoToPageNumber: (Int) -> Void
-    let onSetFitMode: (ReaderFitMode) -> Void
-    let onSetPagingMode: (ReaderPagingMode) -> Void
-    let onSetSpreadMode: (ReaderSpreadMode) -> Void
-    let onSetReadingDirection: (ReaderReadingDirection) -> Void
-    let onSetCoverAsSinglePage: (Bool) -> Void
-    let onRotateCounterClockwise: () -> Void
-    let onRotateClockwise: () -> Void
-    let onResetRotation: () -> Void
-
-    private var ratingBinding: Binding<Int> {
-        Binding(
-            get: { rating },
-            set: onSetRating
-        )
-    }
-
-    var body: some View {
-        ReaderControlsContainer(title: "Reader Controls", onDone: onDone) {
-            ReaderNavigationControlsSection(
-                pageIndicatorText: pageIndicatorText,
-                currentPageNumber: currentPageNumber,
-                pageCount: pageCount,
-                onOpenThumbnails: onOpenThumbnails,
-                onGoToPageNumber: onGoToPageNumber
-            )
-
-            Section("Reading Status") {
-                Button(action: onToggleFavorite) {
-                    Label(
-                        isFavorite ? "Remove Favorite" : "Add Favorite",
-                        systemImage: isFavorite ? "star.slash" : "star"
-                    )
-                }
-
-                Button(action: onToggleReadStatus) {
-                    Label(
-                        isRead ? "Mark Unread" : "Mark Read",
-                        systemImage: isRead ? "arrow.uturn.backward.circle" : "checkmark.circle"
-                    )
-                }
-
-                Button(action: onToggleBookmark) {
-                    Label(
-                        currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
-                        systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
-                    )
-                }
-
-                Picker("Rating", selection: ratingBinding) {
-                    Text("Unrated").tag(0)
-                    ForEach(1...5, id: \.self) { value in
-                        Text(value == 1 ? "1 Star" : "\(value) Stars").tag(value)
-                    }
-                }
-            }
-
-            ReaderBookmarksControlsSection(
-                bookmarkItems: bookmarkItems,
-                onGoToBookmark: onGoToBookmark
-            )
-
-            Section("Library") {
-                Button(action: onOpenQuickMetadata) {
-                    Label("Quick Edit Metadata", systemImage: "pencil")
-                }
-
-                Button(action: onOpenMetadata) {
-                    Label("Edit Metadata", systemImage: "square.and.pencil")
-                }
-
-                Button(action: onOpenOrganization) {
-                    Label("Tags and Reading Lists", systemImage: "tag")
-                }
-            }
-
-            ReaderDisplaySettingsControlsSection(
-                supportsImageLayoutControls: supportsImageLayoutControls,
-                supportsDoublePageSpread: supportsDoublePageSpread,
-                fitMode: fitMode,
-                pagingMode: pagingMode,
-                spreadMode: spreadMode,
-                readingDirection: readingDirection,
-                coverAsSinglePage: coverAsSinglePage,
-                onSetFitMode: onSetFitMode,
-                onSetPagingMode: onSetPagingMode,
-                onSetSpreadMode: onSetSpreadMode,
-                onSetReadingDirection: onSetReadingDirection,
-                onSetCoverAsSinglePage: onSetCoverAsSinglePage
-            )
-
-            ReaderRotationControlsSection(
-                supportsRotationControls: supportsRotationControls,
-                rotation: rotation,
-                onRotateCounterClockwise: onRotateCounterClockwise,
-                onRotateClockwise: onRotateClockwise,
-                onResetRotation: onResetRotation
-            )
-        }
-    }
 }

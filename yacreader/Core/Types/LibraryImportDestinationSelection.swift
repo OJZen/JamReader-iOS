@@ -50,9 +50,26 @@ struct LibraryImportDestinationOption: Identifiable, Hashable {
         }
     }
 
+    enum Status: Hashable {
+        case managed
+        case browseOnly
+        case readOnly
+
+        var title: String {
+            switch self {
+            case .managed:
+                return "Managed"
+            case .browseOnly:
+                return "Browse Only"
+            case .readOnly:
+                return "Read-Only"
+            }
+        }
+    }
+
     let selection: LibraryImportDestinationSelection
     let title: String
-    let subtitle: String
+    let status: Status?
     let detail: String?
     let availability: Availability
 

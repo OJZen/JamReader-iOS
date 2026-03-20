@@ -29,9 +29,9 @@ struct RemoteServerListView: View {
             if viewModel.profiles.isEmpty {
                 Section {
                     ContentUnavailableView(
-                        "No SMB Servers Yet",
+                        "No SMB Servers",
                         systemImage: "server.rack",
-                        description: Text("Save SMB servers here, then browse remote folders and open individual comic archives without importing an entire library first.")
+                        description: Text("Add an SMB server to start browsing.")
                     )
                     .padding(.vertical, 24)
                 }
@@ -161,40 +161,26 @@ struct RemoteServerListView: View {
 
     private var summarySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Remote SMB Access")
-                    .font(.headline)
-
-                Text(viewModel.summaryText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        RemoteSummaryMetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
-                        RemoteSummaryMetricPill(title: "Saved Folders", value: viewModel.shortcutCountText, tint: .teal)
-                        RemoteSummaryMetricPill(title: "Recent", value: viewModel.recentServerCountText, tint: .green)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        RemoteSummaryMetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
-                        RemoteSummaryMetricPill(title: "Saved Folders", value: viewModel.shortcutCountText, tint: .teal)
-                        RemoteSummaryMetricPill(title: "Recent", value: viewModel.recentServerCountText, tint: .green)
-                    }
-                }
-
-                Label("Browse keeps reading destinations and saved folders. Settings handles global remote cache cleanup.", systemImage: "info.circle")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 8) {
-                    StatusBadge(title: "SMB", tint: .blue)
-                    StatusBadge(title: "Single Comic Files", tint: .green)
-                    StatusBadge(title: "On-Demand", tint: .orange)
-                }
+            SectionSummaryCard(
+                title: "Manage SMB Servers",
+                titleFont: .headline,
+                cornerRadius: 20,
+                contentPadding: 16,
+                strokeOpacity: 0.04
+            ) {
+                SummaryMetricGroup(
+                    metrics: [
+                        SummaryMetricItem(title: "Servers", value: viewModel.serverCountText, tint: .blue),
+                        SummaryMetricItem(title: "Saved Folders", value: viewModel.shortcutCountText, tint: .teal),
+                        SummaryMetricItem(title: "Recent", value: viewModel.recentServerCountText, tint: .green)
+                    ],
+                    style: .compactValue,
+                    horizontalSpacing: 8,
+                    verticalSpacing: 8
+                )
             }
-            .padding(.vertical, 6)
+            .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
+            .listRowBackground(Color.clear)
         }
     }
 }
@@ -213,48 +199,65 @@ private struct RemoteServerRow: View {
                 .foregroundStyle(profile.providerKind.tintColor)
                 .frame(width: 28, height: 28)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(profile.name)
                     .font(.headline)
+                    .lineLimit(1)
 
-                Text(profile.connectionDisplayPath)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                RemoteServerMetadataRow(
+                    title: "Host",
+                    value: profile.normalizedHost
+                )
+
+                RemoteServerMetadataRow(
+                    title: "Share",
+                    value: profile.shareDisplaySummary,
+                    lineLimit: 2
+                )
 
                 if let latestSession {
-                    Label(
-                        "\(latestSession.displayName) · \(latestSession.progressText)",
-                        systemImage: "book.closed"
+                    RemoteServerMetadataRow(
+                        title: "Recent",
+                        value: "\(latestSession.displayName) · \(latestSession.progressText)",
+                        lineLimit: 2
                     )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
                 }
 
                 RemoteServerStatusBadgeRow(profile: profile)
 
-                if savedFolderCount > 0 || offlineCopyCount > 0 {
-                    HStack(spacing: 6) {
-                        if savedFolderCount > 0 {
-                            StatusBadge(
-                                title: savedFolderCount == 1 ? "1 saved folder" : "\(savedFolderCount) saved folders",
-                                tint: .teal
-                            )
-                        }
-
-                        if offlineCopyCount > 0 {
-                            StatusBadge(
-                                title: offlineCopyCount == 1 ? "1 offline copy" : "\(offlineCopyCount) offline copies",
-                                tint: .blue
-                            )
-                        }
-                    }
-                }
+                AdaptiveStatusBadgeGroup(
+                    badges: storageBadges,
+                    horizontalSpacing: 6,
+                    verticalSpacing: 6
+                )
             }
         }
         .padding(.vertical, 4)
         .padding(.trailing, trailingAccessoryReservedWidth)
+    }
+
+    private var storageBadges: [StatusBadgeItem] {
+        var badges: [StatusBadgeItem] = []
+
+        if savedFolderCount > 0 {
+            badges.append(
+                StatusBadgeItem(
+                    title: savedFolderCount == 1 ? "1 saved folder" : "\(savedFolderCount) saved folders",
+                    tint: .teal
+                )
+            )
+        }
+
+        if offlineCopyCount > 0 {
+            badges.append(
+                StatusBadgeItem(
+                    title: offlineCopyCount == 1 ? "1 offline copy" : "\(offlineCopyCount) offline copies",
+                    tint: .blue
+                )
+            )
+        }
+
+        return badges
     }
 }
 
@@ -263,11 +266,11 @@ private struct RemoteServerManageButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label("Manage", systemImage: "ellipsis.circle")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(.ultraThinMaterial, in: Capsule())
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(6)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Remote Server Actions")
@@ -290,18 +293,21 @@ private struct RemoteServerActionsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(profile.name)
-                            .font(.headline)
+                    Text(profile.name)
+                        .font(.headline)
 
-                        Text(profile.connectionDisplayPath)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                    RemoteServerStatusBadgeRow(profile: profile, showsPortBadge: false)
 
-                        RemoteServerStatusBadgeRow(profile: profile, showsPortBadge: false)
-                    }
-                    .padding(.vertical, 6)
+                    RemoteServerMetadataRow(
+                        title: "Host",
+                        value: profile.normalizedHost
+                    )
+
+                    RemoteServerMetadataRow(
+                        title: "Share",
+                        value: profile.shareDisplaySummary,
+                        lineLimit: 2
+                    )
                 }
 
                 Section("Manage") {
@@ -311,7 +317,7 @@ private struct RemoteServerActionsSheet: View {
                 }
 
                 if savedFolderCount > 0 || offlineCopyCount > 0 {
-                    Section {
+                    Section("Browse") {
                         if savedFolderCount > 0 {
                             Button(action: onOpenSavedFolders) {
                                 Label(
@@ -329,39 +335,26 @@ private struct RemoteServerActionsSheet: View {
                                 )
                             }
                         }
-                    } header: {
-                        Text("Browse")
-                    } footer: {
-                        Text("Jump straight into the saved SMB folders and downloaded comics that belong to this server.")
                     }
                 }
 
-                Section {
-                    if cacheSummary.isEmpty {
-                        Label("No downloaded comics are cached for this server.", systemImage: "externaldrive")
+                Section("Storage") {
+                    LabeledContent("Downloaded Cache") {
+                        Text(cacheSummary.isEmpty ? "None" : cacheSummary.summaryText)
                             .foregroundStyle(.secondary)
-                    } else {
-                        LabeledContent("Downloaded Cache") {
-                            Text(cacheSummary.summaryText)
-                                .foregroundStyle(.secondary)
-                        }
+                    }
 
+                    if !cacheSummary.isEmpty {
                         Button(role: .destructive, action: onClearCache) {
                             Label("Clear Download Cache", systemImage: "trash")
                         }
                     }
-                } header: {
-                    Text("Storage")
-                } footer: {
-                    Text("This only removes downloaded remote copies kept on the device. It does not remove the SMB server profile.")
                 }
 
                 Section {
                     Button(role: .destructive, action: onDelete) {
                         Label("Delete SMB Server", systemImage: "trash")
                     }
-                } footer: {
-                    Text("Deleting a remote server removes its saved profile and any stored password reference from the app.")
                 }
             }
             .navigationTitle("Server Actions")
@@ -377,39 +370,59 @@ private struct RemoteServerActionsSheet: View {
     }
 }
 
-private struct RemoteSummaryMetricPill: View {
-    let title: String
-    let value: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-
-            Text(value)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
-}
-
 private struct RemoteServerStatusBadgeRow: View {
     let profile: RemoteServerProfile
     var showsPortBadge = true
 
     var body: some View {
-        HStack(spacing: 6) {
-            StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
-            StatusBadge(title: profile.authenticationMode.title, tint: profile.authenticationMode == .guest ? .orange : .green)
-            if showsPortBadge, !profile.usesDefaultPort {
-                StatusBadge(title: ":\(profile.port)", tint: .teal)
-            }
+        AdaptiveStatusBadgeGroup(
+            badges: statusBadges,
+            horizontalSpacing: 6,
+            verticalSpacing: 6
+        )
+    }
+
+    private var statusBadges: [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(title: profile.providerKind.title, tint: profile.providerKind.tintColor),
+            StatusBadgeItem(
+                title: profile.authenticationMode.title,
+                tint: profile.authenticationMode == .guest ? .orange : .green
+            )
+        ]
+
+        if showsPortBadge, !profile.usesDefaultPort {
+            badges.append(StatusBadgeItem(title: ":\(profile.port)", tint: .teal))
         }
+
+        return badges
+    }
+}
+
+private struct RemoteServerMetadataRow: View {
+    let title: String
+    let value: String
+    var lineLimit = 1
+
+    var body: some View {
+        LabeledContent {
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+                .lineLimit(lineLimit)
+        } label: {
+            Text(title)
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+    }
+}
+
+private extension RemoteServerProfile {
+    var shareDisplaySummary: String {
+        let shareComponent = normalizedShareName.isEmpty ? "" : "/\(normalizedShareName)"
+        let combinedPath = "\(shareComponent)\(normalizedBaseDirectoryPath)"
+        return combinedPath.isEmpty ? "/" : combinedPath
     }
 }
 
@@ -455,17 +468,9 @@ private struct RemoteServerEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Server") {
+                Section {
                     TextField("Display name", text: $draft.name)
                         .focused($isNameFieldFocused)
-
-                    Picker("Provider", selection: $draft.providerKind) {
-                        ForEach(RemoteProviderKind.allCases) { provider in
-                            Label(provider.title, systemImage: provider.systemImage)
-                                .tag(provider)
-                        }
-                    }
-                    .disabled(true)
 
                     TextField("Host", text: $draft.host)
                         .textInputAutocapitalization(.never)
@@ -479,16 +484,16 @@ private struct RemoteServerEditorSheet: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
-                    TextField("Base directory (optional)", text: $draft.baseDirectoryPath)
+                    TextField("Base directory", text: $draft.baseDirectoryPath)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-
-                    Text("Example: host `192.168.1.20`, share `Comics`, base directory `/Manga/Weekly`.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Server")
+                } footer: {
+                    Text("Base directory is optional. Example: `/Manga/Weekly`.")
                 }
 
-                Section("Authentication") {
+                Section {
                     Picker("Mode", selection: $draft.authenticationMode) {
                         ForEach(RemoteServerAuthenticationMode.allCases) { mode in
                             Text(mode.title)
@@ -509,12 +514,12 @@ private struct RemoteServerEditorSheet: View {
                                 : "Password",
                             text: $draft.password
                         )
-
-                        if draft.hasStoredPassword {
-                            Text("Leave the password field blank to keep the existing credential already stored in Keychain.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
+                    }
+                } header: {
+                    Text("Authentication")
+                } footer: {
+                    if draft.authenticationMode.requiresPassword, draft.hasStoredPassword {
+                        Text("Leave password empty to keep the saved Keychain credential.")
                     }
                 }
             }
@@ -809,57 +814,31 @@ struct RemoteServerBrowserView: View {
 
     private var summarySection: some View {
         Section {
-            summaryContent
+            summaryCard
+                .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
+                .listRowBackground(Color.clear)
         }
     }
 
     private var summaryCard: some View {
-        summaryContent
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        SectionSummaryCard(
+            title: viewModel.profile.name,
+            badges: summaryBadges,
+            titleFont: .title3.weight(.semibold),
+            cornerRadius: 20,
+            contentPadding: 16,
+            strokeOpacity: 0.04
+        ) {
+            summaryContent
+        }
     }
 
     private var summaryContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(viewModel.profile.name)
-                .font(.headline)
-
-            Text(viewModel.connectionDetailText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
-
-            LabeledContent("Current Folder") {
-                Text(viewModel.currentPathDisplayText)
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption)
-
-            Text(browserSummaryText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                StatusBadge(title: viewModel.capabilities.providerKind.title, tint: viewModel.capabilities.providerKind.tintColor)
-                StatusBadge(title: displayMode.title, tint: .blue)
-                StatusBadge(title: sortMode.shortTitle, tint: .teal)
-                if viewModel.isCurrentFolderSaved {
-                    StatusBadge(title: "Saved", tint: .yellow)
-                }
-                if !trimmedSearchText.isEmpty {
-                    StatusBadge(title: "Filtering", tint: .orange)
-                }
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            FormOverviewContent(items: browserOverviewItems)
 
             if showsFolderActionCluster {
                 Divider()
-                    .padding(.vertical, 2)
-
-                Text(actionClusterTitle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 10) {
@@ -895,21 +874,19 @@ struct RemoteServerBrowserView: View {
             }
         } else if viewModel.items.isEmpty {
             Section {
-                ContentUnavailableView(
-                    "No Remote Comics Yet",
+                browserUnavailableContent(
+                    title: "No Remote Files",
                     systemImage: "folder",
-                    description: Text(viewModel.summaryText)
+                    description: emptyFolderDescription
                 )
-                .padding(.vertical, 24)
             }
         } else if !hasVisibleItems {
             Section {
-                ContentUnavailableView(
-                    "No Matches",
+                browserUnavailableContent(
+                    title: "No Matches",
                     systemImage: "magnifyingglass",
-                    description: Text(browserSummaryText)
+                    description: noMatchesDescription
                 )
-                .padding(.vertical, 24)
             }
         } else {
             if !displayedDirectories.isEmpty {
@@ -962,12 +939,41 @@ struct RemoteServerBrowserView: View {
                 } header: {
                     Text("Comic Files")
                 } footer: {
-                    if displayedUnsupportedFileCount > 0 {
-                        Text("\(displayedUnsupportedFileCount) unsupported remote files are hidden in this folder.")
+                    if let unsupportedFilesNoticeText {
+                        Text(unsupportedFilesNoticeText)
                     }
                 }
             }
         }
+    }
+
+    private var summaryBadges: [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: viewModel.capabilities.providerKind.title,
+                tint: viewModel.capabilities.providerKind.tintColor
+            ),
+            StatusBadgeItem(title: displayMode.title, tint: .blue),
+            StatusBadgeItem(title: sortMode.shortTitle, tint: .teal)
+        ]
+
+        if viewModel.isCurrentFolderSaved {
+            badges.append(StatusBadgeItem(title: "Saved", tint: .yellow))
+        }
+
+        if !trimmedSearchText.isEmpty {
+            badges.append(StatusBadgeItem(title: "Filtering", tint: .orange))
+        }
+
+        return badges
+    }
+
+    private var browserOverviewItems: [FormOverviewItem] {
+        [
+            FormOverviewItem(title: "Location", value: viewModel.connectionDetailText),
+            FormOverviewItem(title: "Current Folder", value: viewModel.currentPathDisplayText),
+            FormOverviewItem(title: trimmedSearchText.isEmpty ? "Visible" : "Matches", value: browserVisibleSummaryText)
+        ]
     }
 
     @ViewBuilder
@@ -984,21 +990,17 @@ struct RemoteServerBrowserView: View {
             remoteErrorContent()
                 .frame(maxWidth: .infinity)
         } else if viewModel.items.isEmpty {
-            ContentUnavailableView(
-                "No Remote Comics Yet",
+            browserUnavailableContent(
+                title: "No Remote Files",
                 systemImage: "folder",
-                description: Text(browserSummaryText)
+                description: emptyFolderDescription
             )
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
         } else if !hasVisibleItems {
-            ContentUnavailableView(
-                "No Matches",
+            browserUnavailableContent(
+                title: "No Matches",
                 systemImage: "magnifyingglass",
-                description: Text(browserSummaryText)
+                description: noMatchesDescription
             )
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
         } else {
             if !displayedDirectories.isEmpty {
                 remoteGridSection(title: "Folders", items: displayedDirectories)
@@ -1008,9 +1010,7 @@ struct RemoteServerBrowserView: View {
                 remoteGridSection(title: "Comic Files", items: displayedComicFiles)
 
                 if displayedUnsupportedFileCount > 0 {
-                    Text("\(displayedUnsupportedFileCount) unsupported remote files are hidden in this folder.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    unsupportedFilesNoticeView
                 }
             }
         }
@@ -1056,52 +1056,60 @@ struct RemoteServerBrowserView: View {
     private func remoteErrorContent() -> some View {
         let loadIssue = viewModel.loadIssue
 
-        return VStack(alignment: .leading, spacing: 16) {
-            ContentUnavailableView(
-                loadIssue?.title ?? "Remote Browser Not Ready Yet",
-                systemImage: "wifi.exclamationmark",
-                description: Text(loadIssue?.message ?? "The remote folder could not be opened.")
+        return ContentUnavailableView {
+            Label(
+                loadIssue?.title ?? "Remote Folder Unavailable",
+                systemImage: "wifi.exclamationmark"
             )
+        } description: {
+            Text(loadIssue?.message ?? "This remote folder could not be opened.")
+        } actions: {
+            errorRecoveryActions(loadIssue: loadIssue)
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+    }
 
+    @ViewBuilder
+    private func errorRecoveryActions(loadIssue: RemoteBrowserLoadIssue?) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             if let recoverySuggestion = loadIssue?.recoverySuggestion {
                 Label(recoverySuggestion, systemImage: "lightbulb")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            VStack(alignment: .leading, spacing: 12) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    retryButton
+                    manageServersButton(loadIssue: loadIssue)
+                    continueReadingButton
+                    offlineShelfButton
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    retryButton
+                    manageServersButton(loadIssue: loadIssue)
+                    continueReadingButton
+                    offlineShelfButton
+                }
+            }
+
+            if loadIssue?.prefersPathRecoveryActions == true {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 12) {
-                        retryButton
-                        manageServersButton(loadIssue: loadIssue)
-                        continueReadingButton
-                        offlineShelfButton
+                        upOneLevelButton
+                        sessionRootButton
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        retryButton
-                        manageServersButton(loadIssue: loadIssue)
-                        continueReadingButton
-                        offlineShelfButton
-                    }
-                }
-
-                if loadIssue?.prefersPathRecoveryActions == true {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 12) {
-                            upOneLevelButton
-                            sessionRootButton
-                        }
-                        VStack(alignment: .leading, spacing: 12) {
-                            upOneLevelButton
-                            sessionRootButton
-                        }
+                        upOneLevelButton
+                        sessionRootButton
                     }
                 }
             }
         }
-        .padding(.vertical, 24)
-        .frame(maxWidth: .infinity)
     }
 
     private var retryButton: some View {
@@ -1161,10 +1169,6 @@ struct RemoteServerBrowserView: View {
 
     private var showsFolderActionCluster: Bool {
         viewModel.parentPath != nil || viewModel.canImportCurrentFolderRecursively || !displayedComicFiles.isEmpty
-    }
-
-    private var actionClusterTitle: String {
-        trimmedSearchText.isEmpty ? "Folder Actions" : "Result Actions"
     }
 
     @ViewBuilder
@@ -1328,34 +1332,66 @@ struct RemoteServerBrowserView: View {
         !displayedDirectories.isEmpty || !displayedComicFiles.isEmpty
     }
 
-    private var browserSummaryText: String {
-        if let loadIssue = viewModel.loadIssue {
-            return loadIssue.message
+    private var emptyFolderDescription: String {
+        if trimmedSearchText.isEmpty {
+            return "No folders or supported comics in this location."
         }
 
-        if viewModel.items.isEmpty {
-            return viewModel.summaryText
+        return noMatchesDescription
+    }
+
+    private var noMatchesDescription: String {
+        "No folders or comics match \"\(trimmedSearchText)\"."
+    }
+
+    private var browserVisibleSummaryText: String {
+        let folderCount = displayedDirectories.count
+        let comicCount = displayedComicFiles.count
+        let hiddenCount = displayedUnsupportedFileCount
+
+        var segments = [
+            folderCount == 1 ? "1 folder" : "\(folderCount) folders",
+            comicCount == 1 ? "1 comic" : "\(comicCount) comics"
+        ]
+
+        if hiddenCount > 0 {
+            segments.append(hiddenCount == 1 ? "1 hidden" : "\(hiddenCount) hidden")
         }
 
-        if hasVisibleItems {
-            let folderCount = displayedDirectories.count
-            let comicCount = displayedComicFiles.count
-            let hiddenCount = displayedUnsupportedFileCount
-            let prefix: String
-            if trimmedSearchText.isEmpty {
-                prefix = "\(folderCount) folders and \(comicCount) comic files are visible here."
-            } else {
-                prefix = "\(folderCount) folders and \(comicCount) comic files match \"\(trimmedSearchText)\"."
-            }
+        return segments.joined(separator: " · ")
+    }
 
-            if hiddenCount > 0 {
-                return "\(prefix) \(hiddenCount) unsupported files are hidden."
-            }
-
-            return prefix
+    private var unsupportedFilesNoticeText: String? {
+        guard displayedUnsupportedFileCount > 0 else {
+            return nil
         }
 
-        return "No folders or supported comic files in this SMB folder match \"\(trimmedSearchText)\"."
+        return displayedUnsupportedFileCount == 1
+            ? "1 unsupported file hidden."
+            : "\(displayedUnsupportedFileCount) unsupported files hidden."
+    }
+
+    @ViewBuilder
+    private var unsupportedFilesNoticeView: some View {
+        if let unsupportedFilesNoticeText {
+            Text(unsupportedFilesNoticeText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func browserUnavailableContent(
+        title: String,
+        systemImage: String,
+        description: String
+    ) -> some View {
+        ContentUnavailableView(
+            title,
+            systemImage: systemImage,
+            description: Text(description)
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
     }
 
     private func filteredItems(_ items: [RemoteDirectoryItem]) -> [RemoteDirectoryItem] {
@@ -1661,22 +1697,22 @@ private enum RemoteBrowserImportRequest: Identifiable {
     var destinationPickerTitle: String {
         switch self {
         case .currentFolder:
-            return "Import Remote Folder"
+            return "Import Folder"
         case .directory:
-            return "Import Remote Directory"
+            return "Import Directory"
         case .comic:
-            return "Import Remote Comic"
+            return "Import Comic"
         }
     }
 
     var destinationPickerMessage: String {
         switch self {
         case .currentFolder:
-            return "Choose the import scope for this SMB folder, then pick which local library should receive the copied comics."
+            return "Choose where to copy comics from this folder."
         case .directory(let item):
-            return "Choose the import scope for \(item.name), then pick which local library should receive the copied comics."
+            return "Choose where to copy comics from \(item.name)."
         case .comic(let item):
-            return "Choose which local library should receive \(item.name)."
+            return "Choose where to copy \(item.name)."
         }
     }
 }

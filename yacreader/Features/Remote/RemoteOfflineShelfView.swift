@@ -133,14 +133,6 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
     }
 
-    var summaryText: String {
-        if entries.isEmpty {
-            return "Open a remote comic once and keep the downloaded copy on this device for quick access later."
-        }
-
-        return "These downloaded remote comics can open from local cache immediately, without waiting on the SMB server."
-    }
-
     func loadIfNeeded() async {
         guard !hasLoaded else {
             return
@@ -309,12 +301,12 @@ struct RemoteOfflineShelfView: View {
             if scopedEntries.isEmpty, !viewModel.isLoading {
                 Section {
                     ContentUnavailableView(
-                        focusedProfile == nil ? "No Offline Comics" : "No Offline Comics for This Server",
+                        "No Offline Comics",
                         systemImage: "arrow.down.circle",
                         description: Text(
                             focusedProfile == nil
-                                ? "Browse a remote server and open a comic once to keep a downloaded copy ready on this device."
-                                : "Browse this SMB server and save a comic offline to keep a downloaded copy ready on this device."
+                                ? "Save a remote comic offline to keep it on this device."
+                                : "Save comics from this server offline."
                         )
                     )
                     .frame(maxWidth: .infinity)
@@ -347,6 +339,7 @@ struct RemoteOfflineShelfView: View {
                                     profile: entry.profile,
                                     availability: entry.availability,
                                     showsNavigationIndicator: true,
+                                    showsServerName: false,
                                     trailingAccessoryReservedWidth: 46
                                 )
                             }
@@ -574,37 +567,25 @@ struct RemoteOfflineShelfView: View {
 
     private var emptyResultsDescription: String {
         if !trimmedSearchText.isEmpty {
-            return "No offline comics match \"\(trimmedSearchText)\"."
+            return "No matches for \"\(trimmedSearchText)\"."
         }
 
         switch filterMode {
         case .all:
-            return "There are no downloaded remote comics on this device yet."
+            return "No downloaded comics on this device."
         case .current:
-            return "There are no fully current downloaded copies in this shelf right now."
+            return "No current local copies."
         case .stale:
-            return "There are no older downloaded copies in this shelf right now."
+            return "No older local copies."
         }
     }
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(summaryTitle)
-                .font(.title2.bold())
-
-            Text(summaryText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                StatusBadge(title: viewModel.cacheSummary.isEmpty ? "Empty" : viewModel.cacheSummary.summaryText, tint: .blue)
-                StatusBadge(title: sortMode.shortTitle, tint: .teal)
-                StatusBadge(title: filterMode.title, tint: .orange)
-                if !trimmedSearchText.isEmpty {
-                    StatusBadge(title: "Searching", tint: .pink)
-                }
-            }
-
+        SectionSummaryCard(
+            title: summaryTitle,
+            badges: summaryBadges,
+            titleFont: .title2.bold()
+        ) {
             Picker("Filter", selection: $filterMode) {
                 ForEach(RemoteOfflineShelfFilter.allCases) { mode in
                     Text(mode.title)
@@ -613,21 +594,37 @@ struct RemoteOfflineShelfView: View {
             }
             .pickerStyle(.segmented)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var summaryBadges: [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: viewModel.cacheSummary.isEmpty ? "Empty" : viewModel.cacheSummary.summaryText,
+                tint: .blue
+            ),
+            StatusBadgeItem(title: sortMode.shortTitle, tint: .teal),
+            StatusBadgeItem(title: filterMode.title, tint: .orange)
+        ]
+
+        if !trimmedSearchText.isEmpty {
+            badges.append(StatusBadgeItem(title: "Searching", tint: .pink))
+        }
+
+        return badges
     }
 
     @ViewBuilder
     private func sectionHeader(for section: RemoteOfflineShelfSection) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(section.profile.name)
                     .font(.subheadline.weight(.semibold))
 
-                Text(section.summaryText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                AdaptiveStatusBadgeGroup(
+                    badges: section.headerBadges,
+                    horizontalSpacing: 6,
+                    verticalSpacing: 6
+                )
             }
 
             Spacer(minLength: 10)
@@ -660,29 +657,9 @@ struct RemoteOfflineShelfView: View {
         return viewModel.summaryTitle
     }
 
-    private var summaryText: String {
-        if let focusedProfile {
-            if scopedEntries.isEmpty {
-                return "Downloaded remote comics from \(focusedProfile.name) appear here once they are saved on this device."
-            }
-
-            return "These downloaded comics from \(focusedProfile.name) can open from local cache immediately, without waiting on the SMB server."
-        }
-
-        return viewModel.summaryText
-    }
-
     private var background: some View {
-        LinearGradient(
-            colors: [
-                Color(.systemBackground),
-                Color(.secondarySystemBackground).opacity(0.65),
-                Color(.systemBackground)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
     }
 
     private func scheduleFeedbackDismissalIfNeeded() {
@@ -742,22 +719,39 @@ private struct RemoteOfflineShelfSection: Identifiable {
         profile.id
     }
 
-    var summaryText: String {
+    var headerBadges: [StatusBadgeItem] {
         let currentCount = entries.filter { $0.availability.kind == .current }.count
         let staleCount = entries.filter { $0.availability.kind == .stale }.count
 
-        var segments: [String] = []
+        var badges = [StatusBadgeItem]()
+
         if currentCount > 0 {
-            segments.append("\(currentCount) offline ready")
+            badges.append(
+                StatusBadgeItem(
+                    title: currentCount == 1 ? "1 ready" : "\(currentCount) ready",
+                    tint: .blue
+                )
+            )
         }
+
         if staleCount > 0 {
-            segments.append("\(staleCount) older")
+            badges.append(
+                StatusBadgeItem(
+                    title: staleCount == 1 ? "1 older" : "\(staleCount) older",
+                    tint: .orange
+                )
+            )
         }
 
-        if segments.isEmpty {
-            return "\(entries.count) downloaded copies"
+        if badges.isEmpty {
+            badges.append(
+                StatusBadgeItem(
+                    title: entries.count == 1 ? "1 copy" : "\(entries.count) copies",
+                    tint: .teal
+                )
+            )
         }
 
-        return segments.joined(separator: " · ")
+        return badges
     }
 }

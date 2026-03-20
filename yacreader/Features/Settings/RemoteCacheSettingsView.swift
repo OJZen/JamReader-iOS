@@ -15,21 +15,13 @@ struct RemoteCacheSettingsView: View {
     var body: some View {
         Form {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Remote Browse Cache")
-                        .font(.headline)
-
-                    Text("Keep downloaded SMB comics and generated thumbnails under control from one place. Server setup stays in Browse, while cache maintenance stays here.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
-            }
-
-            Section("Overview") {
-                LabeledContent("Saved SMB Servers", value: "\(remoteServerCount)")
-                LabeledContent("Recent Remote Sessions", value: "\(remoteSessionCount)")
-                LabeledContent("Cache Preset", value: remoteCachePolicyPreset.title)
+                FormOverviewContent(
+                    message: "Keep downloaded SMB comics and generated thumbnails under control here, while Browse stays focused on discovery and reading.",
+                    items: [
+                        FormOverviewItem(title: "Saved SMB Servers", value: "\(remoteServerCount)"),
+                        FormOverviewItem(title: "Recent Remote Sessions", value: "\(remoteSessionCount)")
+                    ]
+                )
             }
 
             Section("Downloaded Copies") {
@@ -60,13 +52,15 @@ struct RemoteCacheSettingsView: View {
             }
 
             Section("Thumbnails") {
+                if !remoteThumbnailCacheSummary.isEmpty {
+                    LabeledContent("Thumbnail Cache", value: remoteThumbnailCacheSummary.summaryText)
+                }
+
                 if remoteThumbnailCacheSummary.isEmpty {
                     Text("Remote comic thumbnails are generated on demand and currently do not have any saved disk cache on this device.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    LabeledContent("Thumbnail Cache", value: remoteThumbnailCacheSummary.summaryText)
-
                     Button(role: .destructive) {
                         isShowingClearRemoteThumbnailsConfirmation = true
                     } label: {

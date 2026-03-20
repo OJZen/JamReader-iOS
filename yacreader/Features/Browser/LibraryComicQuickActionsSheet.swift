@@ -175,16 +175,9 @@ struct LibrarySelectionActionsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(selectionSummary)
-                            .font(.headline)
-
-                        Text("Choose one action and apply it to the current multi-selection.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, 6)
+                    Text(selectionSummary)
+                        .font(.headline)
+                        .padding(.vertical, 6)
                 }
 
                 Section("Status") {
@@ -225,7 +218,7 @@ struct LibrarySelectionActionsSheet: View {
 
                         if let onImportComicInfo {
                             actionButton(
-                                title: "Import ComicInfo.xml",
+                                title: "Import ComicInfo",
                                 systemImage: "doc.badge.arrow.down",
                                 action: onImportComicInfo
                             )

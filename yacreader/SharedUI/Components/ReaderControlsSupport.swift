@@ -169,6 +169,100 @@ struct ReaderBookmarksControlsSection: View {
     }
 }
 
+struct ReaderReadingStatusControlsSection: View {
+    let currentPageIsBookmarked: Bool
+    let isFavorite: Bool?
+    let isRead: Bool?
+    let rating: Int?
+    let onToggleFavorite: (() -> Void)?
+    let onToggleReadStatus: (() -> Void)?
+    let onToggleBookmark: () -> Void
+    let onSetRating: ((Int) -> Void)?
+
+    private var ratingBinding: Binding<Int>? {
+        guard let rating, let onSetRating else {
+            return nil
+        }
+
+        return Binding(
+            get: { rating },
+            set: onSetRating
+        )
+    }
+
+    var body: some View {
+        Section("Reading Status") {
+            if let onToggleFavorite, let isFavorite {
+                Button(action: onToggleFavorite) {
+                    Label(
+                        isFavorite ? "Remove Favorite" : "Add Favorite",
+                        systemImage: isFavorite ? "star.slash" : "star"
+                    )
+                }
+            }
+
+            if let onToggleReadStatus, let isRead {
+                Button(action: onToggleReadStatus) {
+                    Label(
+                        isRead ? "Mark Unread" : "Mark Read",
+                        systemImage: isRead ? "arrow.uturn.backward.circle" : "checkmark.circle"
+                    )
+                }
+            }
+
+            Button(action: onToggleBookmark) {
+                Label(
+                    currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
+                    systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
+                )
+            }
+
+            if let ratingBinding {
+                Picker("Rating", selection: ratingBinding) {
+                    Text("Unrated").tag(0)
+                    ForEach(1...5, id: \.self) { value in
+                        Text(value == 1 ? "1 Star" : "\(value) Stars").tag(value)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ReaderLibraryActionsControlsSection: View {
+    let onOpenQuickMetadata: (() -> Void)?
+    let onOpenMetadata: (() -> Void)?
+    let onOpenOrganization: (() -> Void)?
+
+    private var hasActions: Bool {
+        onOpenQuickMetadata != nil || onOpenMetadata != nil || onOpenOrganization != nil
+    }
+
+    var body: some View {
+        if hasActions {
+            Section("Library") {
+                if let onOpenQuickMetadata {
+                    Button(action: onOpenQuickMetadata) {
+                        Label("Quick Edit Metadata", systemImage: "pencil")
+                    }
+                }
+
+                if let onOpenMetadata {
+                    Button(action: onOpenMetadata) {
+                        Label("Edit Metadata", systemImage: "square.and.pencil")
+                    }
+                }
+
+                if let onOpenOrganization {
+                    Button(action: onOpenOrganization) {
+                        Label("Tags and Reading Lists", systemImage: "tag")
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ReaderDisplaySettingsControlsSection: View {
     let supportsImageLayoutControls: Bool
     let supportsDoublePageSpread: Bool

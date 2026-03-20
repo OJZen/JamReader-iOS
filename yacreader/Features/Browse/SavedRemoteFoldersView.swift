@@ -42,6 +42,7 @@ struct SavedRemoteFoldersView: View {
                                     shortcut: entry.shortcut,
                                     profile: entry.profile,
                                     showsNavigationIndicator: false,
+                                    showsServerName: false,
                                     trailingAccessoryReservedWidth: 46
                                 )
                             }
@@ -67,6 +68,8 @@ struct SavedRemoteFoldersView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(background)
         .navigationTitle("Saved Folders")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search saved SMB folders")
@@ -160,16 +163,38 @@ struct SavedRemoteFoldersView: View {
 
     private var summarySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(summaryTitle)
-                    .font(.headline)
-
-                Text(summaryText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
+            SectionSummaryCard(
+                title: summaryTitle,
+                badges: summaryBadges,
+                titleFont: .title2.bold(),
+                strokeOpacity: 0.05
+            )
+            .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
+            .listRowBackground(Color.clear)
         }
+    }
+
+    private var summaryBadges: [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(title: "\(focusedEntryCount) shortcuts", tint: .blue)
+        ]
+
+        if focusedProfile == nil, scopedProfileCount > 0 {
+            badges.append(StatusBadgeItem(title: "\(scopedProfileCount) servers", tint: .teal))
+        } else if let focusedProfile {
+            badges.append(
+                StatusBadgeItem(
+                    title: focusedProfile.providerKind.title,
+                    tint: focusedProfile.providerKind.tintColor
+                )
+            )
+        }
+
+        if !trimmedSearchText.isEmpty {
+            badges.append(StatusBadgeItem(title: "Searching", tint: .pink))
+        }
+
+        return badges
     }
 
     private var summaryTitle: String {
@@ -188,18 +213,6 @@ struct SavedRemoteFoldersView: View {
         return viewModel.summaryTitle
     }
 
-    private var summaryText: String {
-        if let focusedProfile {
-            if focusedEntryCount == 0 {
-                return "Save SMB directories from \(focusedProfile.name) to keep them one tap away without reopening the full server tree."
-            }
-
-            return "Open, rename, or remove the SMB folder shortcuts you saved from \(focusedProfile.name)."
-        }
-
-        return viewModel.summaryText
-    }
-
     private var focusedEntryCount: Int {
         if let focusedProfile {
             return viewModel.entries.filter { $0.profile.id == focusedProfile.id }.count
@@ -208,17 +221,25 @@ struct SavedRemoteFoldersView: View {
         return viewModel.entries.count
     }
 
+    private var scopedProfileCount: Int {
+        guard focusedProfile == nil else {
+            return 1
+        }
+
+        return Set(viewModel.entries.map(\.profile.id)).count
+    }
+
     @ViewBuilder
     private var emptyStateSection: some View {
         Section {
             if focusedEntryCount == 0 {
                 ContentUnavailableView(
-                    focusedProfile == nil ? "No Saved Folders Yet" : "No Saved Folders for This Server",
+                    focusedProfile == nil ? "No Saved Folders" : "No Saved Folders",
                     systemImage: "star",
                     description: Text(
                         focusedProfile == nil
-                            ? "Save frequently used SMB directories from the remote browser to keep them one tap away."
-                            : "Save SMB directories from this server in the remote browser to keep them one tap away here."
+                            ? "Save folders from Browse to keep them close."
+                            : "Save folders from this server in Browse."
                     )
                 )
                 .padding(.vertical, 18)
@@ -231,15 +252,28 @@ struct SavedRemoteFoldersView: View {
 
     @ViewBuilder
     private func sectionHeader(for section: SavedRemoteFolderSection) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 10) {
             Text(section.profile.name)
                 .font(.subheadline.weight(.semibold))
 
-            Text(section.summaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Spacer(minLength: 10)
+
+            AdaptiveStatusBadgeGroup(
+                badges: section.headerBadges,
+                horizontalSpacing: 6,
+                verticalSpacing: 6
+            )
         }
         .textCase(nil)
+    }
+
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var background: some View {
+        Color(.systemGroupedBackground)
+            .ignoresSafeArea()
     }
 }
 
@@ -262,20 +296,12 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
     var summaryTitle: String {
         switch entries.count {
         case 0:
-            return "Keep favorite SMB folders close"
+            return "No saved folders yet"
         case 1:
-            return "1 saved folder shortcut"
+            return "1 saved folder"
         default:
-            return "\(entries.count) saved folder shortcuts"
+            return "\(entries.count) saved folders"
         }
-    }
-
-    var summaryText: String {
-        if entries.isEmpty {
-            return "Save the directories you revisit most often so Browse can jump straight back into them."
-        }
-
-        return "Open, rename, or remove your favorite SMB directories here without digging through the server tree again."
     }
 
     func loadIfNeeded() async {
@@ -381,9 +407,12 @@ private struct SavedRemoteFolderRenameSheet: View {
                     TextField("Folder shortcut", text: $proposedTitle)
                         .focused($isFocused)
 
-                    Text(entry.shortcut.path.isEmpty ? "/" : entry.shortcut.path)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    LabeledContent("Path") {
+                        Text(entry.shortcut.path.isEmpty ? "/" : entry.shortcut.path)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                            .textSelection(.enabled)
+                    }
                 }
             }
             .navigationTitle("Rename Shortcut")
@@ -419,12 +448,12 @@ private struct SavedRemoteFolderSection: Identifiable {
         profile.id
     }
 
-    var summaryText: String {
-        switch entries.count {
-        case 1:
-            return "1 saved folder shortcut"
-        default:
-            return "\(entries.count) saved folder shortcuts"
-        }
+    var headerBadges: [StatusBadgeItem] {
+        [
+            StatusBadgeItem(
+                title: entries.count == 1 ? "1 folder" : "\(entries.count) folders",
+                tint: .teal
+            )
+        ]
     }
 }

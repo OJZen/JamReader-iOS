@@ -15,13 +15,6 @@ enum RemoteProviderKind: String, Codable, Hashable, CaseIterable, Identifiable {
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .smb:
-            return "Browse a NAS, Mac, Windows PC, or other SMB shared folder without importing everything first."
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .smb:

@@ -56,7 +56,6 @@ struct RemoteServerBrowserCapabilities: Hashable {
     let providerKind: RemoteProviderKind
     let supportsDirectoryBrowsing: Bool
     let supportsSingleComicOpening: Bool
-    let plannedClientLibrary: String
 }
 
 struct RemoteComicDownloadResult: Hashable {
@@ -151,8 +150,7 @@ final class RemoteServerBrowsingService {
             return RemoteServerBrowserCapabilities(
                 providerKind: .smb,
                 supportsDirectoryBrowsing: true,
-                supportsSingleComicOpening: true,
-                plannedClientLibrary: "SMBClient 0.3.1"
+                supportsSingleComicOpening: true
             )
         }
     }

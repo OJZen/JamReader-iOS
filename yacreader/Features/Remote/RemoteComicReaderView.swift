@@ -326,7 +326,7 @@ struct RemoteComicReaderView: View {
             }
         }
         .sheet(isPresented: $isShowingReaderControls) {
-            RemoteReaderControlsSheet(
+            ReaderControlsSheet(
                 pageIndicatorText: pageIndicatorText,
                 currentPageNumber: currentPageNumber,
                 pageCount: document?.pageCount,
@@ -443,14 +443,7 @@ struct RemoteComicReaderView: View {
     @ViewBuilder
     private var readerBottomBar: some View {
         if let pageIndicatorText {
-            HStack {
-                Spacer(minLength: 0)
-
-                Button(action: presentPageJump) {
-                    ReaderPageIndicatorChip(text: pageIndicatorText)
-                }
-                .buttonStyle(.plain)
-            }
+            ReaderPageJumpBar(pageIndicatorText: pageIndicatorText, onTap: presentPageJump)
         }
     }
 
@@ -474,46 +467,17 @@ struct RemoteComicReaderView: View {
 
     @ViewBuilder
     private func readerContent(for document: ComicDocument) -> some View {
-        switch document {
-        case .pdf(let pdf):
-            ReaderRotatedContentHost(rotation: effectiveReaderLayout.rotation) {
-                PDFReaderContainerView(
-                    document: pdf.pdfDocument,
-                    requestedPageIndex: currentPageIndex,
-                    rotation: effectiveReaderLayout.rotation,
-                    onPageChanged: handleVisiblePageChange(to:),
-                    onReaderTap: handleReaderTap
-                )
-            }
-            .ignoresSafeArea()
-            .background(Color.black.ignoresSafeArea())
-        case .imageSequence(let imageSequence):
-            if effectiveReaderLayout.pagingMode == .verticalContinuous {
-                VerticalImageSequenceReaderContainerView(
-                    document: imageSequence,
-                    initialPageIndex: currentPageIndex,
-                    layout: effectiveReaderLayout,
-                    onPageChanged: handleVisiblePageChange(to:),
-                    onReaderTap: handleReaderTap
-                )
-                .ignoresSafeArea()
-                .background(Color.black.ignoresSafeArea())
-            } else {
-                ImageSequenceReaderContainerView(
-                    document: imageSequence,
-                    initialPageIndex: currentPageIndex,
-                    layout: effectiveReaderLayout,
-                    onPageChanged: handleVisiblePageChange(to:),
-                    onReaderTap: handleReaderTap
-                )
-                .ignoresSafeArea()
-                .background(Color.black.ignoresSafeArea())
-            }
-        case .unsupported(let document):
+        ReaderDocumentContentView(
+            document: document,
+            pageIndex: currentPageIndex,
+            layout: effectiveReaderLayout,
+            onPageChanged: handleVisiblePageChange(to:),
+            onReaderTap: handleReaderTap
+        ) { unsupportedDocument in
             ContentUnavailableView(
                 "Unsupported Comic",
                 systemImage: "doc.badge.questionmark",
-                description: Text(document.reason)
+                description: Text(unsupportedDocument.reason)
             )
         }
     }

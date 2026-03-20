@@ -1,6 +1,96 @@
 import Combine
 import SwiftUI
 
+enum ImportDestinationSheetCopy {
+    static let destinationFooter = "Files are copied into the selected library and indexed automatically. Mirrored or read-only libraries stay browse-only."
+}
+
+struct ImportSheetContextRow: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .padding(.vertical, 4)
+    }
+}
+
+struct LibraryImportDestinationOptionRow: View {
+    let option: LibraryImportDestinationOption
+    var isSuggested = false
+    var isSelected = false
+    var showsSelectionIndicator = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(option.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                if !badges.isEmpty {
+                    AdaptiveStatusBadgeGroup(
+                        badges: badges,
+                        horizontalSpacing: 6,
+                        verticalSpacing: 6
+                    )
+                }
+
+                if let detail = option.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                if case .unavailable(let reason) = option.availability {
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if showsSelectionIndicator && isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(option.isSelectable ? .blue : .secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var badges: [StatusBadgeItem] {
+        var items: [StatusBadgeItem] = []
+
+        if let status = option.status {
+            items.append(StatusBadgeItem(title: status.title, tint: status.tintColor))
+        }
+
+        if isSuggested {
+            items.append(StatusBadgeItem(title: "Suggested", tint: .blue))
+        }
+
+        return items
+    }
+}
+
+private extension LibraryImportDestinationOption.Status {
+    var tintColor: Color {
+        switch self {
+        case .managed:
+            return .blue
+        case .browseOnly:
+            return .blue
+        case .readOnly:
+            return .orange
+        }
+    }
+}
+
 @MainActor
 final class LibraryImportDestinationSheetViewModel: ObservableObject {
     private static let lastSelectionKey = "libraryImport.lastDestinationSelection"
@@ -132,15 +222,9 @@ struct LibraryImportDestinationSheet: View {
         NavigationStack {
             List {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(title)
-                            .font(.headline)
-
-                        Text(message)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
+                    ImportSheetContextRow(title: title)
+                } footer: {
+                    Text(message)
                 }
 
                 Section {
@@ -153,49 +237,10 @@ struct LibraryImportDestinationSheet: View {
                             dismiss()
                             onSelect(option.selection)
                         } label: {
-                            HStack(alignment: .top, spacing: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(option.title)
-                                        .font(.body.weight(.semibold))
-                                        .foregroundStyle(.primary)
-
-                                    Text(option.subtitle)
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
-
-                                    if let detail = option.detail {
-                                        Text(detail)
-                                            .font(.caption)
-                                            .foregroundStyle(.tertiary)
-                                            .lineLimit(2)
-                                    }
-
-                                    if case .unavailable(let reason) = option.availability {
-                                        Text(reason)
-                                            .font(.caption.weight(.medium))
-                                            .foregroundStyle(.orange)
-                                            .lineLimit(2)
-                                    }
-                                }
-
-                                Spacer(minLength: 8)
-
-                                VStack(alignment: .trailing, spacing: 6) {
-                                    if option.selection == viewModel.suggestedSelection {
-                                        Text("Suggested")
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.blue)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.blue.opacity(0.12), in: Capsule())
-                                    }
-
-                                    Image(systemName: "arrow.right.circle.fill")
-                                        .font(.title3)
-                                        .foregroundStyle(option.isSelectable ? .blue : .secondary)
-                                }
-                            }
-                            .padding(.vertical, 4)
+                            LibraryImportDestinationOptionRow(
+                                option: option,
+                                isSuggested: option.selection == viewModel.suggestedSelection
+                            )
                         }
                         .buttonStyle(.plain)
                         .disabled(!option.isSelectable)
@@ -204,7 +249,7 @@ struct LibraryImportDestinationSheet: View {
                 } header: {
                     Text("Choose Destination")
                 } footer: {
-                    Text("Imported files are copied into the selected library folder and then indexed automatically. Read-only or mirrored desktop libraries stay compatible for browsing, but are not used as writable import targets.")
+                    Text(ImportDestinationSheetCopy.destinationFooter)
                 }
             }
             .navigationTitle("Import Destination")

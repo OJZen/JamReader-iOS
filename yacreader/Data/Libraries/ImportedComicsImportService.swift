@@ -184,7 +184,7 @@ final class ImportedComicsImportService {
             LibraryImportDestinationOption(
                 selection: .importedComics,
                 title: importedComicsLibraryName,
-                subtitle: "Managed import library. It will be created automatically if needed.",
+                status: .managed,
                 detail: nil,
                 availability: .available
             )
@@ -199,7 +199,7 @@ final class ImportedComicsImportService {
                 return LibraryImportDestinationOption(
                     selection: .library(descriptor.id),
                     title: descriptor.name,
-                    subtitle: importSubtitle(
+                    status: importStatus(
                         for: descriptor,
                         accessSnapshot: accessSnapshot,
                         availability: availability
@@ -312,24 +312,24 @@ final class ImportedComicsImportService {
         return .available
     }
 
-    private func importSubtitle(
+    private func importStatus(
         for descriptor: LibraryDescriptor,
         accessSnapshot: LibraryAccessSnapshot,
         availability: LibraryImportDestinationOption.Availability
-    ) -> String {
+    ) -> LibraryImportDestinationOption.Status? {
+        if descriptor.storageMode == .mirrored {
+            return .browseOnly
+        }
+
         switch availability {
         case .available:
-            return "Copy imported comics into this library and refresh it automatically."
+            return nil
         case .unavailable:
-            if descriptor.storageMode == .mirrored {
-                return "Compatible for reading and metadata mirroring, but not as a direct import target."
-            }
-
             if !accessSnapshot.sourceWritable {
-                return "This library is readable, but its source folder is currently read-only."
+                return .readOnly
             }
 
-            return "This library cannot receive imports right now."
+            return nil
         }
     }
 

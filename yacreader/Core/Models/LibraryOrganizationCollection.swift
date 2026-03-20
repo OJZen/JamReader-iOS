@@ -35,15 +35,6 @@ enum LibraryOrganizationSectionKind: String, CaseIterable, Identifiable, Hashabl
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .labels:
-            return "Color-coded tags for curated subsets."
-        case .readingLists:
-            return "Custom queues and hand-picked reading orders."
-        }
-    }
-
     var emptyStateTitle: String {
         switch self {
         case .labels:

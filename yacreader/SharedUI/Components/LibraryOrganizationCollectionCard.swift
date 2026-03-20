@@ -4,7 +4,7 @@ struct LibraryOrganizationCollectionCard: View {
     let collection: LibraryOrganizationCollection
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        InsetCard(cornerRadius: 18, contentPadding: 18, strokeOpacity: 0.06) {
             HStack(alignment: .top, spacing: 12) {
                 iconView
 
@@ -29,16 +29,7 @@ struct LibraryOrganizationCollectionCard: View {
                 }
             }
         }
-        .padding(18)
         .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
     }
 
     @ViewBuilder

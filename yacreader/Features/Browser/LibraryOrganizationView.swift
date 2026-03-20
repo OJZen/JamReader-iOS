@@ -147,7 +147,9 @@ struct LibraryOrganizationView: View {
 
     private var listContent: some View {
         List {
-            summarySection
+            Section {
+                summaryCard
+            }
 
             if displayedCollections.isEmpty {
                 Section {
@@ -220,55 +222,18 @@ struct LibraryOrganizationView: View {
         }
     }
 
-    private var summarySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(viewModel.sectionKind.title)
-                    .font(.headline)
-
-                Text(viewModel.sectionKind.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-
-                Text(summaryText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 8)
-        }
-    }
-
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(viewModel.sectionKind.title)
-                .font(.title3.weight(.semibold))
-
-            Text(viewModel.sectionKind.subtitle)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 8) {
-                StatusBadge(title: summaryCountText, tint: .green)
-                if hasSearchQuery {
-                    StatusBadge(title: "Filtered", tint: .orange)
-                }
-                StatusBadge(title: displayMode.title, tint: .blue)
-                StatusBadge(title: sortMode.title, tint: .teal)
-            }
-
+        SectionSummaryCard(
+            title: viewModel.sectionKind.title,
+            badges: summaryBadgeItems,
+            titleFont: .title3.weight(.semibold),
+            cornerRadius: 20,
+            contentPadding: 16,
+            strokeOpacity: 0.04
+        ) {
             Text(summaryText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
     }
 
@@ -306,6 +271,20 @@ struct LibraryOrganizationView: View {
 
     private var summaryCountText: String {
         displayedCollections.count == 1 ? "1 collection" : "\(displayedCollections.count) collections"
+    }
+
+    private var summaryBadgeItems: [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(title: summaryCountText, tint: .green),
+            StatusBadgeItem(title: displayMode.title, tint: .blue),
+            StatusBadgeItem(title: sortMode.title, tint: .teal)
+        ]
+
+        if hasSearchQuery {
+            badges.insert(StatusBadgeItem(title: "Filtered", tint: .orange), at: 1)
+        }
+
+        return badges
     }
 
     private var hasSearchQuery: Bool {

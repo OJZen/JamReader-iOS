@@ -17,7 +17,7 @@ enum ComicInfoImportPolicy: String, CaseIterable, Codable, Hashable, Identifiabl
         }
     }
 
-    var subtitle: String {
+    var summaryText: String {
         switch self {
         case .fillMissing:
             return "Only applies XML values where the library field is still empty."

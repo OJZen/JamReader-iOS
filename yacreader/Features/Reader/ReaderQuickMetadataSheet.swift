@@ -35,20 +35,14 @@ struct ReaderQuickMetadataSheet: View {
                 } else {
                     Form {
                         Section {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(viewModel.metadata.displayTitle)
-                                    .font(.headline)
-
-                                Text(viewModel.metadata.fileName)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .textSelection(.enabled)
-                            }
-                            .padding(.vertical, 6)
+                            ComicMetadataOverviewContent(
+                                title: viewModel.metadata.displayTitle,
+                                fileName: viewModel.metadata.fileName,
+                                badges: metadataHeaderBadges
+                            )
                         }
 
-                        Section("Core Metadata") {
+                        Section("Core") {
                             TextField("Title", text: binding(for: \.title))
                             TextField("Series", text: binding(for: \.series))
                             TextField("Issue Number", text: binding(for: \.issueNumber))
@@ -119,5 +113,9 @@ struct ReaderQuickMetadataSheet: View {
                 viewModel.metadata[keyPath: keyPath] = newValue
             }
         )
+    }
+
+    private var metadataHeaderBadges: [StatusBadgeItem] {
+        [StatusBadgeItem(title: viewModel.metadata.type.title, tint: .gray)]
     }
 }

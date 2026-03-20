@@ -35,16 +35,11 @@ struct ComicMetadataEditorSheet: View {
                 } else {
                     Form {
                         Section {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(viewModel.metadata.displayTitle)
-                                    .font(.headline)
-
-                                Text(viewModel.metadata.fileName)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
-                            }
-                            .padding(.vertical, 8)
+                            ComicMetadataOverviewContent(
+                                title: viewModel.metadata.displayTitle,
+                                fileName: viewModel.metadata.fileName,
+                                badges: metadataHeaderBadges
+                            )
                         }
 
                         Section("Core") {
@@ -114,12 +109,7 @@ struct ComicMetadataEditorSheet: View {
                                 Button {
                                     viewModel.importEmbeddedComicInfo(using: policy)
                                 } label: {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(policy.title)
-                                        Text(policy.subtitle)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
+                                    Text(policy.title)
                                 }
                             }
                         } label: {
@@ -165,6 +155,10 @@ struct ComicMetadataEditorSheet: View {
                 viewModel.metadata[keyPath: keyPath] = newValue
             }
         )
+    }
+
+    private var metadataHeaderBadges: [StatusBadgeItem] {
+        [StatusBadgeItem(title: viewModel.metadata.type.title, tint: .gray)]
     }
 }
 

@@ -50,7 +50,7 @@ enum BatchComicInfoImportScope {
     case selected
     case visible
 
-    func summaryText(for comicCount: Int) -> String {
+    func selectionBadgeTitle(for comicCount: Int) -> String {
         let label: String
         switch self {
         case .selected:
@@ -59,7 +59,7 @@ enum BatchComicInfoImportScope {
             label = comicCount == 1 ? "1 visible comic" : "\(comicCount) visible comics"
         }
 
-        return "\(label). Embedded ComicInfo.xml metadata will be imported from supported archives."
+        return label
     }
 }
 
@@ -102,9 +102,8 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
         snapshot.readingLists
     }
 
-    var summaryText: String {
-        let comicsText = selectedComicCount == 1 ? "1 selected comic" : "\(selectedComicCount) selected comics"
-        return "\(comicsText). \(mode.description)"
+    var selectedComicCountText: String {
+        selectedComicCount == 1 ? "1 selected comic" : "\(selectedComicCount) selected comics"
     }
 
     func loadIfNeeded() {
@@ -205,28 +204,29 @@ struct BatchComicOrganizationSheet: View {
                 } else {
                     List {
                         Section {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Batch Organize")
-                                    .font(.headline)
-
-                                Text(viewModel.summaryText)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-
-                                Picker("Mode", selection: $viewModel.mode) {
-                                    ForEach(BatchOrganizationMode.allCases) { mode in
-                                        Text(mode.title)
-                                            .tag(mode)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                            .padding(.vertical, 8)
+                            BatchSheetOverviewContent(
+                                title: "Batch Organize",
+                                badges: summaryBadges
+                            )
                         }
 
-                        Section("Tags") {
+                        Section {
+                            Picker("Mode", selection: $viewModel.mode) {
+                                ForEach(BatchOrganizationMode.allCases) { mode in
+                                    Text(mode.title)
+                                        .tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        } header: {
+                            Text("Mode")
+                        } footer: {
+                            Text(viewModel.mode.description)
+                        }
+
+                        Section {
                             if viewModel.labels.isEmpty {
-                                Text("No tags yet. Create one from the library root.")
+                                Text("No tags available.")
                                     .foregroundStyle(.secondary)
                             } else {
                                 ForEach(viewModel.labels) { collection in
@@ -242,11 +242,17 @@ struct BatchComicOrganizationSheet: View {
                                     .buttonStyle(.plain)
                                 }
                             }
+                        } header: {
+                            Text("Tags")
+                        } footer: {
+                            if viewModel.labels.isEmpty {
+                                Text("Create tags from the library root.")
+                            }
                         }
 
-                        Section("Reading Lists") {
+                        Section {
                             if viewModel.readingLists.isEmpty {
-                                Text("No reading lists yet. Create one from the library root.")
+                                Text("No reading lists available.")
                                     .foregroundStyle(.secondary)
                             } else {
                                 ForEach(viewModel.readingLists) { collection in
@@ -261,6 +267,12 @@ struct BatchComicOrganizationSheet: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
+                            }
+                        } header: {
+                            Text("Reading Lists")
+                        } footer: {
+                            if viewModel.readingLists.isEmpty {
+                                Text("Create reading lists from the library root.")
                             }
                         }
                     }
@@ -321,13 +333,12 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
         self.databaseURL = storageManager.databaseURL(for: descriptor)
     }
 
-    var summaryText: String {
-        let comicsText = selectedComicCount == 1 ? "1 selected comic" : "\(selectedComicCount) selected comics"
-        return "\(comicsText). Enable the fields you want to overwrite."
+    var selectedComicCountText: String {
+        selectedComicCount == 1 ? "1 selected comic" : "\(selectedComicCount) selected comics"
     }
 
     var helperText: String {
-        "Enabled fields will be applied to every selected comic. Leaving a text field empty will clear that value, and Rating supports Unrated or 1-5 stars."
+        "Enable the fields you want to update. Leaving a text field empty clears that value. Rating supports Unrated or 1-5 stars."
     }
 
     var canApply: Bool {
@@ -389,19 +400,12 @@ struct BatchComicMetadataSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Batch Metadata")
-                            .font(.headline)
-
-                        Text(viewModel.summaryText)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Text(viewModel.helperText)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
+                    BatchSheetOverviewContent(
+                        title: "Batch Metadata",
+                        badges: summaryBadges
+                    )
+                } footer: {
+                    Text(viewModel.helperText)
                 }
 
                 Section("Classification") {
@@ -522,16 +526,11 @@ final class BatchComicInfoImportSheetViewModel: ObservableObject {
     }
 
     var summaryText: String {
-        importScope.summaryText(for: selectedComicCount)
+        importScope.selectionBadgeTitle(for: selectedComicCount)
     }
 
-    var helperText: String {
-        switch policy {
-        case .fillMissing:
-            return "Comics without embedded ComicInfo.xml will be skipped. Existing non-empty library fields stay untouched, while empty fields are filled from XML."
-        case .overwriteExisting:
-            return "Comics without embedded ComicInfo.xml will be skipped. Existing fields in the library will be overwritten by imported values."
-        }
+    var policySummaryText: String {
+        policy.summaryText
     }
 
     func apply() async -> ComicInfoImportBatchResult? {
@@ -589,39 +588,28 @@ struct BatchComicInfoImportSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Import ComicInfo")
-                            .font(.headline)
-
-                        Text(viewModel.summaryText)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        Text(viewModel.helperText)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 8)
+                    BatchSheetOverviewContent(
+                        title: "Import ComicInfo",
+                        badges: summaryBadges
+                    )
                 }
 
-                Section("Import Strategy") {
+                Section {
                     Picker("Strategy", selection: $viewModel.policy) {
                         ForEach(ComicInfoImportPolicy.allCases) { policy in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(policy.title)
-                                Text(policy.subtitle)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .tag(policy)
+                            Text(policy.title)
+                                .tag(policy)
                         }
                     }
                     .pickerStyle(.inline)
+                } header: {
+                    Text("Import Strategy")
+                } footer: {
+                    Text(viewModel.policySummaryText)
                 }
 
-                Section("What Will Be Imported") {
-                    Text("Title, series, issue number, volume, story arc, credits, publisher, format, language, characters, teams, locations, review and tags.")
-                        .foregroundStyle(.secondary)
+                Section("Included Fields") {
+                    FormOverviewContent(items: importedFieldItems)
                 }
             }
             .navigationTitle("ComicInfo")
@@ -678,5 +666,63 @@ private struct BatchMetadataFieldToggle<Editor: View>: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+private extension BatchComicOrganizationSheet {
+    var summaryBadges: [StatusBadgeItem] {
+        [
+            StatusBadgeItem(title: viewModel.selectedComicCountText, tint: .blue),
+            StatusBadgeItem(title: viewModel.mode.title, tint: viewModel.mode.actionTint),
+        ]
+    }
+}
+
+private extension BatchComicMetadataSheet {
+    var summaryBadges: [StatusBadgeItem] {
+        var badges = [StatusBadgeItem(title: viewModel.selectedComicCountText, tint: .blue)]
+
+        if viewModel.patch.enabledFieldCount > 0 {
+            let title = viewModel.patch.enabledFieldCount == 1
+                ? "1 field"
+                : "\(viewModel.patch.enabledFieldCount) fields"
+            badges.append(StatusBadgeItem(title: title, tint: .orange))
+        }
+
+        return badges
+    }
+}
+
+private extension BatchComicInfoImportSheet {
+    var summaryBadges: [StatusBadgeItem] {
+        [
+            StatusBadgeItem(title: viewModel.summaryText, tint: .blue),
+            StatusBadgeItem(title: viewModel.policy.title, tint: .teal),
+        ]
+    }
+
+    var importedFieldItems: [FormOverviewItem] {
+        [
+            FormOverviewItem(
+                title: "Core",
+                value: "Title, series, issue number, volume, and story arc"
+            ),
+            FormOverviewItem(
+                title: "Details",
+                value: "Credits, publisher, format, language, characters, teams, locations, review, and tags"
+            ),
+        ]
+    }
+}
+
+private struct BatchSheetOverviewContent: View {
+    let title: String
+    let badges: [StatusBadgeItem]
+
+    var body: some View {
+        Text(title)
+            .font(.headline)
+
+        AdaptiveStatusBadgeGroup(badges: badges)
     }
 }

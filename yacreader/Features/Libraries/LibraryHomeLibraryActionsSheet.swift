@@ -7,39 +7,23 @@ struct LibraryHomeLibraryActionsSheet: View {
     let onViewInfo: () -> Void
     let onRemove: () -> Void
 
+    private var compatibilityPresentation: LibraryCompatibilityPresentation {
+        LibraryCompatibilityPresentation.resolve(
+            descriptor: item.descriptor,
+            accessSnapshot: item.accessSnapshot
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(item.descriptor.name)
-                            .font(.headline)
+                    Text(item.descriptor.name)
+                        .font(.headline)
 
-                        Text(item.descriptor.sourcePath)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .lineLimit(2)
+                    AdaptiveStatusBadgeGroup(badges: actionSummaryBadges)
 
-                        HStack(spacing: 8) {
-                            StatusBadge(
-                                title: item.descriptor.storageMode.title,
-                                tint: item.descriptor.storageMode.tintColor
-                            )
-                            StatusBadge(
-                                title: item.accessSnapshot.sourceExists ? "Ready" : "Needs Access",
-                                tint: item.accessSnapshot.sourceExists ? .green : .orange
-                            )
-                        }
-
-                        if let maintenanceRecord = item.maintenanceRecord {
-                            Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .padding(.vertical, 6)
+                    FormOverviewContent(items: actionSummaryItems)
                 }
 
                 Section("Manage") {
@@ -56,10 +40,8 @@ struct LibraryHomeLibraryActionsSheet: View {
                     Button(role: .destructive, action: onRemove) {
                         Label("Remove from App", systemImage: "trash")
                     }
-
-                    Text("This only removes the library from the app registry. Source files and metadata stay on disk.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                } footer: {
+                    Text("Removing a library only removes it from the app. Files and metadata stay on disk.")
                 }
             }
             .navigationTitle("Library Actions")
@@ -93,13 +75,13 @@ struct LibraryRenameSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Name") {
+                Section {
                     TextField("Library name", text: $proposedName)
                         .focused($isFocused)
-
-                    Text("This only changes the display name used inside the app.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Name")
+                } footer: {
+                    Text("This only changes the display name used in the app.")
                 }
             }
             .navigationTitle("Rename Library")
@@ -141,56 +123,60 @@ struct LibraryInfoSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Library") {
-                    LabeledContent("Name", value: item.descriptor.name)
-                    LabeledContent("Storage", value: item.descriptor.storageMode.title)
-                    LabeledContent("Created", value: item.descriptor.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    LabeledContent("Updated", value: item.descriptor.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                Section {
+                    Text(item.descriptor.name)
+                        .font(.headline)
+
+                    AdaptiveStatusBadgeGroup(badges: infoSummaryBadges)
+
+                    FormOverviewContent(items: libraryOverviewItems)
                 }
 
                 Section("Access") {
                     LabeledContent("Source", value: item.accessSnapshot.sourceStatus)
                     LabeledContent("Write Access", value: item.accessSnapshot.writeStatus)
-                    LabeledContent("Direct Imports", value: compatibilityPresentation.directImportsTitle)
                     LabeledContent("Metadata", value: item.accessSnapshot.metadataExists ? "Ready" : "Missing")
                     LabeledContent("Database", value: item.accessSnapshot.database.summaryLine)
                 }
 
                 if let maintenanceRecord = item.maintenanceRecord {
-                    Section("Maintenance") {
+                    Section {
                         LabeledContent("Last Action", value: maintenanceRecord.title)
                         LabeledContent("Summary", value: maintenanceRecord.summary.summaryLine)
                         LabeledContent("When", value: maintenanceRecord.formattedTimestampLine)
-
+                    } header: {
+                        Text("Maintenance")
+                    } footer: {
                         if let detailLine = maintenanceRecord.detailLine {
                             Text(detailLine)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
                         }
                     }
                 }
 
-                if let libraryImportCompatibilityDetail = compatibilityPresentation.infoDetail {
-                    Section("Compatibility") {
-                        Text(libraryImportCompatibilityDetail)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                if compatibilityPresentation.directImportsTitle != "Allowed"
+                    || compatibilityPresentation.infoDetail != nil
+                    || compatibilityPresentation.badgeTitle != nil {
+                    Section {
+                        LabeledContent("Direct Imports", value: compatibilityPresentation.directImportsTitle)
+
+                        if let badgeTitle = compatibilityPresentation.badgeTitle {
+                            LabeledContent("Mode", value: badgeTitle)
+                        }
+                    } header: {
+                        Text("Compatibility")
+                    } footer: {
+                        if let libraryImportCompatibilityDetail = compatibilityPresentation.infoDetail {
+                            Text(libraryImportCompatibilityDetail)
+                        }
                     }
                 }
 
                 Section {
-                    Text(item.descriptor.sourcePath)
-                        .textSelection(.enabled)
-
-                    Text(item.metadataPath)
-                        .textSelection(.enabled)
-
-                    Text(item.databasePath)
-                        .textSelection(.enabled)
+                    FormOverviewContent(items: pathOverviewItems)
                 } header: {
                     Text("Paths")
                 } footer: {
-                    Text("Paths are shown for inspection only. Removing a library from the app does not delete these files.")
+                    Text("Paths are shown for inspection only. Removing a library does not delete them.")
                 }
             }
             .navigationTitle("Library Info")
@@ -202,28 +188,105 @@ struct LibraryInfoSheet: View {
 }
 
 struct LibraryHomeQuickActionButton: View {
-    var prominent = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Group {
-                if prominent {
-                    Label("Manage", systemImage: "ellipsis.circle")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
-                } else {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .padding(4)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-            }
+            Image(systemName: "ellipsis.circle")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(6)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Library Actions")
+    }
+}
+
+private extension LibraryHomeLibraryActionsSheet {
+    var actionSummaryBadges: [StatusBadgeItem] {
+        item.libraryActionBadges(compatibilityPresentation: compatibilityPresentation)
+    }
+
+    var actionSummaryItems: [FormOverviewItem] {
+        item.libraryActionOverviewItems
+    }
+}
+
+private extension LibraryInfoSheet {
+    var infoSummaryBadges: [StatusBadgeItem] {
+        item.libraryActionBadges(compatibilityPresentation: compatibilityPresentation)
+    }
+
+    var libraryOverviewItems: [FormOverviewItem] {
+        [
+            FormOverviewItem(title: "Storage", value: item.descriptor.storageMode.title),
+            FormOverviewItem(
+                title: "Created",
+                value: item.descriptor.createdAt.formatted(date: .abbreviated, time: .shortened)
+            ),
+            FormOverviewItem(
+                title: "Updated",
+                value: item.descriptor.updatedAt.formatted(date: .abbreviated, time: .shortened)
+            )
+        ]
+    }
+
+    var pathOverviewItems: [FormOverviewItem] {
+        [
+            FormOverviewItem(title: "Source", value: item.descriptor.sourcePath),
+            FormOverviewItem(title: "Metadata", value: item.metadataPath),
+            FormOverviewItem(title: "Database", value: item.databasePath)
+        ]
+    }
+}
+
+private extension LibraryListItem {
+    func libraryActionBadges(
+        compatibilityPresentation: LibraryCompatibilityPresentation
+    ) -> [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: descriptor.storageMode.title,
+                tint: descriptor.storageMode.tintColor
+            ),
+            StatusBadgeItem(
+                title: accessSnapshot.sourceExists ? "Ready" : "Needs Access",
+                tint: accessSnapshot.sourceExists ? .green : .orange
+            )
+        ]
+
+        if let compatibilityBadgeTitle = compatibilityPresentation.badgeTitle,
+           let tint = compatibilityPresentation.tint {
+            badges.append(StatusBadgeItem(title: compatibilityBadgeTitle, tint: tint))
+        } else if compatibilityPresentation.directImportsTitle != "Allowed",
+                  let tint = compatibilityPresentation.tint {
+            badges.append(
+                StatusBadgeItem(
+                    title: compatibilityPresentation.directImportsTitle,
+                    tint: tint
+                )
+            )
+        }
+
+        return badges
+    }
+
+    var libraryActionOverviewItems: [FormOverviewItem] {
+        var items = [
+            FormOverviewItem(title: "Location", value: descriptor.sourcePath),
+            FormOverviewItem(title: "Database", value: accessSnapshot.database.summaryLine)
+        ]
+
+        if let maintenanceRecord {
+            items.append(
+                FormOverviewItem(
+                    title: "Last Action",
+                    value: maintenanceRecord.formattedTimestampLine
+                )
+            )
+        }
+
+        return items
     }
 }

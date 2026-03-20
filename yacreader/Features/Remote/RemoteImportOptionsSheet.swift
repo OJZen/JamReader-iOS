@@ -20,7 +20,7 @@ enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    var subtitle: String {
+    var summaryText: String {
         switch self {
         case .visibleResults:
             return "Import only the comic files currently visible in this SMB browser, including search results."
@@ -123,20 +123,14 @@ struct RemoteImportOptionsSheet: View {
 
     private var introductionSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.headline)
-
-                Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
+            ImportSheetContextRow(title: title)
+        } footer: {
+            Text(message)
         }
     }
 
     private var scopeSection: some View {
-        Section("Choose Scope") {
+        Section {
             ForEach(availableScopes) { scope in
                 Button {
                     selectedScope = scope
@@ -148,6 +142,10 @@ struct RemoteImportOptionsSheet: View {
                 }
                 .buttonStyle(.plain)
             }
+        } header: {
+            Text("Choose Scope")
+        } footer: {
+            Text(selectedScope.summaryText)
         }
     }
 
@@ -160,10 +158,11 @@ struct RemoteImportOptionsSheet: View {
                     }
                     selectedDestination = option.selection
                 } label: {
-                    RemoteImportDestinationRow(
+                    LibraryImportDestinationOptionRow(
                         option: option,
                         isSuggested: option.selection == destinationViewModel.suggestedSelection,
-                        isSelected: selectedDestination == option.selection
+                        isSelected: selectedDestination == option.selection,
+                        showsSelectionIndicator: true
                     )
                 }
                 .buttonStyle(.plain)
@@ -172,7 +171,7 @@ struct RemoteImportOptionsSheet: View {
         } header: {
             Text("Choose Destination")
         } footer: {
-            Text("Imported files are copied into the selected library folder and then indexed automatically. Read-only or mirrored desktop libraries stay compatible for browsing, but are not used as writable import targets.")
+            Text(ImportDestinationSheetCopy.destinationFooter)
         }
     }
 
@@ -197,77 +196,18 @@ private struct RemoteImportScopeRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(scope.title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
+        HStack(spacing: 12) {
+            Text(scope.title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
 
-                Text(scope.subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 8)
+            Spacer(minLength: 12)
 
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.blue)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private struct RemoteImportDestinationRow: View {
-    let option: LibraryImportDestinationOption
-    let isSuggested: Bool
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(option.title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                Text(option.subtitle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                if let detail = option.detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(2)
-                }
-
-                if case .unavailable(let reason) = option.availability {
-                    Text(reason)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.orange)
-                        .lineLimit(2)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 6) {
-                if isSuggested {
-                    Text("Suggested")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.blue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.blue.opacity(0.12), in: Capsule())
-                }
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(option.isSelectable ? .blue : .secondary)
-                }
             }
         }
         .padding(.vertical, 4)

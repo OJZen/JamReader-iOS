@@ -145,26 +145,6 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
-    var summaryText: String {
-        if let loadIssue {
-            return loadIssue.message
-        }
-
-        if items.isEmpty {
-            return "No folders or supported comic files are visible in this remote location."
-        }
-
-        let folderCount = directories.count
-        let comicCount = comicFiles.count
-        let hiddenCount = unsupportedFileCount
-
-        if hiddenCount > 0 {
-            return "\(folderCount) folders and \(comicCount) comic files are visible here. \(hiddenCount) unsupported files are hidden."
-        }
-
-        return "\(folderCount) folders and \(comicCount) comic files are visible here."
-    }
-
     var connectionDetailText: String {
         profile.connectionDisplayPath
     }

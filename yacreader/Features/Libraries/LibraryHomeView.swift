@@ -377,7 +377,7 @@ struct LibraryHomeView: View {
 
     private var overviewSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
+            InsetCard(cornerRadius: 24, contentPadding: 18, strokeOpacity: 0.04) {
                 Text("Continue Where You Left Off")
                     .font(.headline)
 
@@ -388,57 +388,56 @@ struct LibraryHomeView: View {
                             accessSnapshot: resumeLibraryItem.accessSnapshot
                         )
                         VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .top, spacing: 12) {
-                                Image(systemName: "books.vertical.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
-                                    .frame(width: 30, height: 30)
-
-                                VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 12) {
+                                Label {
                                     Text(resumeLibraryItem.descriptor.name)
                                         .font(.subheadline.weight(.semibold))
+                                } icon: {
+                                    Image(systemName: "books.vertical.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.blue)
+                                        .frame(width: 30, height: 30)
+                                }
+                                .labelStyle(.titleAndIcon)
 
-                                    Text("Resume your last-used local library workspace without starting from the root again.")
+                                Spacer(minLength: 12)
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+
+                            AdaptiveStatusBadgeGroup(
+                                badges: libraryOverviewBadges(
+                                    item: resumeLibraryItem,
+                                    compatibilityBadgeTitle: compatibilityPresentation.badgeTitle
+                                )
+                            )
+
+                            FormOverviewContent(
+                                items: libraryResumeOverviewItems(for: resumeLibraryItem)
+                            ) {
+                                if let maintenanceRecord = resumeLibraryItem.maintenanceRecord {
+                                    Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
 
-                                Spacer(minLength: 12)
-
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.blue)
-                            }
-
-                            HStack(spacing: 8) {
-                                StatusBadge(title: "\(viewModel.items.count) libraries", tint: .blue)
-                                StatusBadge(title: resumeLibraryItem.descriptor.storageMode.title, tint: resumeLibraryItem.descriptor.storageMode.tintColor)
-                                if let badgeTitle = compatibilityPresentation.badgeTitle {
-                                    StatusBadge(title: badgeTitle, tint: .orange)
+                                if let compatibilityNote = compatibilityPresentation.rowHint,
+                                   let iconName = compatibilityPresentation.iconName {
+                                    Label(compatibilityNote, systemImage: iconName)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
 
-                            if let compatibilityNote = compatibilityPresentation.rowHint,
-                               let iconName = compatibilityPresentation.iconName {
-                                Label(compatibilityNote, systemImage: iconName)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            if let maintenanceRecord = resumeLibraryItem.maintenanceRecord {
-                                Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
                         }
-                        .padding(.vertical, 4)
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Text("Add an existing library folder, or import comic files and comic folders into any local library.")
+                    Text("Add a library or import comics.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -471,18 +470,26 @@ struct LibraryHomeView: View {
                     .buttonStyle(.borderedProminent)
                 }
             }
-            .padding(.vertical, 8)
         }
+    }
+
+    private func libraryResumeOverviewItems(
+        for item: LibraryListItem
+    ) -> [FormOverviewItem] {
+        [
+            FormOverviewItem(
+                title: "Database",
+                value: item.accessSnapshot.database.summaryLine
+            )
+        ]
     }
 
     private var compactLibrariesSection: some View {
         Section("Libraries") {
             if viewModel.items.isEmpty {
-                    ContentUnavailableView(
-                        "No Libraries Yet",
-                        systemImage: "books.vertical",
-                        description: Text("Choose a library folder, or import comic files and comic folders into a local library.")
-                    )
+                LibraryListEmptyState(
+                    description: "Add a library folder or import comics."
+                )
                 .padding(.vertical, 24)
             } else {
                 ForEach(viewModel.items) { item in
@@ -505,45 +512,58 @@ struct LibraryHomeView: View {
 
     private var sidebarOverviewSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Library Workspace")
-                    .font(.headline)
-
-                Text(sidebarWorkspaceSummary)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 8) {
-                    StatusBadge(title: "\(viewModel.items.count) libraries", tint: .blue)
-                    StatusBadge(title: "iPad", tint: .green)
-                    if let resumeLibraryItem {
-                        StatusBadge(
-                            title: resumeLibraryItem.descriptor.name,
-                            tint: resumeLibraryItem.descriptor.storageMode.tintColor
-                        )
-                    }
-                }
-            }
-            .padding(.vertical, 6)
+            SectionSummaryCard(
+                title: "Library",
+                badges: sidebarOverviewBadges,
+                titleFont: .headline,
+                cornerRadius: 20,
+                contentPadding: 16,
+                strokeOpacity: 0.04
+            )
         }
     }
 
-    private var sidebarWorkspaceSummary: String {
+    private var sidebarOverviewBadges: [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(title: "\(viewModel.items.count) libraries", tint: .blue)
+        ]
+
         if let resumeLibraryItem {
-            return "Keep libraries in reach while the detail pane resumes \(resumeLibraryItem.descriptor.name) close to where you left off."
+            badges.append(
+                StatusBadgeItem(
+                    title: resumeLibraryItem.descriptor.storageMode.title,
+                    tint: resumeLibraryItem.descriptor.storageMode.tintColor
+                )
+            )
         }
 
-        return "Use the sidebar to keep libraries in reach while browsing folders and reading on the detail side."
+        return badges
+    }
+
+    private func libraryOverviewBadges(
+        item: LibraryListItem,
+        compatibilityBadgeTitle: String?
+    ) -> [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: item.descriptor.storageMode.title,
+                tint: item.descriptor.storageMode.tintColor
+            )
+        ]
+
+        if let compatibilityBadgeTitle {
+            badges.append(StatusBadgeItem(title: compatibilityBadgeTitle, tint: .orange))
+        }
+
+        return badges
     }
 
     private var splitLibrariesSection: some View {
         Section("Libraries") {
             if viewModel.items.isEmpty {
-                    ContentUnavailableView(
-                        "No Libraries Yet",
-                        systemImage: "books.vertical",
-                        description: Text("Add a library folder, or import comic files and comic folders into a local library.")
-                    )
+                LibraryListEmptyState(
+                    description: "Add a library folder or import comics."
+                )
                 .padding(.vertical, 24)
             } else {
                 ForEach(viewModel.items) { item in
@@ -563,11 +583,11 @@ struct LibraryHomeView: View {
     }
 
     private var compactLibraryActionReservedWidth: CGFloat {
-        88
+        44
     }
 
     private func libraryQuickActionButton(for item: LibraryListItem) -> some View {
-        LibraryHomeQuickActionButton(prominent: !usesSplitViewLayout) {
+        LibraryHomeQuickActionButton {
             libraryActionsItem = item
         }
     }
@@ -617,6 +637,18 @@ private enum LibraryHomeImportRoute: Identifiable {
     }
 }
 
+private struct LibraryListEmptyState: View {
+    let description: String
+
+    var body: some View {
+        ContentUnavailableView(
+            "No Libraries Yet",
+            systemImage: "books.vertical",
+            description: Text(description)
+        )
+    }
+}
+
 private struct LibraryRowView: View {
     let item: LibraryListItem
     var trailingAccessoryReservedWidth: CGFloat = 0
@@ -634,14 +666,9 @@ private struct LibraryRowView: View {
                     .foregroundStyle(item.descriptor.storageMode.tintColor)
                     .frame(width: 28, height: 28)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(item.descriptor.name)
                         .font(.headline)
-
-                    Text(item.descriptor.sourcePath)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 12)
@@ -652,35 +679,19 @@ private struct LibraryRowView: View {
                 )
             }
 
-            HStack(spacing: 8) {
-                StatusBadge(title: item.accessSnapshot.sourceStatus, tint: item.accessSnapshot.sourceExists ? .green : .red)
-                StatusBadge(title: item.accessSnapshot.writeStatus, tint: item.accessSnapshot.sourceWritable ? .green : .orange)
-                StatusBadge(title: item.accessSnapshot.metadataExists ? "Metadata" : "No Metadata", tint: item.accessSnapshot.metadataExists ? .blue : .gray)
-            }
+            AdaptiveStatusBadgeGroup(
+                badges: item.homeRowBadges(compatibilityBadgeTitle: compatibilityPresentation.badgeTitle)
+            )
 
             Text(item.accessSnapshot.database.summaryLine)
                 .font(.subheadline)
                 .foregroundStyle(item.accessSnapshot.database.exists ? .primary : .secondary)
+                .lineLimit(1)
 
-            if let maintenanceRecord = item.maintenanceRecord {
-                Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+            if let statusNote = item.homeRowStatusNote(compatibilityPresentation: compatibilityPresentation) {
+                Label(statusNote.text, systemImage: statusNote.systemImage)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let compatibilityNote = compatibilityPresentation.rowHint,
-               let iconName = compatibilityPresentation.iconName {
-                Label(compatibilityNote, systemImage: iconName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let error = item.accessSnapshot.lastError ?? item.accessSnapshot.database.lastError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(statusNote.tint)
                     .lineLimit(2)
             }
         }
@@ -712,28 +723,20 @@ private struct LibrarySidebarRowView: View {
                 Text(item.accessSnapshot.database.summaryLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
 
-                if let maintenanceRecord = item.maintenanceRecord {
-                    Text(maintenanceRecord.summaryLine)
+                if let statusNote = item.sidebarStatusNote(compatibilityPresentation: compatibilityPresentation) {
+                    Label(statusNote.text, systemImage: statusNote.systemImage)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .foregroundStyle(statusNote.tint)
+                        .lineLimit(1)
                 }
 
-                HStack(spacing: 6) {
-                    StatusBadge(
-                        title: item.descriptor.storageMode.title,
-                        tint: item.descriptor.storageMode.tintColor
-                    )
-                    if let badgeTitle = compatibilityPresentation.badgeTitle {
-                        StatusBadge(title: badgeTitle, tint: .orange)
-                    }
-                    StatusBadge(
-                        title: item.accessSnapshot.sourceExists ? "Ready" : "Needs Access",
-                        tint: item.accessSnapshot.sourceExists ? .green : .orange
-                    )
-                }
+                AdaptiveStatusBadgeGroup(
+                    badges: item.sidebarRowBadges(compatibilityBadgeTitle: compatibilityPresentation.badgeTitle),
+                    horizontalSpacing: 6,
+                    verticalSpacing: 6
+                )
             }
         }
         .padding(.vertical, 4)
@@ -768,60 +771,143 @@ private struct LibraryHomeDetailPlaceholder: View {
     let onAddLibrary: () -> Void
 
     var body: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 16) {
-                Image(systemName: "rectangle.split.3x1.fill")
-                    .font(.system(size: 46, weight: .semibold))
-                    .foregroundStyle(.blue)
-
-                Text(itemCount == 0 ? "Add a Library" : "Select a Library")
-                    .font(.largeTitle.weight(.semibold))
-
-                Text(descriptionText)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 520)
-            }
-
-            HStack(spacing: 10) {
-                StatusBadge(title: "Sidebar", tint: .blue)
-                StatusBadge(title: "Folders", tint: .green)
-                StatusBadge(title: "Reader", tint: .orange)
-            }
-
+        ContentUnavailableView {
+            Label(
+                itemCount == 0 ? "Add a Library" : "Select a Library",
+                systemImage: "books.vertical"
+            )
+        } description: {
+            Text(descriptionText)
+        } actions: {
             if itemCount == 0 {
                 Button(action: onAddLibrary) {
-                    Label("Add Library or Comics", systemImage: "plus")
-                        .frame(minWidth: 180)
+                    Label("Add Library", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
         }
-        .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(.secondarySystemBackground),
-                    Color(.systemBackground)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(Color(.systemGroupedBackground))
     }
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Import a YACReader library folder, or select comic files and comic folders to build your Imported Comics library."
+            return "Add a library folder or import comics."
         }
 
-        return "Keep your libraries in the sidebar, browse the folder tree on the right, and move into reading without losing navigation context."
+        return "Choose a library from the sidebar."
     }
 }
 
 private enum PendingLibraryAction {
     case rename(LibraryListItem)
     case info(LibraryListItem)
+}
+
+private struct LibraryStatusNote {
+    let text: String
+    let systemImage: String
+    let tint: Color
+}
+
+private extension LibraryListItem {
+    func homeRowBadges(compatibilityBadgeTitle: String?) -> [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: accessSnapshot.sourceExists ? "Ready" : "Needs Access",
+                tint: accessSnapshot.sourceExists ? .green : .orange
+            ),
+            StatusBadgeItem(
+                title: accessSnapshot.metadataExists ? "Metadata" : "No Metadata",
+                tint: accessSnapshot.metadataExists ? .blue : .gray
+            )
+        ]
+
+        if let compatibilityBadgeTitle {
+            badges.append(StatusBadgeItem(title: compatibilityBadgeTitle, tint: .orange))
+        }
+
+        return badges
+    }
+
+    func sidebarRowBadges(compatibilityBadgeTitle: String?) -> [StatusBadgeItem] {
+        var badges = [
+            StatusBadgeItem(
+                title: descriptor.storageMode.title,
+                tint: descriptor.storageMode.tintColor
+            ),
+            StatusBadgeItem(
+                title: accessSnapshot.sourceExists ? "Ready" : "Needs Access",
+                tint: accessSnapshot.sourceExists ? .green : .orange
+            )
+        ]
+
+        if let compatibilityBadgeTitle {
+            badges.append(StatusBadgeItem(title: compatibilityBadgeTitle, tint: .orange))
+        }
+
+        return badges
+    }
+
+    func homeRowStatusNote(
+        compatibilityPresentation: LibraryCompatibilityPresentation
+    ) -> LibraryStatusNote? {
+        if let error = accessSnapshot.lastError ?? accessSnapshot.database.lastError {
+            return LibraryStatusNote(
+                text: error,
+                systemImage: "exclamationmark.triangle.fill",
+                tint: .orange
+            )
+        }
+
+        if let maintenanceRecord {
+            return LibraryStatusNote(
+                text: maintenanceRecord.summaryLine,
+                systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                tint: .secondary
+            )
+        }
+
+        if let compatibilityNote = compatibilityPresentation.rowHint,
+           let iconName = compatibilityPresentation.iconName {
+            return LibraryStatusNote(
+                text: compatibilityNote,
+                systemImage: iconName,
+                tint: .secondary
+            )
+        }
+
+        return nil
+    }
+
+    func sidebarStatusNote(
+        compatibilityPresentation: LibraryCompatibilityPresentation
+    ) -> LibraryStatusNote? {
+        if let maintenanceRecord {
+            return LibraryStatusNote(
+                text: maintenanceRecord.summaryLine,
+                systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                tint: .secondary
+            )
+        }
+
+        if let compatibilityNote = compatibilityPresentation.rowHint,
+           let iconName = compatibilityPresentation.iconName {
+            return LibraryStatusNote(
+                text: compatibilityNote,
+                systemImage: iconName,
+                tint: .secondary
+            )
+        }
+
+        if let error = accessSnapshot.lastError ?? accessSnapshot.database.lastError {
+            return LibraryStatusNote(
+                text: error,
+                systemImage: "exclamationmark.triangle.fill",
+                tint: .orange
+            )
+        }
+
+        return nil
+    }
 }

@@ -8,18 +8,26 @@ struct RemoteDirectoryItemListRow: View {
     let browsingService: RemoteServerBrowsingService
     var trailingAccessoryReservedWidth: CGFloat = 0
 
+    private var presentation: RemoteDirectoryItemPresentation {
+        RemoteDirectoryItemPresentation(
+            item: item,
+            readingSession: readingSession,
+            cacheAvailability: cacheAvailability
+        )
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             leadingVisual
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(item.name)
-                    .font(.body)
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
 
                 statusBadgeCluster
 
-                metadataLine
+                overviewContent
             }
         }
         .padding(.vertical, 2)
@@ -28,39 +36,15 @@ struct RemoteDirectoryItemListRow: View {
 
     @ViewBuilder
     private var statusBadgeCluster: some View {
-        let descriptors = statusBadgeDescriptors
-
-        if !descriptors.isEmpty {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(descriptors) { descriptor in
-                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(descriptors) { descriptor in
-                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
-                    }
-                }
-            }
-        }
+        AdaptiveStatusBadgeGroup(badges: presentation.statusBadgeDescriptors)
     }
 
     @ViewBuilder
-    private var metadataLine: some View {
-        let descriptors = metadataDescriptors
-
-        if !descriptors.isEmpty {
-            HStack(spacing: 10) {
-                ForEach(descriptors) { descriptor in
-                    Label(descriptor.title, systemImage: descriptor.systemImage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
+    private var overviewContent: some View {
+        RemoteDirectoryOverviewGroup(
+            items: presentation.overviewItems,
+            style: .compact
+        )
     }
 
     @ViewBuilder
@@ -85,57 +69,6 @@ struct RemoteDirectoryItemListRow: View {
         }
     }
 
-    private var statusBadgeDescriptors: [RemoteDirectoryStatusBadgeDescriptor] {
-        var descriptors: [RemoteDirectoryStatusBadgeDescriptor] = []
-
-        if item.isDirectory {
-            descriptors.append(RemoteDirectoryStatusBadgeDescriptor(title: "Folder", tint: .blue))
-        }
-
-        if let readingSession {
-            descriptors.append(
-                RemoteDirectoryStatusBadgeDescriptor(
-                    title: readingSession.progressText,
-                    tint: readingSession.read ? .green : .orange
-                )
-            )
-        }
-
-        if let cacheBadgeTitle = cacheAvailability.badgeTitle {
-            descriptors.append(
-                RemoteDirectoryStatusBadgeDescriptor(
-                    title: cacheBadgeTitle,
-                    tint: cacheAvailability.kind == .current ? .blue : .orange
-                )
-            )
-        }
-
-        return descriptors
-    }
-
-    private var metadataDescriptors: [RemoteDirectoryMetadataDescriptor] {
-        var descriptors: [RemoteDirectoryMetadataDescriptor] = []
-
-        if let fileSize = item.fileSize, item.canOpenAsComic {
-            descriptors.append(
-                RemoteDirectoryMetadataDescriptor(
-                    title: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file),
-                    systemImage: "internaldrive"
-                )
-            )
-        }
-
-        if let modifiedAt = item.modifiedAt {
-            descriptors.append(
-                RemoteDirectoryMetadataDescriptor(
-                    title: modifiedAt.formatted(date: .abbreviated, time: .omitted),
-                    systemImage: "calendar"
-                )
-            )
-        }
-
-        return descriptors
-    }
 }
 
 struct RemoteDirectoryGridCard: View {
@@ -145,8 +78,16 @@ struct RemoteDirectoryGridCard: View {
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
 
+    private var presentation: RemoteDirectoryItemPresentation {
+        RemoteDirectoryItemPresentation(
+            item: item,
+            readingSession: readingSession,
+            cacheAvailability: cacheAvailability
+        )
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        InsetCard(cornerRadius: 20, contentPadding: 0, strokeOpacity: 0.06) {
             leadingVisual
                 .frame(maxWidth: .infinity)
 
@@ -158,54 +99,24 @@ struct RemoteDirectoryGridCard: View {
 
                 statusBadgeCluster
 
-                metadataLine
+                overviewContent
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
         }
     }
 
     @ViewBuilder
     private var statusBadgeCluster: some View {
-        let descriptors = statusBadgeDescriptors
-
-        if !descriptors.isEmpty {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
-                    ForEach(descriptors) { descriptor in
-                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(descriptors) { descriptor in
-                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
-                    }
-                }
-            }
-        }
+        AdaptiveStatusBadgeGroup(badges: presentation.statusBadgeDescriptors)
     }
 
     @ViewBuilder
-    private var metadataLine: some View {
-        let descriptors = metadataDescriptors
-
-        if !descriptors.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(descriptors) { descriptor in
-                    Label(descriptor.title, systemImage: descriptor.systemImage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
+    private var overviewContent: some View {
+        RemoteDirectoryOverviewGroup(
+            items: presentation.overviewItems,
+            style: .card
+        )
     }
 
     @ViewBuilder
@@ -224,30 +135,76 @@ struct RemoteDirectoryGridCard: View {
                 .fill(Color.blue.opacity(0.14))
                 .frame(height: 208)
                 .overlay {
-                    VStack(spacing: 12) {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(.blue)
-
-                        Text("Folder")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.blue)
-                    }
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(.blue)
             }
                 .padding(12)
         }
     }
 
-    private var statusBadgeDescriptors: [RemoteDirectoryStatusBadgeDescriptor] {
-        var descriptors: [RemoteDirectoryStatusBadgeDescriptor] = []
+}
+
+private enum RemoteDirectoryOverviewStyle {
+    case compact
+    case card
+}
+
+private struct RemoteDirectoryOverviewGroup: View {
+    let items: [FormOverviewItem]
+    let style: RemoteDirectoryOverviewStyle
+
+    var body: some View {
+        if !items.isEmpty {
+            switch style {
+            case .compact:
+                VStack(alignment: .leading, spacing: 4) {
+                    compactRows
+                }
+            case .card:
+                FormOverviewContent(items: items)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var compactRows: some View {
+        ForEach(items) { item in
+            LabeledContent {
+                Text(item.value)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(1)
+            } label: {
+                Text(item.title)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption2)
+        }
+    }
+}
+
+private struct RemoteDirectoryItemPresentation {
+    let statusBadgeDescriptors: [StatusBadgeItem]
+    let overviewItems: [FormOverviewItem]
+
+    init(
+        item: RemoteDirectoryItem,
+        readingSession: RemoteComicReadingSession?,
+        cacheAvailability: RemoteComicCachedAvailability
+    ) {
+        var statusBadgeDescriptors: [StatusBadgeItem] = []
+        var overviewItems: [FormOverviewItem] = []
 
         if item.isDirectory {
-            descriptors.append(RemoteDirectoryStatusBadgeDescriptor(title: "Folder", tint: .blue))
+            statusBadgeDescriptors.append(
+                StatusBadgeItem(title: "Folder", tint: .blue)
+            )
         }
 
         if let readingSession {
-            descriptors.append(
-                RemoteDirectoryStatusBadgeDescriptor(
+            statusBadgeDescriptors.append(
+                StatusBadgeItem(
                     title: readingSession.progressText,
                     tint: readingSession.read ? .green : .orange
                 )
@@ -255,76 +212,53 @@ struct RemoteDirectoryGridCard: View {
         }
 
         if let cacheBadgeTitle = cacheAvailability.badgeTitle {
-            descriptors.append(
-                RemoteDirectoryStatusBadgeDescriptor(
+            statusBadgeDescriptors.append(
+                StatusBadgeItem(
                     title: cacheBadgeTitle,
                     tint: cacheAvailability.kind == .current ? .blue : .orange
                 )
             )
         }
 
-        return descriptors
-    }
-
-    private var metadataDescriptors: [RemoteDirectoryMetadataDescriptor] {
-        var descriptors: [RemoteDirectoryMetadataDescriptor] = []
-
         if let fileSize = item.fileSize, item.canOpenAsComic {
-            descriptors.append(
-                RemoteDirectoryMetadataDescriptor(
-                    title: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file),
-                    systemImage: "internaldrive"
+            overviewItems.append(
+                FormOverviewItem(
+                    title: "Size",
+                    value: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
                 )
             )
         }
 
         if let modifiedAt = item.modifiedAt {
-            descriptors.append(
-                RemoteDirectoryMetadataDescriptor(
-                    title: modifiedAt.formatted(date: .abbreviated, time: .omitted),
-                    systemImage: "calendar"
+            overviewItems.append(
+                FormOverviewItem(
+                    title: "Updated",
+                    value: modifiedAt.formatted(date: .abbreviated, time: .omitted)
                 )
             )
         }
 
-        return descriptors
+        self.statusBadgeDescriptors = statusBadgeDescriptors
+        self.overviewItems = overviewItems
     }
-}
-
-private struct RemoteDirectoryStatusBadgeDescriptor: Identifiable {
-    let id = UUID()
-    let title: String
-    let tint: Color
-}
-
-private struct RemoteDirectoryMetadataDescriptor: Identifiable {
-    let id = UUID()
-    let title: String
-    let systemImage: String
 }
 
 struct RemoteBrowserImportProgressView: View {
     let description: String
 
     var body: some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.small)
+        RemoteBrowserOverlaySurface {
+            HStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.small)
 
-            Text(description)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
+                Text(description)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+
+                Spacer(minLength: 0)
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
     }
 }
 
@@ -334,51 +268,44 @@ struct RemoteBrowserFeedbackCard: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: iconName)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(iconTint)
+        RemoteBrowserOverlaySurface {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: iconName)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(iconTint)
+                    .frame(width: 24, height: 24)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(feedback.title)
-                    .font(.subheadline.weight(.semibold))
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(feedback.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
 
-                if let message = feedback.message, !message.isEmpty {
-                    Text(message)
-                        .font(.caption)
+                    if let message = feedback.message, !message.isEmpty {
+                        Text(message)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let onPrimaryAction,
+                       let primaryAction = feedback.primaryAction {
+                        Button(primaryAction.title, action: onPrimaryAction)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(6)
                 }
-
-                if let onPrimaryAction,
-                   let primaryAction = feedback.primaryAction {
-                    Button(primaryAction.title, action: onPrimaryAction)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .padding(.top, 2)
-                }
+                .buttonStyle(.plain)
             }
-
-            Spacer(minLength: 12)
-
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .padding(6)
-            }
-            .buttonStyle(.plain)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.06), radius: 12, y: 4)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
     }
 
     private var iconName: String {
@@ -397,5 +324,17 @@ struct RemoteBrowserFeedbackCard: View {
         case .info:
             return .blue
         }
+    }
+}
+
+private struct RemoteBrowserOverlaySurface<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        InsetCard(cornerRadius: 20, contentPadding: 14, strokeOpacity: 0.05) {
+            content()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
     }
 }

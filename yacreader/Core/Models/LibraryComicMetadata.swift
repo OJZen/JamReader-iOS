@@ -145,6 +145,22 @@ struct BatchComicMetadataPatch: Equatable {
             || shouldUpdateFormat
             || shouldUpdateTags
     }
+
+    var enabledFieldCount: Int {
+        [
+            shouldUpdateType,
+            shouldUpdateRating,
+            shouldUpdateSeries,
+            shouldUpdateVolume,
+            shouldUpdateStoryArc,
+            shouldUpdatePublisher,
+            shouldUpdateLanguageISO,
+            shouldUpdateFormat,
+            shouldUpdateTags,
+        ]
+        .filter { $0 }
+        .count
+    }
 }
 
 extension LibraryComicMetadata {
