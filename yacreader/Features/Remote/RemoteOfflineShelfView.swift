@@ -333,8 +333,11 @@ struct RemoteOfflineShelfView: View {
                                     openMode: .preferLocalCache
                                 )
                             } label: {
-                                RemoteOfflineShelfCard(
-                                    entry: entry,
+                                RemoteOfflineComicCard(
+                                    session: entry.session,
+                                    profile: entry.profile,
+                                    availability: entry.availability,
+                                    showsNavigationIndicator: true,
                                     trailingAccessoryReservedWidth: 46
                                 )
                             }
@@ -658,88 +661,6 @@ struct RemoteOfflineShelfView: View {
             } catch {
                 // Ignore cancellation.
             }
-        }
-    }
-}
-
-private struct RemoteOfflineShelfCard: View {
-    let entry: RemoteOfflineComicEntry
-    var trailingAccessoryReservedWidth: CGFloat = 0
-
-    private var badgeTint: Color {
-        switch entry.availability.kind {
-        case .unavailable:
-            return .secondary
-        case .current:
-            return .blue
-        case .stale:
-            return .orange
-        }
-    }
-
-    private var summaryText: String {
-        switch entry.availability.kind {
-        case .unavailable:
-            return "This local copy is no longer available."
-        case .current:
-            return "Opens directly from the downloaded copy saved on this device."
-        case .stale:
-            return "Opens from a downloaded copy on this device. The remote server may have a newer version."
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(badgeTint)
-                    .frame(width: 32, height: 32)
-                    .background(badgeTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.session.displayName)
-                        .font(.headline)
-
-                    Text(entry.profile.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.blue)
-            }
-
-            HStack(spacing: 8) {
-                if let badgeTitle = entry.availability.badgeTitle {
-                    StatusBadge(title: badgeTitle, tint: badgeTint)
-                }
-
-                StatusBadge(
-                    title: entry.session.progressText,
-                    tint: entry.session.read ? .green : .orange
-                )
-            }
-
-            Text(summaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("Last opened \(entry.session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .padding(.trailing, trailingAccessoryReservedWidth)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
         }
     }
 }

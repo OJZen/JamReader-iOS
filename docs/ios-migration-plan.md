@@ -1268,6 +1268,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - 已开始统一 `Browse` 首页与 `Saved Folders` 的快捷目录数据来源：两边现通过共享的远程快捷目录快照层解析 `shortcut + profile` 关系，避免首页预览和独立快捷目录页各自重复加载资料并手写映射逻辑
 - 已继续固定 `Browse` 首页的入口模式：`Saved Folders` 与 `Offline Ready` 现始终保留在各自 section 中，空状态时也通过同一位置进入目标页面，不再根据内容有无在 `Browse Tools` 与内容区之间来回移动
 - 已开始统一 `Saved Folders` 的条目交互：快捷目录页现改成“点击整项打开，使用统一次级菜单处理重命名 / 删除”，不再同时叠加滑动动作与长按菜单两套重复入口
+- 已开始统一 `Browse` 深层内容卡片的视觉骨架：首页 `Saved Folders / Offline Ready`、`Saved Folders` 页面和 `Offline Shelf` 现开始共用相同的 SMB 卡片组件与信息层级，减少同类远程内容在不同页面之间的样式跳变
 - 已开始继续清理“远程缓存维护”入口重复：全局清理远程下载副本现收口到 `Settings > Remote Cache`，`Remote Servers` 页面回归服务器配置与单服务器维护职责，不再同时暴露重复的全局缓存清理按钮
 - 已进一步收紧 `Remote Servers` 的页面职责：既然全局远程缓存维护已经迁到 `Settings > Remote Cache`，服务器页也不再重复展示全局缓存摘要，只保留服务器列表、最近活动和单服务器维护动作
 - 已继续去重远程目录条目的交互：条目点击保留为唯一主打开动作，`ellipsis` 菜单不再重复提供 `Open Folder / Open Comic`，只保留离线、副本刷新/删除和导入这类次级操作

@@ -32,8 +32,10 @@ struct SavedRemoteFoldersView: View {
                                 dependencies: dependencies
                             )
                         } label: {
-                            SavedRemoteFolderRow(
-                                entry: entry,
+                            RemoteSavedFolderCard(
+                                shortcut: entry.shortcut,
+                                profile: entry.profile,
+                                showsNavigationIndicator: false,
                                 trailingAccessoryReservedWidth: 46
                             )
                         }
@@ -242,47 +244,6 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
                 message: error.localizedDescription
             )
         }
-    }
-}
-
-private struct SavedRemoteFolderRow: View {
-    let entry: SavedRemoteFoldersViewModel.ShortcutEntry
-    var trailingAccessoryReservedWidth: CGFloat = 0
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "star.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.yellow)
-                    .frame(width: 30, height: 30)
-                    .background(.yellow.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.shortcut.title)
-                        .font(.headline)
-
-                    Text(entry.profile.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-
-                    Text(entry.shortcut.path.isEmpty ? "/" : entry.shortcut.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-            }
-
-            HStack(spacing: 8) {
-                StatusBadge(title: entry.profile.providerKind.title, tint: entry.profile.providerKind.tintColor)
-                StatusBadge(title: "Updated \(entry.shortcut.updatedAt.formatted(date: .abbreviated, time: .omitted))", tint: .teal)
-            }
-        }
-        .padding(.trailing, trailingAccessoryReservedWidth)
-        .padding(.vertical, 4)
     }
 }
 

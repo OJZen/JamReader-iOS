@@ -188,7 +188,7 @@ struct BrowseHomeView: View {
                                     openMode: .preferLocalCache
                                 )
                             } label: {
-                                OfflineReadyCard(
+                                RemoteOfflineComicCard(
                                     session: session,
                                     profile: profile,
                                     availability: dependencies.remoteServerBrowsingService.cachedAvailability(
@@ -240,7 +240,10 @@ struct BrowseHomeView: View {
                                 dependencies: dependencies
                             )
                         } label: {
-                            SavedFolderShortcutCard(entry: entry)
+                            RemoteSavedFolderCard(
+                                shortcut: entry.shortcut,
+                                profile: entry.profile
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -307,56 +310,6 @@ struct BrowseHomeView: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
-    }
-}
-
-private struct SavedFolderShortcutCard: View {
-    let entry: BrowseHomeViewModel.ShortcutEntry
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "star.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.yellow)
-                    .frame(width: 30, height: 30)
-                    .background(.yellow.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.shortcut.title)
-                        .font(.headline)
-
-                    Text(entry.profile.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-
-                    Text(entry.shortcut.path.isEmpty ? "/" : entry.shortcut.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            }
-
-            HStack(spacing: 8) {
-                StatusBadge(title: entry.profile.providerKind.title, tint: entry.profile.providerKind.tintColor)
-                StatusBadge(title: "Folder Shortcut", tint: .yellow)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
-        }
     }
 }
 
@@ -431,91 +384,6 @@ private struct ContinueReadingCard: View {
                 StatusBadge(title: session.progressText, tint: session.read ? .green : .orange)
                 StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
             }
-
-            Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
-        }
-    }
-}
-
-private struct OfflineReadyCard: View {
-    let session: RemoteComicReadingSession
-    let profile: RemoteServerProfile
-    let availability: RemoteComicCachedAvailability
-    var showsNavigationIndicator = true
-    var trailingAccessoryReservedWidth: CGFloat = 0
-
-    private var availabilityTint: Color {
-        switch availability.kind {
-        case .unavailable:
-            return .secondary
-        case .current:
-            return .blue
-        case .stale:
-            return .orange
-        }
-    }
-
-    private var subtitleText: String {
-        switch availability.kind {
-        case .unavailable:
-            return "No downloaded copy available on this device."
-        case .current:
-            return "Downloaded on this device and ready to open locally."
-        case .stale:
-            return "A downloaded copy is available locally, but the remote file may be newer."
-        }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(availabilityTint)
-                    .frame(width: 30, height: 30)
-                    .background(availabilityTint.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(session.displayName)
-                        .font(.headline)
-
-                    Text(profile.name)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer(minLength: 10)
-
-                if showsNavigationIndicator {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.blue)
-                } else if trailingAccessoryReservedWidth > 0 {
-                    Color.clear
-                        .frame(width: trailingAccessoryReservedWidth, height: 1)
-                }
-            }
-
-            HStack(spacing: 8) {
-                if let badgeTitle = availability.badgeTitle {
-                    StatusBadge(title: badgeTitle, tint: availabilityTint)
-                }
-                StatusBadge(title: session.progressText, tint: session.read ? .green : .orange)
-            }
-
-            Text(subtitleText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
             Text("Last opened \(session.lastTimeOpened.formatted(date: .abbreviated, time: .shortened))")
                 .font(.caption)
