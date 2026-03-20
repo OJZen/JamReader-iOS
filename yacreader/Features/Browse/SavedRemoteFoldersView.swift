@@ -32,34 +32,23 @@ struct SavedRemoteFoldersView: View {
                                 dependencies: dependencies
                             )
                         } label: {
-                            SavedRemoteFolderRow(entry: entry)
+                            SavedRemoteFolderRow(
+                                entry: entry,
+                                trailingAccessoryReservedWidth: 46
+                            )
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingRemovalEntry = entry
-                            } label: {
-                                Label("Remove", systemImage: "trash")
-                            }
-
-                            Button {
-                                renameEntry = entry
-                            } label: {
-                                Label("Rename", systemImage: "pencil")
-                            }
-                            .tint(.blue)
-                        }
-                        .contextMenu {
-                            Button {
-                                renameEntry = entry
-                            } label: {
-                                Label("Rename Shortcut", systemImage: "pencil")
-                            }
-
-                            Button(role: .destructive) {
-                                pendingRemovalEntry = entry
-                            } label: {
-                                Label("Remove Shortcut", systemImage: "trash")
-                            }
+                        .buttonStyle(.plain)
+                        .overlay(alignment: .topTrailing) {
+                            SavedRemoteFolderActionMenuButton(
+                                onRename: {
+                                    renameEntry = entry
+                                },
+                                onRemove: {
+                                    pendingRemovalEntry = entry
+                                }
+                            )
+                            .padding(.top, 12)
+                            .padding(.trailing, 12)
                         }
                     }
                 }
@@ -258,6 +247,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
 
 private struct SavedRemoteFolderRow: View {
     let entry: SavedRemoteFoldersViewModel.ShortcutEntry
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -291,7 +281,32 @@ private struct SavedRemoteFolderRow: View {
                 StatusBadge(title: "Updated \(entry.shortcut.updatedAt.formatted(date: .abbreviated, time: .omitted))", tint: .teal)
             }
         }
+        .padding(.trailing, trailingAccessoryReservedWidth)
         .padding(.vertical, 4)
+    }
+}
+
+private struct SavedRemoteFolderActionMenuButton: View {
+    let onRename: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(action: onRename) {
+                Label("Rename Shortcut", systemImage: "pencil")
+            }
+
+            Button(role: .destructive, action: onRemove) {
+                Label("Remove Shortcut", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(4)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
