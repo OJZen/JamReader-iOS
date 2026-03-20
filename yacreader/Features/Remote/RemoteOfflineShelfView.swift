@@ -352,68 +352,41 @@ struct RemoteOfflineShelfView: View {
                 ForEach(displayedSections) { section in
                     Section {
                         ForEach(section.entries) { entry in
-                        NavigationLink {
-                            RemoteComicLoadingView(
-                                profile: entry.profile,
-                                item: entry.session.directoryItem,
-                                dependencies: dependencies,
-                                openMode: .preferLocalCache
-                            )
-                        } label: {
-                            RemoteOfflineShelfCard(entry: entry)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            Button {
-                                navigationRequest = .folder(
-                                    entry.profile,
-                                    entry.session.parentDirectoryPath
+                            NavigationLink {
+                                RemoteComicLoadingView(
+                                    profile: entry.profile,
+                                    item: entry.session.directoryItem,
+                                    dependencies: dependencies,
+                                    openMode: .preferLocalCache
                                 )
                             } label: {
-                                Label("Browse Folder", systemImage: "folder")
-                            }
-                            .tint(.teal)
-
-                            Button {
-                                Task<Void, Never> {
-                                    await viewModel.refreshDownloadedCopy(for: entry)
-                                }
-                            } label: {
-                                Label("Refresh", systemImage: "arrow.clockwise")
-                            }
-                            .tint(.blue)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                pendingRemovalEntry = entry
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
-                        .contextMenu {
-                            Button {
-                                navigationRequest = .folder(
-                                    entry.profile,
-                                    entry.session.parentDirectoryPath
+                                RemoteOfflineShelfCard(
+                                    entry: entry,
+                                    trailingAccessoryReservedWidth: 46
                                 )
-                            } label: {
-                                Label("Browse Source Folder", systemImage: "folder")
                             }
-
-                            Button {
-                                Task<Void, Never> {
-                                    await viewModel.refreshDownloadedCopy(for: entry)
-                                }
-                            } label: {
-                                Label("Refresh Downloaded Copy", systemImage: "arrow.clockwise.circle")
-                            }
-
-                            Button(role: .destructive) {
-                                pendingRemovalEntry = entry
-                            } label: {
-                                Label("Delete Downloaded Copy", systemImage: "trash")
+                            .buttonStyle(.plain)
+                            .overlay(alignment: .topTrailing) {
+                                RemoteOfflineShelfItemActionMenuButton(
+                                    onBrowseFolder: {
+                                        navigationRequest = .folder(
+                                            entry.profile,
+                                            entry.session.parentDirectoryPath
+                                        )
+                                    },
+                                    onRefreshDownloadedCopy: {
+                                        Task<Void, Never> {
+                                            await viewModel.refreshDownloadedCopy(for: entry)
+                                        }
+                                    },
+                                    onDeleteDownloadedCopy: {
+                                        pendingRemovalEntry = entry
+                                    }
+                                )
+                                .padding(.top, 12)
+                                .padding(.trailing, 12)
                             }
                         }
-                    }
                     } header: {
                         sectionHeader(for: section)
                     }
@@ -718,6 +691,7 @@ struct RemoteOfflineShelfView: View {
 
 private struct RemoteOfflineShelfCard: View {
     let entry: RemoteOfflineShelfViewModel.Entry
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     private var badgeTint: Color {
         switch entry.availability.kind {
@@ -788,11 +762,41 @@ private struct RemoteOfflineShelfCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
+        .padding(.trailing, trailingAccessoryReservedWidth)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
         }
+    }
+}
+
+private struct RemoteOfflineShelfItemActionMenuButton: View {
+    let onBrowseFolder: () -> Void
+    let onRefreshDownloadedCopy: () -> Void
+    let onDeleteDownloadedCopy: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(action: onBrowseFolder) {
+                Label("Browse Source Folder", systemImage: "folder")
+            }
+
+            Button(action: onRefreshDownloadedCopy) {
+                Label("Refresh Downloaded Copy", systemImage: "arrow.clockwise.circle")
+            }
+
+            Button(role: .destructive, action: onDeleteDownloadedCopy) {
+                Label("Delete Downloaded Copy", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(4)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
