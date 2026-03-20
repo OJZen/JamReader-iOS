@@ -148,6 +148,18 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         )
     }
 
+    var parentDirectoryPath: String {
+        let components = path
+            .split(separator: "/")
+            .map(String.init)
+
+        guard components.count > 1 else {
+            return ""
+        }
+
+        return "/" + components.dropLast().joined(separator: "/")
+    }
+
     var comicFileReference: RemoteComicFileReference {
         RemoteComicFileReference(
             serverID: serverID,

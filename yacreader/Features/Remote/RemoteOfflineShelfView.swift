@@ -1,6 +1,80 @@
 import Combine
 import SwiftUI
 
+private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
+    case recent
+    case title
+    case server
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recent:
+            return "Recently Opened"
+        case .title:
+            return "Title"
+        case .server:
+            return "Server"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .recent:
+            return "Recent"
+        case .title:
+            return "Title"
+        case .server:
+            return "Server"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .recent:
+            return "clock.arrow.circlepath"
+        case .title:
+            return "textformat.abc"
+        case .server:
+            return "server.rack"
+        }
+    }
+
+    func sort(_ entries: [RemoteOfflineShelfViewModel.Entry]) -> [RemoteOfflineShelfViewModel.Entry] {
+        switch self {
+        case .recent:
+            return entries.sorted { lhs, rhs in
+                lhs.session.lastTimeOpened > rhs.session.lastTimeOpened
+            }
+        case .title:
+            return entries.sorted { lhs, rhs in
+                lhs.session.displayName.localizedStandardCompare(rhs.session.displayName) == .orderedAscending
+            }
+        case .server:
+            return entries.sorted { lhs, rhs in
+                let comparison = lhs.profile.name.localizedStandardCompare(rhs.profile.name)
+                if comparison == .orderedSame {
+                    return lhs.session.displayName.localizedStandardCompare(rhs.session.displayName) == .orderedAscending
+                }
+
+                return comparison == .orderedAscending
+            }
+        }
+    }
+}
+
+private enum RemoteOfflineShelfNavigationRequest: Identifiable, Hashable {
+    case folder(RemoteServerProfile, String)
+
+    var id: String {
+        switch self {
+        case .folder(let profile, let path):
+            return "folder:\(profile.id.uuidString):\(path)"
+        }
+    }
+}
+
 @MainActor
 final class RemoteOfflineShelfViewModel: ObservableObject {
     struct Entry: Identifiable, Hashable {
@@ -16,12 +90,15 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
     @Published private(set) var entries: [Entry] = []
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
     @Published private(set) var isLoading = false
+    @Published var feedback: RemoteBrowserFeedbackState?
     @Published var alert: BrowseHomeAlert?
 
     private let remoteServerProfileStore: RemoteServerProfileStore
     private let remoteReadingProgressStore: RemoteReadingProgressStore
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private var hasLoaded = false
+    private var profilesByID: [UUID: RemoteServerProfile] = [:]
+    private var sessions: [RemoteComicReadingSession] = []
 
     init(dependencies: AppDependencies) {
         self.remoteServerProfileStore = dependencies.remoteServerProfileStore
@@ -69,21 +146,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
         do {
             let profiles = try remoteServerProfileStore.load()
-            let sessions = try remoteReadingProgressStore.loadSessions()
-            let profilesByID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-
-            entries = sessions.compactMap { session in
-                let availability = remoteServerBrowsingService.cachedAvailability(for: session.comicFileReference)
-                guard availability.hasLocalCopy,
-                      let profile = profilesByID[session.serverID] else {
-                    return nil
-                }
-
-                return Entry(session: session, profile: profile, availability: availability)
-            }
-            cacheSummary = remoteServerBrowsingService.cacheSummary()
+            profilesByID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
+            sessions = try remoteReadingProgressStore.loadSessions()
+            rebuildEntries()
             alert = nil
         } catch {
+            profilesByID = [:]
+            sessions = []
             entries = []
             cacheSummary = .empty
             alert = BrowseHomeAlert(
@@ -92,12 +161,98 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             )
         }
     }
+
+    func refreshDownloadedCopy(for entry: Entry) async {
+        feedback = nil
+
+        await activeOperation {
+            let result = try await remoteServerBrowsingService.downloadComicFile(
+                for: entry.profile,
+                reference: entry.session.comicFileReference,
+                forceRefresh: true
+            )
+            rebuildEntries()
+
+            feedback = RemoteBrowserFeedbackState(
+                title: "Downloaded Copy Updated",
+                message: refreshFeedbackMessage(for: entry, result: result),
+                kind: .success,
+                autoDismissAfter: 3.2
+            )
+        }
+    }
+
+    func removeDownloadedCopy(for entry: Entry) {
+        feedback = nil
+
+        do {
+            try remoteServerBrowsingService.clearCachedComic(for: entry.session.comicFileReference)
+            rebuildEntries()
+            feedback = RemoteBrowserFeedbackState(
+                title: "Downloaded Copy Removed",
+                message: "\(entry.session.displayName) was removed from this device.",
+                kind: .info,
+                autoDismissAfter: 2.6
+            )
+        } catch {
+            alert = BrowseHomeAlert(
+                title: "Remove Downloaded Copy Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func activeOperation(
+        operation: () async throws -> Void
+    ) async {
+        do {
+            try await operation()
+        } catch {
+            rebuildEntries()
+            alert = BrowseHomeAlert(
+                title: "Offline Shelf Action Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func rebuildEntries() {
+        entries = sessions.compactMap { session in
+            let availability = remoteServerBrowsingService.cachedAvailability(for: session.comicFileReference)
+            guard availability.hasLocalCopy,
+                  let profile = profilesByID[session.serverID] else {
+                return nil
+            }
+
+            return Entry(session: session, profile: profile, availability: availability)
+        }
+
+        cacheSummary = remoteServerBrowsingService.cacheSummary()
+    }
+
+    private func refreshFeedbackMessage(
+        for entry: Entry,
+        result: RemoteComicDownloadResult
+    ) -> String {
+        switch result.source {
+        case .downloaded:
+            return "Downloaded the latest copy of \(entry.session.displayName) to this device."
+        case .cachedCurrent:
+            return "\(entry.session.displayName) is already current on this device."
+        case .cachedFallback(let message):
+            return message
+        }
+    }
 }
 
 struct RemoteOfflineShelfView: View {
     let dependencies: AppDependencies
 
     @StateObject private var viewModel: RemoteOfflineShelfViewModel
+    @State private var searchText = ""
+    @State private var sortMode: RemoteOfflineShelfSortMode = .recent
+    @State private var navigationRequest: RemoteOfflineShelfNavigationRequest?
+    @State private var feedbackDismissTask: Task<Void, Never>?
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -119,9 +274,17 @@ struct RemoteOfflineShelfView: View {
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
+                } else if displayedEntries.isEmpty, !viewModel.isLoading {
+                    ContentUnavailableView(
+                        "No Matches",
+                        systemImage: "magnifyingglass",
+                        description: Text("No offline comics match \"\(trimmedSearchText)\".")
+                    )
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 28)
                 } else {
                     VStack(spacing: 12) {
-                        ForEach(viewModel.entries) { entry in
+                        ForEach(displayedEntries) { entry in
                             NavigationLink {
                                 RemoteComicLoadingView(
                                     profile: entry.profile,
@@ -130,7 +293,23 @@ struct RemoteOfflineShelfView: View {
                                     openMode: .preferLocalCache
                                 )
                             } label: {
-                                RemoteOfflineShelfCard(entry: entry)
+                                RemoteOfflineShelfCard(
+                                    entry: entry,
+                                    onBrowseSourceFolder: {
+                                        navigationRequest = .folder(
+                                            entry.profile,
+                                            entry.session.parentDirectoryPath
+                                        )
+                                    },
+                                    onRefreshDownloadedCopy: {
+                                        Task<Void, Never> {
+                                            await viewModel.refreshDownloadedCopy(for: entry)
+                                        }
+                                    },
+                                    onRemoveDownloadedCopy: {
+                                        viewModel.removeDownloadedCopy(for: entry)
+                                    }
+                                )
                             }
                             .buttonStyle(.plain)
                         }
@@ -143,11 +322,67 @@ struct RemoteOfflineShelfView: View {
         .background(background)
         .navigationTitle("Offline Shelf")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Section("Sort") {
+                        ForEach(RemoteOfflineShelfSortMode.allCases) { mode in
+                            Button {
+                                sortMode = mode
+                            } label: {
+                                HStack {
+                                    Label(mode.title, systemImage: mode.systemImageName)
+                                    if sortMode == mode {
+                                        Spacer()
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.arrow.down.circle")
+                }
+            }
+        }
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Search downloaded remote comics"
+        )
+        .safeAreaInset(edge: .bottom) {
+            if let feedback = viewModel.feedback {
+                RemoteBrowserFeedbackCard(
+                    feedback: feedback,
+                    onPrimaryAction: nil,
+                    onDismiss: {
+                        viewModel.feedback = nil
+                    }
+                )
+            }
+        }
         .task {
             await viewModel.loadIfNeeded()
         }
         .refreshable {
             await viewModel.load()
+        }
+        .onChange(of: viewModel.feedback?.id) { _, _ in
+            scheduleFeedbackDismissalIfNeeded()
+        }
+        .onDisappear {
+            feedbackDismissTask?.cancel()
+            feedbackDismissTask = nil
+        }
+        .navigationDestination(item: $navigationRequest) { request in
+            switch request {
+            case .folder(let profile, let path):
+                RemoteServerBrowserView(
+                    profile: profile,
+                    currentPath: path,
+                    dependencies: dependencies
+                )
+            }
         }
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -156,6 +391,25 @@ struct RemoteOfflineShelfView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    private var displayedEntries: [RemoteOfflineShelfViewModel.Entry] {
+        let filtered: [RemoteOfflineShelfViewModel.Entry]
+        if trimmedSearchText.isEmpty {
+            filtered = viewModel.entries
+        } else {
+            filtered = viewModel.entries.filter { entry in
+                entry.session.displayName.localizedStandardContains(trimmedSearchText)
+                    || entry.profile.name.localizedStandardContains(trimmedSearchText)
+                    || entry.session.path.localizedStandardContains(trimmedSearchText)
+            }
+        }
+
+        return sortMode.sort(filtered)
+    }
+
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var heroCard: some View {
@@ -167,12 +421,13 @@ struct RemoteOfflineShelfView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Label(
-                viewModel.cacheSummary.isEmpty ? "No downloaded remote comics yet" : viewModel.cacheSummary.summaryText,
-                systemImage: "internaldrive.fill"
-            )
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                StatusBadge(title: viewModel.cacheSummary.isEmpty ? "Empty" : viewModel.cacheSummary.summaryText, tint: .blue)
+                StatusBadge(title: sortMode.shortTitle, tint: .teal)
+                if !trimmedSearchText.isEmpty {
+                    StatusBadge(title: "Filtering", tint: .orange)
+                }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
@@ -191,10 +446,39 @@ struct RemoteOfflineShelfView: View {
         )
         .ignoresSafeArea()
     }
+
+    private func scheduleFeedbackDismissalIfNeeded() {
+        feedbackDismissTask?.cancel()
+        feedbackDismissTask = nil
+
+        guard let feedback = viewModel.feedback,
+              let autoDismissAfter = feedback.autoDismissAfter
+        else {
+            return
+        }
+
+        feedbackDismissTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(autoDismissAfter * 1_000_000_000))
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                if viewModel.feedback?.id == feedback.id {
+                    viewModel.feedback = nil
+                }
+            } catch {
+                // Ignore cancellation.
+            }
+        }
+    }
 }
 
 private struct RemoteOfflineShelfCard: View {
     let entry: RemoteOfflineShelfViewModel.Entry
+    let onBrowseSourceFolder: () -> Void
+    let onRefreshDownloadedCopy: () -> Void
+    let onRemoveDownloadedCopy: () -> Void
 
     private var badgeTint: Color {
         switch entry.availability.kind {
@@ -239,9 +523,26 @@ private struct RemoteOfflineShelfCard: View {
 
                 Spacer(minLength: 8)
 
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.blue)
+                Menu {
+                    Button(action: onBrowseSourceFolder) {
+                        Label("Browse Source Folder", systemImage: "folder")
+                    }
+
+                    Button(action: onRefreshDownloadedCopy) {
+                        Label("Refresh Downloaded Copy", systemImage: "arrow.clockwise.circle")
+                    }
+
+                    Button(role: .destructive, action: onRemoveDownloadedCopy) {
+                        Label("Remove Downloaded Copy", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .padding(4)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
             }
 
             HStack(spacing: 8) {
