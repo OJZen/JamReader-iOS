@@ -1270,6 +1270,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - 已补齐远程目录的主动离线准备动作：单本漫画现支持 `Save for Offline / Update Downloaded Copy / Remove Downloaded Copy`，当前目录也支持一键保存可见漫画到设备，`Browse` 与 `Offline Shelf` 之间的回流链路更完整
 - 已把 `Offline Shelf` 补成可管理页面：现支持搜索、排序、刷新下载副本、移除本地副本，以及一键回到来源 `SMB` 文件夹，离线书架不再只是只读列表
 - 已把离线副本删除入口进一步独立化：`Offline Shelf` 现支持直接滑删下载副本，`Browse` 首页的 `Offline Ready` 预览卡片也补上了显式删除入口，减少必须进入二级菜单才能清理本地副本的负担
+- 已继续强化 `Offline Shelf` 的管理心智：离线书架现支持按 `All / Offline Ready / Older Copies` 过滤、按服务器分组查看，并可直接按服务器批量清理下载副本，让离线缓存更像一个可维护的 SMB 下载库而不是扁平列表
 
 当前未完成：
 

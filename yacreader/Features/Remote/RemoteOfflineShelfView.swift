@@ -64,6 +64,36 @@ private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
     }
 }
 
+private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
+    case all
+    case current
+    case stale
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all:
+            return "All"
+        case .current:
+            return "Offline Ready"
+        case .stale:
+            return "Older Copies"
+        }
+    }
+
+    func includes(_ entry: RemoteOfflineShelfViewModel.Entry) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .current:
+            return entry.availability.kind == .current
+        case .stale:
+            return entry.availability.kind == .stale
+        }
+    }
+}
+
 private enum RemoteOfflineShelfNavigationRequest: Identifiable, Hashable {
     case folder(RemoteServerProfile, String)
 
@@ -202,6 +232,31 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
     }
 
+    func clearDownloadedCopies(for profile: RemoteServerProfile, removedCount: Int) {
+        feedback = nil
+
+        do {
+            try remoteServerBrowsingService.clearCachedComics(for: profile)
+            rebuildEntries()
+            let copyWord = removedCount == 1 ? "copy" : "copies"
+            feedback = RemoteBrowserFeedbackState(
+                title: "Downloaded Copies Removed",
+                message: "Removed \(removedCount) downloaded \(copyWord) from \(profile.name).",
+                kind: .info,
+                autoDismissAfter: 3.0
+            )
+        } catch {
+            alert = BrowseHomeAlert(
+                title: "Clear Downloaded Copies Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func downloadedCopyCount(for profile: RemoteServerProfile) -> Int {
+        entries.filter { $0.profile.id == profile.id }.count
+    }
+
     private func activeOperation(
         operation: () async throws -> Void
     ) async {
@@ -251,9 +306,12 @@ struct RemoteOfflineShelfView: View {
     @StateObject private var viewModel: RemoteOfflineShelfViewModel
     @State private var searchText = ""
     @State private var sortMode: RemoteOfflineShelfSortMode = .recent
+    @State private var filterMode: RemoteOfflineShelfFilter = .all
     @State private var navigationRequest: RemoteOfflineShelfNavigationRequest?
     @State private var feedbackDismissTask: Task<Void, Never>?
     @State private var pendingRemovalEntry: RemoteOfflineShelfViewModel.Entry?
+    @State private var pendingServerClearProfile: RemoteServerProfile?
+    @State private var pendingServerClearCount = 0
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -283,16 +341,17 @@ struct RemoteOfflineShelfView: View {
             } else if displayedEntries.isEmpty, !viewModel.isLoading {
                 Section {
                     ContentUnavailableView(
-                        "No Matches",
+                        emptyResultsTitle,
                         systemImage: "magnifyingglass",
-                        description: Text("No offline comics match \"\(trimmedSearchText)\".")
+                        description: Text(emptyResultsDescription)
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
                 }
             } else {
-                Section("Downloaded Comics") {
-                    ForEach(displayedEntries) { entry in
+                ForEach(displayedSections) { section in
+                    Section {
+                        ForEach(section.entries) { entry in
                         NavigationLink {
                             RemoteComicLoadingView(
                                 profile: entry.profile,
@@ -354,6 +413,9 @@ struct RemoteOfflineShelfView: View {
                                 Label("Delete Downloaded Copy", systemImage: "trash")
                             }
                         }
+                    }
+                    } header: {
+                        sectionHeader(for: section)
                     }
                 }
             }
@@ -451,6 +513,39 @@ struct RemoteOfflineShelfView: View {
                 Text("Only the downloaded copy of \"\(entry.session.displayName)\" will be removed from this device. Reading progress will stay intact.")
             }
         }
+        .confirmationDialog(
+            "Delete all downloaded copies for this server?",
+            isPresented: Binding(
+                get: { pendingServerClearProfile != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingServerClearProfile = nil
+                        pendingServerClearCount = 0
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let profile = pendingServerClearProfile {
+                Button("Delete Server Copies", role: .destructive) {
+                    viewModel.clearDownloadedCopies(
+                        for: profile,
+                        removedCount: pendingServerClearCount
+                    )
+                    pendingServerClearProfile = nil
+                    pendingServerClearCount = 0
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingServerClearProfile = nil
+                pendingServerClearCount = 0
+            }
+        } message: {
+            if let profile = pendingServerClearProfile {
+                Text("This removes \(pendingServerClearCount) downloaded copies for \(profile.name) from this device. Remote files and reading progress stay intact.")
+            }
+        }
         .alert(item: $viewModel.alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -472,11 +567,56 @@ struct RemoteOfflineShelfView: View {
             }
         }
 
-        return sortMode.sort(filtered)
+        return sortMode.sort(filtered.filter { filterMode.includes($0) })
+    }
+
+    private var displayedSections: [RemoteOfflineShelfSection] {
+        let grouped = Dictionary(grouping: displayedEntries) { $0.profile.id }
+
+        return grouped.values
+            .map { entries in
+                RemoteOfflineShelfSection(
+                    profile: entries[0].profile,
+                    entries: entries
+                )
+            }
+            .sorted {
+                $0.profile.name.localizedStandardCompare($1.profile.name) == .orderedAscending
+            }
     }
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var emptyResultsTitle: String {
+        if !trimmedSearchText.isEmpty {
+            return "No Matches"
+        }
+
+        switch filterMode {
+        case .all:
+            return "No Offline Comics"
+        case .current:
+            return "No Offline-Ready Comics"
+        case .stale:
+            return "No Older Copies"
+        }
+    }
+
+    private var emptyResultsDescription: String {
+        if !trimmedSearchText.isEmpty {
+            return "No offline comics match \"\(trimmedSearchText)\"."
+        }
+
+        switch filterMode {
+        case .all:
+            return "There are no downloaded remote comics on this device yet."
+        case .current:
+            return "There are no fully current downloaded copies in this shelf right now."
+        case .stale:
+            return "There are no older downloaded copies in this shelf right now."
+        }
     }
 
     private var heroCard: some View {
@@ -491,14 +631,49 @@ struct RemoteOfflineShelfView: View {
             HStack(spacing: 8) {
                 StatusBadge(title: viewModel.cacheSummary.isEmpty ? "Empty" : viewModel.cacheSummary.summaryText, tint: .blue)
                 StatusBadge(title: sortMode.shortTitle, tint: .teal)
+                StatusBadge(title: filterMode.title, tint: .orange)
                 if !trimmedSearchText.isEmpty {
-                    StatusBadge(title: "Filtering", tint: .orange)
+                    StatusBadge(title: "Searching", tint: .pink)
                 }
             }
+
+            Picker("Filter", selection: $filterMode) {
+                ForEach(RemoteOfflineShelfFilter.allCases) { mode in
+                    Text(mode.title)
+                        .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func sectionHeader(for section: RemoteOfflineShelfSection) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(section.profile.name)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(section.summaryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 10)
+
+            Button(role: .destructive) {
+                pendingServerClearProfile = section.profile
+                pendingServerClearCount = viewModel.downloadedCopyCount(for: section.profile)
+            } label: {
+                Label("Clear Server", systemImage: "trash")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
+        }
+        .textCase(nil)
     }
 
     private var background: some View {
@@ -618,5 +793,33 @@ private struct RemoteOfflineShelfCard: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(Color.black.opacity(0.05), lineWidth: 1)
         }
+    }
+}
+
+private struct RemoteOfflineShelfSection: Identifiable {
+    let profile: RemoteServerProfile
+    let entries: [RemoteOfflineShelfViewModel.Entry]
+
+    var id: UUID {
+        profile.id
+    }
+
+    var summaryText: String {
+        let currentCount = entries.filter { $0.availability.kind == .current }.count
+        let staleCount = entries.filter { $0.availability.kind == .stale }.count
+
+        var segments: [String] = []
+        if currentCount > 0 {
+            segments.append("\(currentCount) offline ready")
+        }
+        if staleCount > 0 {
+            segments.append("\(staleCount) older")
+        }
+
+        if segments.isEmpty {
+            return "\(entries.count) downloaded copies"
+        }
+
+        return segments.joined(separator: " · ")
     }
 }
