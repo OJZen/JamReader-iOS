@@ -159,6 +159,7 @@ final class RemoteComicThumbnailPipeline {
     private let thumbnailCacheRootURL: URL
     private let maximumCachedThumbnailCount = 600
     private let maximumTotalCacheBytes: Int64 = 256 * 1_024 * 1_024
+    private let diskCache: RemoteThumbnailDiskCacheStore
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -168,6 +169,12 @@ final class RemoteComicThumbnailPipeline {
         )
             .appendingPathComponent("YACReader", isDirectory: true)
             .appendingPathComponent("RemoteThumbnails", isDirectory: true)
+        self.diskCache = RemoteThumbnailDiskCacheStore(
+            fileManager: fileManager,
+            cacheRootURL: thumbnailCacheRootURL,
+            maximumCachedThumbnailCount: maximumCachedThumbnailCount,
+            maximumTotalCacheBytes: maximumTotalCacheBytes
+        )
         cache.countLimit = 256
         cache.totalCostLimit = 64 * 1_024 * 1_024
     }
@@ -192,13 +199,13 @@ final class RemoteComicThumbnailPipeline {
         }
 
         let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
-        if let diskCachedImage = Self.loadCachedImage(at: diskURL) {
+        if let diskCachedImage = diskCache.loadCachedImage(at: diskURL) {
             cache.setObject(
                 diskCachedImage,
                 forKey: nsCacheKey,
                 cost: Self.cacheCost(for: diskCachedImage)
             )
-            touchCachedThumbnail(at: diskURL)
+            diskCache.touchCachedThumbnail(at: diskURL)
             return diskCachedImage
         }
 
@@ -207,10 +214,7 @@ final class RemoteComicThumbnailPipeline {
         }
 
         let worker = RemoteComicThumbnailWorker(
-            fileManager: fileManager,
-            thumbnailCacheRootURL: thumbnailCacheRootURL,
-            maximumCachedThumbnailCount: maximumCachedThumbnailCount,
-            maximumTotalCacheBytes: maximumTotalCacheBytes
+            diskCache: diskCache
         )
         let task = Task<UIImage?, Never> {
             await worker.buildThumbnail(
@@ -238,44 +242,14 @@ final class RemoteComicThumbnailPipeline {
     }
 
     func cacheSummary() -> RemoteThumbnailCacheSummary {
-        guard fileManager.fileExists(atPath: thumbnailCacheRootURL.path) else {
-            return .empty
-        }
-
-        guard let enumerator = fileManager.enumerator(
-            at: thumbnailCacheRootURL,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return .empty
-        }
-
-        var fileCount = 0
-        var totalBytes: Int64 = 0
-
-        for case let fileURL as URL in enumerator {
-            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-            guard values?.isRegularFile == true else {
-                continue
-            }
-
-            fileCount += 1
-            totalBytes += Int64(values?.fileSize ?? 0)
-        }
-
-        return RemoteThumbnailCacheSummary(fileCount: fileCount, totalBytes: totalBytes)
+        diskCache.cacheSummary()
     }
 
     func clearCache() throws {
         cache.removeAllObjects()
         inFlightTasks.values.forEach { $0.cancel() }
         inFlightTasks.removeAll()
-
-        guard fileManager.fileExists(atPath: thumbnailCacheRootURL.path) else {
-            return
-        }
-
-        try fileManager.removeItem(at: thumbnailCacheRootURL)
+        try diskCache.clearCache()
     }
 
     func preheat(
@@ -355,84 +329,95 @@ final class RemoteComicThumbnailPipeline {
         let fileName = digest.map { String(format: "%02x", $0) }.joined() + ".jpg"
         return thumbnailCacheRootURL.appendingPathComponent(fileName, isDirectory: false)
     }
+}
 
-    private func storeCachedThumbnail(_ image: UIImage, at fileURL: URL) throws {
-        guard let data = Self.encodedThumbnailData(from: image) else {
-            return
+private struct CachedThumbnailFileRecord {
+    let url: URL
+    let size: Int64
+    let lastAccessDate: Date
+}
+
+private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
+    nonisolated(unsafe) private let fileManager: FileManager
+    private let cacheRootURL: URL
+    private let maximumCachedThumbnailCount: Int
+    private let maximumTotalCacheBytes: Int64
+    private let summaryLock = NSLock()
+    private let maintenanceQueue = DispatchQueue(
+        label: "YACReader.RemoteThumbnailDiskCacheMaintenance",
+        qos: .utility
+    )
+
+    nonisolated(unsafe) private var cachedSummary: RemoteThumbnailCacheSummary?
+    nonisolated(unsafe) private var trimScheduled = false
+
+    init(
+        fileManager: FileManager,
+        cacheRootURL: URL,
+        maximumCachedThumbnailCount: Int,
+        maximumTotalCacheBytes: Int64
+    ) {
+        self.fileManager = fileManager
+        self.cacheRootURL = cacheRootURL
+        self.maximumCachedThumbnailCount = maximumCachedThumbnailCount
+        self.maximumTotalCacheBytes = maximumTotalCacheBytes
+    }
+
+    nonisolated func cacheSummary() -> RemoteThumbnailCacheSummary {
+        if let cachedSummary = withSummaryLock({ cachedSummary }) {
+            return cachedSummary
         }
 
+        let scannedSummary = scanSummaryFromDisk()
+
+        return withSummaryLock {
+            if let cachedSummary {
+                return cachedSummary
+            }
+
+            cachedSummary = scannedSummary
+            return scannedSummary
+        }
+    }
+
+    nonisolated func clearCache() throws {
+        if fileManager.fileExists(atPath: cacheRootURL.path) {
+            try fileManager.removeItem(at: cacheRootURL)
+        }
+
+        withSummaryLock {
+            cachedSummary = RemoteThumbnailCacheSummary(fileCount: 0, totalBytes: 0)
+            trimScheduled = false
+        }
+    }
+
+    nonisolated func loadCachedImage(at fileURL: URL) -> UIImage? {
+        guard fileManager.fileExists(atPath: fileURL.path),
+              let image = UIImage(contentsOfFile: fileURL.path)
+        else {
+            return nil
+        }
+
+        return image
+    }
+
+    nonisolated func storeEncodedThumbnailData(_ data: Data, at fileURL: URL) throws {
+        let previousSize = cachedFileSize(at: fileURL)
+
         try fileManager.createDirectory(
-            at: thumbnailCacheRootURL,
+            at: cacheRootURL,
             withIntermediateDirectories: true
         )
         try data.write(to: fileURL, options: .atomic)
         touchCachedThumbnail(at: fileURL)
+
+        updateSummaryAfterStore(
+            previousSize: previousSize,
+            newSize: Int64(data.count)
+        )
     }
 
-    private func trimCacheIfNeeded() throws {
-        guard fileManager.fileExists(atPath: thumbnailCacheRootURL.path) else {
-            return
-        }
-
-        guard let enumerator = fileManager.enumerator(
-            at: thumbnailCacheRootURL,
-            includingPropertiesForKeys: [
-                .isRegularFileKey,
-                .fileSizeKey,
-                .contentModificationDateKey
-            ],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return
-        }
-
-        var cachedFiles: [CachedThumbnailFileRecord] = []
-        var totalBytes: Int64 = 0
-
-        for case let fileURL as URL in enumerator {
-            let values = try? fileURL.resourceValues(
-                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-            )
-            guard values?.isRegularFile == true else {
-                continue
-            }
-
-            let size = Int64(values?.fileSize ?? 0)
-            totalBytes += size
-            cachedFiles.append(
-                CachedThumbnailFileRecord(
-                    url: fileURL,
-                    size: size,
-                    lastAccessDate: values?.contentModificationDate ?? .distantPast
-                )
-            )
-        }
-
-        guard cachedFiles.count > maximumCachedThumbnailCount || totalBytes > maximumTotalCacheBytes else {
-            return
-        }
-
-        let evictionCandidates = cachedFiles.sorted { lhs, rhs in
-            lhs.lastAccessDate < rhs.lastAccessDate
-        }
-
-        var remainingCount = cachedFiles.count
-        var remainingBytes = totalBytes
-
-        for candidate in evictionCandidates {
-            guard remainingCount > maximumCachedThumbnailCount
-                    || remainingBytes > maximumTotalCacheBytes
-            else {
-                break
-            }
-
-            try fileManager.removeItem(at: candidate.url)
-            remainingCount -= 1
-            remainingBytes -= candidate.size
-        }
-    }
-
-    private func touchCachedThumbnail(at fileURL: URL) {
+    nonisolated func touchCachedThumbnail(at fileURL: URL) {
         guard fileManager.fileExists(atPath: fileURL.path) else {
             return
         }
@@ -443,36 +428,170 @@ final class RemoteComicThumbnailPipeline {
         )
     }
 
-    private static func loadCachedImage(at fileURL: URL) -> UIImage? {
-        guard FileManager.default.fileExists(atPath: fileURL.path),
-              let image = UIImage(contentsOfFile: fileURL.path)
-        else {
+    nonisolated private func cachedFileSize(at fileURL: URL) -> Int64? {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
             return nil
         }
 
-        return image
+        let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey])
+        return values?.fileSize.map(Int64.init)
     }
 
-    private static func encodedThumbnailData(from image: UIImage) -> Data? {
-        if let jpegData = image.jpegData(compressionQuality: 0.82) {
-            return jpegData
+    nonisolated private func updateSummaryAfterStore(previousSize: Int64?, newSize: Int64) {
+        let currentSummary = cacheSummary()
+        let updatedSummary = RemoteThumbnailCacheSummary(
+            fileCount: currentSummary.fileCount + (previousSize == nil ? 1 : 0),
+            totalBytes: max(0, currentSummary.totalBytes - (previousSize ?? 0) + newSize)
+        )
+
+        let shouldScheduleTrim = withSummaryLock {
+            cachedSummary = updatedSummary
+
+            guard updatedSummary.fileCount > maximumCachedThumbnailCount
+                    || updatedSummary.totalBytes > maximumTotalCacheBytes
+            else {
+                return false
+            }
+
+            guard !trimScheduled else {
+                return false
+            }
+
+            trimScheduled = true
+            return true
         }
 
-        return image.pngData()
-    }
-}
+        guard shouldScheduleTrim else {
+            return
+        }
 
-private struct CachedThumbnailFileRecord {
-    let url: URL
-    let size: Int64
-    let lastAccessDate: Date
+        maintenanceQueue.async { [weak self] in
+            self?.performTrimMaintenance()
+        }
+    }
+
+    nonisolated private func performTrimMaintenance() {
+        let trimmedSummary = trimCacheIfNeeded()
+
+        let shouldScheduleAnotherPass = withSummaryLock {
+            cachedSummary = trimmedSummary
+            trimScheduled = false
+
+            guard trimmedSummary.fileCount > maximumCachedThumbnailCount
+                    || trimmedSummary.totalBytes > maximumTotalCacheBytes
+            else {
+                return false
+            }
+
+            trimScheduled = true
+            return true
+        }
+
+        guard shouldScheduleAnotherPass else {
+            return
+        }
+
+        maintenanceQueue.async { [weak self] in
+            self?.performTrimMaintenance()
+        }
+    }
+
+    nonisolated private func scanSummaryFromDisk() -> RemoteThumbnailCacheSummary {
+        let cachedFiles = enumerateCachedFiles()
+        let totalBytes = cachedFiles.reduce(into: Int64.zero) { partialResult, record in
+            partialResult += record.size
+        }
+        return RemoteThumbnailCacheSummary(
+            fileCount: cachedFiles.count,
+            totalBytes: totalBytes
+        )
+    }
+
+    nonisolated private func trimCacheIfNeeded() -> RemoteThumbnailCacheSummary {
+        var cachedFiles = enumerateCachedFiles()
+        let totalBytes = cachedFiles.reduce(into: Int64.zero) { partialResult, record in
+            partialResult += record.size
+        }
+
+        guard cachedFiles.count > maximumCachedThumbnailCount || totalBytes > maximumTotalCacheBytes else {
+            return RemoteThumbnailCacheSummary(fileCount: cachedFiles.count, totalBytes: totalBytes)
+        }
+
+        cachedFiles.sort { lhs, rhs in
+            lhs.lastAccessDate < rhs.lastAccessDate
+        }
+
+        var remainingCount = cachedFiles.count
+        var remainingBytes = totalBytes
+
+        for candidate in cachedFiles {
+            guard remainingCount > maximumCachedThumbnailCount
+                    || remainingBytes > maximumTotalCacheBytes
+            else {
+                break
+            }
+
+            try? fileManager.removeItem(at: candidate.url)
+            remainingCount -= 1
+            remainingBytes -= candidate.size
+        }
+
+        return RemoteThumbnailCacheSummary(
+            fileCount: max(0, remainingCount),
+            totalBytes: max(0, remainingBytes)
+        )
+    }
+
+    nonisolated private func enumerateCachedFiles() -> [CachedThumbnailFileRecord] {
+        guard fileManager.fileExists(atPath: cacheRootURL.path) else {
+            return []
+        }
+
+        guard let enumerator = fileManager.enumerator(
+            at: cacheRootURL,
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+                .contentModificationDateKey
+            ],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var cachedFiles: [CachedThumbnailFileRecord] = []
+        cachedFiles.reserveCapacity(256)
+
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+            )
+            guard values?.isRegularFile == true else {
+                continue
+            }
+
+            cachedFiles.append(
+                CachedThumbnailFileRecord(
+                    url: fileURL,
+                    size: Int64(values?.fileSize ?? 0),
+                    lastAccessDate: values?.contentModificationDate ?? .distantPast
+                )
+            )
+        }
+
+        return cachedFiles
+    }
+
+    nonisolated private func withSummaryLock<T>(_ body: () -> T) -> T {
+        summaryLock.lock()
+        defer { summaryLock.unlock() }
+        return body()
+    }
+
 }
 
 private struct RemoteComicThumbnailWorker {
-    nonisolated(unsafe) let fileManager: FileManager
-    let thumbnailCacheRootURL: URL
-    let maximumCachedThumbnailCount: Int
-    let maximumTotalCacheBytes: Int64
+    let diskCache: RemoteThumbnailDiskCacheStore
 
     nonisolated func buildThumbnail(
         for profile: RemoteServerProfile,
@@ -486,15 +605,17 @@ private struct RemoteComicThumbnailWorker {
             reference: reference,
             maxPixelSize: maxPixelSize
         ) {
-            try? storeCachedThumbnail(remoteImage, at: diskURL)
-            try? trimCacheIfNeeded()
+            if let thumbnailData = Self.encodedThumbnailData(from: remoteImage) {
+                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+            }
             return remoteImage
         }
 
         if let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
            let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize) {
-            try? storeCachedThumbnail(cachedImage, at: diskURL)
-            try? trimCacheIfNeeded()
+            if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
+                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+            }
             return cachedImage
         }
 
@@ -512,99 +633,13 @@ private struct RemoteComicThumbnailWorker {
                 return nil
             }
 
-            try? storeCachedThumbnail(image, at: diskURL)
-            try? trimCacheIfNeeded()
+            if let thumbnailData = Self.encodedThumbnailData(from: image) {
+                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+            }
             return image
         } catch {
             return nil
         }
-    }
-
-    nonisolated private func storeCachedThumbnail(_ image: UIImage, at fileURL: URL) throws {
-        guard let data = Self.encodedThumbnailData(from: image) else {
-            return
-        }
-
-        try fileManager.createDirectory(
-            at: thumbnailCacheRootURL,
-            withIntermediateDirectories: true
-        )
-        try data.write(to: fileURL, options: .atomic)
-        touchCachedThumbnail(at: fileURL)
-    }
-
-    nonisolated private func trimCacheIfNeeded() throws {
-        guard fileManager.fileExists(atPath: thumbnailCacheRootURL.path) else {
-            return
-        }
-
-        guard let enumerator = fileManager.enumerator(
-            at: thumbnailCacheRootURL,
-            includingPropertiesForKeys: [
-                .isRegularFileKey,
-                .fileSizeKey,
-                .contentModificationDateKey
-            ],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return
-        }
-
-        var cachedFiles: [CachedThumbnailFileRecord] = []
-        var totalBytes: Int64 = 0
-
-        for case let fileURL as URL in enumerator {
-            let values = try? fileURL.resourceValues(
-                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-            )
-            guard values?.isRegularFile == true else {
-                continue
-            }
-
-            let size = Int64(values?.fileSize ?? 0)
-            totalBytes += size
-            cachedFiles.append(
-                CachedThumbnailFileRecord(
-                    url: fileURL,
-                    size: size,
-                    lastAccessDate: values?.contentModificationDate ?? .distantPast
-                )
-            )
-        }
-
-        guard cachedFiles.count > maximumCachedThumbnailCount || totalBytes > maximumTotalCacheBytes else {
-            return
-        }
-
-        let evictionCandidates = cachedFiles.sorted { lhs, rhs in
-            lhs.lastAccessDate < rhs.lastAccessDate
-        }
-
-        var remainingCount = cachedFiles.count
-        var remainingBytes = totalBytes
-
-        for candidate in evictionCandidates {
-            guard remainingCount > maximumCachedThumbnailCount
-                    || remainingBytes > maximumTotalCacheBytes
-            else {
-                break
-            }
-
-            try fileManager.removeItem(at: candidate.url)
-            remainingCount -= 1
-            remainingBytes -= candidate.size
-        }
-    }
-
-    nonisolated private func touchCachedThumbnail(at fileURL: URL) {
-        guard fileManager.fileExists(atPath: fileURL.path) else {
-            return
-        }
-
-        try? fileManager.setAttributes(
-            [.modificationDate: Date()],
-            ofItemAtPath: fileURL.path
-        )
     }
 
     nonisolated private static func extractThumbnail(from fileURL: URL, maxPixelSize: Int) async -> UIImage? {
