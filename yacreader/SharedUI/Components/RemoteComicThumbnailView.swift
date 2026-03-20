@@ -343,13 +343,16 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     private let maximumCachedThumbnailCount: Int
     private let maximumTotalCacheBytes: Int64
     private let summaryLock = NSLock()
+    private let touchStateLock = NSLock()
     private let maintenanceQueue = DispatchQueue(
         label: "YACReader.RemoteThumbnailDiskCacheMaintenance",
         qos: .utility
     )
+    private let minimumTouchInterval: TimeInterval = 180
 
     nonisolated(unsafe) private var cachedSummary: RemoteThumbnailCacheSummary?
     nonisolated(unsafe) private var trimScheduled = false
+    nonisolated(unsafe) private var recentTouchDatesByPath: [String: Date] = [:]
 
     init(
         fileManager: FileManager,
@@ -389,6 +392,9 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
             cachedSummary = RemoteThumbnailCacheSummary(fileCount: 0, totalBytes: 0)
             trimScheduled = false
         }
+        withTouchStateLock {
+            recentTouchDatesByPath.removeAll()
+        }
     }
 
     nonisolated func loadCachedImage(at fileURL: URL) -> UIImage? {
@@ -409,7 +415,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
             withIntermediateDirectories: true
         )
         try data.write(to: fileURL, options: .atomic)
-        touchCachedThumbnail(at: fileURL)
+        recordTouch(at: fileURL, at: Date())
 
         updateSummaryAfterStore(
             previousSize: previousSize,
@@ -422,10 +428,26 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
             return
         }
 
-        try? fileManager.setAttributes(
-            [.modificationDate: Date()],
-            ofItemAtPath: fileURL.path
-        )
+        let now = Date()
+        guard shouldScheduleTouch(for: fileURL.path, now: now) else {
+            return
+        }
+
+        maintenanceQueue.async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            guard self.fileManager.fileExists(atPath: fileURL.path) else {
+                self.clearRecordedTouch(for: fileURL.path)
+                return
+            }
+
+            try? self.fileManager.setAttributes(
+                [.modificationDate: now],
+                ofItemAtPath: fileURL.path
+            )
+        }
     }
 
     nonisolated private func cachedFileSize(at fileURL: URL) -> Int64? {
@@ -585,6 +607,44 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     nonisolated private func withSummaryLock<T>(_ body: () -> T) -> T {
         summaryLock.lock()
         defer { summaryLock.unlock() }
+        return body()
+    }
+
+    nonisolated private func shouldScheduleTouch(for path: String, now: Date) -> Bool {
+        withTouchStateLock {
+            if let lastTouch = recentTouchDatesByPath[path],
+               now.timeIntervalSince(lastTouch) < minimumTouchInterval {
+                return false
+            }
+
+            recentTouchDatesByPath[path] = now
+
+            if recentTouchDatesByPath.count > 2048 {
+                let cutoffDate = now.addingTimeInterval(-minimumTouchInterval * 2)
+                recentTouchDatesByPath = recentTouchDatesByPath.filter { _, date in
+                    date >= cutoffDate
+                }
+            }
+
+            return true
+        }
+    }
+
+    nonisolated private func recordTouch(at fileURL: URL, at date: Date) {
+        withTouchStateLock {
+            recentTouchDatesByPath[fileURL.path] = date
+        }
+    }
+
+    nonisolated private func clearRecordedTouch(for path: String) {
+        _ = withTouchStateLock {
+            recentTouchDatesByPath.removeValue(forKey: path)
+        }
+    }
+
+    nonisolated private func withTouchStateLock<T>(_ body: () -> T) -> T {
+        touchStateLock.lock()
+        defer { touchStateLock.unlock() }
         return body()
     }
 
