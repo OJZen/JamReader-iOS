@@ -10,6 +10,7 @@ struct SettingsHomeView: View {
     @State private var remoteServerCount = 0
     @State private var remoteSessionCount = 0
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
+    @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .balanced
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var isShowingClearRemoteDownloadsConfirmation = false
     @State private var isShowingClearRemoteThumbnailsConfirmation = false
@@ -39,6 +40,17 @@ struct SettingsHomeView: View {
                 Section("Remote Browse Cache") {
                     LabeledContent("Saved SMB Servers", value: "\(remoteServerCount)")
                     LabeledContent("Recent Remote Sessions", value: "\(remoteSessionCount)")
+
+                    Picker("Cache Preset", selection: $remoteCachePolicyPreset) {
+                        ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
+                            Text(preset.title)
+                                .tag(preset)
+                        }
+                    }
+
+                    Text(remoteCachePolicyPreset.subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
                     if remoteCacheSummary.isEmpty {
                         Text("No downloaded remote comics are cached on this device right now.")
@@ -99,6 +111,9 @@ struct SettingsHomeView: View {
             .task {
                 refresh()
             }
+            .onChange(of: remoteCachePolicyPreset) { _, newValue in
+                applyRemoteCachePolicyPreset(newValue)
+            }
             .refreshable {
                 refresh()
             }
@@ -143,6 +158,7 @@ struct SettingsHomeView: View {
         remoteServerCount = ((try? dependencies.remoteServerProfileStore.load()) ?? []).count
         remoteSessionCount = ((try? dependencies.remoteReadingProgressStore.loadSessions()) ?? []).count
         remoteCacheSummary = dependencies.remoteServerBrowsingService.cacheSummary()
+        remoteCachePolicyPreset = dependencies.remoteServerBrowsingService.cachePolicyPreset()
         remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
     }
 
@@ -165,6 +181,18 @@ struct SettingsHomeView: View {
         } catch {
             alert = SettingsAlertState(
                 title: "Failed to Clear Thumbnails",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func applyRemoteCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) {
+        do {
+            try dependencies.remoteServerBrowsingService.applyCachePolicyPreset(preset)
+            refresh()
+        } catch {
+            alert = SettingsAlertState(
+                title: "Failed to Update Cache Policy",
                 message: error.localizedDescription
             )
         }

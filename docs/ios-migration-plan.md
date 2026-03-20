@@ -1274,6 +1274,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - 已把离线副本删除入口进一步独立化：`Offline Shelf` 现支持直接滑删下载副本，`Browse` 首页的 `Offline Ready` 预览卡片也补上了显式删除入口，减少必须进入二级菜单才能清理本地副本的负担
 - 已继续强化 `Offline Shelf` 的管理心智：离线书架现支持按 `All / Offline Ready / Older Copies` 过滤、按服务器分组查看，并可直接按服务器批量清理下载副本，让离线缓存更像一个可维护的 SMB 下载库而不是扁平列表
 - 已继续补厚远程错误恢复链路：当 SMB 目录因连接、认证或 share 问题无法打开时，错误页除了 `Open Last Comic` 之外，还会在有多本离线副本时提供 `Offline Shelf` 入口，减少错误态下只能依赖单一本最近漫画的限制
+- 已开始把远程缓存策略产品化：`Settings` 里的 `Remote Browse Cache` 现可直接切换 `Compact / Balanced / Extended` 三档缓存预设，远程下载副本的自动淘汰不再只是内部常量，后续可继续扩展到更细粒度的离线策略
 
 当前未完成：
 

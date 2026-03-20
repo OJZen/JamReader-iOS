@@ -124,17 +124,18 @@ final class RemoteServerBrowsingService {
     private let supportedComicFileExtensions: Set<String> = [
         "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf"
     ]
-    private let maximumCachedComicFileCount = 48
-    private let maximumTotalCacheBytes: Int64 = 2 * 1024 * 1024 * 1024
     private let credentialStore: RemoteServerCredentialStore
+    private let cachePolicyStore: RemoteCachePolicyStore
     private let fileManager: FileManager
     private let remoteComicCacheRootURL: URL
 
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
+        cachePolicyStore: RemoteCachePolicyStore = RemoteCachePolicyStore(),
         fileManager: FileManager = .default
     ) {
         self.credentialStore = credentialStore
+        self.cachePolicyStore = cachePolicyStore
         self.fileManager = fileManager
         self.remoteComicCacheRootURL = (
             fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -351,6 +352,19 @@ final class RemoteServerBrowsingService {
         }
 
         return RemoteComicCacheSummary(fileCount: fileCount, totalBytes: totalBytes)
+    }
+
+    func cachePolicyPreset() -> RemoteComicCachePolicyPreset {
+        cachePolicyStore.loadPreset()
+    }
+
+    func cachePolicy() -> RemoteComicCachePolicy {
+        cachePolicyStore.loadPolicy()
+    }
+
+    func applyCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) throws {
+        cachePolicyStore.savePreset(preset)
+        try trimCacheIfNeeded()
     }
 
     func clearCachedComics(for profile: RemoteServerProfile? = nil) throws {
@@ -671,6 +685,8 @@ final class RemoteServerBrowsingService {
             return
         }
 
+        let cachePolicy = cachePolicyStore.loadPolicy()
+
         guard let enumerator = fileManager.enumerator(
             at: remoteComicCacheRootURL,
             includingPropertiesForKeys: [
@@ -705,7 +721,9 @@ final class RemoteServerBrowsingService {
             )
         }
 
-        guard cachedFiles.count > maximumCachedComicFileCount || totalBytes > maximumTotalCacheBytes else {
+        guard cachedFiles.count > cachePolicy.maximumCachedComicFileCount
+                || totalBytes > cachePolicy.maximumTotalCacheBytes
+        else {
             return
         }
 
@@ -717,8 +735,8 @@ final class RemoteServerBrowsingService {
         var remainingBytes = totalBytes
 
         for candidate in evictionCandidates {
-            guard remainingFileCount > maximumCachedComicFileCount
-                    || remainingBytes > maximumTotalCacheBytes
+            guard remainingFileCount > cachePolicy.maximumCachedComicFileCount
+                    || remainingBytes > cachePolicy.maximumTotalCacheBytes
             else {
                 break
             }
