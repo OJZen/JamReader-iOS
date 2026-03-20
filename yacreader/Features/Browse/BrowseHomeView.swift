@@ -4,6 +4,7 @@ struct BrowseHomeView: View {
     let dependencies: AppDependencies
 
     @StateObject private var viewModel: BrowseHomeViewModel
+    @State private var pendingOfflineRemovalSession: RemoteComicReadingSession?
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -45,6 +46,33 @@ struct BrowseHomeView: View {
                     message: Text(alert.message),
                     dismissButton: .default(Text("OK"))
                 )
+            }
+            .confirmationDialog(
+                "Remove downloaded copy?",
+                isPresented: Binding(
+                    get: { pendingOfflineRemovalSession != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            pendingOfflineRemovalSession = nil
+                        }
+                    }
+                ),
+                titleVisibility: .visible
+            ) {
+                if let session = pendingOfflineRemovalSession {
+                    Button("Delete Downloaded Copy", role: .destructive) {
+                        viewModel.removeDownloadedCopy(for: session)
+                        pendingOfflineRemovalSession = nil
+                    }
+                }
+
+                Button("Cancel", role: .cancel) {
+                    pendingOfflineRemovalSession = nil
+                }
+            } message: {
+                if let session = pendingOfflineRemovalSession {
+                    Text("Only the offline copy of \"\(session.displayName)\" will be removed from this device. Your remote server and reading progress stay intact.")
+                }
             }
         }
     }
@@ -201,10 +229,26 @@ struct BrowseHomeView: View {
                                     profile: profile,
                                     availability: dependencies.remoteServerBrowsingService.cachedAvailability(
                                         for: session.comicFileReference
-                                    )
+                                    ),
+                                    showsNavigationIndicator: false,
+                                    trailingAccessoryReservedWidth: 46
                                 )
                             }
                             .buttonStyle(.plain)
+                            .overlay(alignment: .topTrailing) {
+                                Button(role: .destructive) {
+                                    pendingOfflineRemovalSession = session
+                                } label: {
+                                    Image(systemName: "trash.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.red)
+                                        .padding(4)
+                                        .background(.ultraThinMaterial, in: Circle())
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.top, 12)
+                                .padding(.trailing, 12)
+                            }
                         }
                     }
 
@@ -446,6 +490,8 @@ private struct OfflineReadyCard: View {
     let session: RemoteComicReadingSession
     let profile: RemoteServerProfile
     let availability: RemoteComicCachedAvailability
+    var showsNavigationIndicator = true
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     private var availabilityTint: Color {
         switch availability.kind {
@@ -490,9 +536,14 @@ private struct OfflineReadyCard: View {
 
                 Spacer(minLength: 10)
 
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.blue)
+                if showsNavigationIndicator {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.blue)
+                } else if trailingAccessoryReservedWidth > 0 {
+                    Color.clear
+                        .frame(width: trailingAccessoryReservedWidth, height: 1)
+                }
             }
 
             HStack(spacing: 8) {

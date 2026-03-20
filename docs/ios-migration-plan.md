@@ -1269,6 +1269,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - 已把远程目录页的成功结果反馈改成页内底部卡片：导入完成、保存/移除常用文件夹不再总是弹出阻断式 alert，而是改为轻量反馈并在导入完成后直接提供 `Open Library` 动作，错误仍继续使用 alert
 - 已补齐远程目录的主动离线准备动作：单本漫画现支持 `Save for Offline / Update Downloaded Copy / Remove Downloaded Copy`，当前目录也支持一键保存可见漫画到设备，`Browse` 与 `Offline Shelf` 之间的回流链路更完整
 - 已把 `Offline Shelf` 补成可管理页面：现支持搜索、排序、刷新下载副本、移除本地副本，以及一键回到来源 `SMB` 文件夹，离线书架不再只是只读列表
+- 已把离线副本删除入口进一步独立化：`Offline Shelf` 现支持直接滑删下载副本，`Browse` 首页的 `Offline Ready` 预览卡片也补上了显式删除入口，减少必须进入二级菜单才能清理本地副本的负担
 
 当前未完成：
 
