@@ -206,40 +206,20 @@ final class RemoteComicThumbnailPipeline {
             return await inFlightTask.value
         }
 
+        let worker = RemoteComicThumbnailWorker(
+            fileManager: fileManager,
+            thumbnailCacheRootURL: thumbnailCacheRootURL,
+            maximumCachedThumbnailCount: maximumCachedThumbnailCount,
+            maximumTotalCacheBytes: maximumTotalCacheBytes
+        )
         let task = Task<UIImage?, Never> {
-            do {
-                if let remoteImage = await browsingService.fetchDirectThumbnail(
-                    for: profile,
-                    reference: reference,
-                    maxPixelSize: maxPixelSize
-                ) {
-                    try? self.storeCachedThumbnail(remoteImage, at: diskURL)
-                    try? self.trimCacheIfNeeded()
-                    return remoteImage
-                }
-
-                let downloadResult = try await browsingService.downloadComicFile(
-                    for: profile,
-                    reference: reference
-                )
-
-                if Task.isCancelled {
-                    return nil
-                }
-
-                guard let image = Self.extractThumbnail(
-                    from: downloadResult.localFileURL,
-                    maxPixelSize: maxPixelSize
-                ) else {
-                    return nil
-                }
-
-                try? self.storeCachedThumbnail(image, at: diskURL)
-                try? self.trimCacheIfNeeded()
-                return image
-            } catch {
-                return nil
-            }
+            await worker.buildThumbnail(
+                for: profile,
+                reference: reference,
+                browsingService: browsingService,
+                maxPixelSize: maxPixelSize,
+                diskURL: diskURL
+            )
         }
 
         inFlightTasks[cacheKey] = task
@@ -364,41 +344,6 @@ final class RemoteComicThumbnailPipeline {
         let modifiedAt = Int(reference.modifiedAt?.timeIntervalSince1970 ?? 0)
         return "\(reference.id)#\(reference.fileSize ?? 0)#\(modifiedAt)#\(maxPixelSize)"
     }
-
-    private static func extractThumbnail(from fileURL: URL, maxPixelSize: Int) -> UIImage? {
-        let extractor = LibraryComicMetadataExtractor()
-        guard let metadata = try? extractor.extractMetadata(for: fileURL),
-              let coverImage = metadata.coverImage
-        else {
-            return nil
-        }
-
-        return downsampledImage(from: coverImage, maxPixelSize: maxPixelSize)
-    }
-
-    private static func downsampledImage(from image: UIImage, maxPixelSize: Int) -> UIImage {
-        let pixelWidth = image.size.width * image.scale
-        let pixelHeight = image.size.height * image.scale
-        let largestDimension = max(pixelWidth, pixelHeight)
-
-        guard largestDimension > CGFloat(maxPixelSize), largestDimension > 0 else {
-            return image
-        }
-
-        let scaleRatio = CGFloat(maxPixelSize) / largestDimension
-        let targetSize = CGSize(
-            width: max(1, image.size.width * scaleRatio),
-            height: max(1, image.size.height * scaleRatio)
-        )
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-
-        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: targetSize))
-        }
-    }
-
     private static func cacheCost(for image: UIImage) -> Int {
         let width = image.size.width * image.scale
         let height = image.size.height * image.scale
@@ -521,4 +466,186 @@ private struct CachedThumbnailFileRecord {
     let url: URL
     let size: Int64
     let lastAccessDate: Date
+}
+
+private struct RemoteComicThumbnailWorker {
+    nonisolated(unsafe) let fileManager: FileManager
+    let thumbnailCacheRootURL: URL
+    let maximumCachedThumbnailCount: Int
+    let maximumTotalCacheBytes: Int64
+
+    nonisolated func buildThumbnail(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference,
+        browsingService: RemoteServerBrowsingService,
+        maxPixelSize: Int,
+        diskURL: URL
+    ) async -> UIImage? {
+        if let remoteImage = await browsingService.fetchDirectThumbnail(
+            for: profile,
+            reference: reference,
+            maxPixelSize: maxPixelSize
+        ) {
+            try? storeCachedThumbnail(remoteImage, at: diskURL)
+            try? trimCacheIfNeeded()
+            return remoteImage
+        }
+
+        if let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
+           let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize) {
+            try? storeCachedThumbnail(cachedImage, at: diskURL)
+            try? trimCacheIfNeeded()
+            return cachedImage
+        }
+
+        do {
+            let downloadResult = try await browsingService.downloadComicFile(
+                for: profile,
+                reference: reference
+            )
+
+            guard !Task.isCancelled,
+                  let image = await Self.extractThumbnail(
+                    from: downloadResult.localFileURL,
+                    maxPixelSize: maxPixelSize
+                  ) else {
+                return nil
+            }
+
+            try? storeCachedThumbnail(image, at: diskURL)
+            try? trimCacheIfNeeded()
+            return image
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated private func storeCachedThumbnail(_ image: UIImage, at fileURL: URL) throws {
+        guard let data = Self.encodedThumbnailData(from: image) else {
+            return
+        }
+
+        try fileManager.createDirectory(
+            at: thumbnailCacheRootURL,
+            withIntermediateDirectories: true
+        )
+        try data.write(to: fileURL, options: .atomic)
+        touchCachedThumbnail(at: fileURL)
+    }
+
+    nonisolated private func trimCacheIfNeeded() throws {
+        guard fileManager.fileExists(atPath: thumbnailCacheRootURL.path) else {
+            return
+        }
+
+        guard let enumerator = fileManager.enumerator(
+            at: thumbnailCacheRootURL,
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .fileSizeKey,
+                .contentModificationDateKey
+            ],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        var cachedFiles: [CachedThumbnailFileRecord] = []
+        var totalBytes: Int64 = 0
+
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(
+                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+            )
+            guard values?.isRegularFile == true else {
+                continue
+            }
+
+            let size = Int64(values?.fileSize ?? 0)
+            totalBytes += size
+            cachedFiles.append(
+                CachedThumbnailFileRecord(
+                    url: fileURL,
+                    size: size,
+                    lastAccessDate: values?.contentModificationDate ?? .distantPast
+                )
+            )
+        }
+
+        guard cachedFiles.count > maximumCachedThumbnailCount || totalBytes > maximumTotalCacheBytes else {
+            return
+        }
+
+        let evictionCandidates = cachedFiles.sorted { lhs, rhs in
+            lhs.lastAccessDate < rhs.lastAccessDate
+        }
+
+        var remainingCount = cachedFiles.count
+        var remainingBytes = totalBytes
+
+        for candidate in evictionCandidates {
+            guard remainingCount > maximumCachedThumbnailCount
+                    || remainingBytes > maximumTotalCacheBytes
+            else {
+                break
+            }
+
+            try fileManager.removeItem(at: candidate.url)
+            remainingCount -= 1
+            remainingBytes -= candidate.size
+        }
+    }
+
+    nonisolated private func touchCachedThumbnail(at fileURL: URL) {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return
+        }
+
+        try? fileManager.setAttributes(
+            [.modificationDate: Date()],
+            ofItemAtPath: fileURL.path
+        )
+    }
+
+    nonisolated private static func extractThumbnail(from fileURL: URL, maxPixelSize: Int) async -> UIImage? {
+        let extractor = await LibraryComicMetadataExtractor()
+        guard let metadata = try? await extractor.extractMetadata(for: fileURL),
+              let coverImage = metadata.coverImage
+        else {
+            return nil
+        }
+
+        return downsampledImage(from: coverImage, maxPixelSize: maxPixelSize)
+    }
+
+    nonisolated private static func downsampledImage(from image: UIImage, maxPixelSize: Int) -> UIImage {
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
+        let largestDimension = max(pixelWidth, pixelHeight)
+
+        guard largestDimension > CGFloat(maxPixelSize), largestDimension > 0 else {
+            return image
+        }
+
+        let scaleRatio = CGFloat(maxPixelSize) / largestDimension
+        let targetSize = CGSize(
+            width: max(1, image.size.width * scaleRatio),
+            height: max(1, image.size.height * scaleRatio)
+        )
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+
+    nonisolated private static func encodedThumbnailData(from image: UIImage) -> Data? {
+        if let jpegData = image.jpegData(compressionQuality: 0.82) {
+            return jpegData
+        }
+
+        return image.pngData()
+    }
 }
