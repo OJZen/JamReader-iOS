@@ -29,7 +29,7 @@ enum RemoteComicAccessState: Equatable {
     }
 }
 
-enum RemoteComicOpenMode {
+enum RemoteComicOpenMode: Hashable {
     case automatic
     case preferLocalCache
 }

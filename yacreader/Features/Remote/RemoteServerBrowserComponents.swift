@@ -6,6 +6,7 @@ struct RemoteDirectoryItemListRow: View {
     let cacheAvailability: RemoteComicCachedAvailability
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -22,6 +23,7 @@ struct RemoteDirectoryItemListRow: View {
             }
         }
         .padding(.vertical, 2)
+        .padding(.trailing, trailingAccessoryReservedWidth)
     }
 
     @ViewBuilder
@@ -142,25 +144,11 @@ struct RemoteDirectoryGridCard: View {
     let cacheAvailability: RemoteComicCachedAvailability
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
-    let onImport: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ZStack(alignment: .topTrailing) {
-                leadingVisual
-                    .frame(maxWidth: .infinity)
-
-                if let onImport {
-                    Button(action: onImport) {
-                        Image(systemName: "square.and.arrow.down")
-                            .font(.caption.weight(.semibold))
-                            .padding(8)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(8)
-                }
-            }
+            leadingVisual
+                .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.name)

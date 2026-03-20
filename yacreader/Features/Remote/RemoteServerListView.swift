@@ -461,6 +461,7 @@ struct RemoteServerBrowserView: View {
     @State private var hasConfiguredSortMode = false
     @State private var searchText = ""
     @State private var importRequest: RemoteBrowserImportRequest?
+    @State private var navigationRequest: RemoteBrowserNavigationRequest?
 
     init(
         profile: RemoteServerProfile,
@@ -481,55 +482,10 @@ struct RemoteServerBrowserView: View {
     }
 
     var body: some View {
-        Group {
-            if displayMode == .grid {
-                gridBody
-            } else {
-                listBody
-            }
-        }
+        browserContent
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    viewModel.toggleCurrentFolderShortcut()
-                } label: {
-                    Image(systemName: viewModel.isCurrentFolderSaved ? "star.fill" : "star")
-                }
-
-                Menu {
-                    Section("Display") {
-                        ForEach(LibraryComicDisplayMode.allCases) { mode in
-                            Button {
-                                applyDisplayMode(mode)
-                            } label: {
-                                Label(mode.title, systemImage: mode.systemImageName)
-                            }
-                        }
-                    }
-
-                    Section("Sort") {
-                        ForEach(RemoteDirectorySortMode.allCases) { mode in
-                            Button {
-                                applySortMode(mode)
-                            } label: {
-                                HStack {
-                                    Label(mode.title, systemImage: mode.systemImageName)
-
-                                    if sortMode == mode {
-                                        Spacer()
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
+        .toolbar { browserToolbar }
         .task {
             await viewModel.loadIfNeeded()
         }
@@ -558,40 +514,114 @@ struct RemoteServerBrowserView: View {
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert, onPrimaryAction: handleRemoteAlertPrimaryAction(_:))
         }
-        .sheet(item: $importRequest) { request in
-            switch request {
-            case .comic:
-                LibraryImportDestinationSheet(
-                    title: request.destinationPickerTitle,
-                    message: request.destinationPickerMessage,
-                    dependencies: dependencies,
-                    preferredSelection: nil
-                ) { selection in
-                    Task {
-                        await performImport(
-                            request,
-                            destinationSelection: selection,
-                            scope: .currentFolderOnly
-                        )
+        .sheet(item: $importRequest, content: importSheet)
+        .navigationDestination(item: $navigationRequest, destination: navigationDestination)
+    }
+
+    @ViewBuilder
+    private var browserContent: some View {
+        if displayMode == .grid {
+            gridBody
+        } else {
+            listBody
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var browserToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            Button {
+                viewModel.toggleCurrentFolderShortcut()
+            } label: {
+                Image(systemName: viewModel.isCurrentFolderSaved ? "star.fill" : "star")
+            }
+
+            Menu {
+                Section("Display") {
+                    ForEach(LibraryComicDisplayMode.allCases) { mode in
+                        Button {
+                            applyDisplayMode(mode)
+                        } label: {
+                            Label(mode.title, systemImage: mode.systemImageName)
+                        }
                     }
                 }
-            case .currentFolder, .directory:
-                RemoteImportOptionsSheet(
-                    title: request.destinationPickerTitle,
-                    message: request.destinationPickerMessage,
-                    confirmLabel: "Import",
-                    dependencies: dependencies,
-                    preferredSelection: nil
-                ) { selection, scope in
-                    Task {
-                        await performImport(
-                            request,
-                            destinationSelection: selection,
-                            scope: scope
-                        )
+
+                Section("Sort") {
+                    ForEach(RemoteDirectorySortMode.allCases) { mode in
+                        Button {
+                            applySortMode(mode)
+                        } label: {
+                            HStack {
+                                Label(mode.title, systemImage: mode.systemImageName)
+
+                                if sortMode == mode {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
                     }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func importSheet(for request: RemoteBrowserImportRequest) -> some View {
+        switch request {
+        case .comic:
+            LibraryImportDestinationSheet(
+                title: request.destinationPickerTitle,
+                message: request.destinationPickerMessage,
+                dependencies: dependencies,
+                preferredSelection: nil
+            ) { selection in
+                Task {
+                    await performImport(
+                        request,
+                        destinationSelection: selection,
+                        scope: .currentFolderOnly
+                    )
                 }
             }
+        case .currentFolder, .directory:
+            RemoteImportOptionsSheet(
+                title: request.destinationPickerTitle,
+                message: request.destinationPickerMessage,
+                confirmLabel: "Import",
+                dependencies: dependencies,
+                preferredSelection: nil
+            ) { selection, scope in
+                Task {
+                    await performImport(
+                        request,
+                        destinationSelection: selection,
+                        scope: scope
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func navigationDestination(for request: RemoteBrowserNavigationRequest) -> some View {
+        switch request {
+        case .directory(let path):
+            RemoteServerBrowserView(
+                profile: viewModel.profile,
+                currentPath: path,
+                dependencies: dependencies
+            )
+        case .comic(let item, let openMode):
+            RemoteComicLoadingView(
+                profile: viewModel.profile,
+                item: item,
+                dependencies: dependencies,
+                openMode: openMode
+            )
         }
     }
 
@@ -726,28 +756,28 @@ struct RemoteServerBrowserView: View {
             if !displayedDirectories.isEmpty {
                 Section("Folders") {
                     ForEach(displayedDirectories) { item in
-                        NavigationLink {
-                            RemoteServerBrowserView(
-                                profile: viewModel.profile,
-                                currentPath: item.path,
-                                dependencies: dependencies
-                            )
+                        Button {
+                            openPrimaryAction(for: item)
                         } label: {
                             RemoteDirectoryItemListRow(
                                 item: item,
                                 readingSession: nil,
                                 cacheAvailability: .unavailable,
                                 profile: viewModel.profile,
-                                browsingService: dependencies.remoteServerBrowsingService
+                                browsingService: dependencies.remoteServerBrowsingService,
+                                trailingAccessoryReservedWidth: 46
                             )
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                importRequest = .directory(item)
-                            } label: {
-                                Label("Import", systemImage: "square.and.arrow.down")
-                            }
-                            .tint(.blue)
+                        .buttonStyle(.plain)
+                        .overlay(alignment: .trailing) {
+                            RemoteBrowserItemActionMenuButton(
+                                item: item,
+                                cacheAvailability: .unavailable,
+                                onOpen: { openPrimaryAction(for: item) },
+                                onOpenOffline: nil,
+                                onImport: { importRequest = .directory(item) }
+                            )
+                            .padding(.trailing, 4)
                         }
                     }
                 }
@@ -756,28 +786,32 @@ struct RemoteServerBrowserView: View {
             if !displayedComicFiles.isEmpty {
                 Section {
                     ForEach(displayedComicFiles) { item in
-                        NavigationLink {
-                            RemoteComicLoadingView(
-                                profile: viewModel.profile,
-                                item: item,
-                                dependencies: dependencies
-                            )
+                        let availability = viewModel.cacheAvailability(for: item)
+
+                        Button {
+                            openPrimaryAction(for: item)
                         } label: {
                             RemoteDirectoryItemListRow(
                                 item: item,
                                 readingSession: viewModel.progress(for: item),
-                                cacheAvailability: viewModel.cacheAvailability(for: item),
+                                cacheAvailability: availability,
                                 profile: viewModel.profile,
-                                browsingService: dependencies.remoteServerBrowsingService
+                                browsingService: dependencies.remoteServerBrowsingService,
+                                trailingAccessoryReservedWidth: 46
                             )
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
-                                importRequest = .comic(item)
-                            } label: {
-                                Label("Import", systemImage: "square.and.arrow.down")
-                            }
-                            .tint(.blue)
+                        .buttonStyle(.plain)
+                        .overlay(alignment: .trailing) {
+                            RemoteBrowserItemActionMenuButton(
+                                item: item,
+                                cacheAvailability: availability,
+                                onOpen: { openPrimaryAction(for: item) },
+                                onOpenOffline: availability.hasLocalCopy ? {
+                                    openOfflineCopy(for: item)
+                                } : nil,
+                                onImport: { importRequest = .comic(item) }
+                            )
+                            .padding(.trailing, 4)
                         }
                     }
                 } header: {
@@ -855,33 +889,33 @@ struct RemoteServerBrowserView: View {
                 spacing: 16
             ) {
                 ForEach(items) { item in
-                    NavigationLink {
-                        if item.isDirectory {
-                            RemoteServerBrowserView(
-                                profile: viewModel.profile,
-                                currentPath: item.path,
-                                dependencies: dependencies
-                            )
-                        } else {
-                            RemoteComicLoadingView(
-                                profile: viewModel.profile,
+                    let availability = viewModel.cacheAvailability(for: item)
+
+                    ZStack(alignment: .topTrailing) {
+                        Button {
+                            openPrimaryAction(for: item)
+                        } label: {
+                            RemoteDirectoryGridCard(
                                 item: item,
-                                dependencies: dependencies
+                                readingSession: viewModel.progress(for: item),
+                                cacheAvailability: availability,
+                                profile: viewModel.profile,
+                                browsingService: dependencies.remoteServerBrowsingService
                             )
                         }
-                    } label: {
-                        RemoteDirectoryGridCard(
+                        .buttonStyle(.plain)
+
+                        RemoteBrowserItemActionMenuButton(
                             item: item,
-                            readingSession: viewModel.progress(for: item),
-                            cacheAvailability: viewModel.cacheAvailability(for: item),
-                            profile: viewModel.profile,
-                            browsingService: dependencies.remoteServerBrowsingService,
-                            onImport: importAction.map { action in
-                                { action(item) }
-                            }
+                            cacheAvailability: availability,
+                            onOpen: { openPrimaryAction(for: item) },
+                            onOpenOffline: item.canOpenAsComic && availability.hasLocalCopy ? {
+                                openOfflineCopy(for: item)
+                            } : nil,
+                            onImport: importAction.map { action in { action(item) } }
                         )
+                        .padding(10)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -1161,6 +1195,22 @@ struct RemoteServerBrowserView: View {
         }
     }
 
+    private func openPrimaryAction(for item: RemoteDirectoryItem) {
+        if item.isDirectory {
+            navigationRequest = .directory(item.path)
+        } else if item.canOpenAsComic {
+            navigationRequest = .comic(item, .automatic)
+        }
+    }
+
+    private func openOfflineCopy(for item: RemoteDirectoryItem) {
+        guard item.canOpenAsComic else {
+            return
+        }
+
+        navigationRequest = .comic(item, .preferLocalCache)
+    }
+
     private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
         displayMode = mode
         Self.persistDisplayMode(mode)
@@ -1266,5 +1316,65 @@ private enum RemoteBrowserImportRequest: Identifiable {
         case .comic(let item):
             return "Choose which local library should receive \(item.name)."
         }
+    }
+}
+
+private enum RemoteBrowserNavigationRequest: Identifiable, Hashable {
+    case directory(String)
+    case comic(RemoteDirectoryItem, RemoteComicOpenMode)
+
+    var id: String {
+        switch self {
+        case .directory(let path):
+            return "directory:\(path)"
+        case .comic(let item, let openMode):
+            switch openMode {
+            case .automatic:
+                return "comic:\(item.id):automatic"
+            case .preferLocalCache:
+                return "comic:\(item.id):offline"
+            }
+        }
+    }
+}
+
+private struct RemoteBrowserItemActionMenuButton: View {
+    let item: RemoteDirectoryItem
+    let cacheAvailability: RemoteComicCachedAvailability
+    let onOpen: () -> Void
+    let onOpenOffline: (() -> Void)?
+    let onImport: (() -> Void)?
+
+    var body: some View {
+        Menu {
+            Button(action: onOpen) {
+                Label(item.isDirectory ? "Open Folder" : "Open Comic", systemImage: item.isDirectory ? "folder.open" : "book.closed")
+            }
+
+            if let onOpenOffline {
+                Button(action: onOpenOffline) {
+                    Label(
+                        cacheAvailability.kind == .stale ? "Open Older Downloaded Copy" : "Open Downloaded Copy",
+                        systemImage: "arrow.down.circle"
+                    )
+                }
+            }
+
+            if let onImport {
+                Button(action: onImport) {
+                    Label(
+                        item.isDirectory ? "Import Folder to Library" : "Import to Library",
+                        systemImage: "square.and.arrow.down"
+                    )
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(4)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
