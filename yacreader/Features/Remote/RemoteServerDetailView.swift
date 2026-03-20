@@ -123,6 +123,7 @@ struct RemoteServerDetailView: View {
                 profile: profile,
                 savedFolderCount: viewModel.shortcutCount(for: profile),
                 offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
+                recentHistoryCount: recentSessions.count,
                 cacheSummary: viewModel.cacheSummary(for: profile),
                 onDone: { isShowingActions = false },
                 onEdit: {
@@ -139,6 +140,10 @@ struct RemoteServerDetailView: View {
                 },
                 onClearCache: {
                     pendingAction = .clearCache
+                    isShowingActions = false
+                },
+                onClearHistory: {
+                    pendingAction = .clearHistory
                     isShowingActions = false
                 },
                 onDelete: {
@@ -179,6 +184,9 @@ struct RemoteServerDetailView: View {
                 navigationRequest = .offlineShelf(profile)
             case .clearCache:
                 viewModel.clearCache(for: profile)
+                refreshDetailState(forceReload: true)
+            case .clearHistory:
+                viewModel.clearRecentHistory(for: profile)
                 refreshDetailState(forceReload: true)
             case .delete:
                 viewModel.delete(profile)
@@ -272,6 +280,7 @@ private enum RemoteServerDetailPendingAction {
     case openSavedFolders
     case openOfflineShelf
     case clearCache
+    case clearHistory
     case delete
 }
 

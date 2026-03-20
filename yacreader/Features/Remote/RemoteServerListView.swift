@@ -97,6 +97,7 @@ struct RemoteServerListView: View {
                 profile: profile,
                 savedFolderCount: viewModel.shortcutCount(for: profile),
                 offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
+                recentHistoryCount: viewModel.recentSessions(for: profile).count,
                 cacheSummary: viewModel.cacheSummary(for: profile),
                 onDone: { actionsProfile = nil },
                 onEdit: {
@@ -113,6 +114,10 @@ struct RemoteServerListView: View {
                 },
                 onClearCache: {
                     pendingAction = .clearCache(profile)
+                    actionsProfile = nil
+                },
+                onClearHistory: {
+                    pendingAction = .clearHistory(profile)
                     actionsProfile = nil
                 },
                 onDelete: {
@@ -153,6 +158,8 @@ struct RemoteServerListView: View {
                 navigationRequest = .offlineShelf(profile)
             case .clearCache(let profile):
                 viewModel.clearCache(for: profile)
+            case .clearHistory(let profile):
+                viewModel.clearRecentHistory(for: profile)
             case .delete(let profile):
                 viewModel.delete(profile)
             }
@@ -281,12 +288,14 @@ struct RemoteServerActionsSheet: View {
     let profile: RemoteServerProfile
     let savedFolderCount: Int
     let offlineCopyCount: Int
+    let recentHistoryCount: Int
     let cacheSummary: RemoteComicCacheSummary
     let onDone: () -> Void
     let onEdit: () -> Void
     let onOpenSavedFolders: () -> Void
     let onOpenOfflineShelf: () -> Void
     let onClearCache: () -> Void
+    let onClearHistory: () -> Void
     let onDelete: () -> Void
 
     var body: some View {
@@ -334,6 +343,19 @@ struct RemoteServerActionsSheet: View {
                                     systemImage: "arrow.down.circle"
                                 )
                             }
+                        }
+                    }
+                }
+
+                if recentHistoryCount > 0 {
+                    Section("History") {
+                        LabeledContent("Recent Comics") {
+                            Text("\(recentHistoryCount)")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button(role: .destructive, action: onClearHistory) {
+                            Label("Clear Browsing History", systemImage: "clock.arrow.circlepath")
                         }
                     }
                 }
@@ -431,6 +453,7 @@ private enum PendingRemoteServerAction {
     case openSavedFolders(RemoteServerProfile)
     case openOfflineShelf(RemoteServerProfile)
     case clearCache(RemoteServerProfile)
+    case clearHistory(RemoteServerProfile)
     case delete(RemoteServerProfile)
 }
 
