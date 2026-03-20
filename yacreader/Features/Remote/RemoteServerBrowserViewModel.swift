@@ -630,6 +630,60 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
+    func removeOfflineCopies(for items: [RemoteDirectoryItem]) {
+        feedback = nil
+
+        let comics = items.filter(\.canOpenAsComic)
+        guard !comics.isEmpty else {
+            return
+        }
+
+        var removedCount = 0
+        var failedNames: [String] = []
+
+        for item in comics {
+            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+                failedNames.append(item.name)
+                continue
+            }
+
+            guard browsingService.cachedAvailability(for: reference).hasLocalCopy else {
+                continue
+            }
+
+            do {
+                try browsingService.clearCachedComic(for: reference)
+                removedCount += 1
+            } catch {
+                failedNames.append(item.name)
+            }
+        }
+
+        refreshProgressState()
+
+        guard removedCount > 0 else {
+            if !failedNames.isEmpty {
+                alert = RemoteAlertState(
+                    title: "Remove Downloaded Copies Failed",
+                    message: "No downloaded copies could be removed from this device."
+                )
+            }
+            return
+        }
+
+        var message = "Removed \(removedCount) downloaded \(removedCount == 1 ? "copy" : "copies") from this device."
+        if !failedNames.isEmpty {
+            message += " Failed to remove \(failedNames.count) item(s)."
+        }
+
+        feedback = RemoteBrowserFeedbackState(
+            title: "Downloaded Copies Removed",
+            message: message,
+            kind: .info,
+            autoDismissAfter: 3.0
+        )
+    }
+
     static func lastBrowsedPath(for profile: RemoteServerProfile) -> String {
         initialPath(for: profile, explicitPath: nil)
     }

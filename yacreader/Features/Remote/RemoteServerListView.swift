@@ -440,6 +440,7 @@ struct RemoteServerBrowserView: View {
     @State private var searchText = ""
     @State private var importRequest: RemoteBrowserImportRequest?
     @State private var navigationRequest: RemoteBrowserNavigationRequest?
+    @State private var pendingOfflineRemoval: PendingRemoteOfflineRemoval?
     @State private var feedbackDismissTask: Task<Void, Never>?
 
     init(
@@ -516,6 +517,33 @@ struct RemoteServerBrowserView: View {
         }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert, onPrimaryAction: handleRemoteAlertPrimaryAction(_:))
+        }
+        .confirmationDialog(
+            pendingOfflineRemoval?.title ?? "Remove downloaded copies?",
+            isPresented: Binding(
+                get: { pendingOfflineRemoval != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingOfflineRemoval = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let pendingOfflineRemoval {
+                Button(pendingOfflineRemoval.buttonTitle, role: .destructive) {
+                    viewModel.removeOfflineCopies(for: pendingOfflineRemoval.items)
+                    self.pendingOfflineRemoval = nil
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingOfflineRemoval = nil
+            }
+        } message: {
+            if let pendingOfflineRemoval {
+                Text(pendingOfflineRemoval.message)
+            }
         }
         .sheet(item: $importRequest, content: importSheet)
         .navigationDestination(item: $navigationRequest, destination: navigationDestination)
@@ -700,7 +728,7 @@ struct RemoteServerBrowserView: View {
                 Divider()
                     .padding(.vertical, 2)
 
-                Text("Folder Actions")
+                Text(actionClusterTitle)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
 
@@ -708,15 +736,13 @@ struct RemoteServerBrowserView: View {
                     HStack(spacing: 10) {
                         upOneLevelButton
                         sessionRootButton
-                        saveVisibleComicsButton
-                        importCurrentFolderButton
+                        contentActionsMenu
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
                         upOneLevelButton
                         sessionRootButton
-                        saveVisibleComicsButton
-                        importCurrentFolderButton
+                        contentActionsMenu
                     }
                 }
             }
@@ -1056,6 +1082,10 @@ struct RemoteServerBrowserView: View {
         viewModel.parentPath != nil || viewModel.canImportCurrentFolderRecursively || !displayedComicFiles.isEmpty
     }
 
+    private var actionClusterTitle: String {
+        trimmedSearchText.isEmpty ? "Folder Actions" : "Result Actions"
+    }
+
     @ViewBuilder
     private var upOneLevelButton: some View {
         if let parentPath = viewModel.parentPath {
@@ -1073,26 +1103,36 @@ struct RemoteServerBrowserView: View {
     }
 
     @ViewBuilder
-    private var importCurrentFolderButton: some View {
-        if viewModel.canImportCurrentFolderRecursively {
-            Button {
-                importRequest = .currentFolder
-            } label: {
-                Label(importCurrentFolderButtonTitle, systemImage: "square.and.arrow.down.on.square")
-            }
-            .buttonStyle(.bordered)
-        }
-    }
+    private var contentActionsMenu: some View {
+        if viewModel.canImportCurrentFolderRecursively || !displayedComicFiles.isEmpty {
+            Menu {
+                if !displayedComicFiles.isEmpty {
+                    Button {
+                        Task<Void, Never> {
+                            await viewModel.saveComicsForOffline(displayedComicFiles)
+                        }
+                    } label: {
+                        Label(saveVisibleComicsButtonTitle, systemImage: "arrow.down.circle")
+                    }
+                }
 
-    @ViewBuilder
-    private var saveVisibleComicsButton: some View {
-        if !displayedComicFiles.isEmpty {
-            Button {
-                Task<Void, Never> {
-                    await viewModel.saveComicsForOffline(displayedComicFiles)
+                if !visibleOfflineComicFiles.isEmpty {
+                    Button(role: .destructive) {
+                        presentVisibleOfflineRemovalConfirmation()
+                    } label: {
+                        Label(removeVisibleOfflineCopiesButtonTitle, systemImage: "trash")
+                    }
+                }
+
+                if viewModel.canImportCurrentFolderRecursively {
+                    Button {
+                        importRequest = .currentFolder
+                    } label: {
+                        Label(importCurrentFolderButtonTitle, systemImage: "square.and.arrow.down.on.square")
+                    }
                 }
             } label: {
-                Label("Save Visible Comics", systemImage: "arrow.down.circle")
+                Label(contentActionsMenuTitle, systemImage: "ellipsis.circle")
             }
             .buttonStyle(.bordered)
         }
@@ -1189,6 +1229,10 @@ struct RemoteServerBrowserView: View {
 
     private var displayedComicFiles: [RemoteDirectoryItem] {
         filteredAndSorted(viewModel.comicFiles)
+    }
+
+    private var visibleOfflineComicFiles: [RemoteDirectoryItem] {
+        displayedComicFiles.filter { viewModel.cacheAvailability(for: $0).hasLocalCopy }
     }
 
     private var displayedUnsupportedFileCount: Int {
@@ -1305,8 +1349,20 @@ struct RemoteServerBrowserView: View {
         !trimmedSearchText.isEmpty && !displayedComicFiles.isEmpty
     }
 
+    private var saveVisibleComicsButtonTitle: String {
+        trimmedSearchText.isEmpty ? "Save Visible Comics" : "Save Results Offline"
+    }
+
+    private var removeVisibleOfflineCopiesButtonTitle: String {
+        trimmedSearchText.isEmpty ? "Remove Downloaded Copies" : "Remove Downloaded Result Copies"
+    }
+
     private var importCurrentFolderButtonTitle: String {
         supportsVisibleResultsImportScope ? "Import Results" : "Import This Folder"
+    }
+
+    private var contentActionsMenuTitle: String {
+        trimmedSearchText.isEmpty ? "Content Actions" : "Result Actions"
     }
 
     private func availableImportScopes(for request: RemoteBrowserImportRequest) -> [RemoteDirectoryImportScope] {
@@ -1359,6 +1415,27 @@ struct RemoteServerBrowserView: View {
         case .openLibrary(let libraryID, let folderID):
             AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
         }
+    }
+
+    private func presentVisibleOfflineRemovalConfirmation() {
+        let items = visibleOfflineComicFiles
+        guard !items.isEmpty else {
+            return
+        }
+
+        let noun: String
+        if trimmedSearchText.isEmpty {
+            noun = items.count == 1 ? "visible comic" : "visible comics"
+        } else {
+            noun = items.count == 1 ? "matching result" : "matching results"
+        }
+
+        pendingOfflineRemoval = PendingRemoteOfflineRemoval(
+            items: items,
+            title: removeVisibleOfflineCopiesButtonTitle,
+            buttonTitle: removeVisibleOfflineCopiesButtonTitle,
+            message: "Only the downloaded copies of the current \(noun) will be removed from this device. The SMB server, saved folder, and reading progress stay intact."
+        )
     }
 
     private func scheduleFeedbackDismissalIfNeeded() {
@@ -1466,6 +1543,13 @@ private enum RemoteBrowserNavigationRequest: Identifiable, Hashable {
             }
         }
     }
+}
+
+private struct PendingRemoteOfflineRemoval {
+    let items: [RemoteDirectoryItem]
+    let title: String
+    let buttonTitle: String
+    let message: String
 }
 
 private struct RemoteBrowserItemActionMenuButton: View {
