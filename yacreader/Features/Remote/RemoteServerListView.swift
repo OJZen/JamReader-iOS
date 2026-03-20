@@ -993,12 +993,14 @@ struct RemoteServerBrowserView: View {
                         retryButton
                         manageServersButton(loadIssue: loadIssue)
                         continueReadingButton
+                        offlineShelfButton
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
                         retryButton
                         manageServersButton(loadIssue: loadIssue)
                         continueReadingButton
+                        offlineShelfButton
                     }
                 }
 
@@ -1056,6 +1058,20 @@ struct RemoteServerBrowserView: View {
                 )
             } label: {
                 Label("Open Last Comic", systemImage: "book.closed")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var offlineShelfButton: some View {
+        if let loadIssue = viewModel.loadIssue,
+           loadIssue.allowsOfflineRecovery,
+           viewModel.offlineRecoveryCount > 1 {
+            NavigationLink {
+                RemoteOfflineShelfView(dependencies: dependencies)
+            } label: {
+                Label("Offline Shelf", systemImage: "arrow.down.circle")
             }
             .buttonStyle(.bordered)
         }

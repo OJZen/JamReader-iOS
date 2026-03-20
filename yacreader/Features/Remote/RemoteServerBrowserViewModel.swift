@@ -181,8 +181,16 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         loadIssue?.message
     }
 
+    var offlineRecoverySessions: [RemoteComicReadingSession] {
+        recentSessions.filter { browsingService.cachedAvailability(for: $0.comicFileReference).hasLocalCopy }
+    }
+
     var recoverySession: RemoteComicReadingSession? {
-        recentSessions.first { browsingService.cachedAvailability(for: $0.comicFileReference).hasLocalCopy }
+        offlineRecoverySessions.first
+    }
+
+    var offlineRecoveryCount: Int {
+        offlineRecoverySessions.count
     }
 
     func loadIfNeeded() async {
