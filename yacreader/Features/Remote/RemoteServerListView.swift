@@ -800,14 +800,7 @@ struct RemoteServerBrowserView: View {
                         }
                         .buttonStyle(.plain)
                         .overlay(alignment: .trailing) {
-                            RemoteBrowserItemActionMenuButton(
-                                item: item,
-                                cacheAvailability: .unavailable,
-                                onOpenOffline: nil,
-                                onSaveOffline: nil,
-                                onRemoveOffline: nil,
-                                onImport: { importRequest = .directory(item) }
-                            )
+                            browserItemActionMenuButton(for: item)
                             .padding(.trailing, 4)
                         }
                     }
@@ -833,25 +826,7 @@ struct RemoteServerBrowserView: View {
                         }
                         .buttonStyle(.plain)
                         .overlay(alignment: .trailing) {
-                            RemoteBrowserItemActionMenuButton(
-                                item: item,
-                                cacheAvailability: availability,
-                                onOpenOffline: availability.hasLocalCopy ? {
-                                    openOfflineCopy(for: item)
-                                } : nil,
-                                onSaveOffline: {
-                                    Task<Void, Never> {
-                                        await viewModel.saveComicForOffline(
-                                            item,
-                                            forceRefresh: availability.kind != .unavailable
-                                        )
-                                    }
-                                },
-                                onRemoveOffline: availability.hasLocalCopy ? {
-                                    viewModel.removeOfflineCopy(for: item)
-                                } : nil,
-                                onImport: { importRequest = .comic(item) }
-                            )
+                            browserItemActionMenuButton(for: item)
                             .padding(.trailing, 4)
                         }
                     }
@@ -897,15 +872,11 @@ struct RemoteServerBrowserView: View {
             .padding(.vertical, 24)
         } else {
             if !displayedDirectories.isEmpty {
-                remoteGridSection(title: "Folders", items: displayedDirectories) { item in
-                    importRequest = .directory(item)
-                }
+                remoteGridSection(title: "Folders", items: displayedDirectories)
             }
 
             if !displayedComicFiles.isEmpty {
-                remoteGridSection(title: "Comic Files", items: displayedComicFiles) { item in
-                    importRequest = .comic(item)
-                }
+                remoteGridSection(title: "Comic Files", items: displayedComicFiles)
 
                 if displayedUnsupportedFileCount > 0 {
                     Text("\(displayedUnsupportedFileCount) unsupported remote files are hidden in this folder.")
@@ -918,8 +889,7 @@ struct RemoteServerBrowserView: View {
 
     private func remoteGridSection(
         title: String,
-        items: [RemoteDirectoryItem],
-        importAction: ((RemoteDirectoryItem) -> Void)?
+        items: [RemoteDirectoryItem]
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
@@ -946,25 +916,7 @@ struct RemoteServerBrowserView: View {
                         }
                         .buttonStyle(.plain)
 
-                        RemoteBrowserItemActionMenuButton(
-                            item: item,
-                            cacheAvailability: availability,
-                            onOpenOffline: item.canOpenAsComic && availability.hasLocalCopy ? {
-                                openOfflineCopy(for: item)
-                            } : nil,
-                            onSaveOffline: item.canOpenAsComic ? {
-                                Task<Void, Never> {
-                                    await viewModel.saveComicForOffline(
-                                        item,
-                                        forceRefresh: availability.kind != .unavailable
-                                    )
-                                }
-                            } : nil,
-                            onRemoveOffline: item.canOpenAsComic && availability.hasLocalCopy ? {
-                                viewModel.removeOfflineCopy(for: item)
-                            } : nil,
-                            onImport: importAction.map { action in { action(item) } }
-                        )
+                        browserItemActionMenuButton(for: item)
                         .padding(10)
                     }
                 }
@@ -1334,6 +1286,80 @@ struct RemoteServerBrowserView: View {
         }
 
         navigationRequest = .comic(item, .preferLocalCache)
+    }
+
+    @ViewBuilder
+    private func browserItemActionMenuButton(for item: RemoteDirectoryItem) -> some View {
+        let availability = viewModel.cacheAvailability(for: item)
+
+        RemoteBrowserItemActionMenuButton(
+            item: item,
+            cacheAvailability: availability,
+            onOpenOffline: openOfflineAction(for: item, availability: availability),
+            onSaveOffline: saveOfflineAction(for: item, availability: availability),
+            onRemoveOffline: removeOfflineAction(for: item, availability: availability),
+            onImport: importAction(for: item)
+        )
+    }
+
+    private func openOfflineAction(
+        for item: RemoteDirectoryItem,
+        availability: RemoteComicCachedAvailability
+    ) -> (() -> Void)? {
+        guard item.canOpenAsComic, availability.hasLocalCopy else {
+            return nil
+        }
+
+        return {
+            openOfflineCopy(for: item)
+        }
+    }
+
+    private func saveOfflineAction(
+        for item: RemoteDirectoryItem,
+        availability: RemoteComicCachedAvailability
+    ) -> (() -> Void)? {
+        guard item.canOpenAsComic else {
+            return nil
+        }
+
+        return {
+            Task<Void, Never> {
+                await viewModel.saveComicForOffline(
+                    item,
+                    forceRefresh: availability.kind != .unavailable
+                )
+            }
+        }
+    }
+
+    private func removeOfflineAction(
+        for item: RemoteDirectoryItem,
+        availability: RemoteComicCachedAvailability
+    ) -> (() -> Void)? {
+        guard item.canOpenAsComic, availability.hasLocalCopy else {
+            return nil
+        }
+
+        return {
+            viewModel.removeOfflineCopy(for: item)
+        }
+    }
+
+    private func importAction(for item: RemoteDirectoryItem) -> (() -> Void)? {
+        if item.isDirectory {
+            return {
+                importRequest = .directory(item)
+            }
+        }
+
+        guard item.canOpenAsComic else {
+            return nil
+        }
+
+        return {
+            importRequest = .comic(item)
+        }
     }
 
     private var alternateDisplayMode: LibraryComicDisplayMode {

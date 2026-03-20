@@ -154,12 +154,19 @@ struct BrowseHomeView: View {
         let sessions = viewModel.offlineShelfPreviewSessions
 
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeaderLink(
-                title: "Offline Ready",
-                subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.",
-                destinationLabel: sessions.isEmpty ? "Open Shelf" : "See All"
-            ) {
-                RemoteOfflineShelfView(dependencies: dependencies)
+            if sessions.isEmpty {
+                sectionHeader(
+                    "Offline Ready",
+                    subtitle: "Open downloaded remote comics immediately, even before the SMB server responds."
+                )
+            } else {
+                sectionHeaderLink(
+                    title: "Offline Ready",
+                    subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.",
+                    destinationLabel: "See All"
+                ) {
+                    RemoteOfflineShelfView(dependencies: dependencies)
+                }
             }
 
             if sessions.isEmpty {
@@ -210,12 +217,19 @@ struct BrowseHomeView: View {
         let shortcutEntries = viewModel.shortcutEntries
 
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeaderLink(
-                title: "Saved Folders",
-                subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page.",
-                destinationLabel: shortcutEntries.isEmpty ? "Open" : "See All"
-            ) {
-                SavedRemoteFoldersView(dependencies: dependencies)
+            if shortcutEntries.isEmpty {
+                sectionHeader(
+                    "Saved Folders",
+                    subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page."
+                )
+            } else {
+                sectionHeaderLink(
+                    title: "Saved Folders",
+                    subtitle: "Pinned SMB directories stay on the home surface, while rename and cleanup live in the dedicated Saved Folders page.",
+                    destinationLabel: "See All"
+                ) {
+                    SavedRemoteFoldersView(dependencies: dependencies)
+                }
             }
 
             if shortcutEntries.isEmpty {
