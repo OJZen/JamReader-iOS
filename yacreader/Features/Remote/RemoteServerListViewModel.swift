@@ -87,7 +87,6 @@ struct RemoteServerEditorDraft: Identifiable {
 final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var latestSessionsByServerID: [UUID: RemoteComicReadingSession] = [:]
-    @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
     @Published var alert: RemoteAlertState?
 
     private let profileStore: RemoteServerProfileStore
@@ -135,7 +134,6 @@ final class RemoteServerListViewModel: ObservableObject {
         do {
             profiles = try profileStore.load()
             refreshRecentActivity()
-            refreshCacheSummary()
         } catch {
             profiles = []
             alert = RemoteAlertState(
@@ -272,7 +270,6 @@ final class RemoteServerListViewModel: ObservableObject {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
             refreshRecentActivity()
-            refreshCacheSummary()
             return .success(())
         } catch {
             return .failure(
@@ -302,17 +299,12 @@ final class RemoteServerListViewModel: ObservableObject {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
             refreshRecentActivity()
-            refreshCacheSummary()
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Remove SMB Server",
                 message: error.localizedDescription
             )
         }
-    }
-
-    func refreshCacheSummary() {
-        cacheSummary = browsingService.cacheSummary()
     }
 
     func cacheSummary(for profile: RemoteServerProfile) -> RemoteComicCacheSummary {
@@ -322,7 +314,6 @@ final class RemoteServerListViewModel: ObservableObject {
     func clearCache(for profile: RemoteServerProfile) {
         do {
             try browsingService.clearCachedComics(for: profile)
-            refreshCacheSummary()
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Clear Cache",

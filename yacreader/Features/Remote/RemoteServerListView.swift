@@ -76,7 +76,6 @@ struct RemoteServerListView: View {
         }
         .onAppear {
             viewModel.refreshRecentActivity()
-            viewModel.refreshCacheSummary()
         }
         .refreshable {
             viewModel.load()
@@ -153,12 +152,6 @@ struct RemoteServerListView: View {
                     StatusBadge(title: "SMB", tint: .blue)
                     StatusBadge(title: "Single Comic Files", tint: .green)
                     StatusBadge(title: "On-Demand", tint: .orange)
-                }
-
-                if !viewModel.cacheSummary.isEmpty {
-                    Label(viewModel.cacheSummary.summaryText, systemImage: "externaldrive.fill.badge.minus")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.vertical, 6)
