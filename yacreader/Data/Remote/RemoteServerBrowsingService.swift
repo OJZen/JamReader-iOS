@@ -446,7 +446,7 @@ final class RemoteServerBrowsingService {
         maxPixelSize: Int
     ) async -> UIImage? {
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
-        guard ["cbz", "zip", "cbt", "tar"].contains(fileExtension) else {
+        guard ["cbz", "zip", "cbt", "tar", "pdf"].contains(fileExtension) else {
             return nil
         }
 
@@ -461,6 +461,9 @@ final class RemoteServerBrowsingService {
                         .extractThumbnail(maxPixelSize: maxPixelSize)
                 case "cbt", "tar":
                     image = try await RemoteTARThumbnailExtractor(fileReader: reader)
+                        .extractThumbnail(maxPixelSize: maxPixelSize)
+                case "pdf":
+                    image = try await RemotePDFThumbnailExtractor(fileReader: reader)
                         .extractThumbnail(maxPixelSize: maxPixelSize)
                 default:
                     try? await reader.close()
