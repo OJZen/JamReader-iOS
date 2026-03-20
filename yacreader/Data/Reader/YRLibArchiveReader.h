@@ -2,11 +2,19 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@protocol YRLibArchiveDataSource <NSObject>
+
+@property (nonatomic, readonly) int64_t archiveSize;
+- (nullable NSData *)readDataAtOffset:(int64_t)offset length:(NSUInteger)length error:(NSError * _Nullable * _Nullable)error;
+
+@end
+
 @interface YRLibArchiveReader : NSObject
 
 @property (nonatomic, copy, readonly) NSArray<NSString *> *entryPaths;
 
 - (nullable instancetype)initWithArchiveURL:(NSURL *)archiveURL error:(NSError * _Nullable * _Nullable)error NS_DESIGNATED_INITIALIZER;
+- (nullable instancetype)initWithDataSource:(id<YRLibArchiveDataSource>)dataSource error:(NSError * _Nullable * _Nullable)error NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
 

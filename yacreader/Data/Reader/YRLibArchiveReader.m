@@ -13,11 +13,20 @@ typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
 @interface YRLibArchiveReader ()
 
 @property (nonatomic, strong, readonly) NSURL *archiveURL;
+@property (nonatomic, strong, readonly) id<YRLibArchiveDataSource> dataSource;
 @property (nonatomic, copy, readwrite) NSArray<NSString *> *entryPaths;
 @property (nonatomic) struct archive *archiveHandle;
 @property (nonatomic) NSInteger nextReadableEntryIndex;
+@property (nonatomic) la_int64_t currentOffset;
+@property (nonatomic, copy) NSData *currentReadBuffer;
 
 @end
+
+static int YRLibArchiveOpenCallback(struct archive *archive, void *clientData);
+static la_ssize_t YRLibArchiveReadCallback(struct archive *archive, void *clientData, const void **buffer);
+static la_int64_t YRLibArchiveSkipCallback(struct archive *archive, void *clientData, la_int64_t request);
+static la_int64_t YRLibArchiveSeekCallback(struct archive *archive, void *clientData, la_int64_t offset, int whence);
+static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
 
 @implementation YRLibArchiveReader
 
@@ -28,9 +37,33 @@ typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
     }
 
     _archiveURL = archiveURL;
+    _dataSource = nil;
     _entryPaths = @[];
     _archiveHandle = NULL;
     _nextReadableEntryIndex = 0;
+    _currentOffset = 0;
+    _currentReadBuffer = nil;
+
+    if (![self enumerateEntryPaths:error]) {
+        return nil;
+    }
+
+    return self;
+}
+
+- (nullable instancetype)initWithDataSource:(id<YRLibArchiveDataSource>)dataSource error:(NSError * _Nullable * _Nullable)error {
+    self = [super init];
+    if (self == nil) {
+        return nil;
+    }
+
+    _archiveURL = nil;
+    _dataSource = dataSource;
+    _entryPaths = @[];
+    _archiveHandle = NULL;
+    _nextReadableEntryIndex = 0;
+    _currentOffset = 0;
+    _currentReadBuffer = nil;
 
     if (![self enumerateEntryPaths:error]) {
         return nil;
@@ -113,7 +146,20 @@ typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
     archive_read_support_format_all(archiveHandle);
     archive_read_support_filter_all(archiveHandle);
 
-    if (archive_read_open_filename(archiveHandle, self.archiveURL.fileSystemRepresentation, 64 * 1024) != ARCHIVE_OK) {
+    int openResult = ARCHIVE_OK;
+    if (self.archiveURL != nil) {
+        openResult = archive_read_open_filename(archiveHandle, self.archiveURL.fileSystemRepresentation, 64 * 1024);
+    } else {
+        archive_read_set_callback_data(archiveHandle, (__bridge void *)self);
+        archive_read_set_open_callback(archiveHandle, YRLibArchiveOpenCallback);
+        archive_read_set_read_callback(archiveHandle, YRLibArchiveReadCallback);
+        archive_read_set_seek_callback(archiveHandle, YRLibArchiveSeekCallback);
+        archive_read_set_skip_callback(archiveHandle, YRLibArchiveSkipCallback);
+        archive_read_set_close_callback(archiveHandle, YRLibArchiveCloseCallback);
+        openResult = archive_read_open1(archiveHandle);
+    }
+
+    if (openResult != ARCHIVE_OK) {
         self.archiveHandle = archiveHandle;
         BOOL populated = [self populateArchiveError:error fallback:@"Unable to open archive."];
         [self closeArchive];
@@ -122,6 +168,8 @@ typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
 
     self.archiveHandle = archiveHandle;
     self.nextReadableEntryIndex = 0;
+    self.currentOffset = 0;
+    self.currentReadBuffer = nil;
     return YES;
 }
 
@@ -132,6 +180,8 @@ typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
     }
 
     self.nextReadableEntryIndex = 0;
+    self.currentOffset = 0;
+    self.currentReadBuffer = nil;
 }
 
 - (BOOL)seekToEntryAtIndex:(NSInteger)targetIndex error:(NSError * _Nullable * _Nullable)error {
@@ -250,3 +300,82 @@ typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
 }
 
 @end
+
+static YRLibArchiveReader *YRLibArchiveReaderFromClientData(void *clientData) {
+    return (__bridge YRLibArchiveReader *)clientData;
+}
+
+static int YRLibArchiveOpenCallback(struct archive *archive, void *clientData) {
+    YRLibArchiveReader *reader = YRLibArchiveReaderFromClientData(clientData);
+    reader.currentOffset = 0;
+    reader.currentReadBuffer = nil;
+    return ARCHIVE_OK;
+}
+
+static la_ssize_t YRLibArchiveReadCallback(struct archive *archive, void *clientData, const void **buffer) {
+    YRLibArchiveReader *reader = YRLibArchiveReaderFromClientData(clientData);
+    NSError *error = nil;
+    NSData *data = [reader.dataSource readDataAtOffset:reader.currentOffset length:64 * 1024 error:&error];
+    if (data == nil) {
+        NSString *message = error.localizedDescription ?: @"Unable to read remote archive data.";
+        archive_set_error(archive, -1, "%s", message.UTF8String);
+        return -1;
+    }
+
+    if (data.length == 0) {
+        reader.currentReadBuffer = nil;
+        *buffer = NULL;
+        return 0;
+    }
+
+    reader.currentReadBuffer = data;
+    *buffer = reader.currentReadBuffer.bytes;
+    reader.currentOffset += (la_int64_t)reader.currentReadBuffer.length;
+    return (la_ssize_t)reader.currentReadBuffer.length;
+}
+
+static la_int64_t YRLibArchiveSkipCallback(struct archive *archive, void *clientData, la_int64_t request) {
+    YRLibArchiveReader *reader = YRLibArchiveReaderFromClientData(clientData);
+    la_int64_t nextOffset = reader.currentOffset + request;
+    nextOffset = MAX(0, MIN(nextOffset, (la_int64_t)reader.dataSource.archiveSize));
+    la_int64_t skipped = nextOffset - reader.currentOffset;
+    reader.currentOffset = nextOffset;
+    reader.currentReadBuffer = nil;
+    return skipped;
+}
+
+static la_int64_t YRLibArchiveSeekCallback(struct archive *archive, void *clientData, la_int64_t offset, int whence) {
+    YRLibArchiveReader *reader = YRLibArchiveReaderFromClientData(clientData);
+    la_int64_t baseOffset = 0;
+
+    switch (whence) {
+        case SEEK_SET:
+            baseOffset = 0;
+            break;
+        case SEEK_CUR:
+            baseOffset = reader.currentOffset;
+            break;
+        case SEEK_END:
+            baseOffset = (la_int64_t)reader.dataSource.archiveSize;
+            break;
+        default:
+            archive_set_error(archive, -1, "%s", "Unsupported remote archive seek mode.");
+            return -1;
+    }
+
+    la_int64_t nextOffset = baseOffset + offset;
+    if (nextOffset < 0 || nextOffset > (la_int64_t)reader.dataSource.archiveSize) {
+        archive_set_error(archive, -1, "%s", "Remote archive seek is out of bounds.");
+        return -1;
+    }
+
+    reader.currentOffset = nextOffset;
+    reader.currentReadBuffer = nil;
+    return nextOffset;
+}
+
+static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData) {
+    YRLibArchiveReader *reader = YRLibArchiveReaderFromClientData(clientData);
+    reader.currentReadBuffer = nil;
+    return ARCHIVE_OK;
+}
