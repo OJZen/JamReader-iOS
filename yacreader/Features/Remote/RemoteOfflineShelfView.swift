@@ -671,7 +671,7 @@ private struct RemoteOfflineShelfItemActionMenuButton: View {
     let onDeleteDownloadedCopy: () -> Void
 
     var body: some View {
-        Menu {
+        RemoteCardActionMenuButton(accessibilityLabel: "Offline Comic Actions") {
             Button(action: onBrowseFolder) {
                 Label("Browse Source Folder", systemImage: "folder")
             }
@@ -683,14 +683,7 @@ private struct RemoteOfflineShelfItemActionMenuButton: View {
             Button(role: .destructive, action: onDeleteDownloadedCopy) {
                 Label("Delete Downloaded Copy", systemImage: "trash")
             }
-        } label: {
-            Image(systemName: "ellipsis.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .padding(4)
-                .background(.ultraThinMaterial, in: Circle())
         }
-        .buttonStyle(.plain)
     }
 }
 

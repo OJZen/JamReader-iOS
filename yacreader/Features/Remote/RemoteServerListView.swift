@@ -1561,7 +1561,7 @@ private struct RemoteBrowserItemActionMenuButton: View {
     let onImport: (() -> Void)?
 
     var body: some View {
-        Menu {
+        RemoteCardActionMenuButton(accessibilityLabel: "Remote Item Actions") {
             if let onOpenOffline {
                 Button(action: onOpenOffline) {
                     Label(
@@ -1591,14 +1591,7 @@ private struct RemoteBrowserItemActionMenuButton: View {
                     )
                 }
             }
-        } label: {
-            Image(systemName: "ellipsis.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .padding(4)
-                .background(.ultraThinMaterial, in: Circle())
         }
-        .buttonStyle(.plain)
     }
 
     private var saveOfflineTitle: String {

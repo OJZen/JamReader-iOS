@@ -1,5 +1,32 @@
 import SwiftUI
 
+struct RemoteCardActionMenuButton<MenuContent: View>: View {
+    var accessibilityLabel = "More Actions"
+    @ViewBuilder let content: MenuContent
+
+    init(
+        accessibilityLabel: String = "More Actions",
+        @ViewBuilder content: () -> MenuContent
+    ) {
+        self.accessibilityLabel = accessibilityLabel
+        self.content = content()
+    }
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .padding(4)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
 struct RemoteSavedFolderCard: View {
     let shortcut: RemoteFolderShortcut
     let profile: RemoteServerProfile

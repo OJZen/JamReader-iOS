@@ -252,7 +252,7 @@ private struct SavedRemoteFolderActionMenuButton: View {
     let onRemove: () -> Void
 
     var body: some View {
-        Menu {
+        RemoteCardActionMenuButton(accessibilityLabel: "Saved Folder Actions") {
             Button(action: onRename) {
                 Label("Rename Shortcut", systemImage: "pencil")
             }
@@ -260,14 +260,7 @@ private struct SavedRemoteFolderActionMenuButton: View {
             Button(role: .destructive, action: onRemove) {
                 Label("Remove Shortcut", systemImage: "trash")
             }
-        } label: {
-            Image(systemName: "ellipsis.circle.fill")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .padding(4)
-                .background(.ultraThinMaterial, in: Circle())
         }
-        .buttonStyle(.plain)
     }
 }
 
