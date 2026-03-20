@@ -132,7 +132,7 @@ struct BrowseHomeView: View {
 
     private var browseToolsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("Browse Tools", subtitle: "Keep the home focused on entry points. Server setup, saved folders, and offline reading each get their own destination.")
+            sectionHeader("Browse Tools", subtitle: "Keep setup actions here, and let active SMB content live in its own sections below.")
 
             LazyVGrid(
                 columns: [GridItem(.adaptive(minimum: 155, maximum: 240), spacing: 12)],
@@ -150,33 +150,35 @@ struct BrowseHomeView: View {
                 }
                 .buttonStyle(.plain)
 
-                NavigationLink {
-                    SavedRemoteFoldersView(dependencies: dependencies)
-                } label: {
-                    ActionCard(
-                        title: "Saved Folders",
-                        subtitle: viewModel.shortcutEntries.isEmpty
-                            ? "Pin frequently used SMB directories for one-tap access."
-                            : "\(viewModel.shortcutEntries.count) saved SMB folders are ready to open.",
-                        systemImage: "star.fill",
-                        tint: .teal
-                    )
+                if viewModel.shortcutEntries.isEmpty {
+                    NavigationLink {
+                        SavedRemoteFoldersView(dependencies: dependencies)
+                    } label: {
+                        ActionCard(
+                            title: "Saved Folders",
+                            subtitle: "Pin frequently used SMB directories for one-tap access.",
+                            systemImage: "star.fill",
+                            tint: .teal
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
-                NavigationLink {
-                    RemoteOfflineShelfView(dependencies: dependencies)
-                } label: {
-                    ActionCard(
-                        title: "Offline Shelf",
-                        subtitle: viewModel.offlineReadySessions.isEmpty
-                            ? "Open downloaded remote comics without waiting for SMB."
-                            : "\(viewModel.offlineReadySessions.count) downloaded remote comics are ready offline.",
-                        systemImage: "arrow.down.circle.fill",
-                        tint: .green
-                    )
+                if viewModel.offlineShelfPreviewSessions.isEmpty {
+                    NavigationLink {
+                        RemoteOfflineShelfView(dependencies: dependencies)
+                    } label: {
+                        ActionCard(
+                            title: "Offline Shelf",
+                            subtitle: viewModel.offlineReadySessions.isEmpty
+                                ? "Open downloaded remote comics without waiting for SMB."
+                                : "\(viewModel.offlineReadySessions.count) downloaded remote comics are ready offline.",
+                            systemImage: "arrow.down.circle.fill",
+                            tint: .green
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -207,11 +209,24 @@ struct BrowseHomeView: View {
 
     @ViewBuilder
     private var offlineReadySection: some View {
-        let sessions = viewModel.offlineReadySessions
+        let sessions = viewModel.offlineShelfPreviewSessions
 
         if !sessions.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Offline Ready", subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.")
+                HStack(alignment: .top) {
+                    sectionHeader("Offline Ready", subtitle: "Open downloaded remote comics immediately, even before the SMB server responds.")
+
+                    Spacer(minLength: 12)
+
+                    NavigationLink {
+                        RemoteOfflineShelfView(dependencies: dependencies)
+                    } label: {
+                        Text("See All")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
 
                 VStack(spacing: 12) {
                     ForEach(Array(sessions.prefix(3))) { session in
@@ -251,23 +266,6 @@ struct BrowseHomeView: View {
                             }
                         }
                     }
-
-                    NavigationLink {
-                        RemoteOfflineShelfView(dependencies: dependencies)
-                    } label: {
-                        HStack {
-                            Label("Open Offline Shelf", systemImage: "arrow.right.circle.fill")
-                                .font(.subheadline.weight(.semibold))
-                            Spacer()
-                            Text("\(sessions.count)")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
                 }
             }
         }

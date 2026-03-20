@@ -86,6 +86,14 @@ final class BrowseHomeViewModel: ObservableObject {
         }
     }
 
+    var offlineShelfPreviewSessions: [RemoteComicReadingSession] {
+        guard let continueReadingSession else {
+            return offlineReadySessions
+        }
+
+        return offlineReadySessions.filter { $0.id != continueReadingSession.id }
+    }
+
     var offlineReadyCountText: String {
         "\(offlineReadySessions.count)"
     }
