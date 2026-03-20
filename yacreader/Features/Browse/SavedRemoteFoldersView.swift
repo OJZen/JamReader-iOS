@@ -28,34 +28,40 @@ struct SavedRemoteFoldersView: View {
             if filteredEntries.isEmpty {
                 emptyStateSection
             } else {
-                Section("Saved SMB Folders") {
-                    ForEach(filteredEntries) { entry in
-                        NavigationLink {
-                            RemoteServerBrowserView(
-                                profile: entry.profile,
-                                currentPath: entry.shortcut.path,
-                                dependencies: dependencies
-                            )
-                        } label: {
-                            RemoteSavedFolderCard(
-                                shortcut: entry.shortcut,
-                                profile: entry.profile,
-                                showsNavigationIndicator: false,
-                                trailingAccessoryReservedWidth: 46
-                            )
+                ForEach(displayedSections) { section in
+                    Section {
+                        ForEach(section.entries) { entry in
+                            NavigationLink {
+                                RemoteServerBrowserView(
+                                    profile: entry.profile,
+                                    currentPath: entry.shortcut.path,
+                                    dependencies: dependencies
+                                )
+                            } label: {
+                                RemoteSavedFolderCard(
+                                    shortcut: entry.shortcut,
+                                    profile: entry.profile,
+                                    showsNavigationIndicator: false,
+                                    trailingAccessoryReservedWidth: 46
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .overlay(alignment: .topTrailing) {
+                                SavedRemoteFolderActionMenuButton(
+                                    onRename: {
+                                        renameEntry = entry
+                                    },
+                                    onRemove: {
+                                        pendingRemovalEntry = entry
+                                    }
+                                )
+                                .padding(.top, 12)
+                                .padding(.trailing, 12)
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .topTrailing) {
-                            SavedRemoteFolderActionMenuButton(
-                                onRename: {
-                                    renameEntry = entry
-                                },
-                                onRemove: {
-                                    pendingRemovalEntry = entry
-                                }
-                            )
-                            .padding(.top, 12)
-                            .padding(.trailing, 12)
+                    } header: {
+                        if focusedProfile == nil {
+                            sectionHeader(for: section)
                         }
                     }
                 }
@@ -131,6 +137,27 @@ struct SavedRemoteFoldersView: View {
         }
     }
 
+    private var displayedSections: [SavedRemoteFolderSection] {
+        let grouped = Dictionary(grouping: filteredEntries) { $0.profile.id }
+
+        return grouped.values
+            .map { entries in
+                SavedRemoteFolderSection(
+                    profile: entries[0].profile,
+                    entries: entries.sorted {
+                        if $0.shortcut.updatedAt != $1.shortcut.updatedAt {
+                            return $0.shortcut.updatedAt > $1.shortcut.updatedAt
+                        }
+
+                        return $0.shortcut.title.localizedStandardCompare($1.shortcut.title) == .orderedAscending
+                    }
+                )
+            }
+            .sorted {
+                $0.profile.name.localizedStandardCompare($1.profile.name) == .orderedAscending
+            }
+    }
+
     private var summarySection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
@@ -200,6 +227,19 @@ struct SavedRemoteFoldersView: View {
                     .padding(.vertical, 18)
             }
         }
+    }
+
+    @ViewBuilder
+    private func sectionHeader(for section: SavedRemoteFolderSection) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(section.profile.name)
+                .font(.subheadline.weight(.semibold))
+
+            Text(section.summaryText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .textCase(nil)
     }
 }
 
@@ -367,6 +407,24 @@ private struct SavedRemoteFolderRenameSheet: View {
         .presentationDetents([.medium])
         .onAppear {
             isFocused = true
+        }
+    }
+}
+
+private struct SavedRemoteFolderSection: Identifiable {
+    let profile: RemoteServerProfile
+    let entries: [SavedRemoteFoldersViewModel.ShortcutEntry]
+
+    var id: UUID {
+        profile.id
+    }
+
+    var summaryText: String {
+        switch entries.count {
+        case 1:
+            return "1 saved folder shortcut"
+        default:
+            return "\(entries.count) saved folder shortcuts"
         }
     }
 }
