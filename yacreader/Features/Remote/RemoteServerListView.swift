@@ -536,17 +536,14 @@ struct RemoteServerBrowserView: View {
                 Image(systemName: viewModel.isCurrentFolderSaved ? "star.fill" : "star")
             }
 
-            Menu {
-                Section("Display") {
-                    ForEach(LibraryComicDisplayMode.allCases) { mode in
-                        Button {
-                            applyDisplayMode(mode)
-                        } label: {
-                            Label(mode.title, systemImage: mode.systemImageName)
-                        }
-                    }
-                }
+            Button {
+                toggleDisplayMode()
+            } label: {
+                Image(systemName: alternateDisplayMode.systemImageName)
+            }
+            .accessibilityLabel("Switch to \(alternateDisplayMode.title) View")
 
+            Menu {
                 Section("Sort") {
                     ForEach(RemoteDirectorySortMode.allCases) { mode in
                         Button {
@@ -1209,6 +1206,19 @@ struct RemoteServerBrowserView: View {
         }
 
         navigationRequest = .comic(item, .preferLocalCache)
+    }
+
+    private var alternateDisplayMode: LibraryComicDisplayMode {
+        switch displayMode {
+        case .list:
+            return .grid
+        case .grid:
+            return .list
+        }
+    }
+
+    private func toggleDisplayMode() {
+        applyDisplayMode(alternateDisplayMode)
     }
 
     private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
