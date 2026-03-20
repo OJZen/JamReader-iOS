@@ -130,7 +130,7 @@ struct RemoteServerListView: View {
 
     private var summarySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Remote SMB Access")
                     .font(.headline)
 
@@ -138,12 +138,21 @@ struct RemoteServerListView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Text("Browse home handles Continue Reading, Offline Shelf, and Saved Folders. This page stays focused on server setup and maintenance.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        RemoteSummaryMetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
+                        RemoteSummaryMetricPill(title: "Saved Folders", value: viewModel.shortcutCountText, tint: .teal)
+                        RemoteSummaryMetricPill(title: "Recent", value: viewModel.recentServerCountText, tint: .green)
+                    }
 
-                Text("Global remote cache cleanup now lives in Settings > Remote Cache, so this page only keeps server-specific actions.")
+                    VStack(alignment: .leading, spacing: 8) {
+                        RemoteSummaryMetricPill(title: "Servers", value: viewModel.serverCountText, tint: .blue)
+                        RemoteSummaryMetricPill(title: "Saved Folders", value: viewModel.shortcutCountText, tint: .teal)
+                        RemoteSummaryMetricPill(title: "Recent", value: viewModel.recentServerCountText, tint: .green)
+                    }
+                }
+
+                Label("Browse keeps reading destinations and saved folders. Settings handles global remote cache cleanup.", systemImage: "info.circle")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -190,13 +199,7 @@ private struct RemoteServerRow: View {
                     .lineLimit(2)
                 }
 
-                HStack(spacing: 6) {
-                    StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
-                    StatusBadge(title: profile.authenticationMode.title, tint: profile.authenticationMode == .guest ? .orange : .green)
-                    if !profile.usesDefaultPort {
-                        StatusBadge(title: ":\(profile.port)", tint: .teal)
-                    }
-                }
+                RemoteServerStatusBadgeRow(profile: profile)
             }
         }
         .padding(.vertical, 4)
@@ -241,10 +244,7 @@ private struct RemoteServerActionsSheet: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
 
-                        HStack(spacing: 8) {
-                            StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
-                            StatusBadge(title: profile.authenticationMode.title, tint: profile.authenticationMode == .guest ? .orange : .green)
-                        }
+                        RemoteServerStatusBadgeRow(profile: profile, showsPortBadge: false)
                     }
                     .padding(.vertical, 6)
                 }
@@ -293,6 +293,42 @@ private struct RemoteServerActionsSheet: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+}
+
+private struct RemoteSummaryMetricPill: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+private struct RemoteServerStatusBadgeRow: View {
+    let profile: RemoteServerProfile
+    var showsPortBadge = true
+
+    var body: some View {
+        HStack(spacing: 6) {
+            StatusBadge(title: profile.providerKind.title, tint: profile.providerKind.tintColor)
+            StatusBadge(title: profile.authenticationMode.title, tint: profile.authenticationMode == .guest ? .orange : .green)
+            if showsPortBadge, !profile.usesDefaultPort {
+                StatusBadge(title: ":\(profile.port)", tint: .teal)
+            }
+        }
     }
 }
 
@@ -719,10 +755,6 @@ struct RemoteServerBrowserView: View {
                     StatusBadge(title: "Filtering", tint: .orange)
                 }
             }
-
-            Text("Client: \(viewModel.capabilities.plannedClientLibrary)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
             if showsFolderActionCluster {
                 Divider()

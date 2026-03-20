@@ -87,6 +87,7 @@ struct RemoteServerEditorDraft: Identifiable {
 final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var latestSessionsByServerID: [UUID: RemoteComicReadingSession] = [:]
+    @Published private(set) var shortcutCount = 0
     @Published var alert: RemoteAlertState?
 
     private let profileStore: RemoteServerProfileStore
@@ -121,6 +122,18 @@ final class RemoteServerListViewModel: ObservableObject {
         }
     }
 
+    var serverCountText: String {
+        "\(profiles.count)"
+    }
+
+    var recentServerCountText: String {
+        "\(latestSessionsByServerID.count)"
+    }
+
+    var shortcutCountText: String {
+        "\(shortcutCount)"
+    }
+
     func loadIfNeeded() {
         guard !hasLoaded else {
             return
@@ -134,8 +147,10 @@ final class RemoteServerListViewModel: ObservableObject {
         do {
             profiles = try profileStore.load()
             refreshRecentActivity()
+            refreshShortcutCount()
         } catch {
             profiles = []
+            shortcutCount = 0
             alert = RemoteAlertState(
                 title: "Failed to Load Remote Servers",
                 message: error.localizedDescription
@@ -270,6 +285,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
             refreshRecentActivity()
+            refreshShortcutCount()
             return .success(())
         } catch {
             return .failure(
@@ -299,6 +315,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
             refreshRecentActivity()
+            refreshShortcutCount()
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Remove SMB Server",
@@ -339,5 +356,11 @@ final class RemoteServerListViewModel: ObservableObject {
 
     func latestSession(for profile: RemoteServerProfile) -> RemoteComicReadingSession? {
         latestSessionsByServerID[profile.id]
+    }
+
+    private func refreshShortcutCount() {
+        let activeServerIDs = Set(profiles.map(\.id))
+        let allShortcuts = (try? folderShortcutStore.load()) ?? []
+        shortcutCount = allShortcuts.filter { activeServerIDs.contains($0.serverID) }.count
     }
 }
