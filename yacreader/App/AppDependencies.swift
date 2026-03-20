@@ -4,6 +4,7 @@ struct AppDependencies {
     let libraryDescriptorStore: LibraryDescriptorStore
     let remoteServerProfileStore: RemoteServerProfileStore
     let remoteFolderShortcutStore: RemoteFolderShortcutStore
+    let remoteFolderShortcutSnapshotStore: RemoteFolderShortcutSnapshotStore
     let remoteServerCredentialStore: RemoteServerCredentialStore
     let remoteCachePolicyStore: RemoteCachePolicyStore
     let libraryStorageManager: LibraryStorageManager
@@ -34,6 +35,7 @@ struct AppDependencies {
         let remoteCachePolicyStore = RemoteCachePolicyStore()
         let remoteReadingProgressStore = RemoteReadingProgressStore()
         let remoteServerProfileStore = RemoteServerProfileStore()
+        let remoteFolderShortcutStore = RemoteFolderShortcutStore()
         let remoteServerBrowsingService = RemoteServerBrowsingService(
             credentialStore: remoteServerCredentialStore,
             cachePolicyStore: remoteCachePolicyStore
@@ -41,7 +43,11 @@ struct AppDependencies {
         return AppDependencies(
             libraryDescriptorStore: descriptorStore,
             remoteServerProfileStore: remoteServerProfileStore,
-            remoteFolderShortcutStore: RemoteFolderShortcutStore(),
+            remoteFolderShortcutStore: remoteFolderShortcutStore,
+            remoteFolderShortcutSnapshotStore: RemoteFolderShortcutSnapshotStore(
+                remoteServerProfileStore: remoteServerProfileStore,
+                remoteFolderShortcutStore: remoteFolderShortcutStore
+            ),
             remoteServerCredentialStore: remoteServerCredentialStore,
             remoteCachePolicyStore: remoteCachePolicyStore,
             libraryStorageManager: storageManager,

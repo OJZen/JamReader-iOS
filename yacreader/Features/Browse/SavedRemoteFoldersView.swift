@@ -162,24 +162,17 @@ struct SavedRemoteFoldersView: View {
 
 @MainActor
 final class SavedRemoteFoldersViewModel: ObservableObject {
-    struct ShortcutEntry: Identifiable {
-        let shortcut: RemoteFolderShortcut
-        let profile: RemoteServerProfile
-
-        var id: UUID {
-            shortcut.id
-        }
-    }
+    typealias ShortcutEntry = RemoteResolvedFolderShortcut
 
     @Published private(set) var entries: [ShortcutEntry] = []
     @Published var alert: BrowseHomeAlert?
 
-    private let profileStore: RemoteServerProfileStore
+    private let shortcutSnapshotStore: RemoteFolderShortcutSnapshotStore
     private let shortcutStore: RemoteFolderShortcutStore
     private var hasLoaded = false
 
     init(dependencies: AppDependencies) {
-        self.profileStore = dependencies.remoteServerProfileStore
+        self.shortcutSnapshotStore = dependencies.remoteFolderShortcutSnapshotStore
         self.shortcutStore = dependencies.remoteFolderShortcutStore
     }
 
@@ -213,15 +206,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
 
     func load() async {
         do {
-            let profiles = try profileStore.load()
-            let shortcuts = try shortcutStore.load()
-            entries = shortcuts.compactMap { shortcut in
-                guard let profile = profiles.first(where: { $0.id == shortcut.serverID }) else {
-                    return nil
-                }
-
-                return ShortcutEntry(shortcut: shortcut, profile: profile)
-            }
+            entries = try shortcutSnapshotStore.loadEntries()
             alert = nil
         } catch {
             entries = []

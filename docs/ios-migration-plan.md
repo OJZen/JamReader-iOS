@@ -1265,6 +1265,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - 已继续收敛 `Browse` 首页的重复入口：`Browse Tools` 现只保留真正未在内容区出现的动作，`Continue Reading` 对应的离线漫画也不再同时重复出现在 `Offline Ready` 预览里，避免同一本漫画和同一目的地在首页被重复呈现
 - 已继续收窄 `Browse` 首页的离线职责：`Offline Ready` 现回归纯预览与快速打开，不再在首页重复承担删除下载副本这类维护动作；离线刷新与删除统一留在 `Offline Shelf` 或具体 `SMB` 目录页处理
 - 已开始统一 `Browse` 首页与 `Offline Shelf` 的离线数据来源：两边现在开始通过共享的远程离线快照层读取 profiles、sessions、offline entries 与缓存摘要，减少首页预览和离线书架各自重建状态造成的计数与排序漂移
+- 已开始统一 `Browse` 首页与 `Saved Folders` 的快捷目录数据来源：两边现通过共享的远程快捷目录快照层解析 `shortcut + profile` 关系，避免首页预览和独立快捷目录页各自重复加载资料并手写映射逻辑
 - 已开始继续清理“远程缓存维护”入口重复：全局清理远程下载副本现收口到 `Settings > Remote Cache`，`Remote Servers` 页面回归服务器配置与单服务器维护职责，不再同时暴露重复的全局缓存清理按钮
 - 已进一步收紧 `Remote Servers` 的页面职责：既然全局远程缓存维护已经迁到 `Settings > Remote Cache`，服务器页也不再重复展示全局缓存摘要，只保留服务器列表、最近活动和单服务器维护动作
 - 已继续去重远程目录条目的交互：条目点击保留为唯一主打开动作，`ellipsis` 菜单不再重复提供 `Open Folder / Open Comic`，只保留离线、副本刷新/删除和导入这类次级操作

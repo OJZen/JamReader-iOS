@@ -3,14 +3,7 @@ import Foundation
 
 @MainActor
 final class BrowseHomeViewModel: ObservableObject {
-    struct ShortcutEntry: Identifiable {
-        let shortcut: RemoteFolderShortcut
-        let profile: RemoteServerProfile
-
-        var id: UUID {
-            shortcut.id
-        }
-    }
+    typealias ShortcutEntry = RemoteResolvedFolderShortcut
 
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var sessions: [RemoteComicReadingSession] = []
@@ -21,12 +14,12 @@ final class BrowseHomeViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published var alert: BrowseHomeAlert?
 
-    private let remoteFolderShortcutStore: RemoteFolderShortcutStore
+    private let remoteFolderShortcutSnapshotStore: RemoteFolderShortcutSnapshotStore
     private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private var hasLoaded = false
 
     init(dependencies: AppDependencies) {
-        self.remoteFolderShortcutStore = dependencies.remoteFolderShortcutStore
+        self.remoteFolderShortcutSnapshotStore = dependencies.remoteFolderShortcutSnapshotStore
         self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
     }
 
@@ -127,7 +120,7 @@ final class BrowseHomeViewModel: ObservableObject {
         do {
             let offlineSnapshot = try remoteOfflineLibrarySnapshotStore.loadSnapshot()
             profiles = offlineSnapshot.profiles
-            shortcutEntries = resolvedShortcutEntries(for: try remoteFolderShortcutStore.load(), profiles: profiles)
+            shortcutEntries = try remoteFolderShortcutSnapshotStore.loadEntries()
             sessions = offlineSnapshot.sessions
             offlineEntries = offlineSnapshot.offlineEntries
             cacheSummary = offlineSnapshot.cacheSummary
@@ -149,19 +142,6 @@ final class BrowseHomeViewModel: ObservableObject {
 
     func profile(for serverID: UUID) -> RemoteServerProfile? {
         profiles.first { $0.id == serverID }
-    }
-
-    private func resolvedShortcutEntries(
-        for shortcuts: [RemoteFolderShortcut],
-        profiles: [RemoteServerProfile]
-    ) -> [ShortcutEntry] {
-        shortcuts.compactMap { shortcut in
-            guard let profile = profiles.first(where: { $0.id == shortcut.serverID }) else {
-                return nil
-            }
-
-            return ShortcutEntry(shortcut: shortcut, profile: profile)
-        }
     }
 }
 
