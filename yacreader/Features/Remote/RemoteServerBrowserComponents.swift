@@ -16,34 +16,49 @@ struct RemoteDirectoryItemListRow: View {
                     .font(.body)
                     .lineLimit(2)
 
+                statusBadgeCluster
+
+                metadataLine
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var statusBadgeCluster: some View {
+        let descriptors = statusBadgeDescriptors
+
+        if !descriptors.isEmpty {
+            ViewThatFits(in: .horizontal) {
                 HStack(spacing: 8) {
-                    if let readingSession {
-                        Label(readingSession.progressText, systemImage: "bookmark")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(readingSession.read ? .green : .orange)
+                    ForEach(descriptors) { descriptor in
+                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
                     }
+                }
 
-                    if let cacheBadgeTitle = cacheAvailability.badgeTitle {
-                        Text(cacheBadgeTitle)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(cacheAvailability.kind == .current ? .blue : .orange)
-                    }
-
-                    if let fileSize = item.fileSize, item.canOpenAsComic {
-                        Text(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if let modifiedAt = item.modifiedAt {
-                        Text(modifiedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(descriptors) { descriptor in
+                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
                     }
                 }
             }
         }
-        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var metadataLine: some View {
+        let descriptors = metadataDescriptors
+
+        if !descriptors.isEmpty {
+            HStack(spacing: 10) {
+                ForEach(descriptors) { descriptor in
+                    Label(descriptor.title, systemImage: descriptor.systemImage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -64,8 +79,60 @@ struct RemoteDirectoryItemListRow: View {
                     Image(systemName: item.isDirectory ? "folder.fill" : "doc.richtext.fill")
                         .font(.title3)
                         .foregroundStyle(item.isDirectory ? .blue : .green)
-                }
+            }
         }
+    }
+
+    private var statusBadgeDescriptors: [RemoteDirectoryStatusBadgeDescriptor] {
+        var descriptors: [RemoteDirectoryStatusBadgeDescriptor] = []
+
+        if item.isDirectory {
+            descriptors.append(RemoteDirectoryStatusBadgeDescriptor(title: "Folder", tint: .blue))
+        }
+
+        if let readingSession {
+            descriptors.append(
+                RemoteDirectoryStatusBadgeDescriptor(
+                    title: readingSession.progressText,
+                    tint: readingSession.read ? .green : .orange
+                )
+            )
+        }
+
+        if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+            descriptors.append(
+                RemoteDirectoryStatusBadgeDescriptor(
+                    title: cacheBadgeTitle,
+                    tint: cacheAvailability.kind == .current ? .blue : .orange
+                )
+            )
+        }
+
+        return descriptors
+    }
+
+    private var metadataDescriptors: [RemoteDirectoryMetadataDescriptor] {
+        var descriptors: [RemoteDirectoryMetadataDescriptor] = []
+
+        if let fileSize = item.fileSize, item.canOpenAsComic {
+            descriptors.append(
+                RemoteDirectoryMetadataDescriptor(
+                    title: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file),
+                    systemImage: "internaldrive"
+                )
+            )
+        }
+
+        if let modifiedAt = item.modifiedAt {
+            descriptors.append(
+                RemoteDirectoryMetadataDescriptor(
+                    title: modifiedAt.formatted(date: .abbreviated, time: .omitted),
+                    systemImage: "calendar"
+                )
+            )
+        }
+
+        return descriptors
     }
 }
 
@@ -101,23 +168,9 @@ struct RemoteDirectoryGridCard: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                if let readingSession {
-                    Text(readingSession.progressText)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(readingSession.read ? .green : .orange)
-                } else if let cacheBadgeTitle = cacheAvailability.badgeTitle {
-                    Text(cacheBadgeTitle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(cacheAvailability.kind == .current ? .blue : .orange)
-                } else if let fileSize = item.fileSize, item.canOpenAsComic {
-                    Text(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if item.isDirectory {
-                    Text("Folder")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                statusBadgeCluster
+
+                metadataLine
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 12)
@@ -127,6 +180,43 @@ struct RemoteDirectoryGridCard: View {
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var statusBadgeCluster: some View {
+        let descriptors = statusBadgeDescriptors
+
+        if !descriptors.isEmpty {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(descriptors) { descriptor in
+                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(descriptors) { descriptor in
+                        StatusBadge(title: descriptor.title, tint: descriptor.tint)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var metadataLine: some View {
+        let descriptors = metadataDescriptors
+
+        if !descriptors.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(descriptors) { descriptor in
+                    Label(descriptor.title, systemImage: descriptor.systemImage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 
@@ -155,10 +245,74 @@ struct RemoteDirectoryGridCard: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.blue)
                     }
-                }
+            }
                 .padding(12)
         }
     }
+
+    private var statusBadgeDescriptors: [RemoteDirectoryStatusBadgeDescriptor] {
+        var descriptors: [RemoteDirectoryStatusBadgeDescriptor] = []
+
+        if item.isDirectory {
+            descriptors.append(RemoteDirectoryStatusBadgeDescriptor(title: "Folder", tint: .blue))
+        }
+
+        if let readingSession {
+            descriptors.append(
+                RemoteDirectoryStatusBadgeDescriptor(
+                    title: readingSession.progressText,
+                    tint: readingSession.read ? .green : .orange
+                )
+            )
+        }
+
+        if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+            descriptors.append(
+                RemoteDirectoryStatusBadgeDescriptor(
+                    title: cacheBadgeTitle,
+                    tint: cacheAvailability.kind == .current ? .blue : .orange
+                )
+            )
+        }
+
+        return descriptors
+    }
+
+    private var metadataDescriptors: [RemoteDirectoryMetadataDescriptor] {
+        var descriptors: [RemoteDirectoryMetadataDescriptor] = []
+
+        if let fileSize = item.fileSize, item.canOpenAsComic {
+            descriptors.append(
+                RemoteDirectoryMetadataDescriptor(
+                    title: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file),
+                    systemImage: "internaldrive"
+                )
+            )
+        }
+
+        if let modifiedAt = item.modifiedAt {
+            descriptors.append(
+                RemoteDirectoryMetadataDescriptor(
+                    title: modifiedAt.formatted(date: .abbreviated, time: .omitted),
+                    systemImage: "calendar"
+                )
+            )
+        }
+
+        return descriptors
+    }
+}
+
+private struct RemoteDirectoryStatusBadgeDescriptor: Identifiable {
+    let id = UUID()
+    let title: String
+    let tint: Color
+}
+
+private struct RemoteDirectoryMetadataDescriptor: Identifiable {
+    let id = UUID()
+    let title: String
+    let systemImage: String
 }
 
 struct RemoteBrowserImportProgressView: View {
