@@ -294,9 +294,15 @@ final class RemoteComicThumbnailPipeline {
         browsingService: RemoteServerBrowsingService,
         maxPixelSize: Int,
         limit: Int,
+        skipCount: Int = 0,
         concurrency: Int
     ) async {
-        let candidates = Array(items.filter(\.canOpenAsComic).prefix(max(0, limit)))
+        let candidates = Array(
+            items
+                .filter(\.canOpenAsComic)
+                .dropFirst(max(0, skipCount))
+                .prefix(max(0, limit))
+        )
         guard !candidates.isEmpty else {
             return
         }

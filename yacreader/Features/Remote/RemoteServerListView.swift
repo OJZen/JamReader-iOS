@@ -469,7 +469,7 @@ struct RemoteServerBrowserView: View {
             await viewModel.loadIfNeeded()
         }
         .task(id: thumbnailPreheatRequestID) {
-            preheatVisibleThumbnails()
+            await preheatVisibleThumbnails()
         }
         .onAppear {
             viewModel.refreshProgressState()
@@ -1141,29 +1141,45 @@ struct RemoteServerBrowserView: View {
     }
 
     private var thumbnailPreheatRequestID: String {
-        let candidateIDs = displayedComicFiles.prefix(displayMode == .grid ? 18 : 12).map(\.id).joined(separator: "|")
+        let trackedLimit = displayMode == .grid ? 42 : 24
+        let candidateIDs = displayedComicFiles.prefix(trackedLimit).map(\.id).joined(separator: "|")
         return "\(viewModel.profile.id.uuidString)#\(displayMode.rawValue)#\(sortMode.rawValue)#\(trimmedSearchText)#\(Int(displayScale * 100))#\(candidateIDs)"
     }
 
-    private func preheatVisibleThumbnails() {
+    private func preheatVisibleThumbnails() async {
         guard !viewModel.isLoading, !displayedComicFiles.isEmpty else {
             return
         }
 
         let maxDimension: CGFloat = displayMode == .grid ? 208 : 76
         let maxPixelSize = Int(maxDimension * max(displayScale, 1))
-        let limit = displayMode == .grid ? 18 : 12
+        let primaryLimit = displayMode == .grid ? 18 : 12
+        let secondaryLimit = displayMode == .grid ? 24 : 12
 
-        Task<Void, Never> {
-            await RemoteComicThumbnailPipeline.shared.preheat(
+        await RemoteComicThumbnailPipeline.shared.preheat(
             for: viewModel.profile,
             items: displayedComicFiles,
             browsingService: dependencies.remoteServerBrowsingService,
             maxPixelSize: maxPixelSize,
-            limit: limit,
+            limit: primaryLimit,
             concurrency: displayMode == .grid ? 4 : 3
-            )
+        )
+
+        guard !Task.isCancelled,
+              displayedComicFiles.count > primaryLimit
+        else {
+            return
         }
+
+        await RemoteComicThumbnailPipeline.shared.preheat(
+            for: viewModel.profile,
+            items: displayedComicFiles,
+            browsingService: dependencies.remoteServerBrowsingService,
+            maxPixelSize: maxPixelSize,
+            limit: secondaryLimit,
+            skipCount: primaryLimit,
+            concurrency: 2
+        )
     }
 
     private var trimmedSearchText: String {
