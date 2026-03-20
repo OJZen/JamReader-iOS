@@ -368,6 +368,25 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    func clearCachedComic(for reference: RemoteComicFileReference) throws {
+        let fileURL = cachedFileURL(for: reference)
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return
+        }
+
+        do {
+            try fileManager.removeItem(at: fileURL)
+            try removeEmptyParentDirectories(
+                from: fileURL.deletingLastPathComponent(),
+                stoppingAt: cacheRootURL(for: nil)
+            )
+        } catch {
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "The downloaded copy could not be removed from this device. \(error.localizedDescription)"
+            )
+        }
+    }
+
     func cachedAvailability(for reference: RemoteComicFileReference) -> RemoteComicCachedAvailability {
         let destinationURL = cachedFileURL(for: reference)
         guard fileManager.fileExists(atPath: destinationURL.path) else {
@@ -713,6 +732,24 @@ final class RemoteServerBrowsingService {
                     "The downloaded remote comic cache could not be trimmed automatically. \(error.localizedDescription)"
                 )
             }
+        }
+    }
+
+    private func removeEmptyParentDirectories(from startURL: URL, stoppingAt rootURL: URL) throws {
+        var currentURL = startURL.standardizedFileURL
+        let normalizedRootURL = rootURL.standardizedFileURL
+
+        while currentURL.path.hasPrefix(normalizedRootURL.path), currentURL != normalizedRootURL {
+            let contents = try fileManager.contentsOfDirectory(
+                at: currentURL,
+                includingPropertiesForKeys: nil
+            )
+            guard contents.isEmpty else {
+                break
+            }
+
+            try fileManager.removeItem(at: currentURL)
+            currentURL.deleteLastPathComponent()
         }
     }
 

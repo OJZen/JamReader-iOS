@@ -728,12 +728,14 @@ struct RemoteServerBrowserView: View {
                     HStack(spacing: 10) {
                         upOneLevelButton
                         sessionRootButton
+                        saveVisibleComicsButton
                         importCurrentFolderButton
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
                         upOneLevelButton
                         sessionRootButton
+                        saveVisibleComicsButton
                         importCurrentFolderButton
                     }
                 }
@@ -797,6 +799,8 @@ struct RemoteServerBrowserView: View {
                                 cacheAvailability: .unavailable,
                                 onOpen: { openPrimaryAction(for: item) },
                                 onOpenOffline: nil,
+                                onSaveOffline: nil,
+                                onRemoveOffline: nil,
                                 onImport: { importRequest = .directory(item) }
                             )
                             .padding(.trailing, 4)
@@ -830,6 +834,17 @@ struct RemoteServerBrowserView: View {
                                 onOpen: { openPrimaryAction(for: item) },
                                 onOpenOffline: availability.hasLocalCopy ? {
                                     openOfflineCopy(for: item)
+                                } : nil,
+                                onSaveOffline: {
+                                    Task<Void, Never> {
+                                        await viewModel.saveComicForOffline(
+                                            item,
+                                            forceRefresh: availability.kind != .unavailable
+                                        )
+                                    }
+                                },
+                                onRemoveOffline: availability.hasLocalCopy ? {
+                                    viewModel.removeOfflineCopy(for: item)
                                 } : nil,
                                 onImport: { importRequest = .comic(item) }
                             )
@@ -934,6 +949,17 @@ struct RemoteServerBrowserView: View {
                             onOpenOffline: item.canOpenAsComic && availability.hasLocalCopy ? {
                                 openOfflineCopy(for: item)
                             } : nil,
+                            onSaveOffline: item.canOpenAsComic ? {
+                                Task<Void, Never> {
+                                    await viewModel.saveComicForOffline(
+                                        item,
+                                        forceRefresh: availability.kind != .unavailable
+                                    )
+                                }
+                            } : nil,
+                            onRemoveOffline: item.canOpenAsComic && availability.hasLocalCopy ? {
+                                viewModel.removeOfflineCopy(for: item)
+                            } : nil,
                             onImport: importAction.map { action in { action(item) } }
                         )
                         .padding(10)
@@ -994,7 +1020,7 @@ struct RemoteServerBrowserView: View {
 
     private var retryButton: some View {
         Button {
-            Task {
+            Task<Void, Never> {
                 await viewModel.load()
             }
         } label: {
@@ -1034,7 +1060,7 @@ struct RemoteServerBrowserView: View {
     }
 
     private var showsFolderActionCluster: Bool {
-        viewModel.parentPath != nil || viewModel.canImportCurrentFolderRecursively
+        viewModel.parentPath != nil || viewModel.canImportCurrentFolderRecursively || !displayedComicFiles.isEmpty
     }
 
     @ViewBuilder
@@ -1060,6 +1086,20 @@ struct RemoteServerBrowserView: View {
                 importRequest = .currentFolder
             } label: {
                 Label("Import This Folder", systemImage: "square.and.arrow.down.on.square")
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    private var saveVisibleComicsButton: some View {
+        if !displayedComicFiles.isEmpty {
+            Button {
+                Task<Void, Never> {
+                    await viewModel.saveComicsForOffline(displayedComicFiles)
+                }
+            } label: {
+                Label("Save Visible Comics", systemImage: "arrow.down.circle")
             }
             .buttonStyle(.bordered)
         }
@@ -1115,7 +1155,7 @@ struct RemoteServerBrowserView: View {
         let maxPixelSize = Int(maxDimension * max(displayScale, 1))
         let limit = displayMode == .grid ? 18 : 12
 
-        Task {
+        Task<Void, Never> {
             await RemoteComicThumbnailPipeline.shared.preheat(
             for: viewModel.profile,
             items: displayedComicFiles,
@@ -1404,6 +1444,8 @@ private struct RemoteBrowserItemActionMenuButton: View {
     let cacheAvailability: RemoteComicCachedAvailability
     let onOpen: () -> Void
     let onOpenOffline: (() -> Void)?
+    let onSaveOffline: (() -> Void)?
+    let onRemoveOffline: (() -> Void)?
     let onImport: (() -> Void)?
 
     var body: some View {
@@ -1418,6 +1460,18 @@ private struct RemoteBrowserItemActionMenuButton: View {
                         cacheAvailability.kind == .stale ? "Open Older Downloaded Copy" : "Open Downloaded Copy",
                         systemImage: "arrow.down.circle"
                     )
+                }
+            }
+
+            if let onSaveOffline {
+                Button(action: onSaveOffline) {
+                    Label(saveOfflineTitle, systemImage: saveOfflineSystemImage)
+                }
+            }
+
+            if let onRemoveOffline {
+                Button(role: .destructive, action: onRemoveOffline) {
+                    Label("Remove Downloaded Copy", systemImage: "trash")
                 }
             }
 
@@ -1437,5 +1491,25 @@ private struct RemoteBrowserItemActionMenuButton: View {
                 .background(.ultraThinMaterial, in: Circle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var saveOfflineTitle: String {
+        switch cacheAvailability.kind {
+        case .unavailable:
+            return "Save for Offline"
+        case .current:
+            return "Refresh Downloaded Copy"
+        case .stale:
+            return "Update Downloaded Copy"
+        }
+    }
+
+    private var saveOfflineSystemImage: String {
+        switch cacheAvailability.kind {
+        case .unavailable:
+            return "arrow.down.circle"
+        case .current, .stale:
+            return "arrow.clockwise.circle"
+        }
     }
 }

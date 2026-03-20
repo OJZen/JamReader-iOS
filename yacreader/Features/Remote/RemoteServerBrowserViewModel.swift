@@ -447,6 +447,158 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
     }
 
+    func saveComicForOffline(
+        _ item: RemoteDirectoryItem,
+        forceRefresh: Bool = false
+    ) async {
+        feedback = nil
+
+        guard item.canOpenAsComic else {
+            alert = RemoteAlertState(
+                title: "Offline Save Unavailable",
+                message: "Only supported remote comic files can be saved for offline reading."
+            )
+            return
+        }
+
+        guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+            alert = RemoteAlertState(
+                title: "Offline Save Unavailable",
+                message: "This remote comic could not be prepared for offline reading."
+            )
+            return
+        }
+
+        activeImportDescription = forceRefresh
+            ? "Refreshing downloaded copy…"
+            : "Saving \(item.name)…"
+        defer {
+            activeImportDescription = nil
+        }
+
+        do {
+            let result = try await browsingService.downloadComicFile(
+                for: profile,
+                reference: reference,
+                forceRefresh: forceRefresh
+            )
+            refreshProgressState()
+            feedback = RemoteBrowserFeedbackState(
+                title: forceRefresh ? "Downloaded Copy Updated" : "Saved for Offline",
+                message: offlineSaveMessage(for: item, result: result, forceRefresh: forceRefresh),
+                kind: .success,
+                autoDismissAfter: 3.2
+            )
+        } catch {
+            alert = RemoteAlertState(
+                title: "Failed to Save Offline Copy",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func saveComicsForOffline(_ items: [RemoteDirectoryItem]) async {
+        feedback = nil
+
+        let comics = items.filter(\.canOpenAsComic)
+        guard !comics.isEmpty else {
+            alert = RemoteAlertState(
+                title: "Nothing to Save",
+                message: "There are no supported remote comic files in the current results yet."
+            )
+            return
+        }
+
+        var savedCount = 0
+        var refreshedCount = 0
+        var failedNames: [String] = []
+
+        for (index, item) in comics.enumerated() {
+            activeImportDescription = "Saving visible comics… \(index + 1) of \(comics.count)"
+
+            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+                failedNames.append(item.name)
+                continue
+            }
+
+            do {
+                let result = try await browsingService.downloadComicFile(
+                    for: profile,
+                    reference: reference
+                )
+                switch result.source {
+                case .downloaded:
+                    savedCount += 1
+                case .cachedCurrent, .cachedFallback:
+                    refreshedCount += 1
+                }
+            } catch {
+                failedNames.append(item.name)
+            }
+        }
+
+        activeImportDescription = nil
+        refreshProgressState()
+
+        guard savedCount > 0 || refreshedCount > 0 else {
+            alert = RemoteAlertState(
+                title: "Offline Save Failed",
+                message: "No visible comics could be saved for offline reading."
+            )
+            return
+        }
+
+        var segments: [String] = []
+        if savedCount > 0 {
+            segments.append("Saved \(savedCount) comic(s) to this device.")
+        }
+        if refreshedCount > 0 {
+            let copyPhrase = refreshedCount == 1 ? "downloaded copy" : "downloaded copies"
+            segments.append("Kept \(refreshedCount) existing \(copyPhrase) ready offline.")
+        }
+        if !failedNames.isEmpty {
+            segments.append("Failed to save \(failedNames.count) item(s).")
+        }
+
+        feedback = RemoteBrowserFeedbackState(
+            title: "Offline Copies Ready",
+            message: segments.joined(separator: " "),
+            kind: .success
+        )
+    }
+
+    func removeOfflineCopy(for item: RemoteDirectoryItem) {
+        feedback = nil
+
+        guard item.canOpenAsComic else {
+            return
+        }
+
+        guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+            alert = RemoteAlertState(
+                title: "Remove Offline Copy Failed",
+                message: "This remote comic could not be matched to a downloaded copy."
+            )
+            return
+        }
+
+        do {
+            try browsingService.clearCachedComic(for: reference)
+            refreshProgressState()
+            feedback = RemoteBrowserFeedbackState(
+                title: "Downloaded Copy Removed",
+                message: "\(item.name) was removed from this device.",
+                kind: .info,
+                autoDismissAfter: 2.6
+            )
+        } catch {
+            alert = RemoteAlertState(
+                title: "Remove Offline Copy Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
     static func lastBrowsedPath(for profile: RemoteServerProfile) -> String {
         initialPath(for: profile, explicitPath: nil)
     }
@@ -725,5 +877,22 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         return segments.joined(separator: " ")
+    }
+
+    private func offlineSaveMessage(
+        for item: RemoteDirectoryItem,
+        result: RemoteComicDownloadResult,
+        forceRefresh: Bool
+    ) -> String {
+        switch result.source {
+        case .downloaded:
+            return forceRefresh
+                ? "Downloaded the latest copy of \(item.name) to this device."
+                : "Saved \(item.name) to this device for offline reading."
+        case .cachedCurrent:
+            return "\(item.name) is already saved on this device and ready offline."
+        case .cachedFallback:
+            return "A downloaded copy of \(item.name) is already available on this device."
+        }
     }
 }
