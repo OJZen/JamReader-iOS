@@ -90,7 +90,7 @@ struct RemoteCacheSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Saved SMB servers and reading progress stay intact. Only downloaded remote copies on this device are removed.")
+            Text("Saved SMB servers stay intact. Downloaded remote copies, SMB browsing history, and remembered SMB folder positions are removed.")
         }
         .confirmationDialog(
             "Clear cached remote thumbnails?",
@@ -124,6 +124,11 @@ struct RemoteCacheSettingsView: View {
     private func clearRemoteDownloads() {
         do {
             try dependencies.remoteServerBrowsingService.clearCachedComics()
+            try dependencies.remoteReadingProgressStore.clearAllSessions()
+            let profiles = (try? dependencies.remoteServerProfileStore.load()) ?? []
+            for profile in profiles {
+                RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
+            }
             refresh()
         } catch {
             alert = SettingsAlertState(

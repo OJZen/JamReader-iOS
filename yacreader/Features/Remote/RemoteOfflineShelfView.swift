@@ -115,11 +115,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private let remoteServerBrowsingService: RemoteServerBrowsingService
+    private let remoteReadingProgressStore: RemoteReadingProgressStore
     private var hasLoaded = false
 
     init(dependencies: AppDependencies) {
         self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
         self.remoteServerBrowsingService = dependencies.remoteServerBrowsingService
+        self.remoteReadingProgressStore = dependencies.remoteReadingProgressStore
     }
 
     var summaryTitle: String {
@@ -210,11 +212,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
         do {
             try remoteServerBrowsingService.clearCachedComics(for: profile)
+            try remoteReadingProgressStore.deleteSessions(for: profile.id)
+            RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             try rebuildEntries()
             let copyWord = removedCount == 1 ? "copy" : "copies"
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copies Removed",
-                message: "Removed \(removedCount) downloaded \(copyWord) from \(profile.name).",
+                message: "Removed \(removedCount) downloaded \(copyWord) from \(profile.name) and cleared its browsing history.",
                 kind: .info,
                 autoDismissAfter: 3.0
             )

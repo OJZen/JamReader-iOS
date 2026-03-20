@@ -330,7 +330,10 @@ final class RemoteServerListViewModel: ObservableObject {
     func clearCache(for profile: RemoteServerProfile) {
         do {
             try browsingService.clearCachedComics(for: profile)
+            try readingProgressStore.deleteSessions(for: profile.id)
+            RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             refreshCacheSummaries()
+            refreshRecentActivity()
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Clear Cache",
