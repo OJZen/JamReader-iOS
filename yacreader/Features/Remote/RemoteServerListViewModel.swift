@@ -358,6 +358,14 @@ final class RemoteServerListViewModel: ObservableObject {
         latestSessionsByServerID[profile.id]
     }
 
+    func recentSessions(for profile: RemoteServerProfile) -> [RemoteComicReadingSession] {
+        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.serverID == profile.id }
+    }
+
+    func profile(withID profileID: UUID) -> RemoteServerProfile? {
+        profiles.first { $0.id == profileID }
+    }
+
     private func refreshShortcutCount() {
         let activeServerIDs = Set(profiles.map(\.id))
         let allShortcuts = (try? folderShortcutStore.load()) ?? []

@@ -185,7 +185,7 @@ struct RemoteServerListView: View {
     }
 }
 
-private struct RemoteServerRow: View {
+struct RemoteServerRow: View {
     let profile: RemoteServerProfile
     let latestSession: RemoteComicReadingSession?
     let savedFolderCount: Int
@@ -277,7 +277,7 @@ private struct RemoteServerManageButton: View {
     }
 }
 
-private struct RemoteServerActionsSheet: View {
+struct RemoteServerActionsSheet: View {
     let profile: RemoteServerProfile
     let savedFolderCount: Int
     let offlineCopyCount: Int
@@ -370,7 +370,7 @@ private struct RemoteServerActionsSheet: View {
     }
 }
 
-private struct RemoteServerStatusBadgeRow: View {
+struct RemoteServerStatusBadgeRow: View {
     let profile: RemoteServerProfile
     var showsPortBadge = true
 
@@ -399,7 +399,7 @@ private struct RemoteServerStatusBadgeRow: View {
     }
 }
 
-private struct RemoteServerMetadataRow: View {
+struct RemoteServerMetadataRow: View {
     let title: String
     let value: String
     var lineLimit = 1
@@ -418,7 +418,7 @@ private struct RemoteServerMetadataRow: View {
     }
 }
 
-private extension RemoteServerProfile {
+extension RemoteServerProfile {
     var shareDisplaySummary: String {
         let shareComponent = normalizedShareName.isEmpty ? "" : "/\(normalizedShareName)"
         let combinedPath = "\(shareComponent)\(normalizedBaseDirectoryPath)"
@@ -448,7 +448,7 @@ private enum RemoteServerListNavigationRequest: Identifiable, Hashable {
     }
 }
 
-private struct RemoteServerEditorSheet: View {
+struct RemoteServerEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let onSave: (RemoteServerEditorDraft) -> Result<Void, RemoteAlertState>
@@ -1656,7 +1656,7 @@ struct RemoteServerBrowserView: View {
     }
 }
 
-private func makeRemoteAlert(
+func makeRemoteAlert(
     for alert: RemoteAlertState,
     onPrimaryAction: @escaping (RemoteAlertPrimaryAction) -> Void = { _ in }
 ) -> Alert {
