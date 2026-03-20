@@ -153,19 +153,6 @@ final class BrowseHomeViewModel: ObservableObject {
         profiles.first { $0.id == serverID }
     }
 
-    func removeDownloadedCopy(for session: RemoteComicReadingSession) {
-        do {
-            try remoteServerBrowsingService.clearCachedComic(for: session.comicFileReference)
-            cacheSummary = remoteServerBrowsingService.cacheSummary()
-            alert = nil
-        } catch {
-            alert = BrowseHomeAlert(
-                title: "Remove Downloaded Copy Failed",
-                message: error.localizedDescription
-            )
-        }
-    }
-
     private func resolvedShortcutEntries(
         for shortcuts: [RemoteFolderShortcut],
         profiles: [RemoteServerProfile]
