@@ -1127,7 +1127,8 @@ struct RemoteServerBrowserView: View {
         }
 
         hasConfiguredDisplayMode = true
-        displayMode = Self.loadStoredDisplayMode(
+        displayMode = dependencies.remoteBrowserPreferencesStore.loadDisplayMode(
+            for: viewModel.profile.id,
             defaultMode: horizontalSizeClass == .regular ? .grid : .list
         )
     }
@@ -1138,7 +1139,9 @@ struct RemoteServerBrowserView: View {
         }
 
         hasConfiguredSortMode = true
-        sortMode = Self.loadStoredSortMode()
+        sortMode = dependencies.remoteBrowserPreferencesStore.loadSortMode(
+            for: viewModel.profile.id
+        )
     }
 
     private var thumbnailPreheatRequestID: String {
@@ -1288,41 +1291,18 @@ struct RemoteServerBrowserView: View {
 
     private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
         displayMode = mode
-        Self.persistDisplayMode(mode)
+        dependencies.remoteBrowserPreferencesStore.saveDisplayMode(
+            mode,
+            for: viewModel.profile.id
+        )
     }
 
     private func applySortMode(_ mode: RemoteDirectorySortMode) {
         sortMode = mode
-        Self.persistSortMode(mode)
-    }
-
-    private static func loadStoredDisplayMode(defaultMode: LibraryComicDisplayMode) -> LibraryComicDisplayMode {
-        let userDefaults = UserDefaults.standard
-        let storageKey = "remoteServerBrowser.displayMode"
-        if let rawValue = userDefaults.string(forKey: storageKey),
-           let mode = LibraryComicDisplayMode(rawValue: rawValue) {
-            return mode
-        }
-
-        return defaultMode
-    }
-
-    private static func persistDisplayMode(_ mode: LibraryComicDisplayMode) {
-        UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.displayMode")
-    }
-
-    private static func loadStoredSortMode() -> RemoteDirectorySortMode {
-        let storageKey = "remoteServerBrowser.sortMode"
-        if let rawValue = UserDefaults.standard.string(forKey: storageKey),
-           let mode = RemoteDirectorySortMode(rawValue: rawValue) {
-            return mode
-        }
-
-        return .nameAscending
-    }
-
-    private static func persistSortMode(_ mode: RemoteDirectorySortMode) {
-        UserDefaults.standard.set(mode.rawValue, forKey: "remoteServerBrowser.sortMode")
+        dependencies.remoteBrowserPreferencesStore.saveSortMode(
+            mode,
+            for: viewModel.profile.id
+        )
     }
 
     private func handleRemoteAlertPrimaryAction(_ action: RemoteAlertPrimaryAction) {

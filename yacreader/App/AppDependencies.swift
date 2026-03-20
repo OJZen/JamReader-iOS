@@ -18,6 +18,7 @@ struct AppDependencies {
     let comicInfoImportService: ComicInfoImportService
     let remoteServerBrowsingService: RemoteServerBrowsingService
     let remoteReadingProgressStore: RemoteReadingProgressStore
+    let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
 
     static func makeDefault() -> AppDependencies {
@@ -58,6 +59,7 @@ struct AppDependencies {
                 credentialStore: remoteServerCredentialStore
             ),
             remoteReadingProgressStore: remoteReadingProgressStore,
+            remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore(),
             readerLayoutPreferencesStore: ReaderLayoutPreferencesStore()
         )
     }
