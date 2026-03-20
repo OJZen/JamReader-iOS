@@ -777,7 +777,6 @@ struct RemoteServerBrowserView: View {
                             RemoteBrowserItemActionMenuButton(
                                 item: item,
                                 cacheAvailability: .unavailable,
-                                onOpen: { openPrimaryAction(for: item) },
                                 onOpenOffline: nil,
                                 onSaveOffline: nil,
                                 onRemoveOffline: nil,
@@ -811,7 +810,6 @@ struct RemoteServerBrowserView: View {
                             RemoteBrowserItemActionMenuButton(
                                 item: item,
                                 cacheAvailability: availability,
-                                onOpen: { openPrimaryAction(for: item) },
                                 onOpenOffline: availability.hasLocalCopy ? {
                                     openOfflineCopy(for: item)
                                 } : nil,
@@ -925,7 +923,6 @@ struct RemoteServerBrowserView: View {
                         RemoteBrowserItemActionMenuButton(
                             item: item,
                             cacheAvailability: availability,
-                            onOpen: { openPrimaryAction(for: item) },
                             onOpenOffline: item.canOpenAsComic && availability.hasLocalCopy ? {
                                 openOfflineCopy(for: item)
                             } : nil,
@@ -1474,7 +1471,6 @@ private enum RemoteBrowserNavigationRequest: Identifiable, Hashable {
 private struct RemoteBrowserItemActionMenuButton: View {
     let item: RemoteDirectoryItem
     let cacheAvailability: RemoteComicCachedAvailability
-    let onOpen: () -> Void
     let onOpenOffline: (() -> Void)?
     let onSaveOffline: (() -> Void)?
     let onRemoveOffline: (() -> Void)?
@@ -1482,10 +1478,6 @@ private struct RemoteBrowserItemActionMenuButton: View {
 
     var body: some View {
         Menu {
-            Button(action: onOpen) {
-                Label(item.isDirectory ? "Open Folder" : "Open Comic", systemImage: item.isDirectory ? "folder.open" : "book.closed")
-            }
-
             if let onOpenOffline {
                 Button(action: onOpenOffline) {
                     Label(
