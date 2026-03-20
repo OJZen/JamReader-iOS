@@ -56,6 +56,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     @Published private(set) var loadIssue: RemoteBrowserLoadIssue?
     @Published private(set) var activeImportDescription: String?
     @Published private(set) var isCurrentFolderSaved = false
+    @Published var feedback: RemoteBrowserFeedbackState?
     @Published var alert: RemoteAlertState?
 
     let profile: RemoteServerProfile
@@ -263,9 +264,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func toggleCurrentFolderShortcut() {
         let normalizedPath = Self.normalizedShortcutPath(currentPath)
+        let wasSaved = isCurrentFolderSaved
 
         do {
-            if isCurrentFolderSaved {
+            if wasSaved {
                 try folderShortcutStore.removeShortcut(
                     serverID: profile.id,
                     path: normalizedPath
@@ -278,6 +280,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 )
             }
             refreshShortcutState()
+            feedback = RemoteBrowserFeedbackState(
+                title: wasSaved ? "Folder Removed" : "Folder Saved",
+                message: wasSaved
+                    ? "This SMB folder was removed from Saved Folders."
+                    : "This SMB folder now appears in Browse > Saved Folders.",
+                kind: .success,
+                autoDismissAfter: 2.6
+            )
         } catch {
             alert = RemoteAlertState(
                 title: isCurrentFolderSaved ? "Failed to Remove Shortcut" : "Failed to Save Shortcut",
@@ -297,6 +307,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         _ item: RemoteDirectoryItem,
         destinationSelection: LibraryImportDestinationSelection = .importedComics
     ) async {
+        feedback = nil
+
         guard item.canOpenAsComic else {
             alert = RemoteAlertState(
                 title: "Import Unavailable",
@@ -347,6 +359,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         destinationSelection: LibraryImportDestinationSelection = .importedComics,
         scope: RemoteDirectoryImportScope = .includeSubfolders
     ) async {
+        feedback = nil
+
         guard item.isDirectory else {
             alert = RemoteAlertState(
                 title: "Import Unavailable",
@@ -391,6 +405,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         destinationSelection: LibraryImportDestinationSelection = .importedComics,
         scope: RemoteDirectoryImportScope = .includeSubfolders
     ) async {
+        feedback = nil
+
         guard canImportCurrentFolderRecursively else {
             alert = RemoteAlertState(
                 title: "Nothing to Import",
@@ -437,6 +453,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     static func clearRememberedPath(for profile: RemoteServerProfile) {
         UserDefaults.standard.removeObject(forKey: lastBrowsedPathStorageKey(for: profile.id))
+    }
+
+    func dismissFeedback() {
+        feedback = nil
     }
 
     private static func initialPath(for profile: RemoteServerProfile, explicitPath: String?) -> String {
@@ -516,12 +536,27 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
+        let primaryAction: RemoteAlertPrimaryAction? = (result.createdLibrary || result.hasImportedAnyComics)
+            ? .openLibrary(result.importedDestinationID, 1)
+            : nil
+
+        if result.importedComicCount > 0 {
+            feedback = RemoteBrowserFeedbackState(
+                title: successTitle,
+                message: importFeedbackMessage(
+                    from: result,
+                    extraFailedItemNames: extraFailedItemNames
+                ),
+                kind: .success,
+                primaryAction: primaryAction
+            )
+            return
+        }
+
         alert = RemoteAlertState(
-            title: result.importedComicCount > 0 ? successTitle : "Import Finished with Warnings",
+            title: "Import Finished with Warnings",
             message: messageLines.joined(separator: "\n"),
-            primaryAction: (result.createdLibrary || result.hasImportedAnyComics)
-                ? .openLibrary(result.importedDestinationID, 1)
-                : nil
+            primaryAction: primaryAction
         )
     }
 
@@ -658,5 +693,37 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 path: path
             )
         }
+    }
+
+    private func importFeedbackMessage(
+        from result: ImportedComicsImportResult,
+        extraFailedItemNames: [String]
+    ) -> String {
+        var segments: [String] = []
+
+        if result.createdLibrary {
+            segments.append("Added \(result.importedDestinationName).")
+        }
+
+        let comicWord = result.importedComicCount == 1 ? "comic" : "comics"
+        segments.append("Imported \(result.importedComicCount) \(comicWord) into \(result.importedDestinationName).")
+
+        if let scanSummary = result.scanSummary {
+            segments.append(scanSummary.indexedSummaryLine + ".")
+        } else if result.scanErrorMessage != nil {
+            segments.append("Open the library and run Refresh to finish indexing the new files.")
+        }
+
+        if !result.unsupportedItemNames.isEmpty {
+            let itemWord = result.unsupportedItemNames.count == 1 ? "item" : "items"
+            segments.append("Skipped \(result.unsupportedItemNames.count) unsupported \(itemWord).")
+        }
+
+        let failedCount = Set(result.failedItemNames + extraFailedItemNames).count
+        if failedCount > 0 {
+            segments.append("Failed to import \(failedCount) item(s).")
+        }
+
+        return segments.joined(separator: " ")
     }
 }

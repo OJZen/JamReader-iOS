@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-enum RemoteAlertPrimaryAction {
+enum RemoteAlertPrimaryAction: Equatable {
     case openLibrary(UUID, Int64)
 
     var title: String {
@@ -9,6 +9,34 @@ enum RemoteAlertPrimaryAction {
         case .openLibrary:
             return "Open Library"
         }
+    }
+}
+
+struct RemoteBrowserFeedbackState: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case success
+        case info
+    }
+
+    let id = UUID()
+    let title: String
+    let message: String?
+    let kind: Kind
+    let primaryAction: RemoteAlertPrimaryAction?
+    let autoDismissAfter: TimeInterval?
+
+    init(
+        title: String,
+        message: String? = nil,
+        kind: Kind = .success,
+        primaryAction: RemoteAlertPrimaryAction? = nil,
+        autoDismissAfter: TimeInterval? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.kind = kind
+        self.primaryAction = primaryAction
+        self.autoDismissAfter = autoDismissAfter
     }
 }
 

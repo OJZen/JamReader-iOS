@@ -462,6 +462,7 @@ struct RemoteServerBrowserView: View {
     @State private var searchText = ""
     @State private var importRequest: RemoteBrowserImportRequest?
     @State private var navigationRequest: RemoteBrowserNavigationRequest?
+    @State private var feedbackDismissTask: Task<Void, Never>?
 
     init(
         profile: RemoteServerProfile,
@@ -501,14 +502,38 @@ struct RemoteServerBrowserView: View {
         .refreshable {
             await viewModel.load()
         }
+        .onChange(of: viewModel.feedback?.id) { _, _ in
+            scheduleFeedbackDismissalIfNeeded()
+        }
+        .onDisappear {
+            feedbackDismissTask?.cancel()
+            feedbackDismissTask = nil
+        }
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .automatic),
             prompt: "Filter this SMB folder"
         )
         .safeAreaInset(edge: .bottom) {
-            if let activeImportDescription = viewModel.activeImportDescription {
-                RemoteBrowserImportProgressView(description: activeImportDescription)
+            VStack(spacing: 10) {
+                if let activeImportDescription = viewModel.activeImportDescription {
+                    RemoteBrowserImportProgressView(description: activeImportDescription)
+                }
+
+                if let feedback = viewModel.feedback {
+                    RemoteBrowserFeedbackCard(
+                        feedback: feedback,
+                        onPrimaryAction: feedback.primaryAction.map { action in
+                            {
+                                viewModel.dismissFeedback()
+                                handleRemoteAlertPrimaryAction(action)
+                            }
+                        },
+                        onDismiss: {
+                            viewModel.dismissFeedback()
+                        }
+                    )
+                }
             }
         }
         .alert(item: $viewModel.alert) { alert in
@@ -1264,6 +1289,32 @@ struct RemoteServerBrowserView: View {
         switch action {
         case .openLibrary(let libraryID, let folderID):
             AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
+        }
+    }
+
+    private func scheduleFeedbackDismissalIfNeeded() {
+        feedbackDismissTask?.cancel()
+        feedbackDismissTask = nil
+
+        guard let feedback = viewModel.feedback,
+              let autoDismissAfter = feedback.autoDismissAfter
+        else {
+            return
+        }
+
+        feedbackDismissTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: UInt64(autoDismissAfter * 1_000_000_000))
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                if viewModel.feedback?.id == feedback.id {
+                    viewModel.dismissFeedback()
+                }
+            } catch {
+                // Ignore cancellation.
+            }
         }
     }
 }

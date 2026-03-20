@@ -327,3 +327,75 @@ struct RemoteBrowserImportProgressView: View {
         .padding(.bottom, 12)
     }
 }
+
+struct RemoteBrowserFeedbackCard: View {
+    let feedback: RemoteBrowserFeedbackState
+    let onPrimaryAction: (() -> Void)?
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: iconName)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(iconTint)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(feedback.title)
+                    .font(.subheadline.weight(.semibold))
+
+                if let message = feedback.message, !message.isEmpty {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let onPrimaryAction,
+                   let primaryAction = feedback.primaryAction {
+                    Button(primaryAction.title, action: onPrimaryAction)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .padding(.top, 2)
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .padding(6)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.06), radius: 12, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+
+    private var iconName: String {
+        switch feedback.kind {
+        case .success:
+            return "checkmark.circle.fill"
+        case .info:
+            return "info.circle.fill"
+        }
+    }
+
+    private var iconTint: Color {
+        switch feedback.kind {
+        case .success:
+            return .green
+        case .info:
+            return .blue
+        }
+    }
+}
