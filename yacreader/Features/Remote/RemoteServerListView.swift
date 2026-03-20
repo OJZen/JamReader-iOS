@@ -580,6 +580,7 @@ struct RemoteServerBrowserView: View {
     @State private var navigationRequest: RemoteBrowserNavigationRequest?
     @State private var pendingOfflineRemoval: PendingRemoteOfflineRemoval?
     @State private var feedbackDismissTask: Task<Void, Never>?
+    @State private var visibleComicIDs: Set<String> = []
 
     init(
         profile: RemoteServerProfile,
@@ -625,6 +626,7 @@ struct RemoteServerBrowserView: View {
         .onDisappear {
             feedbackDismissTask?.cancel()
             feedbackDismissTask = nil
+            visibleComicIDs.removeAll()
         }
         .searchable(
             text: $searchText,
@@ -930,6 +932,12 @@ struct RemoteServerBrowserView: View {
                                 trailingAccessoryReservedWidth: 46
                             )
                         }
+                        .onAppear {
+                            markComicVisible(item)
+                        }
+                        .onDisappear {
+                            markComicInvisible(item)
+                        }
                         .buttonStyle(.plain)
                         .overlay(alignment: .trailing) {
                             browserItemActionMenuButton(for: item)
@@ -1042,6 +1050,12 @@ struct RemoteServerBrowserView: View {
                                 profile: viewModel.profile,
                                 browsingService: dependencies.remoteServerBrowsingService
                             )
+                        }
+                        .onAppear {
+                            markComicVisible(item)
+                        }
+                        .onDisappear {
+                            markComicInvisible(item)
                         }
                         .buttonStyle(.plain)
 
@@ -1263,9 +1277,8 @@ struct RemoteServerBrowserView: View {
     }
 
     private var thumbnailPreheatRequestID: String {
-        let trackedLimit = displayMode == .grid ? 42 : 24
-        let candidateIDs = displayedComicFiles.prefix(trackedLimit).map(\.id).joined(separator: "|")
-        return "\(viewModel.profile.id.uuidString)#\(displayMode.rawValue)#\(sortMode.rawValue)#\(trimmedSearchText)#\(Int(displayScale * 100))#\(candidateIDs)"
+        let plan = thumbnailPreheatPlan
+        return "\(viewModel.profile.id.uuidString)#\(displayMode.rawValue)#\(sortMode.rawValue)#\(trimmedSearchText)#\(Int(displayScale * 100))#\(plan.requestSignature)"
     }
 
     private func preheatVisibleThumbnails() async {
@@ -1275,21 +1288,90 @@ struct RemoteServerBrowserView: View {
 
         let maxDimension: CGFloat = displayMode == .grid ? 208 : 76
         let maxPixelSize = Int(maxDimension * max(displayScale, 1))
-        let primaryLimit = displayMode == .grid ? 18 : 12
-        let secondaryLimit = displayMode == .grid ? 24 : 12
+        let plan = thumbnailPreheatPlan
 
-        await RemoteComicThumbnailPipeline.shared.preheat(
-            for: viewModel.profile,
-            items: displayedComicFiles,
-            browsingService: dependencies.remoteServerBrowsingService,
+        await preheatThumbnails(
+            in: plan.primaryRange,
             maxPixelSize: maxPixelSize,
-            limit: primaryLimit,
             concurrency: displayMode == .grid ? 4 : 3
         )
 
-        guard !Task.isCancelled,
-              displayedComicFiles.count > primaryLimit
-        else {
+        guard !Task.isCancelled else {
+            return
+        }
+
+        for secondaryRange in plan.secondaryRanges {
+            await preheatThumbnails(
+                in: secondaryRange,
+                maxPixelSize: maxPixelSize,
+                concurrency: 2
+            )
+
+            guard !Task.isCancelled else {
+                return
+            }
+        }
+    }
+
+    private var thumbnailPreheatPlan: ThumbnailPreheatPlan {
+        let items = displayedComicFiles
+        guard !items.isEmpty else {
+            return ThumbnailPreheatPlan(
+                primaryRange: 0..<0,
+                secondaryRanges: [],
+                requestSignature: "empty"
+            )
+        }
+
+        let visibleIndexes = items.enumerated().compactMap { index, item in
+            visibleComicIDs.contains(item.id) ? index : nil
+        }
+
+        let defaultVisibleUpperBound = min(
+            items.count - 1,
+            displayMode == .grid ? 5 : 2
+        )
+        let visibleLowerBound = visibleIndexes.min() ?? 0
+        let visibleUpperBound = visibleIndexes.max() ?? defaultVisibleUpperBound
+
+        let primaryLeadingPadding = displayMode == .grid ? 18 : 8
+        let primaryTrailingPadding = displayMode == .grid ? 6 : 2
+        let secondaryLeadingPadding = displayMode == .grid ? 42 : 18
+        let secondaryTrailingPadding = displayMode == .grid ? 12 : 4
+
+        let primaryStart = max(0, visibleLowerBound - primaryTrailingPadding)
+        let primaryEndExclusive = min(items.count, visibleUpperBound + primaryLeadingPadding + 1)
+        let primaryRange = primaryStart..<primaryEndExclusive
+
+        let secondaryStart = max(0, visibleLowerBound - secondaryTrailingPadding)
+        let secondaryEndExclusive = min(items.count, visibleUpperBound + secondaryLeadingPadding + 1)
+
+        var secondaryRanges: [Range<Int>] = []
+        if secondaryStart < primaryRange.lowerBound {
+            secondaryRanges.append(secondaryStart..<primaryRange.lowerBound)
+        }
+        if primaryRange.upperBound < secondaryEndExclusive {
+            secondaryRanges.append(primaryRange.upperBound..<secondaryEndExclusive)
+        }
+
+        let visibleSignature = visibleIndexes.map(String.init).joined(separator: ",")
+        let secondarySignature = secondaryRanges
+            .map { "\($0.lowerBound)-\($0.upperBound)" }
+            .joined(separator: "|")
+
+        return ThumbnailPreheatPlan(
+            primaryRange: primaryRange,
+            secondaryRanges: secondaryRanges,
+            requestSignature: "\(visibleSignature)#\(primaryRange.lowerBound)-\(primaryRange.upperBound)#\(secondarySignature)"
+        )
+    }
+
+    private func preheatThumbnails(
+        in range: Range<Int>,
+        maxPixelSize: Int,
+        concurrency: Int
+    ) async {
+        guard !range.isEmpty else {
             return
         }
 
@@ -1298,10 +1380,26 @@ struct RemoteServerBrowserView: View {
             items: displayedComicFiles,
             browsingService: dependencies.remoteServerBrowsingService,
             maxPixelSize: maxPixelSize,
-            limit: secondaryLimit,
-            skipCount: primaryLimit,
-            concurrency: 2
+            limit: range.count,
+            skipCount: range.lowerBound,
+            concurrency: concurrency
         )
+    }
+
+    private func markComicVisible(_ item: RemoteDirectoryItem) {
+        guard item.canOpenAsComic else {
+            return
+        }
+
+        visibleComicIDs.insert(item.id)
+    }
+
+    private func markComicInvisible(_ item: RemoteDirectoryItem) {
+        guard item.canOpenAsComic else {
+            return
+        }
+
+        visibleComicIDs.remove(item.id)
     }
 
     private var trimmedSearchText: String {
@@ -1654,6 +1752,12 @@ struct RemoteServerBrowserView: View {
             }
         }
     }
+}
+
+private struct ThumbnailPreheatPlan {
+    let primaryRange: Range<Int>
+    let secondaryRanges: [Range<Int>]
+    let requestSignature: String
 }
 
 func makeRemoteAlert(
