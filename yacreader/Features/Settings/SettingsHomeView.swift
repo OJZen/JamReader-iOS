@@ -7,13 +7,9 @@ struct SettingsHomeView: View {
     @State private var comicLayout = ReaderDisplayLayout(defaultsFor: .comic)
     @State private var mangaLayout = ReaderDisplayLayout(defaultsFor: .manga)
     @State private var webcomicLayout = ReaderDisplayLayout(defaultsFor: .webComic)
-    @State private var remoteServerCount = 0
-    @State private var remoteSessionCount = 0
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .balanced
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
-    @State private var isShowingClearRemoteDownloadsConfirmation = false
-    @State private var isShowingClearRemoteThumbnailsConfirmation = false
     @State private var alert: SettingsAlertState?
 
     var body: some View {
@@ -38,45 +34,32 @@ struct SettingsHomeView: View {
                 }
 
                 Section("Remote Browse Cache") {
-                    LabeledContent("Saved SMB Servers", value: "\(remoteServerCount)")
-                    LabeledContent("Recent Remote Sessions", value: "\(remoteSessionCount)")
+                    NavigationLink {
+                        RemoteCacheSettingsView(dependencies: dependencies)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Manage Remote Cache")
+                                    .font(.headline)
 
-                    Picker("Cache Preset", selection: $remoteCachePolicyPreset) {
-                        ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
-                            Text(preset.title)
-                                .tag(preset)
-                        }
-                    }
+                                Spacer()
 
-                    Text(remoteCachePolicyPreset.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                                Text(remoteCachePolicyPreset.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
 
-                    if remoteCacheSummary.isEmpty {
-                        Text("No downloaded remote comics are cached on this device right now.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        LabeledContent("Downloaded Copies", value: remoteCacheSummary.summaryText)
+                            Text(remoteCacheSummary.isEmpty
+                                 ? "No downloaded remote comics are cached on this device right now."
+                                 : remoteCacheSummary.summaryText)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
 
-                        Button(role: .destructive) {
-                            isShowingClearRemoteDownloadsConfirmation = true
-                        } label: {
-                            Label("Clear Remote Downloads", systemImage: "trash")
-                        }
-                    }
-
-                    if remoteThumbnailCacheSummary.isEmpty {
-                        Text("Remote comic thumbnails are generated on demand and currently do not have any saved disk cache on this device.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        LabeledContent("Thumbnail Cache", value: remoteThumbnailCacheSummary.summaryText)
-
-                        Button(role: .destructive) {
-                            isShowingClearRemoteThumbnailsConfirmation = true
-                        } label: {
-                            Label("Clear Thumbnail Cache", systemImage: "photo.stack")
+                            Text(remoteThumbnailCacheSummary.isEmpty
+                                 ? "No saved thumbnail cache yet."
+                                 : remoteThumbnailCacheSummary.summaryText)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
                         }
                     }
                 }
@@ -111,35 +94,8 @@ struct SettingsHomeView: View {
             .task {
                 refresh()
             }
-            .onChange(of: remoteCachePolicyPreset) { _, newValue in
-                applyRemoteCachePolicyPreset(newValue)
-            }
             .refreshable {
                 refresh()
-            }
-            .confirmationDialog(
-                "Clear downloaded remote comics?",
-                isPresented: $isShowingClearRemoteDownloadsConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Clear Downloads", role: .destructive) {
-                    clearRemoteDownloads()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Saved SMB servers and reading progress stay intact. Only downloaded remote copies on this device are removed.")
-            }
-            .confirmationDialog(
-                "Clear cached remote thumbnails?",
-                isPresented: $isShowingClearRemoteThumbnailsConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Clear Thumbnails", role: .destructive) {
-                    clearRemoteThumbnails()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This only removes generated remote cover thumbnails. Remote downloads and reading progress stay intact.")
             }
             .alert(item: $alert) { alert in
                 Alert(
@@ -155,47 +111,9 @@ struct SettingsHomeView: View {
         comicLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: .comic)
         mangaLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: .manga)
         webcomicLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: .webComic)
-        remoteServerCount = ((try? dependencies.remoteServerProfileStore.load()) ?? []).count
-        remoteSessionCount = ((try? dependencies.remoteReadingProgressStore.loadSessions()) ?? []).count
         remoteCacheSummary = dependencies.remoteServerBrowsingService.cacheSummary()
         remoteCachePolicyPreset = dependencies.remoteServerBrowsingService.cachePolicyPreset()
         remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
-    }
-
-    private func clearRemoteDownloads() {
-        do {
-            try dependencies.remoteServerBrowsingService.clearCachedComics()
-            refresh()
-        } catch {
-            alert = SettingsAlertState(
-                title: "Failed to Clear Downloads",
-                message: error.localizedDescription
-            )
-        }
-    }
-
-    private func clearRemoteThumbnails() {
-        do {
-            try RemoteComicThumbnailPipeline.shared.clearCache()
-            refresh()
-        } catch {
-            alert = SettingsAlertState(
-                title: "Failed to Clear Thumbnails",
-                message: error.localizedDescription
-            )
-        }
-    }
-
-    private func applyRemoteCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) {
-        do {
-            try dependencies.remoteServerBrowsingService.applyCachePolicyPreset(preset)
-            refresh()
-        } catch {
-            alert = SettingsAlertState(
-                title: "Failed to Update Cache Policy",
-                message: error.localizedDescription
-            )
-        }
     }
 }
 
@@ -257,7 +175,7 @@ private struct SettingsStatusRow: View {
     }
 }
 
-private struct SettingsAlertState: Identifiable {
+struct SettingsAlertState: Identifiable {
     let id = UUID()
     let title: String
     let message: String

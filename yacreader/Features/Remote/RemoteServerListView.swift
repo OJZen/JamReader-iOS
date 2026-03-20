@@ -7,7 +7,6 @@ struct RemoteServerListView: View {
     @State private var editorDraft: RemoteServerEditorDraft?
     @State private var actionsProfile: RemoteServerProfile?
     @State private var pendingAction: PendingRemoteServerAction?
-    @State private var isShowingClearAllCacheConfirmation = false
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -113,18 +112,6 @@ struct RemoteServerListView: View {
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
         }
-        .confirmationDialog(
-            "Clear all downloaded remote comics?",
-            isPresented: $isShowingClearAllCacheConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear All Downloads", role: .destructive) {
-                viewModel.clearAllCache()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This only removes remote copies cached on this device. Saved SMB servers and reading progress stay intact.")
-        }
         .onChange(of: actionsProfile) { _, newValue in
             guard newValue == nil, let pendingAction else {
                 return
@@ -157,6 +144,11 @@ struct RemoteServerListView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
+                Text("Global remote cache cleanup now lives in Settings > Remote Cache, so this page only keeps server-specific actions.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack(spacing: 8) {
                     StatusBadge(title: "SMB", tint: .blue)
                     StatusBadge(title: "Single Comic Files", tint: .green)
@@ -167,13 +159,6 @@ struct RemoteServerListView: View {
                     Label(viewModel.cacheSummary.summaryText, systemImage: "externaldrive.fill.badge.minus")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-
-                    Button(role: .destructive) {
-                        isShowingClearAllCacheConfirmation = true
-                    } label: {
-                        Label("Clear All Downloads", systemImage: "trash")
-                            .font(.subheadline.weight(.semibold))
-                    }
                 }
             }
             .padding(.vertical, 6)

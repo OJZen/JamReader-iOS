@@ -331,18 +331,6 @@ final class RemoteServerListViewModel: ObservableObject {
         }
     }
 
-    func clearAllCache() {
-        do {
-            try browsingService.clearCachedComics()
-            refreshCacheSummary()
-        } catch {
-            alert = RemoteAlertState(
-                title: "Failed to Clear Cache",
-                message: error.localizedDescription
-            )
-        }
-    }
-
     func refreshRecentActivity() {
         let activeServerIDs = Set(profiles.map(\.id))
         let allSessions = (try? readingProgressStore.loadSessions()) ?? []
