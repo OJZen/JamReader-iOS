@@ -88,6 +88,7 @@ final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
     @Published private(set) var latestSessionsByServerID: [UUID: RemoteComicReadingSession] = [:]
     @Published private(set) var shortcutCountByServerID: [UUID: Int] = [:]
+    @Published private(set) var cacheSummaryByServerID: [UUID: RemoteComicCacheSummary] = [:]
     @Published private(set) var shortcutCount = 0
     @Published var alert: RemoteAlertState?
 
@@ -138,9 +139,11 @@ final class RemoteServerListViewModel: ObservableObject {
             profiles = try profileStore.load()
             refreshRecentActivity()
             refreshShortcutCount()
+            refreshCacheSummaries()
         } catch {
             profiles = []
             shortcutCount = 0
+            cacheSummaryByServerID = [:]
             alert = RemoteAlertState(
                 title: "Failed to Load Remote Servers",
                 message: error.localizedDescription
@@ -276,6 +279,7 @@ final class RemoteServerListViewModel: ObservableObject {
             }
             refreshRecentActivity()
             refreshShortcutCount()
+            refreshCacheSummaries()
             return .success(())
         } catch {
             return .failure(
@@ -306,6 +310,7 @@ final class RemoteServerListViewModel: ObservableObject {
             }
             refreshRecentActivity()
             refreshShortcutCount()
+            refreshCacheSummaries()
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Remove SMB Server",
@@ -315,7 +320,7 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func cacheSummary(for profile: RemoteServerProfile) -> RemoteComicCacheSummary {
-        browsingService.cacheSummary(for: profile)
+        cacheSummaryByServerID[profile.id] ?? .empty
     }
 
     func shortcutCount(for profile: RemoteServerProfile) -> Int {
@@ -325,6 +330,7 @@ final class RemoteServerListViewModel: ObservableObject {
     func clearCache(for profile: RemoteServerProfile) {
         do {
             try browsingService.clearCachedComics(for: profile)
+            refreshCacheSummaries()
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Clear Cache",
@@ -361,5 +367,11 @@ final class RemoteServerListViewModel: ObservableObject {
             grouping: scopedShortcuts,
             by: \.serverID
         ).mapValues(\.count)
+    }
+
+    private func refreshCacheSummaries() {
+        cacheSummaryByServerID = profiles.reduce(into: [:]) { result, profile in
+            result[profile.id] = browsingService.cacheSummary(for: profile)
+        }
     }
 }

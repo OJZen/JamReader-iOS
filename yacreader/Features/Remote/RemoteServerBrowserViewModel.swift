@@ -220,26 +220,34 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     func refreshProgressState() {
-        progressByItemID = items.reduce(into: [:]) { result, item in
-            guard item.canOpenAsComic,
-                  let reference = try? browsingService.makeComicFileReference(from: item),
-                  let progress = try? readingProgressStore.loadProgress(for: reference)
-            else {
-                return
+        let sessionsByPath = ((try? readingProgressStore.loadSessions()) ?? [])
+            .reduce(into: [String: RemoteComicReadingSession]()) { result, session in
+                guard session.serverID == profile.id,
+                      result[session.path] == nil else {
+                    return
+                }
+
+                result[session.path] = session
             }
 
-            result[item.id] = progress
-        }
+        var nextProgressByItemID: [String: RemoteComicReadingSession] = [:]
+        var nextCacheAvailabilityByItemID: [String: RemoteComicCachedAvailability] = [:]
 
-        cacheAvailabilityByItemID = items.reduce(into: [:]) { result, item in
+        for item in items {
             guard item.canOpenAsComic,
-                  let reference = try? browsingService.makeComicFileReference(from: item)
-            else {
-                return
+                  let reference = try? browsingService.makeComicFileReference(from: item) else {
+                continue
             }
 
-            result[item.id] = browsingService.cachedAvailability(for: reference)
+            if let session = sessionsByPath[reference.path] {
+                nextProgressByItemID[item.id] = session
+            }
+
+            nextCacheAvailabilityByItemID[item.id] = browsingService.cachedAvailability(for: reference)
         }
+
+        progressByItemID = nextProgressByItemID
+        cacheAvailabilityByItemID = nextCacheAvailabilityByItemID
     }
 
     func progress(for item: RemoteDirectoryItem) -> RemoteComicReadingSession? {

@@ -127,6 +127,8 @@ final class RemoteServerBrowsingService {
     private let cachePolicyStore: RemoteCachePolicyStore
     private let fileManager: FileManager
     private let remoteComicCacheRootURL: URL
+    private let cacheSummaryLock = NSLock()
+    private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
 
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
@@ -303,6 +305,7 @@ final class RemoteServerBrowsingService {
             try fileManager.moveItem(at: temporaryDownloadURL, to: destinationURL)
             touchCachedFile(at: destinationURL)
             try? trimCacheIfNeeded()
+            invalidateCachedSummaries()
             return RemoteComicDownloadResult(localFileURL: destinationURL, source: .downloaded)
         } catch {
             try? fileManager.removeItem(at: temporaryDownloadURL)
@@ -324,7 +327,17 @@ final class RemoteServerBrowsingService {
 
     func cacheSummary(for profile: RemoteServerProfile? = nil) -> RemoteComicCacheSummary {
         let cacheURL = cacheRootURL(for: profile)
+        let cacheRootPath = cacheURL.standardizedFileURL.path
+
+        cacheSummaryLock.lock()
+        if let cachedSummary = cacheSummariesByRootPath[cacheRootPath] {
+            cacheSummaryLock.unlock()
+            return cachedSummary
+        }
+        cacheSummaryLock.unlock()
+
         guard fileManager.fileExists(atPath: cacheURL.path) else {
+            storeCachedSummary(.empty, forRootPath: cacheRootPath)
             return .empty
         }
 
@@ -349,7 +362,9 @@ final class RemoteServerBrowsingService {
             totalBytes += Int64(resourceValues?.fileSize ?? 0)
         }
 
-        return RemoteComicCacheSummary(fileCount: fileCount, totalBytes: totalBytes)
+        let summary = RemoteComicCacheSummary(fileCount: fileCount, totalBytes: totalBytes)
+        storeCachedSummary(summary, forRootPath: cacheRootPath)
+        return summary
     }
 
     func cachePolicyPreset() -> RemoteComicCachePolicyPreset {
@@ -363,6 +378,7 @@ final class RemoteServerBrowsingService {
     func applyCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) throws {
         cachePolicyStore.savePreset(preset)
         try trimCacheIfNeeded()
+        invalidateCachedSummaries()
     }
 
     func clearCachedComics(for profile: RemoteServerProfile? = nil) throws {
@@ -373,6 +389,7 @@ final class RemoteServerBrowsingService {
 
         do {
             try fileManager.removeItem(at: cacheURL)
+            invalidateCachedSummaries()
         } catch {
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                 "The downloaded remote comic cache could not be cleared. \(error.localizedDescription)"
@@ -392,6 +409,7 @@ final class RemoteServerBrowsingService {
                 from: fileURL.deletingLastPathComponent(),
                 stoppingAt: cacheRootURL(for: nil)
             )
+            invalidateCachedSummaries()
         } catch {
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                 "The downloaded copy could not be removed from this device. \(error.localizedDescription)"
@@ -676,6 +694,18 @@ final class RemoteServerBrowsingService {
             [.modificationDate: Date()],
             ofItemAtPath: fileURL.path
         )
+    }
+
+    private func storeCachedSummary(_ summary: RemoteComicCacheSummary, forRootPath rootPath: String) {
+        cacheSummaryLock.lock()
+        cacheSummariesByRootPath[rootPath] = summary
+        cacheSummaryLock.unlock()
+    }
+
+    private func invalidateCachedSummaries() {
+        cacheSummaryLock.lock()
+        cacheSummariesByRootPath.removeAll()
+        cacheSummaryLock.unlock()
     }
 
     private func trimCacheIfNeeded() throws {

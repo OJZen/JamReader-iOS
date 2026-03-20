@@ -5,6 +5,7 @@ final class RemoteReadingProgressStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let maximumStoredSessions: Int
+    private var cachedSessions: [RemoteComicReadingSession]?
 
     init(
         fileManager: FileManager = .default,
@@ -24,16 +25,23 @@ final class RemoteReadingProgressStore {
     }
 
     func loadSessions() throws -> [RemoteComicReadingSession] {
+        if let cachedSessions {
+            return cachedSessions
+        }
+
         let storageURL = try storageFileURL()
         guard fileManager.fileExists(atPath: storageURL.path) else {
+            cachedSessions = []
             return []
         }
 
         let data = try Data(contentsOf: storageURL)
         let sessions = try decoder.decode([RemoteComicReadingSession].self, from: data)
-        return sessions.sorted { lhs, rhs in
+        let sortedSessions = sessions.sorted { lhs, rhs in
             lhs.lastTimeOpened > rhs.lastTimeOpened
         }
+        cachedSessions = sortedSessions
+        return sortedSessions
     }
 
     func loadProgress(
@@ -104,6 +112,7 @@ final class RemoteReadingProgressStore {
         let storageURL = try storageFileURL()
         let data = try encoder.encode(sessions)
         try data.write(to: storageURL, options: .atomic)
+        cachedSessions = sessions
     }
 
     private func storageFileURL() throws -> URL {
