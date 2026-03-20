@@ -362,6 +362,18 @@ final class RemoteServerListViewModel: ObservableObject {
         ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.serverID == profile.id }
     }
 
+    func deleteRecentSession(_ session: RemoteComicReadingSession) {
+        do {
+            try readingProgressStore.deleteSession(session)
+            refreshRecentActivity()
+        } catch {
+            alert = RemoteAlertState(
+                title: "Failed to Delete History",
+                message: error.localizedDescription
+            )
+        }
+    }
+
     func profile(withID profileID: UUID) -> RemoteServerProfile? {
         profiles.first { $0.id == profileID }
     }

@@ -108,6 +108,13 @@ final class RemoteReadingProgressStore {
         try saveSessions(filteredSessions)
     }
 
+    func deleteSession(_ session: RemoteComicReadingSession) throws {
+        let filteredSessions = try loadSessions().filter { candidate in
+            candidate.serverID != session.serverID || candidate.path != session.path
+        }
+        try saveSessions(filteredSessions)
+    }
+
     private func saveSessions(_ sessions: [RemoteComicReadingSession]) throws {
         let storageURL = try storageFileURL()
         let data = try encoder.encode(sessions)

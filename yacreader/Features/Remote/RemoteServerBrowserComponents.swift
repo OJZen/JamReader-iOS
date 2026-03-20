@@ -17,20 +17,20 @@ struct RemoteDirectoryItemListRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 10) {
             leadingVisual
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(item.name)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(2)
 
                 statusBadgeCluster
 
-                overviewContent
+                overviewSummaryText
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 1)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
 
@@ -40,11 +40,13 @@ struct RemoteDirectoryItemListRow: View {
     }
 
     @ViewBuilder
-    private var overviewContent: some View {
-        RemoteDirectoryOverviewGroup(
-            items: presentation.overviewItems,
-            style: .compact
-        )
+    private var overviewSummaryText: some View {
+        if let summary = presentation.overviewSummaryText {
+            Text(summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 
     @ViewBuilder
@@ -54,13 +56,13 @@ struct RemoteDirectoryItemListRow: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                width: 54,
-                height: 76
+                width: 48,
+                height: 68
             )
         } else {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(item.isDirectory ? Color.blue.opacity(0.14) : Color.green.opacity(0.14))
-                .frame(width: 54, height: 76)
+                .frame(width: 48, height: 68)
                 .overlay {
                     Image(systemName: item.isDirectory ? "folder.fill" : "doc.richtext.fill")
                         .font(.title3)
@@ -87,11 +89,11 @@ struct RemoteDirectoryGridCard: View {
     }
 
     var body: some View {
-        InsetCard(cornerRadius: 20, contentPadding: 0, strokeOpacity: 0.06) {
+        InsetCard(cornerRadius: 18, contentPadding: 0, strokeOpacity: 0.06) {
             leadingVisual
                 .frame(maxWidth: .infinity)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(item.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -99,10 +101,10 @@ struct RemoteDirectoryGridCard: View {
 
                 statusBadgeCluster
 
-                overviewContent
+                overviewSummaryText
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 10)
         }
     }
 
@@ -112,11 +114,13 @@ struct RemoteDirectoryGridCard: View {
     }
 
     @ViewBuilder
-    private var overviewContent: some View {
-        RemoteDirectoryOverviewGroup(
-            items: presentation.overviewItems,
-            style: .card
-        )
+    private var overviewSummaryText: some View {
+        if let summary = presentation.overviewSummaryText {
+            Text(summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
     }
 
     @ViewBuilder
@@ -126,67 +130,28 @@ struct RemoteDirectoryGridCard: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                width: 148,
-                height: 208
+                width: 136,
+                height: 190
             )
-            .padding(12)
+            .padding(10)
         } else {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.blue.opacity(0.14))
-                .frame(height: 208)
+                .frame(height: 190)
                 .overlay {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 34, weight: .semibold))
                         .foregroundStyle(.blue)
             }
-                .padding(12)
+                .padding(10)
         }
     }
 
-}
-
-private enum RemoteDirectoryOverviewStyle {
-    case compact
-    case card
-}
-
-private struct RemoteDirectoryOverviewGroup: View {
-    let items: [FormOverviewItem]
-    let style: RemoteDirectoryOverviewStyle
-
-    var body: some View {
-        if !items.isEmpty {
-            switch style {
-            case .compact:
-                VStack(alignment: .leading, spacing: 4) {
-                    compactRows
-                }
-            case .card:
-                FormOverviewContent(items: items)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var compactRows: some View {
-        ForEach(items) { item in
-            LabeledContent {
-                Text(item.value)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-                    .lineLimit(1)
-            } label: {
-                Text(item.title)
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption2)
-        }
-    }
 }
 
 private struct RemoteDirectoryItemPresentation {
     let statusBadgeDescriptors: [StatusBadgeItem]
-    let overviewItems: [FormOverviewItem]
+    let overviewSummaryText: String?
 
     init(
         item: RemoteDirectoryItem,
@@ -194,7 +159,7 @@ private struct RemoteDirectoryItemPresentation {
         cacheAvailability: RemoteComicCachedAvailability
     ) {
         var statusBadgeDescriptors: [StatusBadgeItem] = []
-        var overviewItems: [FormOverviewItem] = []
+        var overviewSegments: [String] = []
 
         if item.isDirectory {
             statusBadgeDescriptors.append(
@@ -221,25 +186,19 @@ private struct RemoteDirectoryItemPresentation {
         }
 
         if let fileSize = item.fileSize, item.canOpenAsComic {
-            overviewItems.append(
-                FormOverviewItem(
-                    title: "Size",
-                    value: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
-                )
+            overviewSegments.append(
+                ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
             )
         }
 
         if let modifiedAt = item.modifiedAt {
-            overviewItems.append(
-                FormOverviewItem(
-                    title: "Updated",
-                    value: modifiedAt.formatted(date: .abbreviated, time: .omitted)
-                )
+            overviewSegments.append(
+                modifiedAt.formatted(date: .abbreviated, time: .omitted)
             )
         }
 
         self.statusBadgeDescriptors = statusBadgeDescriptors
-        self.overviewItems = overviewItems
+        self.overviewSummaryText = overviewSegments.isEmpty ? nil : overviewSegments.joined(separator: " · ")
     }
 }
 

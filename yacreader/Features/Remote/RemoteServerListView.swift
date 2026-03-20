@@ -1033,8 +1033,8 @@ struct RemoteServerBrowserView: View {
                 .font(.headline)
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 168, maximum: 220), spacing: 16)],
-                spacing: 16
+                columns: [GridItem(.adaptive(minimum: 156, maximum: 206), spacing: 12)],
+                spacing: 12
             ) {
                 ForEach(items) { item in
                     let availability = viewModel.cacheAvailability(for: item)
