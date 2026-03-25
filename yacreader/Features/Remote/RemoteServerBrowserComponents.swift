@@ -1,5 +1,58 @@
 import SwiftUI
 
+struct RemoteBrowserContextGlyph: View {
+    let isRoot: Bool
+
+    private var tint: Color {
+        isRoot ? .teal : .blue
+    }
+
+    private var systemImage: String {
+        isRoot ? "square.grid.2x2.fill" : "folder.fill"
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(tint.opacity(0.14))
+            .frame(width: 48, height: 48)
+            .overlay {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(tint)
+            }
+    }
+}
+
+struct RemoteBrowserQuickActionLabel: View {
+    let title: String
+    let systemImage: String
+    var tint: Color = .blue
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(
+                    tint.opacity(0.12),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Color(.secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+    }
+}
+
 struct RemoteDirectoryItemListRow: View {
     let item: RemoteDirectoryItem
     let readingSession: RemoteComicReadingSession?
@@ -8,45 +61,103 @@ struct RemoteDirectoryItemListRow: View {
     let browsingService: RemoteServerBrowsingService
     var trailingAccessoryReservedWidth: CGFloat = 0
 
-    private var presentation: RemoteDirectoryItemPresentation {
-        RemoteDirectoryItemPresentation(
-            item: item,
-            readingSession: readingSession,
-            cacheAvailability: cacheAvailability
-        )
-    }
-
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             leadingVisual
 
             VStack(alignment: .leading, spacing: 5) {
                 Text(item.name)
                     .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                statusBadgeCluster
-
-                overviewSummaryText
+                RemoteInlineMetadataLine(
+                    items: supportingMetadataItems,
+                    horizontalSpacing: 8,
+                    verticalSpacing: 4
+                )
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 4)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
 
-    @ViewBuilder
-    private var statusBadgeCluster: some View {
-        AdaptiveStatusBadgeGroup(badges: presentation.statusBadgeDescriptors)
-    }
+    private var supportingMetadataItems: [RemoteInlineMetadataItem] {
+        var items = [RemoteInlineMetadataItem]()
 
-    @ViewBuilder
-    private var overviewSummaryText: some View {
-        if let summary = presentation.overviewSummaryText {
-            Text(summary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+        if item.isDirectory {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "folder",
+                    text: "Folder",
+                    tint: .blue
+                )
+            )
+
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "clock",
+                    text: item.modifiedAt?.formatted(date: .abbreviated, time: .omitted) ?? "Browse folder",
+                    tint: .secondary
+                )
+            )
+            return items
         }
+
+        if let readingSession {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "book.closed",
+                    text: readingSession.progressText,
+                    tint: readingSession.readingProgressTint
+                )
+            )
+            return items
+        }
+
+        if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: cacheAvailability.kind == .current
+                        ? "arrow.down.circle.fill"
+                        : "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90",
+                    text: cacheBadgeTitle,
+                    tint: cacheAvailability.kind == .current ? .blue : .orange
+                )
+            )
+            return items
+        }
+
+        if let fileSize = item.fileSize {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "internaldrive",
+                    text: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file),
+                    tint: .secondary
+                )
+            )
+        } else {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: item.canOpenAsComic ? "book.closed" : "doc",
+                    text: item.canOpenAsComic ? "Comic file" : "Remote file",
+                    tint: .secondary
+                )
+            )
+        }
+
+        if let modifiedAt = item.modifiedAt {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "clock",
+                    text: modifiedAt.formatted(date: .abbreviated, time: .omitted),
+                    tint: .secondary
+                )
+            )
+        }
+
+        return items
     }
 
     @ViewBuilder
@@ -56,21 +167,52 @@ struct RemoteDirectoryItemListRow: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                width: 48,
-                height: 68
+                width: 54,
+                height: 76
             )
-        } else {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(item.isDirectory ? Color.blue.opacity(0.14) : Color.green.opacity(0.14))
-                .frame(width: 48, height: 68)
-                .overlay {
-                    Image(systemName: item.isDirectory ? "folder.fill" : "doc.richtext.fill")
-                        .font(.title3)
-                        .foregroundStyle(item.isDirectory ? .blue : .green)
+            .overlay(alignment: .bottomTrailing) {
+                cacheStatusDot(size: 8)
             }
+        } else {
+            RemoteDirectorySymbolTile(
+                systemImage: item.isDirectory ? "folder.fill" : "doc.richtext.fill",
+                tint: item.isDirectory ? .blue : .green,
+                width: 54,
+                height: 76
+            )
         }
     }
 
+    @ViewBuilder
+    private func cacheStatusDot(size: CGFloat) -> some View {
+        switch cacheAvailability.kind {
+        case .current:
+            Image(systemName: "circle.fill")
+                .font(.system(size: size))
+                .foregroundStyle(Color.statusCached)
+                .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 0.5)
+                .offset(x: Spacing.xxxs, y: Spacing.xxxs)
+        case .stale:
+            Image(systemName: "circle.fill")
+                .font(.system(size: size))
+                .foregroundStyle(Color.statusStale)
+                .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 0.5)
+                .offset(x: Spacing.xxxs, y: Spacing.xxxs)
+        case .unavailable:
+            EmptyView()
+        }
+    }
+
+}
+
+extension RemoteDirectoryItemListRow: Equatable {
+    static func == (lhs: RemoteDirectoryItemListRow, rhs: RemoteDirectoryItemListRow) -> Bool {
+        lhs.item == rhs.item
+            && lhs.readingSession == rhs.readingSession
+            && lhs.cacheAvailability == rhs.cacheAvailability
+            && lhs.profile.id == rhs.profile.id
+            && lhs.trailingAccessoryReservedWidth == rhs.trailingAccessoryReservedWidth
+    }
 }
 
 struct RemoteDirectoryGridCard: View {
@@ -99,9 +241,9 @@ struct RemoteDirectoryGridCard: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                statusBadgeCluster
+                supportingSummaryLine
 
-                overviewSummaryText
+                compactStatusLine
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 10)
@@ -109,18 +251,22 @@ struct RemoteDirectoryGridCard: View {
     }
 
     @ViewBuilder
-    private var statusBadgeCluster: some View {
-        AdaptiveStatusBadgeGroup(badges: presentation.statusBadgeDescriptors)
+    private var compactStatusLine: some View {
+        RemoteInlineMetadataLine(
+            items: presentation.metadataItems,
+            horizontalSpacing: 8,
+            verticalSpacing: 4
+        )
     }
 
     @ViewBuilder
-    private var overviewSummaryText: some View {
-        if let summary = presentation.overviewSummaryText {
-            Text(summary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
+    private var supportingSummaryLine: some View {
+        RemoteDirectorySupportingLine(
+            systemImage: presentation.supportingSystemImage,
+            text: presentation.supportingText,
+            tint: presentation.supportingTint,
+            lineLimit: 2
+        )
     }
 
     @ViewBuilder
@@ -133,6 +279,9 @@ struct RemoteDirectoryGridCard: View {
                 width: 136,
                 height: 190
             )
+            .overlay(alignment: .bottomTrailing) {
+                gridCacheStatusDot
+            }
             .padding(10)
         } else {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -142,44 +291,75 @@ struct RemoteDirectoryGridCard: View {
                     Image(systemName: "folder.fill")
                         .font(.system(size: 34, weight: .semibold))
                         .foregroundStyle(.blue)
-            }
+                }
                 .padding(10)
+        }
+    }
+
+    @ViewBuilder
+    private var gridCacheStatusDot: some View {
+        switch cacheAvailability.kind {
+        case .current:
+            Image(systemName: "circle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.statusCached)
+                .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 0.5)
+                .offset(x: Spacing.xxs, y: Spacing.xxs)
+        case .stale:
+            Image(systemName: "circle.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.statusStale)
+                .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 0.5)
+                .offset(x: Spacing.xxs, y: Spacing.xxs)
+        case .unavailable:
+            EmptyView()
         }
     }
 
 }
 
+extension RemoteDirectoryGridCard: Equatable {
+    static func == (lhs: RemoteDirectoryGridCard, rhs: RemoteDirectoryGridCard) -> Bool {
+        lhs.item == rhs.item
+            && lhs.readingSession == rhs.readingSession
+            && lhs.cacheAvailability == rhs.cacheAvailability
+            && lhs.profile.id == rhs.profile.id
+    }
+}
+
 private struct RemoteDirectoryItemPresentation {
-    let statusBadgeDescriptors: [StatusBadgeItem]
-    let overviewSummaryText: String?
+    let metadataItems: [RemoteInlineMetadataItem]
+    let supportingText: String
+    let supportingSystemImage: String
+    let supportingTint: Color
 
     init(
         item: RemoteDirectoryItem,
         readingSession: RemoteComicReadingSession?,
         cacheAvailability: RemoteComicCachedAvailability
     ) {
-        var statusBadgeDescriptors: [StatusBadgeItem] = []
+        var metadataItems = [RemoteInlineMetadataItem]()
         var overviewSegments: [String] = []
-
-        if item.isDirectory {
-            statusBadgeDescriptors.append(
-                StatusBadgeItem(title: "Folder", tint: .blue)
-            )
-        }
+        let supportingText: String
+        let supportingSystemImage: String
 
         if let readingSession {
-            statusBadgeDescriptors.append(
-                StatusBadgeItem(
-                    title: readingSession.progressText,
+            metadataItems.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "book.closed",
+                    text: readingSession.progressText,
                     tint: readingSession.read ? .green : .orange
                 )
             )
         }
 
         if let cacheBadgeTitle = cacheAvailability.badgeTitle {
-            statusBadgeDescriptors.append(
-                StatusBadgeItem(
-                    title: cacheBadgeTitle,
+            metadataItems.append(
+                RemoteInlineMetadataItem(
+                    systemImage: cacheAvailability.kind == .current
+                        ? "arrow.down.circle.fill"
+                        : "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90",
+                    text: cacheBadgeTitle,
                     tint: cacheAvailability.kind == .current ? .blue : .orange
                 )
             )
@@ -197,8 +377,76 @@ private struct RemoteDirectoryItemPresentation {
             )
         }
 
-        self.statusBadgeDescriptors = statusBadgeDescriptors
-        self.overviewSummaryText = overviewSegments.isEmpty ? nil : overviewSegments.joined(separator: " · ")
+        self.metadataItems = metadataItems
+        if overviewSegments.isEmpty {
+            if item.isDirectory {
+                supportingText = "Browse this folder"
+            } else if item.canOpenAsComic {
+                supportingText = "Open comic file"
+            } else {
+                supportingText = "Remote file"
+            }
+        } else {
+            supportingText = overviewSegments.joined(separator: " · ")
+        }
+        self.supportingText = supportingText
+
+        if item.isDirectory {
+            supportingSystemImage = "folder.fill"
+        } else if item.canOpenAsComic {
+            supportingSystemImage = "book.closed.fill"
+        } else {
+            supportingSystemImage = "doc.fill"
+        }
+        self.supportingSystemImage = supportingSystemImage
+        self.supportingTint = item.isDirectory ? .blue : .secondary
+    }
+}
+
+private struct RemoteDirectorySupportingLine: View {
+    let systemImage: String
+    let text: String
+    let tint: Color
+    var lineLimit = 1
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 14)
+                .padding(.top, 2)
+
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(lineLimit)
+                .multilineTextAlignment(.leading)
+
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct RemoteDirectorySymbolTile: View {
+    let systemImage: String
+    let tint: Color
+    let width: CGFloat
+    let height: CGFloat
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(tint.opacity(0.14))
+            .frame(width: width, height: height)
+            .overlay {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(tint)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(tint.opacity(0.10), lineWidth: 1)
+            }
     }
 }
 
