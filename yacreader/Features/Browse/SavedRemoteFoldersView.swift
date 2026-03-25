@@ -1,6 +1,10 @@
 import Combine
 import SwiftUI
 
+private enum SavedRemoteFoldersLayoutMetrics {
+    static let horizontalInset: CGFloat = 12
+}
+
 struct SavedRemoteFoldersView: View {
     let dependencies: AppDependencies
     let focusedProfile: RemoteServerProfile?
@@ -42,22 +46,16 @@ struct SavedRemoteFoldersView: View {
                                     shortcut: entry.shortcut,
                                     profile: entry.profile,
                                     showsNavigationIndicator: false,
-                                    showsServerName: false,
-                                    trailingAccessoryReservedWidth: 46
+                                    showsServerName: false
                                 )
                             }
                             .buttonStyle(.plain)
-                            .overlay(alignment: .topTrailing) {
-                                SavedRemoteFolderActionMenuButton(
-                                    onRename: {
-                                        renameEntry = entry
-                                    },
-                                    onRemove: {
-                                        pendingRemovalEntry = entry
-                                    }
-                                )
-                                .padding(.top, 12)
-                                .padding(.trailing, 12)
+                            .insetCardListRow(horizontalInset: SavedRemoteFoldersLayoutMetrics.horizontalInset)
+                            .contextMenu {
+                                savedFolderActionMenuContent(for: entry)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                savedFolderSwipeActions(for: entry)
                             }
                         }
                     } header: {
@@ -72,7 +70,7 @@ struct SavedRemoteFoldersView: View {
         .background(background)
         .navigationTitle("Saved Folders")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "Search saved SMB folders")
+        .searchable(text: $searchText, prompt: "Search saved remote folders")
         .task {
             await viewModel.loadIfNeeded()
         }
@@ -163,54 +161,119 @@ struct SavedRemoteFoldersView: View {
 
     private var summarySection: some View {
         Section {
-            SectionSummaryCard(
-                title: summaryTitle,
-                badges: summaryBadges,
-                titleFont: .title2.bold(),
-                strokeOpacity: 0.05
+            InsetCard(
+                cornerRadius: 24,
+                contentPadding: 16,
+                backgroundColor: Color(.systemBackground),
+                strokeOpacity: 0.04
+            ) {
+                SummaryMetricGroup(
+                    metrics: summaryMetrics,
+                    style: .compactValue,
+                    horizontalSpacing: 10,
+                    verticalSpacing: 8
+                )
+
+                RemoteInlineMetadataLine(
+                    items: summaryMetadataItems,
+                    horizontalSpacing: 8,
+                    verticalSpacing: 4
+                )
+
+                Label(summaryDescription, systemImage: "star")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            .insetCardListRow(
+                horizontalInset: SavedRemoteFoldersLayoutMetrics.horizontalInset,
+                top: 14,
+                bottom: 10
             )
-            .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
-            .listRowBackground(Color.clear)
         }
     }
 
-    private var summaryBadges: [StatusBadgeItem] {
-        var badges = [
-            StatusBadgeItem(title: "\(focusedEntryCount) shortcuts", tint: .blue)
+    private var summaryMetrics: [SummaryMetricItem] {
+        var metrics = [
+            SummaryMetricItem(
+                title: trimmedSearchText.isEmpty ? "Shortcuts" : "Visible",
+                value: "\(filteredEntries.count)",
+                tint: .blue
+            )
         ]
 
         if focusedProfile == nil, scopedProfileCount > 0 {
-            badges.append(StatusBadgeItem(title: "\(scopedProfileCount) servers", tint: .teal))
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Servers",
+                    value: "\(scopedProfileCount)",
+                    tint: .teal
+                )
+            )
         } else if let focusedProfile {
-            badges.append(
-                StatusBadgeItem(
-                    title: focusedProfile.providerKind.title,
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Provider",
+                    value: focusedProfile.providerKind.title,
                     tint: focusedProfile.providerKind.tintColor
                 )
             )
         }
 
-        if !trimmedSearchText.isEmpty {
-            badges.append(StatusBadgeItem(title: "Searching", tint: .pink))
-        }
-
-        return badges
+        return metrics
     }
 
-    private var summaryTitle: String {
-        let count = focusedEntryCount
+    private var summaryMetadataItems: [RemoteInlineMetadataItem] {
+        var items = [RemoteInlineMetadataItem]()
+
         if let focusedProfile {
-            switch count {
-            case 0:
-                return "No saved folders for \(focusedProfile.name)"
-            case 1:
-                return "1 saved folder for \(focusedProfile.name)"
-            default:
-                return "\(count) saved folders for \(focusedProfile.name)"
-            }
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "server.rack",
+                    text: focusedProfile.name,
+                    tint: .secondary
+                )
+            )
         }
 
-        return viewModel.summaryTitle
+        if !trimmedSearchText.isEmpty {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "magnifyingglass",
+                    text: "Search: \(trimmedSearchText)",
+                    tint: .pink
+                )
+            )
+        } else if focusedEntryCount > 0 {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "clock",
+                    text: focusedEntryCount == 1 ? "1 saved location" : "\(focusedEntryCount) saved locations",
+                    tint: .secondary
+                )
+            )
+        }
+
+        return items
+    }
+
+    private var summaryDescription: String {
+        if focusedEntryCount == 0 {
+            return focusedProfile == nil
+                ? "Save folders from Browse to keep frequent remote locations close."
+                : "Save folders from this server in Browse to pin them here."
+        }
+
+        if !trimmedSearchText.isEmpty {
+            return filteredEntries.count == 1
+                ? "1 shortcut matches the current search."
+                : "\(filteredEntries.count) shortcuts match the current search."
+        }
+
+        if let focusedProfile {
+            return "Pinned folders from \(focusedProfile.name) stay one tap away."
+        }
+
+        return "Pinned folders keep your most-used remote paths close across servers."
     }
 
     private var focusedEntryCount: Int {
@@ -253,18 +316,37 @@ struct SavedRemoteFoldersView: View {
     @ViewBuilder
     private func sectionHeader(for section: SavedRemoteFolderSection) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(section.profile.name)
-                .font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(section.profile.name)
+                    .font(.subheadline.weight(.semibold))
+
+                RemoteInlineMetadataLine(
+                    items: sectionHeaderMetadataItems(for: section),
+                    horizontalSpacing: 8,
+                    verticalSpacing: 4
+                )
+            }
 
             Spacer(minLength: 10)
-
-            AdaptiveStatusBadgeGroup(
-                badges: section.headerBadges,
-                horizontalSpacing: 6,
-                verticalSpacing: 6
-            )
         }
         .textCase(nil)
+    }
+
+    private func sectionHeaderMetadataItems(
+        for section: SavedRemoteFolderSection
+    ) -> [RemoteInlineMetadataItem] {
+        [
+            RemoteInlineMetadataItem(
+                systemImage: "externaldrive.connected.to.line.below",
+                text: section.profile.providerKind.title,
+                tint: section.profile.providerKind.tintColor
+            ),
+            RemoteInlineMetadataItem(
+                systemImage: "star",
+                text: section.entries.count == 1 ? "1 saved folder" : "\(section.entries.count) saved folders",
+                tint: .secondary
+            )
+        ]
     }
 
     private var trimmedSearchText: String {
@@ -274,6 +356,41 @@ struct SavedRemoteFoldersView: View {
     private var background: some View {
         Color(.systemGroupedBackground)
             .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func savedFolderActionMenuContent(
+        for entry: SavedRemoteFoldersViewModel.ShortcutEntry
+    ) -> some View {
+        Button {
+            renameEntry = entry
+        } label: {
+            Label("Rename Shortcut", systemImage: "pencil")
+        }
+
+        Button(role: .destructive) {
+            pendingRemovalEntry = entry
+        } label: {
+            Label("Remove Shortcut", systemImage: "trash")
+        }
+    }
+
+    @ViewBuilder
+    private func savedFolderSwipeActions(
+        for entry: SavedRemoteFoldersViewModel.ShortcutEntry
+    ) -> some View {
+        Button {
+            renameEntry = entry
+        } label: {
+            Label("Rename", systemImage: "pencil")
+        }
+        .tint(.blue)
+
+        Button(role: .destructive) {
+            pendingRemovalEntry = entry
+        } label: {
+            Label("Remove", systemImage: "trash")
+        }
     }
 }
 
@@ -331,7 +448,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
         guard !title.isEmpty else {
             alert = BrowseHomeAlert(
                 title: "Shortcut Name Required",
-                message: "Enter a display name for this saved SMB folder."
+                message: "Enter a display name for this saved remote folder."
             )
             return
         }
@@ -361,23 +478,6 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
                 title: "Failed to Remove Shortcut",
                 message: error.localizedDescription
             )
-        }
-    }
-}
-
-private struct SavedRemoteFolderActionMenuButton: View {
-    let onRename: () -> Void
-    let onRemove: () -> Void
-
-    var body: some View {
-        RemoteCardActionMenuButton(accessibilityLabel: "Saved Folder Actions") {
-            Button(action: onRename) {
-                Label("Rename Shortcut", systemImage: "pencil")
-            }
-
-            Button(role: .destructive, action: onRemove) {
-                Label("Remove Shortcut", systemImage: "trash")
-            }
         }
     }
 }
@@ -446,14 +546,5 @@ private struct SavedRemoteFolderSection: Identifiable {
 
     var id: UUID {
         profile.id
-    }
-
-    var headerBadges: [StatusBadgeItem] {
-        [
-            StatusBadgeItem(
-                title: entries.count == 1 ? "1 folder" : "\(entries.count) folders",
-                tint: .teal
-            )
-        ]
     }
 }

@@ -15,7 +15,7 @@ struct RemoteTARThumbnailExtractor {
     private static let paxTypeFlags: Set<UInt8> = [ascii("x"), ascii("g")]
     private static let longNameTypeFlag = ascii("L")
 
-    let fileReader: FileReader
+    let fileReader: any RemoteRandomAccessFileReader
 
     func extractThumbnail(maxPixelSize: Int) async throws -> UIImage {
         let fileSize = try await fileReader.fileSize

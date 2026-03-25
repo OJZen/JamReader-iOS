@@ -1,6 +1,10 @@
 import Combine
 import SwiftUI
 
+private enum RemoteOfflineShelfLayoutMetrics {
+    static let horizontalInset: CGFloat = 12
+}
+
 private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
     case recent
     case title
@@ -212,7 +216,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
         do {
             try remoteServerBrowsingService.clearCachedComics(for: profile)
-            try remoteReadingProgressStore.deleteSessions(for: profile.id)
+            try remoteReadingProgressStore.deleteSessions(for: profile)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             try rebuildEntries()
             let copyWord = removedCount == 1 ? "copy" : "copies"
@@ -296,34 +300,26 @@ struct RemoteOfflineShelfView: View {
 
     var body: some View {
         List {
-            Section {
-                heroCard
-                    .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
-                    .listRowBackground(Color.clear)
-            }
+            summarySection
 
             if scopedEntries.isEmpty, !viewModel.isLoading {
                 Section {
-                    ContentUnavailableView(
-                        "No Offline Comics",
+                    EmptyStateView(
                         systemImage: "arrow.down.circle",
-                        description: Text(
-                            focusedProfile == nil
-                                ? "Save a remote comic offline to keep it on this device."
-                                : "Save comics from this server offline."
-                        )
+                        title: "No Offline Comics",
+                        description: focusedProfile == nil
+                            ? "Save a remote comic offline to keep it on this device."
+                            : "Save comics from this server offline."
                     )
-                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
                 }
             } else if displayedEntries.isEmpty, !viewModel.isLoading {
                 Section {
-                    ContentUnavailableView(
-                        emptyResultsTitle,
+                    EmptyStateView(
                         systemImage: "magnifyingglass",
-                        description: Text(emptyResultsDescription)
+                        title: emptyResultsTitle,
+                        description: emptyResultsDescription
                     )
-                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 28)
                 }
             } else {
@@ -338,35 +334,24 @@ struct RemoteOfflineShelfView: View {
                                     openMode: .preferLocalCache
                                 )
                             } label: {
-                                RemoteOfflineComicCard(
-                                    session: entry.session,
-                                    profile: entry.profile,
-                                    availability: entry.availability,
-                                    showsNavigationIndicator: true,
-                                    showsServerName: false,
-                                    trailingAccessoryReservedWidth: 46
-                                )
+                                RemoteInsetListRowCard(contentPadding: 12) {
+                                    RemoteOfflineComicCard(
+                                        session: entry.session,
+                                        profile: entry.profile,
+                                        availability: entry.availability,
+                                        browsingService: dependencies.remoteServerBrowsingService,
+                                        showsNavigationIndicator: false,
+                                        showsServerName: false
+                                    )
+                                }
                             }
                             .buttonStyle(.plain)
-                            .overlay(alignment: .topTrailing) {
-                                RemoteOfflineShelfItemActionMenuButton(
-                                    onBrowseFolder: {
-                                        navigationRequest = .folder(
-                                            entry.profile,
-                                            entry.session.parentDirectoryPath
-                                        )
-                                    },
-                                    onRefreshDownloadedCopy: {
-                                        Task<Void, Never> {
-                                            await viewModel.refreshDownloadedCopy(for: entry)
-                                        }
-                                    },
-                                    onDeleteDownloadedCopy: {
-                                        pendingRemovalEntry = entry
-                                    }
-                                )
-                                .padding(.top, 12)
-                                .padding(.trailing, 12)
+                            .insetCardListRow(horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset)
+                            .contextMenu {
+                                offlineShelfItemActionMenuContent(for: entry)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                offlineShelfItemSwipeActions(for: entry)
                             }
                         }
                     } header: {
@@ -384,24 +369,39 @@ struct RemoteOfflineShelfView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Section("Filter") {
+                        ForEach(RemoteOfflineShelfFilter.allCases) { mode in
+                            Button {
+                                filterMode = mode
+                            } label: {
+                                selectionMenuLabel(
+                                    title: mode.title,
+                                    systemImage: mode == .all
+                                        ? "line.3.horizontal.decrease.circle"
+                                        : "line.3.horizontal.decrease.circle.fill",
+                                    isSelected: filterMode == mode
+                                )
+                            }
+                        }
+                    }
+
                     Section("Sort") {
                         ForEach(RemoteOfflineShelfSortMode.allCases) { mode in
                             Button {
                                 sortMode = mode
                             } label: {
-                                HStack {
-                                    Label(mode.title, systemImage: mode.systemImageName)
-                                    if sortMode == mode {
-                                        Spacer()
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
+                                selectionMenuLabel(
+                                    title: mode.title,
+                                    systemImage: mode.systemImageName,
+                                    isSelected: sortMode == mode
+                                )
                             }
                         }
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down.circle")
+                    Image(systemName: "line.3.horizontal.decrease.circle")
                 }
+                .accessibilityLabel("Browse Options")
             }
         }
         .searchable(
@@ -584,81 +584,254 @@ struct RemoteOfflineShelfView: View {
         }
     }
 
-    private var heroCard: some View {
-        SectionSummaryCard(
-            title: summaryTitle,
-            badges: summaryBadges,
-            titleFont: .title2.bold()
-        ) {
-            Picker("Filter", selection: $filterMode) {
-                ForEach(RemoteOfflineShelfFilter.allCases) { mode in
-                    Text(mode.title)
-                        .tag(mode)
-                }
+    private var summarySection: some View {
+        Section {
+            InsetCard(
+                cornerRadius: 24,
+                contentPadding: 16,
+                backgroundColor: Color(.systemBackground),
+                strokeOpacity: 0.04
+            ) {
+                SummaryMetricGroup(
+                    metrics: summaryMetrics,
+                    style: .compactValue,
+                    horizontalSpacing: 10,
+                    verticalSpacing: 8
+                )
+
+                RemoteInlineMetadataLine(
+                    items: summaryMetadataItems,
+                    horizontalSpacing: 8,
+                    verticalSpacing: 4
+                )
+
+                Label(summaryDescription, systemImage: "arrow.down.circle")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
-            .pickerStyle(.segmented)
+            .insetCardListRow(
+                horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset,
+                top: 14,
+                bottom: 10
+            )
         }
     }
 
-    private var summaryBadges: [StatusBadgeItem] {
-        var badges = [
-            StatusBadgeItem(
-                title: viewModel.cacheSummary.isEmpty ? "Empty" : viewModel.cacheSummary.summaryText,
+    private var summaryMetrics: [SummaryMetricItem] {
+        let readyCount = scopedEntries.filter { $0.availability.kind == .current }.count
+        let olderCount = scopedEntries.filter { $0.availability.kind == .stale }.count
+
+        var metrics = [
+            SummaryMetricItem(
+                title: "Copies",
+                value: "\(scopedEntries.count)",
                 tint: .blue
             ),
-            StatusBadgeItem(title: sortMode.shortTitle, tint: .teal),
-            StatusBadgeItem(title: filterMode.title, tint: .orange)
+            SummaryMetricItem(
+                title: "Ready",
+                value: "\(readyCount)",
+                tint: .teal
+            )
         ]
 
-        if !trimmedSearchText.isEmpty {
-            badges.append(StatusBadgeItem(title: "Searching", tint: .pink))
+        if olderCount > 0 {
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Older",
+                    value: "\(olderCount)",
+                    tint: .orange
+                )
+            )
+        } else if focusedProfile == nil {
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Servers",
+                    value: "\(scopedServerCount)",
+                    tint: .secondary
+                )
+            )
         }
 
-        return badges
+        return metrics
+    }
+
+    private var summaryMetadataItems: [RemoteInlineMetadataItem] {
+        var items = [RemoteInlineMetadataItem]()
+
+        if !viewModel.cacheSummary.isEmpty {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "internaldrive",
+                    text: viewModel.cacheSummary.summaryText,
+                    tint: .secondary
+                )
+            )
+        }
+
+        if let focusedProfile {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "server.rack",
+                    text: focusedProfile.name,
+                    tint: .secondary
+                )
+            )
+        } else if scopedServerCount > 0 {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "server.rack",
+                    text: scopedServerCount == 1 ? "1 server" : "\(scopedServerCount) servers",
+                    tint: .secondary
+                )
+            )
+        }
+
+        if !trimmedSearchText.isEmpty {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "magnifyingglass",
+                    text: "Search: \(trimmedSearchText)",
+                    tint: .pink
+                )
+            )
+        }
+
+        if filterMode != .all {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    text: filterMode.title,
+                    tint: .orange
+                )
+            )
+        }
+
+        items.append(
+            RemoteInlineMetadataItem(
+                systemImage: sortMode.systemImageName,
+                text: "Sorted by \(sortMode.title)",
+                tint: .teal
+            )
+        )
+
+        return items
+    }
+
+    @ViewBuilder
+    private func selectionMenuLabel(
+        title: String,
+        systemImage: String,
+        isSelected: Bool
+    ) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+            if isSelected {
+                Spacer()
+                Image(systemName: "checkmark")
+            }
+        }
     }
 
     @ViewBuilder
     private func sectionHeader(for section: RemoteOfflineShelfSection) -> some View {
         HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(section.profile.name)
                     .font(.subheadline.weight(.semibold))
 
-                AdaptiveStatusBadgeGroup(
-                    badges: section.headerBadges,
-                    horizontalSpacing: 6,
-                    verticalSpacing: 6
+                RemoteInlineMetadataLine(
+                    items: sectionHeaderMetadataItems(for: section),
+                    horizontalSpacing: 8,
+                    verticalSpacing: 4
                 )
             }
 
             Spacer(minLength: 10)
 
-            Button(role: .destructive) {
-                pendingServerClearProfile = section.profile
-                pendingServerClearCount = viewModel.downloadedCopyCount(for: section.profile)
+            Menu {
+                Button(role: .destructive) {
+                    pendingServerClearProfile = section.profile
+                    pendingServerClearCount = viewModel.downloadedCopyCount(for: section.profile)
+                } label: {
+                    Label(
+                        section.entries.count == 1 ? "Clear Downloaded Copy" : "Clear Downloaded Copies",
+                        systemImage: "trash"
+                    )
+                }
             } label: {
-                Label("Clear Server", systemImage: "trash")
-                    .font(.caption.weight(.semibold))
+                Image(systemName: "ellipsis.circle")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Manage \(section.profile.name)")
         }
         .textCase(nil)
     }
 
-    private var summaryTitle: String {
-        let count = scopedEntries.count
-        if let focusedProfile {
-            switch count {
-            case 0:
-                return "No offline comics for \(focusedProfile.name)"
-            case 1:
-                return "1 offline comic for \(focusedProfile.name)"
-            default:
-                return "\(count) offline comics for \(focusedProfile.name)"
-            }
+    private func sectionHeaderMetadataItems(
+        for section: RemoteOfflineShelfSection
+    ) -> [RemoteInlineMetadataItem] {
+        var items = [RemoteInlineMetadataItem]()
+
+        if section.readyCount > 0 {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "arrow.down.circle.fill",
+                    text: section.readyCount == 1 ? "1 ready" : "\(section.readyCount) ready",
+                    tint: .blue
+                )
+            )
         }
 
-        return viewModel.summaryTitle
+        if section.olderCount > 0 {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90",
+                    text: section.olderCount == 1 ? "1 older" : "\(section.olderCount) older",
+                    tint: .orange
+                )
+            )
+        }
+
+        if items.isEmpty {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "arrow.down.circle",
+                    text: section.entries.count == 1 ? "1 downloaded copy" : "\(section.entries.count) downloaded copies",
+                    tint: .secondary
+                )
+            )
+        }
+
+        return items
+    }
+
+    private var summaryDescription: String {
+        if !trimmedSearchText.isEmpty {
+            return displayedEntries.count == 1
+                ? "1 offline copy matches the current search."
+                : "\(displayedEntries.count) offline copies match the current search."
+        }
+
+        switch filterMode {
+        case .all:
+            if let focusedProfile {
+                return "Downloaded comics from \(focusedProfile.name) stay available on this device."
+            }
+
+            return "Downloaded comics stay available on this device across your configured servers."
+        case .current:
+            return "Showing offline copies that are ready and current on this device."
+        case .stale:
+            return "Showing older local copies that may need a refresh."
+        }
+    }
+
+    private var scopedServerCount: Int {
+        Set(scopedEntries.map(\.profile.id)).count
     }
 
     private var background: some View {
@@ -691,26 +864,52 @@ struct RemoteOfflineShelfView: View {
             }
         }
     }
-}
 
-private struct RemoteOfflineShelfItemActionMenuButton: View {
-    let onBrowseFolder: () -> Void
-    let onRefreshDownloadedCopy: () -> Void
-    let onDeleteDownloadedCopy: () -> Void
+    @ViewBuilder
+    private func offlineShelfItemActionMenuContent(
+        for entry: RemoteOfflineComicEntry
+    ) -> some View {
+        Button {
+            navigationRequest = .folder(
+                entry.profile,
+                entry.session.parentDirectoryPath
+            )
+        } label: {
+            Label("Browse Source Folder", systemImage: "folder")
+        }
 
-    var body: some View {
-        RemoteCardActionMenuButton(accessibilityLabel: "Offline Comic Actions") {
-            Button(action: onBrowseFolder) {
-                Label("Browse Source Folder", systemImage: "folder")
+        Button {
+            Task<Void, Never> {
+                await viewModel.refreshDownloadedCopy(for: entry)
             }
+        } label: {
+            Label("Refresh Downloaded Copy", systemImage: "arrow.clockwise.circle")
+        }
 
-            Button(action: onRefreshDownloadedCopy) {
-                Label("Refresh Downloaded Copy", systemImage: "arrow.clockwise.circle")
-            }
+        Button(role: .destructive) {
+            pendingRemovalEntry = entry
+        } label: {
+            Label("Delete Downloaded Copy", systemImage: "trash")
+        }
+    }
 
-            Button(role: .destructive, action: onDeleteDownloadedCopy) {
-                Label("Delete Downloaded Copy", systemImage: "trash")
+    @ViewBuilder
+    private func offlineShelfItemSwipeActions(
+        for entry: RemoteOfflineComicEntry
+    ) -> some View {
+        Button {
+            Task<Void, Never> {
+                await viewModel.refreshDownloadedCopy(for: entry)
             }
+        } label: {
+            Label("Refresh", systemImage: "arrow.clockwise.circle")
+        }
+        .tint(.blue)
+
+        Button(role: .destructive) {
+            pendingRemovalEntry = entry
+        } label: {
+            Label("Delete", systemImage: "trash")
         }
     }
 }
@@ -723,39 +922,11 @@ private struct RemoteOfflineShelfSection: Identifiable {
         profile.id
     }
 
-    var headerBadges: [StatusBadgeItem] {
-        let currentCount = entries.filter { $0.availability.kind == .current }.count
-        let staleCount = entries.filter { $0.availability.kind == .stale }.count
+    var readyCount: Int {
+        entries.filter { $0.availability.kind == .current }.count
+    }
 
-        var badges = [StatusBadgeItem]()
-
-        if currentCount > 0 {
-            badges.append(
-                StatusBadgeItem(
-                    title: currentCount == 1 ? "1 ready" : "\(currentCount) ready",
-                    tint: .blue
-                )
-            )
-        }
-
-        if staleCount > 0 {
-            badges.append(
-                StatusBadgeItem(
-                    title: staleCount == 1 ? "1 older" : "\(staleCount) older",
-                    tint: .orange
-                )
-            )
-        }
-
-        if badges.isEmpty {
-            badges.append(
-                StatusBadgeItem(
-                    title: entries.count == 1 ? "1 copy" : "\(entries.count) copies",
-                    tint: .teal
-                )
-            )
-        }
-
-        return badges
+    var olderCount: Int {
+        entries.filter { $0.availability.kind == .stale }.count
     }
 }

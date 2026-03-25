@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct LibraryOrganizationCollectionDetailView: View {
+    private enum LayoutMetrics {
+        static let horizontalInset: CGFloat = 12
+        static let rowAccessoryReservedWidth: CGFloat = 34
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -51,8 +56,7 @@ struct LibraryOrganizationCollectionDetailView: View {
     var body: some View {
         Group {
             if viewModel.isLoading {
-                ProgressView("Loading \(viewModel.collection.displayTitle)")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingStateView(message: "Loading \(viewModel.collection.displayTitle)")
             } else {
                 contentBody
             }
@@ -91,7 +95,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                             Button {
                                 isShowingComicInfoImportSheet = true
                             } label: {
-                                Image(systemName: "doc.badge.arrow.down")
+                                Image(systemName: "square.and.arrow.down")
                             }
                         }
                     }
@@ -349,12 +353,16 @@ struct LibraryOrganizationCollectionDetailView: View {
         List {
             summarySection
 
+            if showsFilterControls {
+                filterControlsSection
+            }
+
             if displayedComics.isEmpty {
                 Section {
                     emptyStateView
                 }
             } else {
-                Section("Comics") {
+                Section(contentSectionTitle) {
                     ForEach(displayedComics) { comic in
                         listComicRow(for: comic)
                     }
@@ -365,8 +373,12 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var gridContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 summaryCard
+
+                if showsFilterControls {
+                    filterControlsCard
+                }
 
                 if displayedComics.isEmpty {
                     emptyStateView
@@ -374,7 +386,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                         .padding(.top, 16)
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Comics")
+                        Text(contentSectionTitle)
                             .font(.headline)
 
                         LazyVGrid(columns: comicGridColumns, alignment: .leading, spacing: 16) {
@@ -385,71 +397,88 @@ struct LibraryOrganizationCollectionDetailView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
         }
     }
 
     private var summarySection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 8) {
-                LibraryOrganizationCollectionRow(collection: viewModel.collection)
-
-                Text(summaryText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if !viewModel.comics.isEmpty, !isSelectionMode {
-                    LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                        comicFilter = selectedFilter
-                    }
-                }
-            }
-            .padding(.vertical, 8)
+            summaryCard
+                .insetCardListRow(
+                    horizontalInset: LayoutMetrics.horizontalInset,
+                    top: 14,
+                    bottom: 10
+                )
         }
     }
 
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LibraryOrganizationCollectionRow(collection: viewModel.collection)
+        InsetCard(
+            cornerRadius: 18,
+            contentPadding: 14,
+            backgroundColor: Color(.systemBackground),
+            strokeOpacity: 0.04
+        ) {
+            SummaryMetricGroup(
+                metrics: summaryMetrics,
+                style: .compactValue,
+                horizontalSpacing: 8,
+                verticalSpacing: 8
+            )
 
-            HStack(spacing: 8) {
-                StatusBadge(title: "\(displayedComics.count) comics", tint: .green)
-                StatusBadge(title: comicSortMode.title, tint: .blue)
-                if displayMode == .grid {
-                    StatusBadge(title: "Grid", tint: .orange)
-                }
-                if comicFilter != .all {
-                    StatusBadge(title: comicFilter.title, tint: .teal)
-                }
-            }
+            InlineMetadataLine(items: summaryMetadataItems)
 
-            Text(summaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if !viewModel.comics.isEmpty, !isSelectionMode {
-                LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                    comicFilter = selectedFilter
-                }
-            }
+            Label(
+                summaryDescription,
+                systemImage: hasActiveFilter ? "magnifyingglass" : viewModel.collection.systemImageName
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
+    }
+
+    private var filterControlsSection: some View {
+        Section {
+            filterControlsCard
+                .insetCardListRow(
+                    horizontalInset: LayoutMetrics.horizontalInset,
+                    top: 0,
+                    bottom: 10
+                )
+        }
+    }
+
+    private var filterControlsCard: some View {
+        InsetCard(
+            cornerRadius: 18,
+            contentPadding: 12,
+            backgroundColor: Color(.systemBackground),
+            strokeOpacity: 0.04
+        ) {
+            LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
+                comicFilter = selectedFilter
+            }
+
+            if canResetFilters {
+                Button {
+                    resetFilters()
+                } label: {
+                    Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+            }
         }
     }
 
     private var emptyStateView: some View {
-        ContentUnavailableView(
-            emptyStateTitle,
+        EmptyStateView(
             systemImage: emptyStateSystemImage,
-            description: Text(emptyStateDescription)
+            title: emptyStateTitle,
+            description: emptyStateDescription
         )
         .padding(.vertical, 24)
     }
@@ -460,14 +489,17 @@ struct LibraryOrganizationCollectionDetailView: View {
             Button {
                 toggleSelection(for: comic)
             } label: {
-                LibraryComicRow(
-                    comic: comic,
-                    coverURL: viewModel.coverURL(for: comic),
-                    showsSelectionState: true,
-                    isSelected: selectedComicIDs.contains(comic.id)
-                )
+                InsetListRowCard {
+                    LibraryComicRow(
+                        comic: comic,
+                        coverURL: viewModel.coverURL(for: comic),
+                        showsSelectionState: true,
+                        isSelected: selectedComicIDs.contains(comic.id)
+                    )
+                }
             }
             .buttonStyle(.plain)
+            .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         } else {
             NavigationLink {
                 ComicReaderView(
@@ -481,16 +513,20 @@ struct LibraryOrganizationCollectionDetailView: View {
                     dependencies: dependencies
                 )
             } label: {
-                LibraryComicRow(
-                    comic: comic,
-                    coverURL: viewModel.coverURL(for: comic),
-                    trailingAccessoryReservedWidth: 40
-                )
+                InsetListRowCard {
+                    LibraryComicRow(
+                        comic: comic,
+                        coverURL: viewModel.coverURL(for: comic),
+                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                    )
+                }
             }
             .overlay(alignment: .trailing) {
                 quickActionButton(for: comic)
                     .padding(.trailing, 8)
             }
+            .buttonStyle(.plain)
+            .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
             .contextMenu {
                 comicContextActions(for: comic)
             }
@@ -559,7 +595,7 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private var canSortComics: Bool {
-        !displayedComics.isEmpty
+        !viewModel.comics.isEmpty
     }
 
     private var deletingCollectionConfirmationBinding: Binding<Bool> {
@@ -611,6 +647,14 @@ struct LibraryOrganizationCollectionDetailView: View {
         !supportsGridDisplay
     }
 
+    private var showsFilterControls: Bool {
+        !viewModel.comics.isEmpty && !isSelectionMode
+    }
+
+    private var canResetFilters: Bool {
+        hasActiveFilter
+    }
+
     private var comicInfoImportTargetComics: [LibraryComic] {
         isSelectionMode ? selectedComics : displayedComics
     }
@@ -657,7 +701,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                 Button {
                     isShowingComicInfoImportSheet = true
                 } label: {
-                    Label("Import ComicInfo", systemImage: "doc.badge.arrow.down")
+                    Label("Import ComicInfo", systemImage: "square.and.arrow.down")
                 }
             }
 
@@ -810,8 +854,12 @@ struct LibraryOrganizationCollectionDetailView: View {
             }
     }
 
+    private var trimmedSearchQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var hasActiveFilter: Bool {
-        comicFilter != .all || !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        comicFilter != .all || !trimmedSearchQuery.isEmpty
     }
 
     private var summaryText: String {
@@ -819,11 +867,10 @@ struct LibraryOrganizationCollectionDetailView: View {
             return viewModel.summaryText
         }
 
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !query.isEmpty {
+        if !trimmedSearchQuery.isEmpty {
             return displayedComics.count == 1
-                ? "1 comic matches \"\(query)\"."
-                : "\(displayedComics.count) comics match \"\(query)\"."
+                ? "1 comic matches \"\(trimmedSearchQuery)\"."
+                : "\(displayedComics.count) comics match \"\(trimmedSearchQuery)\"."
         }
 
         return displayedComics.count == 1
@@ -831,14 +878,102 @@ struct LibraryOrganizationCollectionDetailView: View {
             : "\(displayedComics.count) comics are visible in \(comicFilter.title.lowercased())."
     }
 
+    private var contentSectionTitle: String {
+        hasActiveFilter ? "Visible Comics" : "All Comics"
+    }
+
+    private var summaryMetrics: [SummaryMetricItem] {
+        var metrics = [
+            SummaryMetricItem(
+                title: "Comics",
+                value: "\(viewModel.comics.count)",
+                tint: collectionAccentColor
+            )
+        ]
+
+        if hasActiveFilter {
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Visible",
+                    value: "\(displayedComics.count)",
+                    tint: .blue
+                )
+            )
+        }
+
+        return metrics
+    }
+
+    private var summaryMetadataItems: [InlineMetadataItem] {
+        var items = [
+            InlineMetadataItem(
+                systemImage: viewModel.collection.systemImageName,
+                text: collectionTypeLabel,
+                tint: collectionAccentColor
+            )
+        ]
+
+        if comicFilter != .all {
+            items.append(
+                InlineMetadataItem(
+                    systemImage: comicFilter.systemImageName,
+                    text: comicFilter.title,
+                    tint: .teal
+                )
+            )
+        }
+
+        if !trimmedSearchQuery.isEmpty {
+            items.append(
+                InlineMetadataItem(
+                    systemImage: "magnifyingglass",
+                    text: "\"\(trimmedSearchQuery)\"",
+                    tint: .orange
+                )
+            )
+        }
+
+        return items
+    }
+
+    private var collectionTypeLabel: String {
+        switch viewModel.collection.type {
+        case .label:
+            return "Tag"
+        case .readingList:
+            return "Reading List"
+        }
+    }
+
+    private var collectionAccentColor: Color {
+        switch viewModel.collection.type {
+        case .label:
+            return (viewModel.collection.labelColor ?? .blue).swiftUIColor
+        case .readingList:
+            return .orange
+        }
+    }
+
+    private var summaryDescription: String {
+        hasActiveFilter ? summaryText : collectionSummaryDescription
+    }
+
+    private var collectionSummaryDescription: String {
+        switch viewModel.collection.type {
+        case .label:
+            return "Use this tag to group comics across folders without changing the library structure."
+        case .readingList:
+            return "Use this reading list to keep a custom queue and reading order together."
+        }
+    }
+
     private var emptyStateTitle: String {
         hasActiveFilter ? "No Matching Comics" : viewModel.collection.sectionKind.detailEmptyStateTitle
     }
 
     private var emptyStateDescription: String {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !query.isEmpty {
-            return "No comics in \(viewModel.collection.displayTitle) matched \"\(query)\"."
+        if !trimmedSearchQuery.isEmpty {
+            return "No comics in \(viewModel.collection.displayTitle) matched \"\(trimmedSearchQuery)\"."
         }
 
         if comicFilter != .all {
@@ -849,11 +984,16 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private var emptyStateSystemImage: String {
-        if !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if !trimmedSearchQuery.isEmpty {
             return "magnifyingglass"
         }
 
         return hasActiveFilter ? comicFilter.systemImageName : viewModel.collection.systemImageName
+    }
+
+    private func resetFilters() {
+        comicFilter = .all
+        searchQuery = ""
     }
 
     private var selectionSummaryText: String {

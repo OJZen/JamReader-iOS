@@ -620,8 +620,11 @@ struct RemoteServerBrowserView: View {
             contentSectionHeader(title: title, metadataItems: metadataItems)
 
             LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 156, maximum: 206), spacing: 12)],
-                spacing: 12
+                columns: [GridItem(.adaptive(
+                    minimum: horizontalSizeClass == .regular ? 200 : 156,
+                    maximum: horizontalSizeClass == .regular ? 280 : 206
+                ), spacing: Spacing.sm)],
+                spacing: Spacing.sm
             ) {
                 ForEach(items) { item in
                     let availability = viewModel.cacheAvailability(for: item)

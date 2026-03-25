@@ -15,51 +15,85 @@ struct RemoteCacheSettingsView: View {
     var body: some View {
         Form {
             Section {
-                FormOverviewContent(
-                    message: "Keep downloaded SMB comics and generated thumbnails under control here, while Browse stays focused on discovery and reading.",
-                    items: [
-                        FormOverviewItem(title: "Saved SMB Servers", value: "\(remoteServerCount)"),
-                        FormOverviewItem(title: "Recent Remote Sessions", value: "\(remoteSessionCount)")
-                    ]
+                RemoteCacheSummaryCard(
+                    summaryMetrics: summaryMetrics,
+                    metadataItems: summaryMetadataItems,
+                    description: summaryDescription
                 )
+                .listRowInsets(
+                    EdgeInsets(
+                        top: 6,
+                        leading: 12,
+                        bottom: 6,
+                        trailing: 12
+                    )
+                )
+                .listRowBackground(Color.clear)
             }
 
-            Section("Downloaded Copies") {
-                Picker("Cache Preset", selection: $remoteCachePolicyPreset) {
-                    ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
-                        Text(preset.title)
-                            .tag(preset)
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Retention")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+
+                    Picker("Cache Preset", selection: $remoteCachePolicyPreset) {
+                        ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
+                            Text(preset.title)
+                                .tag(preset)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+                .padding(.vertical, 4)
+
+                LabeledContent("Current Limit") {
+                    Text(remoteCachePolicyPreset.subtitle)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
                 }
 
-                Text(remoteCachePolicyPreset.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                LabeledContent("On This Device") {
+                    Text(remoteCacheSummary.isEmpty ? "None" : remoteCacheSummary.summaryText)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
 
                 if remoteCacheSummary.isEmpty {
-                    Text("No downloaded remote comics are cached on this device right now.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Label(
+                        "Downloaded remote comics will appear here after you save them for offline reading.",
+                        systemImage: "arrow.down.circle"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 } else {
-                    LabeledContent("Downloaded Copies", value: remoteCacheSummary.summaryText)
-
                     Button(role: .destructive) {
                         isShowingClearRemoteDownloadsConfirmation = true
                     } label: {
-                        Label("Clear Remote Downloads", systemImage: "trash")
+                        Label("Clear Downloaded Copies", systemImage: "trash")
                     }
                 }
+            } header: {
+                Text("Downloaded Copies")
+            } footer: {
+                Text("Clearing downloaded copies also removes remote browsing history and remembered server folder positions.")
             }
 
-            Section("Thumbnails") {
-                if !remoteThumbnailCacheSummary.isEmpty {
-                    LabeledContent("Thumbnail Cache", value: remoteThumbnailCacheSummary.summaryText)
+            Section {
+                LabeledContent("On This Device") {
+                    Text(remoteThumbnailCacheSummary.isEmpty ? "None" : remoteThumbnailCacheSummary.summaryText)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
                 }
 
                 if remoteThumbnailCacheSummary.isEmpty {
-                    Text("Remote comic thumbnails are generated on demand and currently do not have any saved disk cache on this device.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Label(
+                        "Remote covers are generated on demand and only saved locally after you browse them.",
+                        systemImage: "photo.stack"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 } else {
                     Button(role: .destructive) {
                         isShowingClearRemoteThumbnailsConfirmation = true
@@ -67,6 +101,10 @@ struct RemoteCacheSettingsView: View {
                         Label("Clear Thumbnail Cache", systemImage: "photo.stack")
                     }
                 }
+            } header: {
+                Text("Cover Thumbnails")
+            } footer: {
+                Text("Thumbnail cache only affects generated remote covers. Downloaded copies and reading progress stay intact.")
             }
         }
         .navigationTitle("Remote Cache")
@@ -90,7 +128,7 @@ struct RemoteCacheSettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Saved SMB servers stay intact. Downloaded remote copies, SMB browsing history, and remembered SMB folder positions are removed.")
+            Text("Saved remote servers stay intact. Downloaded remote copies, browsing history, and remembered remote folder positions are removed.")
         }
         .confirmationDialog(
             "Clear cached remote thumbnails?",
@@ -111,6 +149,67 @@ struct RemoteCacheSettingsView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    private var summaryMetrics: [SummaryMetricItem] {
+        [
+            SummaryMetricItem(
+                title: "Servers",
+                value: "\(remoteServerCount)",
+                tint: .blue
+            ),
+            SummaryMetricItem(
+                title: "Downloads",
+                value: "\(remoteCacheSummary.fileCount)",
+                tint: .green
+            ),
+            SummaryMetricItem(
+                title: "Covers",
+                value: "\(remoteThumbnailCacheSummary.fileCount)",
+                tint: .orange
+            )
+        ]
+    }
+
+    private var summaryMetadataItems: [RemoteInlineMetadataItem] {
+        [
+            RemoteInlineMetadataItem(
+                systemImage: "slider.horizontal.3",
+                text: "\(remoteCachePolicyPreset.title) retention",
+                tint: .teal
+            ),
+            RemoteInlineMetadataItem(
+                systemImage: "clock.arrow.circlepath",
+                text: "\(remoteSessionCount) recent sessions",
+                tint: .orange
+            ),
+            RemoteInlineMetadataItem(
+                systemImage: "internaldrive",
+                text: localStorageFootprintText,
+                tint: .blue
+            )
+        ]
+    }
+
+    private var localStorageFootprintText: String {
+        let totalBytes = remoteCacheSummary.totalBytes + remoteThumbnailCacheSummary.totalBytes
+        guard totalBytes > 0 else {
+            return "No local cache yet"
+        }
+
+        return ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file) + " on device"
+    }
+
+    private var summaryDescription: String {
+        if remoteCacheSummary.isEmpty, remoteThumbnailCacheSummary.isEmpty {
+            return "Remote content is fetched on demand until you save comics or generate covers again."
+        }
+
+        if remoteCacheSummary.isEmpty {
+            return "Generated covers are cached locally, while full remote comics are not currently stored on this device."
+        }
+
+        return "Downloaded comics and generated covers are kept locally so remote browsing and reading stay responsive."
     }
 
     private func refresh() {
@@ -159,6 +258,73 @@ struct RemoteCacheSettingsView: View {
                 title: "Failed to Update Cache Policy",
                 message: error.localizedDescription
             )
+        }
+    }
+}
+
+private struct RemoteCacheSummaryCard: View {
+    let summaryMetrics: [SummaryMetricItem]
+    let metadataItems: [RemoteInlineMetadataItem]
+    let description: String
+
+    var body: some View {
+        InsetCard(
+            cornerRadius: 20,
+            contentPadding: 14,
+            backgroundColor: Color(.systemBackground),
+            strokeOpacity: 0.04
+        ) {
+            HStack(alignment: .center, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.blue.opacity(0.18),
+                                    Color.teal.opacity(0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Image(systemName: "internaldrive.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.blue)
+                }
+                .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Local Remote Storage")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+                    Text("Manage downloaded remote comics and generated covers kept on this device.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            SummaryMetricGroup(
+                metrics: summaryMetrics,
+                style: .compactValue,
+                horizontalSpacing: 8,
+                verticalSpacing: 8
+            )
+
+            RemoteInlineMetadataLine(
+                items: metadataItems,
+                horizontalSpacing: 8,
+                verticalSpacing: 4
+            )
+
+            Label(description, systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
         }
     }
 }

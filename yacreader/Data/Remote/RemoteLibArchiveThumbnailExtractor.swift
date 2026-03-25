@@ -8,11 +8,11 @@ enum RemoteLibArchiveThumbnailExtractionError: Error {
 }
 
 struct RemoteLibArchiveThumbnailExtractor {
-    let fileReader: FileReader
+    let fileReader: any RemoteRandomAccessFileReader
 
     func extractThumbnail(maxPixelSize: Int) async throws -> UIImage {
         let fileSize = try await fileReader.fileSize
-        let dataSource = RemoteLibArchiveSMBDataSource(
+        let dataSource = RemoteLibArchiveDataSource(
             fileReader: fileReader,
             fileSize: fileSize
         )
@@ -92,14 +92,14 @@ private struct RemoteLibArchiveEntry {
 }
 
 @objcMembers
-private final class RemoteLibArchiveSMBDataSource: NSObject, YRLibArchiveDataSource {
+private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource {
     let archiveSize: Int64
 
     private let readerProxy: RemoteLibArchiveFileReaderProxy
     private let blockCache = RemoteLibArchiveBlockCache()
     private let blockSize = 128 * 1_024
 
-    init(fileReader: FileReader, fileSize: UInt64) {
+    init(fileReader: any RemoteRandomAccessFileReader, fileSize: UInt64) {
         self.readerProxy = RemoteLibArchiveFileReaderProxy(fileReader: fileReader)
         self.archiveSize = Int64(clamping: fileSize)
         super.init()
@@ -226,9 +226,9 @@ private final class RemoteLibArchiveBlockCache {
 }
 
 private final class RemoteLibArchiveFileReaderProxy: @unchecked Sendable {
-    let fileReader: FileReader
+    let fileReader: any RemoteRandomAccessFileReader
 
-    init(fileReader: FileReader) {
+    init(fileReader: any RemoteRandomAccessFileReader) {
         self.fileReader = fileReader
     }
 }

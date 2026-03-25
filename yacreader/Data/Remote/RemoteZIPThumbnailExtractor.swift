@@ -20,7 +20,7 @@ struct RemoteZIPThumbnailExtractor {
     private static let centralDirectoryFileHeaderSignature: UInt32 = 0x02014b50
     private static let localFileHeaderSignature: UInt32 = 0x04034b50
 
-    let fileReader: FileReader
+    let fileReader: any RemoteRandomAccessFileReader
 
     func extractThumbnail(maxPixelSize: Int) async throws -> UIImage {
         let fileSize = try await fileReader.fileSize

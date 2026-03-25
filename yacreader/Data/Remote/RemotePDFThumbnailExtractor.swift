@@ -9,7 +9,7 @@ enum RemotePDFThumbnailExtractionError: Error {
 }
 
 struct RemotePDFThumbnailExtractor {
-    let fileReader: FileReader
+    let fileReader: any RemoteRandomAccessFileReader
 
     func extractThumbnail(maxPixelSize: Int) async throws -> UIImage {
         let fileSize = try await fileReader.fileSize
@@ -81,7 +81,7 @@ private final class RemotePDFRandomAccessDataSource {
     private let blockCache = RemotePDFBlockCache()
     private let blockSize = 128 * 1_024
 
-    init(fileReader: FileReader, fileSize: UInt64) {
+    init(fileReader: any RemoteRandomAccessFileReader, fileSize: UInt64) {
         self.readerProxy = RemotePDFFileReaderProxy(fileReader: fileReader)
         self.fileSize = fileSize
     }
@@ -261,9 +261,9 @@ private final class RemotePDFBlockCache {
 }
 
 private final class RemotePDFFileReaderProxy: @unchecked Sendable {
-    let fileReader: FileReader
+    let fileReader: any RemoteRandomAccessFileReader
 
-    init(fileReader: FileReader) {
+    init(fileReader: any RemoteRandomAccessFileReader) {
         self.fileReader = fileReader
     }
 }

@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct LibraryOrganizationView: View {
+    private enum LayoutMetrics {
+        static let horizontalInset: CGFloat = 12
+        static let rowAccessoryReservedWidth: CGFloat = 34
+    }
+
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -13,6 +18,7 @@ struct LibraryOrganizationView: View {
     @State private var searchQuery = ""
     @State private var editingCollection: LibraryOrganizationCollection?
     @State private var deletingCollection: LibraryOrganizationCollection?
+    @State private var navigationCollection: LibraryOrganizationCollection?
 
     init(
         descriptor: LibraryDescriptor,
@@ -134,6 +140,13 @@ struct LibraryOrganizationView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .navigationDestination(item: $navigationCollection) { collection in
+            LibraryOrganizationCollectionDetailView(
+                descriptor: viewModel.descriptor,
+                collection: collection,
+                dependencies: dependencies
+            )
+        }
     }
 
     @ViewBuilder
@@ -149,6 +162,11 @@ struct LibraryOrganizationView: View {
         List {
             Section {
                 summaryCard
+                    .insetCardListRow(
+                        horizontalInset: LayoutMetrics.horizontalInset,
+                        top: 14,
+                        bottom: 10
+                    )
             }
 
             if displayedCollections.isEmpty {
@@ -156,27 +174,27 @@ struct LibraryOrganizationView: View {
                     emptyStateView
                 }
             } else {
-                Section(viewModel.sectionKind.title) {
+                Section(contentSectionTitle) {
                     ForEach(displayedCollections) { collection in
-                        NavigationLink {
-                            LibraryOrganizationCollectionDetailView(
-                                descriptor: viewModel.descriptor,
-                                collection: collection,
-                                dependencies: dependencies
-                            )
+                        Button {
+                            navigationCollection = collection
                         } label: {
-                            LibraryOrganizationCollectionRow(
-                                collection: collection,
-                                trailingAccessoryReservedWidth: usesProminentCollectionActions ? 86 : 40
-                            )
+                            InsetListRowCard {
+                                LibraryOrganizationCollectionRow(
+                                    collection: collection,
+                                    trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                                )
+                            }
                         }
+                        .buttonStyle(.plain)
                         .overlay(alignment: .trailing) {
                             collectionActionMenu(
                                 for: collection,
-                                style: usesProminentCollectionActions ? .compactCapsule : .icon
+                                style: .icon
                             )
-                            .padding(.trailing, usesProminentCollectionActions ? 6 : 8)
+                            .padding(.trailing, 8)
                         }
+                        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                     }
                 }
             }
@@ -185,7 +203,7 @@ struct LibraryOrganizationView: View {
 
     private var gridContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 20) {
                 summaryCard
 
                 if displayedCollections.isEmpty {
@@ -194,7 +212,7 @@ struct LibraryOrganizationView: View {
                         .padding(.top, 16)
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text(viewModel.sectionKind.title)
+                        Text(contentSectionTitle)
                             .font(.headline)
 
                         LazyVGrid(columns: collectionGridColumns, alignment: .leading, spacing: 16) {
@@ -218,22 +236,32 @@ struct LibraryOrganizationView: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
         }
     }
 
     private var summaryCard: some View {
-        SectionSummaryCard(
-            title: viewModel.sectionKind.title,
-            badges: summaryBadgeItems,
-            titleFont: .title3.weight(.semibold),
-            cornerRadius: 20,
-            contentPadding: 16,
+        InsetCard(
+            cornerRadius: 18,
+            contentPadding: 14,
+            backgroundColor: Color(.systemBackground),
             strokeOpacity: 0.04
         ) {
-            Text(summaryText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            SummaryMetricGroup(
+                metrics: summaryMetrics,
+                style: .compactValue,
+                horizontalSpacing: 8,
+                verticalSpacing: 8
+            )
+
+            Label(
+                hasSearchQuery ? summaryText : sectionSummaryDescription,
+                systemImage: hasSearchQuery ? "magnifyingglass" : viewModel.sectionKind.systemImageName
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
         }
     }
 
@@ -269,22 +297,44 @@ struct LibraryOrganizationView: View {
         return viewModel.summaryText
     }
 
-    private var summaryCountText: String {
-        displayedCollections.count == 1 ? "1 collection" : "\(displayedCollections.count) collections"
+    private var contentSectionTitle: String {
+        "All \(viewModel.sectionKind.title)"
     }
 
-    private var summaryBadgeItems: [StatusBadgeItem] {
-        var badges = [
-            StatusBadgeItem(title: summaryCountText, tint: .green),
-            StatusBadgeItem(title: displayMode.title, tint: .blue),
-            StatusBadgeItem(title: sortMode.title, tint: .teal)
+    private var summaryMetrics: [SummaryMetricItem] {
+        var metrics = [
+            SummaryMetricItem(
+                title: viewModel.sectionKind.title,
+                value: "\(viewModel.collections.count)",
+                tint: .orange
+            ),
+            SummaryMetricItem(
+                title: "Comics",
+                value: "\(viewModel.collections.reduce(0) { $0 + $1.comicCount })",
+                tint: .green
+            )
         ]
 
         if hasSearchQuery {
-            badges.insert(StatusBadgeItem(title: "Filtered", tint: .orange), at: 1)
+            metrics.append(
+                SummaryMetricItem(
+                    title: "Visible",
+                    value: "\(displayedCollections.count)",
+                    tint: .blue
+                )
+            )
         }
 
-        return badges
+        return metrics
+    }
+
+    private var sectionSummaryDescription: String {
+        switch viewModel.sectionKind {
+        case .labels:
+            return "Use tags to group comics across folders without changing the library structure."
+        case .readingLists:
+            return "Build reading queues for arcs, storylines, and custom reading orders."
+        }
     }
 
     private var hasSearchQuery: Bool {
@@ -318,7 +368,7 @@ struct LibraryOrganizationView: View {
     }
 
     private var usesProminentCollectionActions: Bool {
-        !supportsGridDisplay
+        false
     }
 
     private var canSortCollections: Bool {

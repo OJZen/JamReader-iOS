@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class LibraryOrganizationViewModel: ObservableObject {
+final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var collections: [LibraryOrganizationCollection] = []
     @Published private(set) var isLoading = false
     @Published var isShowingCreateSheet = false
