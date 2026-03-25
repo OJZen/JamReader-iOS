@@ -3,6 +3,7 @@ import SwiftUI
 struct InsetCard<Content: View>: View {
     var cornerRadius: CGFloat = 22
     var contentPadding: CGFloat = 16
+    var backgroundColor: Color = Color(.secondarySystemBackground)
     var strokeOpacity: Double = 0.05
     @ViewBuilder let content: () -> Content
 
@@ -13,12 +14,104 @@ struct InsetCard<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(contentPadding)
         .background(
-            Color(.secondarySystemBackground),
+            backgroundColor,
             in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.black.opacity(strokeOpacity), lineWidth: 1)
+        }
+    }
+}
+
+struct InsetListRowCard<Content: View>: View {
+    var cornerRadius: CGFloat = 18
+    var contentPadding: CGFloat = 12
+    var backgroundColor: Color = Color(.systemBackground)
+    var strokeOpacity: Double = 0.04
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        InsetCard(
+            cornerRadius: cornerRadius,
+            contentPadding: contentPadding,
+            backgroundColor: backgroundColor,
+            strokeOpacity: strokeOpacity
+        ) {
+            content()
+        }
+    }
+}
+
+struct CompactActionChip: View {
+    let title: String
+    let systemImage: String
+    var tint: Color = .accentColor
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(
+            Color(.secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+    }
+}
+
+struct InlineMetadataItem: Identifiable {
+    let id: String
+    let systemImage: String
+    let text: String
+    let tint: Color
+
+    init(
+        systemImage: String,
+        text: String,
+        tint: Color = .secondary,
+        id: String? = nil
+    ) {
+        self.id = id ?? "\(systemImage):\(text)"
+        self.systemImage = systemImage
+        self.text = text
+        self.tint = tint
+    }
+}
+
+struct InlineMetadataLine: View {
+    let items: [InlineMetadataItem]
+    var horizontalSpacing: CGFloat = 10
+    var verticalSpacing: CGFloat = 6
+
+    private var visibleItems: [InlineMetadataItem] {
+        items.filter { !$0.text.isEmpty }
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if !visibleItems.isEmpty {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: horizontalSpacing) {
+                    ForEach(visibleItems) { item in
+                        InlineMetadataToken(item: item)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: verticalSpacing) {
+                    ForEach(visibleItems) { item in
+                        InlineMetadataToken(item: item)
+                    }
+                }
+            }
         }
     }
 }
@@ -36,6 +129,23 @@ struct StatusBadgeItem: Identifiable {
         self.id = id ?? title
         self.title = title
         self.tint = tint
+    }
+}
+
+private struct InlineMetadataToken: View {
+    let item: InlineMetadataItem
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: item.systemImage)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(item.tint)
+
+            Text(item.text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -266,6 +376,25 @@ extension SectionSummaryCard where Content == EmptyView {
         ) {
             EmptyView()
         }
+    }
+}
+
+extension View {
+    func insetCardListRow(
+        horizontalInset: CGFloat = 0,
+        top: CGFloat = 6,
+        bottom: CGFloat = 6
+    ) -> some View {
+        listRowInsets(
+            EdgeInsets(
+                top: top,
+                leading: horizontalInset,
+                bottom: bottom,
+                trailing: horizontalInset
+            )
+        )
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 }
 

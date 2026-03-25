@@ -19,8 +19,7 @@ struct LibraryOrganizationCollectionRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-
-            Spacer(minLength: 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsAssignmentIndicator {
                 Image(systemName: collection.isAssigned ? "checkmark.circle.fill" : "circle")
