@@ -27,7 +27,7 @@ final class LibArchiveReader {
         return ImageSequenceComicDocument(
             url: archiveURL,
             pageNames: orderedEntries.map(\.path),
-            pageSource: try LibArchivePageSource(archiveURL: archiveURL, entries: orderedEntries)
+            pageSource: LibArchivePageSource(archiveURL: archiveURL, archiveReader: archiveReader, entries: orderedEntries)
         )
     }
 
@@ -94,7 +94,7 @@ final class LibArchiveReader {
 }
 
 private actor LibArchivePageSource: ComicPageDataSource {
-    private let archiveURL: URL
+    private let archiveReader: YRLibArchiveReader
     private let entries: [LibArchiveEntry]
     private let sharedCache = ReaderPageCache.shared
     private let cacheNamespace: String
@@ -105,8 +105,8 @@ private actor LibArchivePageSource: ComicPageDataSource {
         return cache
     }()
 
-    init(archiveURL: URL, entries: [LibArchiveEntry]) throws {
-        self.archiveURL = archiveURL
+    init(archiveURL: URL, archiveReader: YRLibArchiveReader, entries: [LibArchiveEntry]) {
+        self.archiveReader = archiveReader
         self.entries = entries
         self.cacheNamespace = ReaderPageCache.namespace(for: archiveURL)
     }
@@ -129,7 +129,7 @@ private actor LibArchivePageSource: ComicPageDataSource {
             return cachedPage
         }
 
-        let pageData = try LibArchiveEntryReader.data(in: archiveURL, at: entries[index].archiveIndex)
+        let pageData = try archiveReader.dataForEntry(at: entries[index].archiveIndex)
         cache.setObject(pageData as NSData, forKey: NSNumber(value: index), cost: pageData.count)
         await sharedCache.store(pageData, for: cacheKey)
         return pageData
@@ -143,12 +143,5 @@ private actor LibArchivePageSource: ComicPageDataSource {
 
             _ = try? await dataForPage(at: index)
         }
-    }
-}
-
-private enum LibArchiveEntryReader {
-    nonisolated static func data(in archiveURL: URL, at entryIndex: Int) throws -> Data {
-        let archiveReader = try YRLibArchiveReader(archiveURL: archiveURL)
-        return try archiveReader.dataForEntry(at: entryIndex)
     }
 }

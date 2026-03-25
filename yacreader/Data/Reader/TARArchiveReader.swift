@@ -304,6 +304,10 @@ private enum TARArchiveEntryReader {
             try? fileHandle.close()
         }
 
+        return try data(using: fileHandle, for: entry)
+    }
+
+    nonisolated static func data(using fileHandle: FileHandle, for entry: TARArchiveEntry) throws -> Data {
         do {
             try fileHandle.seek(toOffset: entry.dataOffset)
             guard let data = try fileHandle.read(upToCount: entry.size),
@@ -322,6 +326,7 @@ private enum TARArchiveEntryReader {
 
 private actor TARArchivePageSource: ComicPageDataSource {
     private let archiveURL: URL
+    private let fileHandle: FileHandle
     private let entries: [TARArchiveEntry]
     private let sharedCache = ReaderPageCache.shared
     private let cacheNamespace: String
@@ -334,8 +339,13 @@ private actor TARArchivePageSource: ComicPageDataSource {
 
     init(archiveURL: URL, entries: [TARArchiveEntry]) throws {
         self.archiveURL = archiveURL
+        self.fileHandle = try FileHandle(forReadingFrom: archiveURL)
         self.entries = entries
         self.cacheNamespace = ReaderPageCache.namespace(for: archiveURL)
+    }
+
+    deinit {
+        try? fileHandle.close()
     }
 
     func dataForPage(at index: Int) async throws -> Data {
@@ -356,7 +366,7 @@ private actor TARArchivePageSource: ComicPageDataSource {
             return cachedPage
         }
 
-        let data = try TARArchiveEntryReader.data(in: archiveURL, for: entries[index])
+        let data = try TARArchiveEntryReader.data(using: fileHandle, for: entries[index])
         cache.setObject(data as NSData, forKey: NSNumber(value: index), cost: data.count)
         await sharedCache.store(data, for: cacheKey)
         return data

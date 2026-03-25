@@ -49,7 +49,6 @@ struct ZIPArchiveEntry: Sendable {
     let compressedSize: UInt32
     let uncompressedSize: UInt32
     let localHeaderOffset: UInt32
-    let dataOffset: UInt64
 
     var isDirectory: Bool {
         path.hasSuffix("/")
@@ -250,10 +249,6 @@ private struct ZIPArchiveParser {
 
             let fileNameData = centralDirectoryData.subdata(in: pathStart..<pathEnd)
             let path = decodeEntryName(fileNameData, generalPurposeFlag: generalPurposeFlag)
-            let dataOffset = try resolveDataOffset(
-                from: UInt64(localHeaderOffset),
-                fileHandle: fileHandle
-            )
 
             entries.append(
                 ZIPArchiveEntry(
@@ -262,8 +257,7 @@ private struct ZIPArchiveParser {
                     generalPurposeFlag: generalPurposeFlag,
                     compressedSize: compressedSize,
                     uncompressedSize: uncompressedSize,
-                    localHeaderOffset: localHeaderOffset,
-                    dataOffset: dataOffset
+                    localHeaderOffset: localHeaderOffset
                 )
             )
 
@@ -312,18 +306,6 @@ private struct ZIPArchiveParser {
             centralDirectorySize: centralDirectorySize,
             centralDirectoryOffset: centralDirectoryOffset
         )
-    }
-
-    private func resolveDataOffset(from localHeaderOffset: UInt64, fileHandle: FileHandle) throws -> UInt64 {
-        let localHeader = try readData(from: localHeaderOffset, length: 30, fileHandle: fileHandle)
-        guard localHeader.uint32LE(at: 0) == Self.localFileHeaderSignature,
-              let fileNameLength = localHeader.uint16LE(at: 26),
-              let extraFieldLength = localHeader.uint16LE(at: 28)
-        else {
-            throw ZIPArchiveError.invalidArchive
-        }
-
-        return localHeaderOffset + 30 + UInt64(fileNameLength) + UInt64(extraFieldLength)
     }
 
     private func readData(from offset: UInt64, length: Int, fileHandle: FileHandle) throws -> Data {
@@ -384,7 +366,8 @@ private enum ZIPArchiveEntryReader {
             throw ZIPArchiveError.encryptedEntry(entry.path)
         }
 
-        let compressedData = try readCompressedData(using: fileHandle, for: entry)
+        let dataOffset = try resolveDataOffset(using: fileHandle, for: entry)
+        let compressedData = try readCompressedData(using: fileHandle, at: dataOffset, for: entry)
 
         switch entry.compressionMethod {
         case 0:
@@ -400,9 +383,33 @@ private enum ZIPArchiveEntryReader {
         }
     }
 
-    nonisolated private static func readCompressedData(using fileHandle: FileHandle, for entry: ZIPArchiveEntry) throws -> Data {
+    nonisolated private static func resolveDataOffset(
+        using fileHandle: FileHandle,
+        for entry: ZIPArchiveEntry
+    ) throws -> UInt64 {
+        let localHeaderOffset = UInt64(entry.localHeaderOffset)
         do {
-            try fileHandle.seek(toOffset: entry.dataOffset)
+            try fileHandle.seek(toOffset: localHeaderOffset)
+            guard let localHeader = try fileHandle.read(upToCount: 30),
+                  localHeader.count == 30,
+                  localHeader.uint32LE(at: 0) == 0x04034b50,
+                  let fileNameLength = localHeader.uint16LE(at: 26),
+                  let extraFieldLength = localHeader.uint16LE(at: 28)
+            else {
+                throw ZIPArchiveError.invalidArchive
+            }
+
+            return localHeaderOffset + 30 + UInt64(fileNameLength) + UInt64(extraFieldLength)
+        } catch let error as ZIPArchiveError {
+            throw error
+        } catch {
+            throw ZIPArchiveError.invalidArchive
+        }
+    }
+
+    nonisolated private static func readCompressedData(using fileHandle: FileHandle, at dataOffset: UInt64, for entry: ZIPArchiveEntry) throws -> Data {
+        do {
+            try fileHandle.seek(toOffset: dataOffset)
             guard let data = try fileHandle.read(upToCount: Int(entry.compressedSize)),
                   data.count == Int(entry.compressedSize)
             else {
