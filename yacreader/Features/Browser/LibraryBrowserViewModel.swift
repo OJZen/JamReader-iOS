@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class LibraryBrowserViewModel: ObservableObject {
+final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var content: LibraryFolderContent?
     @Published private(set) var isLoading = false
     @Published private(set) var isInitializingLibrary = false
@@ -33,6 +33,7 @@ final class LibraryBrowserViewModel: ObservableObject {
     private let coverLocator: LibraryCoverLocator
     private let comicInfoImportService: ComicInfoImportService
     private let importedComicsImportService: ImportedComicsImportService
+    private let databaseInspector = SQLiteDatabaseInspector()
 
     private let metadataRootURL: URL
     private let databaseURL: URL
@@ -73,10 +74,14 @@ final class LibraryBrowserViewModel: ObservableObject {
         self.importedComicsImportService = importedComicsImportService
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
         self.databaseURL = storageManager.databaseURL(for: descriptor)
-        self.maintenanceRecord = maintenanceStatusStore.loadRecord(for: descriptor.id)
-        self.lastInitializationSummary = maintenanceRecord?.summary
+        let initialMaintenanceRecord = maintenanceStatusStore.loadRecord(for: descriptor.id)
+        self.maintenanceRecord = initialMaintenanceRecord
+        self.lastInitializationSummary = initialMaintenanceRecord?.summary
+        self.databaseSummary = SQLiteDatabaseInspector().inspectDatabase(at: self.databaseURL)
         configureSearch()
     }
+
+    @Published private(set) var databaseSummary: LibraryDatabaseSummary
 
     var navigationTitle: String {
         if let content {
@@ -99,11 +104,20 @@ final class LibraryBrowserViewModel: ObservableObject {
     }
 
     var canRefreshLibrary: Bool {
-        folderID == 1 && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+        folderID == 1
+            && databaseExists
+            && databaseSummary.hasCompatibleSchemaVersion
+            && !isInitializingLibrary
+            && !isRefreshingLibrary
     }
 
     var canRefreshCurrentFolder: Bool {
-        folderID != 1 && content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+        folderID != 1
+            && content != nil
+            && databaseExists
+            && databaseSummary.hasCompatibleSchemaVersion
+            && !isInitializingLibrary
+            && !isRefreshingLibrary
     }
 
     var canScanFromCurrentContext: Bool {
@@ -111,15 +125,29 @@ final class LibraryBrowserViewModel: ObservableObject {
     }
 
     var canImportLibraryComicInfo: Bool {
-        folderID == 1 && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+        folderID == 1
+            && databaseExists
+            && databaseSummary.hasCompatibleSchemaVersion
+            && !isInitializingLibrary
+            && !isRefreshingLibrary
     }
 
     var canImportCurrentFolderComicInfo: Bool {
-        folderID != 1 && content != nil && databaseExists && !isInitializingLibrary && !isRefreshingLibrary
+        folderID != 1
+            && content != nil
+            && databaseExists
+            && databaseSummary.hasCompatibleSchemaVersion
+            && !isInitializingLibrary
+            && !isRefreshingLibrary
     }
 
     var canImportComicFiles: Bool {
-        content != nil && databaseExists && supportsDirectLibraryImports && !isInitializingLibrary && !isRefreshingLibrary
+        content != nil
+            && databaseExists
+            && databaseSummary.hasCompatibleSchemaVersion
+            && supportsDirectLibraryImports
+            && !isInitializingLibrary
+            && !isRefreshingLibrary
     }
 
     var libraryImportCompatibilityNotice: String? {
@@ -243,6 +271,7 @@ final class LibraryBrowserViewModel: ObservableObject {
 
     func toggleFavorite(for comic: LibraryComic) {
         let updatedValue = !comic.isFavorite
+        AppHaptics.medium()
 
         do {
             try databaseWriter.setFavorite(
@@ -261,6 +290,7 @@ final class LibraryBrowserViewModel: ObservableObject {
 
     func toggleReadStatus(for comic: LibraryComic) {
         let updatedValue = !comic.read
+        AppHaptics.light()
 
         do {
             try databaseWriter.setReadStatus(
@@ -284,6 +314,8 @@ final class LibraryBrowserViewModel: ObservableObject {
         guard currentRating != normalizedRating else {
             return
         }
+
+        AppHaptics.selection()
 
         do {
             try databaseWriter.setRating(
@@ -309,6 +341,8 @@ final class LibraryBrowserViewModel: ObservableObject {
         guard !targetComics.isEmpty else {
             return false
         }
+
+        AppHaptics.medium()
 
         do {
             try databaseWriter.setFavorite(
@@ -339,6 +373,8 @@ final class LibraryBrowserViewModel: ObservableObject {
         guard !targetComics.isEmpty else {
             return false
         }
+
+        AppHaptics.light()
 
         do {
             try databaseWriter.setReadStatus(
@@ -408,6 +444,19 @@ final class LibraryBrowserViewModel: ObservableObject {
         isLoading = true
         defer {
             isLoading = false
+        }
+
+        databaseSummary = databaseInspector.inspectDatabase(at: databaseURL)
+
+        if let compatibilityIssue = databaseSummary.compatibilityIssueDescription {
+            content = nil
+            emptyStateMessage = compatibilityIssue
+            continueReadingComics = []
+            recentComics = []
+            favoritesComics = []
+            specialCollectionCounts = [:]
+            clearSearch()
+            return
         }
 
         do {

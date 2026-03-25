@@ -109,7 +109,10 @@ struct LibraryComicQuickActionsSheet: View {
 
                 if let removeFromContextTitle, let onRemoveFromCurrentContext {
                     Section {
-                        Button(role: .destructive, action: onRemoveFromCurrentContext) {
+                        Button(role: .destructive) {
+                            AppHaptics.warning()
+                            onRemoveFromCurrentContext()
+                        } label: {
                             Label(removeFromContextTitle, systemImage: "minus.circle")
                         }
                     }
@@ -219,7 +222,7 @@ struct LibrarySelectionActionsSheet: View {
                         if let onImportComicInfo {
                             actionButton(
                                 title: "Import ComicInfo",
-                                systemImage: "doc.badge.arrow.down",
+                                systemImage: "square.and.arrow.down",
                                 action: onImportComicInfo
                             )
                         }
@@ -237,6 +240,7 @@ struct LibrarySelectionActionsSheet: View {
                 if let removeFromContextTitle, let onRemoveFromCurrentContext {
                     Section {
                         Button(role: .destructive) {
+                            AppHaptics.warning()
                             performAction(onRemoveFromCurrentContext)
                         } label: {
                             Label(removeFromContextTitle, systemImage: "minus.circle")

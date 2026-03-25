@@ -86,6 +86,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         self.folderShortcutStore = folderShortcutStore
         self.isCurrentFolderSaved = folderShortcutStore.containsShortcut(
             for: profile.id,
+            providerKind: profile.providerKind,
+            providerRootIdentifier: profile.normalizedProviderRootIdentifier,
             path: Self.normalizedShortcutPath(currentPath ?? Self.initialPath(for: profile, explicitPath: currentPath))
         )
     }
@@ -222,7 +224,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     func refreshProgressState() {
         let sessionsByPath = ((try? readingProgressStore.loadSessions()) ?? [])
             .reduce(into: [String: RemoteComicReadingSession]()) { result, session in
-                guard session.serverID == profile.id,
+                guard session.matches(profile: profile),
                       result[session.path] == nil else {
                     return
                 }
@@ -266,11 +268,15 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             if wasSaved {
                 try folderShortcutStore.removeShortcut(
                     serverID: profile.id,
+                    providerKind: profile.providerKind,
+                    providerRootIdentifier: profile.normalizedProviderRootIdentifier,
                     path: normalizedPath
                 )
             } else {
                 try folderShortcutStore.upsertShortcut(
                     serverID: profile.id,
+                    providerKind: profile.providerKind,
+                    providerRootIdentifier: profile.normalizedProviderRootIdentifier,
                     path: normalizedPath,
                     title: currentFolderShortcutTitle
                 )
@@ -279,8 +285,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             feedback = RemoteBrowserFeedbackState(
                 title: wasSaved ? "Folder Removed" : "Folder Saved",
                 message: wasSaved
-                    ? "This SMB folder was removed from Saved Folders."
-                    : "This SMB folder now appears in Browse > Saved Folders.",
+                    ? "This remote folder was removed from Saved Folders."
+                    : "This remote folder now appears in Browse > Saved Folders.",
                 kind: .success,
                 autoDismissAfter: 2.6
             )
@@ -295,6 +301,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     func refreshShortcutState() {
         isCurrentFolderSaved = folderShortcutStore.containsShortcut(
             for: profile.id,
+            providerKind: profile.providerKind,
+            providerRootIdentifier: profile.normalizedProviderRootIdentifier,
             path: Self.normalizedShortcutPath(currentPath)
         )
     }
@@ -453,7 +461,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         guard !visibleComics.isEmpty else {
             alert = RemoteAlertState(
                 title: "Nothing to Import",
-                message: "There are no visible supported comic files in the current SMB results."
+                message: "There are no visible supported comic files in the current browser results."
             )
             return
         }
@@ -528,62 +536,79 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        var savedCount = 0
-        var refreshedCount = 0
+        activeImportDescription = "Saving visible comics…"
+        defer {
+            activeImportDescription = nil
+        }
+
         var failedNames: [String] = []
-
-        for (index, item) in comics.enumerated() {
-            activeImportDescription = "Saving visible comics… \(index + 1) of \(comics.count)"
-
+        let preparedDownloads = comics.compactMap { item -> (RemoteDirectoryItem, RemoteComicFileReference)? in
             guard let reference = try? browsingService.makeComicFileReference(from: item) else {
                 failedNames.append(item.name)
-                continue
+                return nil
             }
 
-            do {
-                let result = try await browsingService.downloadComicFile(
-                    for: profile,
-                    reference: reference
-                )
-                switch result.source {
-                case .downloaded:
-                    savedCount += 1
-                case .cachedCurrent, .cachedFallback:
-                    refreshedCount += 1
-                }
-            } catch {
-                failedNames.append(item.name)
-            }
+            return (item, reference)
         }
 
-        activeImportDescription = nil
-        refreshProgressState()
+        do {
+            let outcomes = try await browsingService.downloadComicFiles(
+                for: profile,
+                references: preparedDownloads.map { $0.1 }
+            )
+            let itemNameByReferenceID = Dictionary(
+                uniqueKeysWithValues: preparedDownloads.map { ($0.1.id, $0.0.name) }
+            )
 
-        guard savedCount > 0 || refreshedCount > 0 else {
+            var savedCount = 0
+            var refreshedCount = 0
+
+            for outcome in outcomes {
+                if let result = outcome.result {
+                    switch result.source {
+                    case .downloaded:
+                        savedCount += 1
+                    case .cachedCurrent, .cachedFallback:
+                        refreshedCount += 1
+                    }
+                } else {
+                    failedNames.append(itemNameByReferenceID[outcome.reference.id] ?? outcome.reference.fileName)
+                }
+            }
+
+            refreshProgressState()
+
+            guard savedCount > 0 || refreshedCount > 0 else {
+                alert = RemoteAlertState(
+                    title: "Offline Save Failed",
+                    message: "No visible comics could be saved for offline reading."
+                )
+                return
+            }
+
+            var segments: [String] = []
+            if savedCount > 0 {
+                segments.append("Saved \(savedCount) comic(s) to this device.")
+            }
+            if refreshedCount > 0 {
+                let copyPhrase = refreshedCount == 1 ? "downloaded copy" : "downloaded copies"
+                segments.append("Kept \(refreshedCount) existing \(copyPhrase) ready offline.")
+            }
+            if !failedNames.isEmpty {
+                segments.append("Failed to save \(failedNames.count) item(s).")
+            }
+
+            feedback = RemoteBrowserFeedbackState(
+                title: "Offline Copies Ready",
+                message: segments.joined(separator: " "),
+                kind: .success
+            )
+        } catch {
             alert = RemoteAlertState(
                 title: "Offline Save Failed",
-                message: "No visible comics could be saved for offline reading."
+                message: error.localizedDescription
             )
-            return
         }
-
-        var segments: [String] = []
-        if savedCount > 0 {
-            segments.append("Saved \(savedCount) comic(s) to this device.")
-        }
-        if refreshedCount > 0 {
-            let copyPhrase = refreshedCount == 1 ? "downloaded copy" : "downloaded copies"
-            segments.append("Kept \(refreshedCount) existing \(copyPhrase) ready offline.")
-        }
-        if !failedNames.isEmpty {
-            segments.append("Failed to save \(failedNames.count) item(s).")
-        }
-
-        feedback = RemoteBrowserFeedbackState(
-            title: "Offline Copies Ready",
-            message: segments.joined(separator: " "),
-            kind: .success
-        )
     }
 
     func removeOfflineCopy(for item: RemoteDirectoryItem) {
@@ -677,7 +702,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     static func clearRememberedPath(for profile: RemoteServerProfile) {
-        UserDefaults.standard.removeObject(forKey: lastBrowsedPathStorageKey(for: profile.id))
+        UserDefaults.standard.removeObject(forKey: lastBrowsedPathStorageKey(for: profile))
     }
 
     func dismissFeedback() {
@@ -690,8 +715,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         let rootPath = normalizedPath(profile.normalizedBaseDirectoryPath)
+        let scopedKey = lastBrowsedPathStorageKey(for: profile)
+        let legacyKey = "\(lastBrowsedPathKeyPrefix)\(profile.id.uuidString)"
         let storedPath = normalizedPath(
-            UserDefaults.standard.string(forKey: lastBrowsedPathStorageKey(for: profile.id)) ?? rootPath
+            UserDefaults.standard.string(forKey: scopedKey)
+                ?? UserDefaults.standard.string(forKey: legacyKey)
+                ?? rootPath
         )
 
         guard isPath(storedPath, withinRootPath: rootPath) else {
@@ -704,7 +733,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private static func rememberLastBrowsedPath(_ path: String, for profile: RemoteServerProfile) {
         UserDefaults.standard.set(
             normalizedPath(path),
-            forKey: lastBrowsedPathStorageKey(for: profile.id)
+            forKey: lastBrowsedPathStorageKey(for: profile)
         )
     }
 
@@ -744,8 +773,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             .map(String.init)
     }
 
-    private static func lastBrowsedPathStorageKey(for serverID: UUID) -> String {
-        "\(lastBrowsedPathKeyPrefix)\(serverID.uuidString)"
+    private static func lastBrowsedPathStorageKey(for profile: RemoteServerProfile) -> String {
+        "\(lastBrowsedPathKeyPrefix)\(profile.id.uuidString)|\(profile.remoteScopeKey)"
     }
 
     private func presentImportResult(
@@ -766,6 +795,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             : nil
 
         if result.importedComicCount > 0 {
+            AppHaptics.success()
             feedback = RemoteBrowserFeedbackState(
                 title: successTitle,
                 message: importFeedbackMessage(
@@ -786,7 +816,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     private func recentSessionsForProfile() -> [RemoteComicReadingSession] {
-        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.serverID == profile.id }
+        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.matches(profile: profile) }
     }
 
     private func makeLoadIssue(from error: Error) -> RemoteBrowserLoadIssue {
@@ -805,14 +835,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 kind: .connection,
                 title: "Server Unreachable",
                 message: error.localizedDescription,
-                recoverySuggestion: "Make sure this device can reach the SMB server on the current network. You can still try opening a recently cached comic below."
+                recoverySuggestion: "Make sure this device can reach the remote server on the current network. You can still try opening a recently cached comic below."
             )
         case .shareUnavailable:
             return RemoteBrowserLoadIssue(
                 kind: .shareUnavailable,
-                title: "Share Unavailable",
+                title: "Location Unavailable",
                 message: error.localizedDescription,
-                recoverySuggestion: "The share name may have changed or gone offline. Review the saved SMB server settings, then refresh."
+                recoverySuggestion: "The saved remote root may have changed or gone offline. Review the server settings, then refresh."
             )
         case .remotePathUnavailable:
             return RemoteBrowserLoadIssue(
@@ -826,7 +856,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 kind: .accessDenied,
                 title: "Access Denied",
                 message: error.localizedDescription,
-                recoverySuggestion: "The current credentials or permissions do not allow this folder. Try a different location or review the saved SMB server settings."
+                recoverySuggestion: "The current credentials or permissions do not allow this folder. Try a different location or review the saved server settings."
             )
         case .invalidProfile, .providerIntegrationUnavailable, .unsupportedComicFile,
              .missingCredentials, .cacheMaintenanceFailed, .operationFailed, .none:
@@ -834,7 +864,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 kind: .generic,
                 title: "Remote Browser Not Ready Yet",
                 message: error.localizedDescription,
-                recoverySuggestion: "Try refreshing this folder again. If the problem keeps coming back, return to the SMB server list and review the saved connection."
+                recoverySuggestion: "Try refreshing this folder again. If the problem keeps coming back, return to the server list and review the saved connection."
             )
         }
     }
@@ -849,30 +879,45 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
         }
 
-        var downloadedFileURLs: [URL] = []
         var failedDownloadNames: [String] = []
-
-        for (index, item) in sortedItems.enumerated() {
-            activeImportDescription = "\(progressPrefix)… \(index + 1) of \(sortedItems.count)"
-
-            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
-                failedDownloadNames.append(item.name)
-                continue
-            }
-
-            do {
-                let downloadResult = try await browsingService.downloadComicFile(
-                    for: profile,
-                    reference: reference
-                )
-                downloadedFileURLs.append(downloadResult.localFileURL)
-            } catch {
-                failedDownloadNames.append(item.name)
-            }
-        }
-
+        activeImportDescription = "\(progressPrefix)…"
         defer {
             activeImportDescription = nil
+        }
+
+        let preparedDownloads = sortedItems.compactMap { item -> (RemoteDirectoryItem, RemoteComicFileReference)? in
+            guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+                failedDownloadNames.append(item.name)
+                return nil
+            }
+
+            return (item, reference)
+        }
+
+        let downloadedFileURLs: [URL]
+        do {
+            let outcomes = try await browsingService.downloadComicFiles(
+                for: profile,
+                references: preparedDownloads.map { $0.1 }
+            )
+            let itemNameByReferenceID = Dictionary(
+                uniqueKeysWithValues: preparedDownloads.map { ($0.1.id, $0.0.name) }
+            )
+
+            downloadedFileURLs = outcomes.compactMap { outcome in
+                if let result = outcome.result {
+                    return result.localFileURL
+                }
+
+                failedDownloadNames.append(itemNameByReferenceID[outcome.reference.id] ?? outcome.reference.fileName)
+                return nil
+            }
+        } catch {
+            alert = RemoteAlertState(
+                title: "Folder Import Failed",
+                message: error.localizedDescription
+            )
+            return
         }
 
         guard !downloadedFileURLs.isEmpty else {

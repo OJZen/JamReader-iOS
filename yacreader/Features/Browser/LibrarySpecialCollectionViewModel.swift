@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class LibrarySpecialCollectionViewModel: ObservableObject {
+final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var comics: [LibraryComic] = []
     @Published private(set) var isLoading = false
     @Published var alert: LibraryAlertState?
@@ -62,6 +62,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject {
 
     func toggleFavorite(for comic: LibraryComic) {
         let updatedValue = !comic.isFavorite
+        AppHaptics.medium()
 
         do {
             try databaseWriter.setFavorite(
@@ -83,6 +84,8 @@ final class LibrarySpecialCollectionViewModel: ObservableObject {
         guard !selectedComicIDs.isEmpty else {
             return true
         }
+
+        AppHaptics.medium()
 
         do {
             try databaseWriter.setFavorite(
@@ -113,6 +116,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject {
 
     func toggleReadStatus(for comic: LibraryComic) {
         let updatedValue = !comic.read
+        AppHaptics.light()
 
         do {
             try databaseWriter.setReadStatus(
@@ -137,6 +141,8 @@ final class LibrarySpecialCollectionViewModel: ObservableObject {
             return
         }
 
+        AppHaptics.selection()
+
         do {
             try databaseWriter.setRating(
                 ratingValue,
@@ -157,6 +163,8 @@ final class LibrarySpecialCollectionViewModel: ObservableObject {
         guard !selectedComicIDs.isEmpty else {
             return true
         }
+
+        AppHaptics.light()
 
         do {
             try databaseWriter.setReadStatus(

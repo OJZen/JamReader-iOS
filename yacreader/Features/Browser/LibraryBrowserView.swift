@@ -2,6 +2,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct LibraryBrowserView: View {
+    private enum LayoutMetrics {
+        static let horizontalInset: CGFloat = Spacing.sm
+        static let rowAccessoryReservedWidth: CGFloat = 34
+    }
+
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -60,24 +65,24 @@ struct LibraryBrowserView: View {
             } else if let content = viewModel.content {
                 contentView(content)
             } else if viewModel.isLoading || viewModel.isInitializingLibrary || viewModel.isRefreshingLibrary {
-                VStack(spacing: 12) {
+                VStack(spacing: Spacing.sm) {
                     ProgressView(progressMessage)
 
                     if let scanProgress = viewModel.scanProgress {
                         Text(scanProgress.detailLine)
-                            .font(.footnote)
+                            .font(AppFont.footnote())
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
+                            .padding(.horizontal, Spacing.xl)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(spacing: 20) {
-                    ContentUnavailableView(
-                        viewModel.canInitializeLibrary ? "Library Not Initialized" : "Library Unavailable",
+                VStack(spacing: Spacing.lg) {
+                    EmptyStateView(
                         systemImage: viewModel.canInitializeLibrary ? "books.vertical.circle" : "externaldrive.badge.exclamationmark",
-                        description: Text(viewModel.emptyStateMessage ?? "The selected library could not be loaded.")
+                        title: viewModel.canInitializeLibrary ? "Library Not Initialized" : "Library Unavailable",
+                        description: viewModel.emptyStateMessage ?? "The selected library could not be loaded."
                     )
 
                     if viewModel.canInitializeLibrary {
@@ -90,10 +95,10 @@ struct LibraryBrowserView: View {
                         .buttonStyle(.borderedProminent)
 
                         Text("This creates a compatible `library.ydb`, inserts the root folder, and performs an initial scan of supported comic files.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .font(AppFont.footnote())
+                            .foregroundStyle(Color.textSecondary)
                             .multilineTextAlignment(.center)
-                            .padding(.horizontal, 24)
+                            .padding(.horizontal, Spacing.xl)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,7 +111,7 @@ struct LibraryBrowserView: View {
                     dismiss: viewModel.dismissScanCompletion
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
-                .padding(.top, 8)
+                .padding(.top, Spacing.xs)
             }
         }
         .animation(.easeInOut(duration: 0.22), value: viewModel.scanCompletion?.id)
@@ -146,7 +151,7 @@ struct LibraryBrowserView: View {
                             Button {
                                 isShowingComicInfoImportSheet = true
                             } label: {
-                                Image(systemName: "doc.badge.arrow.down")
+                                Image(systemName: "square.and.arrow.down")
                             }
                         }
                     }
@@ -207,8 +212,8 @@ struct LibraryBrowserView: View {
             if isSelectionMode {
                 ToolbarItem(placement: .bottomBar) {
                     Text(selectionSummaryText)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .font(AppFont.footnote(.semibold))
+                        .foregroundStyle(Color.textSecondary)
                 }
 
                 ToolbarItem(placement: .bottomBar) {
@@ -535,7 +540,7 @@ struct LibraryBrowserView: View {
                 Button {
                     isShowingComicInfoImportSheet = true
                 } label: {
-                    Label("Import ComicInfo", systemImage: "doc.badge.arrow.down")
+                    Label("Import ComicInfo", systemImage: "square.and.arrow.down")
                 }
             }
 
@@ -599,8 +604,8 @@ struct LibraryBrowserView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(option.title)
                         Text(option.subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(AppFont.caption())
+                            .foregroundStyle(Color.textSecondary)
                     }
                     Spacer()
                     if recentWindowOption == option {
@@ -639,7 +644,7 @@ struct LibraryBrowserView: View {
                     viewModel.importLibraryComicInfo(policy: policy)
                 }
             } label: {
-                Label("Import Library ComicInfo", systemImage: "doc.badge.arrow.down")
+                Label("Import Library ComicInfo", systemImage: "square.and.arrow.down")
             }
         }
 
@@ -649,7 +654,7 @@ struct LibraryBrowserView: View {
                     viewModel.importCurrentFolderComicInfo(policy: policy)
                 }
             } label: {
-                Label("Import Current Folder ComicInfo", systemImage: "doc.badge.arrow.down")
+                Label("Import Current Folder ComicInfo", systemImage: "square.and.arrow.down")
             }
         }
     }
@@ -756,6 +761,13 @@ struct LibraryBrowserView: View {
         hasActiveLocalFolderSearch || comicFilter != .all
     }
 
+    private var comicFilterChipBinding: Binding<LibraryComicQuickFilter?> {
+        Binding(
+            get: { comicFilter == .all ? nil : comicFilter },
+            set: { comicFilter = $0 ?? .all }
+        )
+    }
+
     private func filteredSubfolders(
         _ folders: [LibraryFolder],
         localQuery: String? = nil
@@ -814,28 +826,30 @@ struct LibraryBrowserView: View {
                     displayedComics: displayedComics,
                     titleFont: .headline
                 )
-                .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
-                .listRowBackground(Color.clear)
+                .insetCardListRow(
+                    horizontalInset: LayoutMetrics.horizontalInset,
+                    top: 14,
+                    bottom: 10
+                )
+            }
+
+            if showsLocalFolderControls(for: content) {
+                localControlsListSection(content)
             }
 
             if content.folder.isRoot && !hasActiveLocalFolderSearch {
-                ForEach(rootPreviewKinds, id: \.self) { kind in
-                    collectionPreviewListSection(for: kind)
-                }
-
-                ForEach(dashboardShortcutSections) { section in
-                    shortcutListSection(section)
-                }
+                continueReadingListSection
+                browseByListSection
             }
 
             if content.subfolders.isEmpty, content.comics.isEmpty {
                 Section {
-                    ContentUnavailableView(
-                        "Empty Folder",
+                    EmptyStateView(
                         systemImage: "folder",
-                        description: Text("This part of the library does not contain subfolders or comics yet.")
+                        title: "Empty Folder",
+                        description: "This part of the library does not contain subfolders or comics yet."
                     )
-                    .padding(.vertical, 24)
+                    .padding(.vertical, Spacing.xl)
                 }
             } else if displayedSubfolders.isEmpty, displayedComics.isEmpty {
                 Section {
@@ -853,7 +867,7 @@ struct LibraryBrowserView: View {
         let displayedComics = filteredSortedComics(content.comics, localQuery: folderSearchQuery)
 
         return ScrollView {
-            LazyVStack(alignment: .leading, spacing: 24) {
+            LazyVStack(alignment: .leading, spacing: Spacing.xl) {
                 overviewCard(
                     content,
                     displayedSubfolders: displayedSubfolders,
@@ -861,89 +875,144 @@ struct LibraryBrowserView: View {
                     titleFont: .title2.weight(.semibold)
                 )
 
-                if content.folder.isRoot && !hasActiveLocalFolderSearch {
-                    ForEach(rootPreviewKinds, id: \.self) { kind in
-                        collectionPreviewGridSection(for: kind)
-                    }
+                if showsLocalFolderControls(for: content) {
+                    localControlsCard(content)
+                }
 
-                    ForEach(dashboardShortcutSections) { section in
-                        shortcutGridSection(section)
-                    }
+                if content.folder.isRoot && !hasActiveLocalFolderSearch {
+                    continueReadingGridSection
+                    browseByGridSection
                 }
 
                 if content.subfolders.isEmpty, content.comics.isEmpty {
-                    ContentUnavailableView(
-                        "Empty Folder",
+                    EmptyStateView(
                         systemImage: "folder",
-                        description: Text("This part of the library does not contain subfolders or comics yet.")
+                        title: "Empty Folder",
+                        description: "This part of the library does not contain subfolders or comics yet."
                     )
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 36)
+                    .padding(.vertical, Spacing.xxxl)
                 } else if displayedSubfolders.isEmpty, displayedComics.isEmpty {
                     filteredContentEmptyStateView(content)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 36)
+                        .padding(.vertical, Spacing.xxxl)
                 } else {
                     folderGridSection(displayedSubfolders)
                     comicGridSection(content, displayedComics: displayedComics)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.lg)
         }
     }
 
-    private var specialCollectionShortcutItems: [LibraryShortcutCardItem] {
-        LibrarySpecialCollectionKind.allCases.map { kind in
-            LibraryShortcutCardItem(
-                id: kind.id,
-                title: kind.title,
-                systemImageName: kind.systemImageName,
-                tint: .blue,
-                badgeTitle: collectionCountTitle(for: kind),
-                destination: AnyView(
-                    LibrarySpecialCollectionView(
-                        descriptor: viewModel.descriptor,
-                        kind: kind,
-                        dependencies: dependencies
-                    )
-                )
-            )
-        }
-    }
-
-    private var organizationShortcutItems: [LibraryShortcutCardItem] {
-        LibraryOrganizationSectionKind.allCases.map { sectionKind in
-            LibraryShortcutCardItem(
-                id: sectionKind.id,
-                title: sectionKind.title,
-                systemImageName: sectionKind.systemImageName,
-                tint: .orange,
-                destination: AnyView(
-                    LibraryOrganizationView(
-                        descriptor: viewModel.descriptor,
-                        sectionKind: sectionKind,
-                        dependencies: dependencies
-                    )
-                )
-            )
-        }
-    }
-
-    private var rootPreviewKinds: [LibrarySpecialCollectionKind] {
-        [.reading, .recent, .favorites]
-    }
-
-    private var dashboardShortcutSections: [LibraryDashboardShortcutSection] {
+    private var browseByShortcutItems: [LibraryShortcutCardItem] {
         [
-            LibraryDashboardShortcutSection(
-                title: "Collections",
-                items: specialCollectionShortcutItems
-            ),
-            LibraryDashboardShortcutSection(
-                title: "Organize",
-                items: organizationShortcutItems
-            )
+            organizationShortcutItem(for: .readingLists),
+            organizationShortcutItem(for: .labels),
+            specialCollectionShortcutItem(for: .favorites),
+            specialCollectionShortcutItem(for: .recent)
         ]
+    }
+
+    private func specialCollectionShortcutItem(
+        for kind: LibrarySpecialCollectionKind
+    ) -> LibraryShortcutCardItem {
+        let count = viewModel.specialCollectionCount(for: kind)
+
+        return LibraryShortcutCardItem(
+            id: kind.id,
+            title: kind.title,
+            subtitle: kind.dashboardSubtitle(
+                count: count,
+                recentDays: viewModel.currentRecentDays
+            ),
+            systemImageName: kind.systemImageName,
+            tint: .blue,
+            badgeTitle: count > 0 ? collectionCountTitle(for: kind) : nil,
+            destination: AnyView(
+                LibrarySpecialCollectionView(
+                    descriptor: viewModel.descriptor,
+                    kind: kind,
+                    dependencies: dependencies
+                )
+            )
+        )
+    }
+
+    private func organizationShortcutItem(
+        for sectionKind: LibraryOrganizationSectionKind
+    ) -> LibraryShortcutCardItem {
+        LibraryShortcutCardItem(
+            id: sectionKind.id,
+            title: sectionKind.title,
+            subtitle: organizationShortcutSubtitle(for: sectionKind),
+            systemImageName: sectionKind.systemImageName,
+            tint: .orange,
+            destination: AnyView(
+                LibraryOrganizationView(
+                    descriptor: viewModel.descriptor,
+                    sectionKind: sectionKind,
+                    dependencies: dependencies
+                )
+            )
+        )
+    }
+
+    private func organizationShortcutSubtitle(
+        for sectionKind: LibraryOrganizationSectionKind
+    ) -> String {
+        switch sectionKind {
+        case .labels:
+            return "Group comics across folders with lightweight tags."
+        case .readingLists:
+            return "Build reading queues for arcs, runs, and custom orders."
+        }
+    }
+
+    @ViewBuilder
+    private var continueReadingListSection: some View {
+        collectionPreviewListSection(for: .reading)
+    }
+
+    @ViewBuilder
+    private var continueReadingGridSection: some View {
+        collectionPreviewGridSection(for: .reading)
+    }
+
+    @ViewBuilder
+    private var browseByListSection: some View {
+        if !browseByShortcutItems.isEmpty {
+            Section("Browse By") {
+                ForEach(browseByShortcutItems) { item in
+                    NavigationLink {
+                        item.destination
+                    } label: {
+                        InsetListRowCard {
+                            LibraryShortcutRow(item: item)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var browseByGridSection: some View {
+        if !browseByShortcutItems.isEmpty {
+            gridSection(title: "Browse By") {
+                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
+                    ForEach(browseByShortcutItems) { item in
+                        NavigationLink {
+                            item.destination
+                        } label: {
+                            LibraryShortcutCard(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -973,7 +1042,7 @@ struct LibraryBrowserView: View {
                 if kind == .reading, let comic = comics.first {
                     previewGridNavigationLink(for: kind, comic: comic)
                 } else {
-                    LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
+                    LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                         ForEach(comics) { comic in
                             previewGridNavigationLink(for: kind, comic: comic)
                         }
@@ -1053,14 +1122,15 @@ struct LibraryBrowserView: View {
             ContinueReadingRow(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
-                trailingAccessoryReservedWidth: 40
+                trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
             )
         } else {
             LibraryComicRow(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
-                trailingAccessoryReservedWidth: 40
+                trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
             )
+            .equatable()
         }
     }
 
@@ -1087,6 +1157,41 @@ struct LibraryBrowserView: View {
             )
         } else {
             LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+                .equatable()
+        }
+    }
+
+    private func showsLocalFolderControls(for content: LibraryFolderContent) -> Bool {
+        guard !isSelectionMode else {
+            return false
+        }
+
+        if !content.folder.isRoot {
+            return true
+        }
+
+        return !(content.subfolders.isEmpty && content.comics.isEmpty)
+    }
+
+    private func localControlsListSection(_ content: LibraryFolderContent) -> some View {
+        Section {
+            localControlsCard(content)
+                .insetCardListRow(
+                    horizontalInset: LayoutMetrics.horizontalInset,
+                    top: 0,
+                    bottom: 10
+                )
+        }
+    }
+
+    private func localControlsCard(_ content: LibraryFolderContent) -> some View {
+        InsetCard(
+            cornerRadius: CornerRadius.lg,
+            contentPadding: Spacing.sm,
+            backgroundColor: Color.surfaceGroupedSecondary,
+            strokeOpacity: 0
+        ) {
+            localFolderControls(content)
         }
     }
 
@@ -1096,28 +1201,40 @@ struct LibraryBrowserView: View {
         displayedComics: [LibraryComic],
         titleFont: Font
     ) -> some View {
-        InsetCard(cornerRadius: 20, contentPadding: 16, strokeOpacity: 0.04) {
-            Text(content.folder.displayName)
-                .font(titleFont)
+        InsetCard(
+            cornerRadius: CornerRadius.sheet,
+            contentPadding: Spacing.sm,
+            backgroundColor: Color.surfacePrimary,
+            strokeOpacity: 0.04
+        ) {
+            HStack(alignment: .top, spacing: Spacing.sm) {
+                Image(systemName: content.folder.isRoot ? "books.vertical.fill" : "folder.fill")
+                    .font(.title3)
+                    .foregroundStyle(content.folder.isRoot ? .blue : .orange)
+                    .frame(width: 30, height: 30)
 
-            Text(viewModel.folderPath)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(content.folder.displayName)
+                        .font(titleFont)
 
-            AdaptiveStatusBadgeGroup(
-                badges: overviewBadgeItems(
-                    content,
-                    displayedSubfolders: displayedSubfolders,
-                    displayedComics: displayedComics
-                )
-            )
+                    Text(viewModel.folderPath)
+                        .font(AppFont.subheadline())
+                        .foregroundStyle(Color.textSecondary)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
 
-            FormOverviewContent(
-                items: overviewDetailItems(for: content)
-            ) {
-                maintenanceSummaryView
+                    AdaptiveStatusBadgeGroup(
+                        badges: overviewBadgeItems(
+                            content,
+                            displayedSubfolders: displayedSubfolders,
+                            displayedComics: displayedComics
+                        )
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            maintenanceSummaryView
 
             if let scanProgress = viewModel.scanProgress {
                 scanProgressPanel(scanProgress)
@@ -1126,72 +1243,42 @@ struct LibraryBrowserView: View {
             if let compatibilityPresentation = viewModel.compatibilityPresentation {
                 libraryImportCompatibilityPanel(compatibilityPresentation)
             }
-
-            localFolderControls(content)
         }
-    }
-
-    private func overviewDetailItems(
-        for content: LibraryFolderContent
-    ) -> [FormOverviewItem] {
-        var items = [
-            FormOverviewItem(
-                title: content.folder.isRoot ? "Location" : "Path",
-                value: viewModel.folderPath
-            )
-        ]
-
-        if content.folder.isRoot {
-            items.append(
-                FormOverviewItem(
-                    title: "Database",
-                    value: viewModel.databasePath
-                )
-            )
-        }
-
-        return items
     }
 
     private func libraryImportCompatibilityPanel(
         _ presentation: LibraryCompatibilityPresentation
     ) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: Spacing.sm) {
             Image(systemName: presentation.iconName ?? "externaldrive.badge.exclamationmark")
-                .font(.headline)
+                .font(AppFont.headline())
                 .foregroundStyle(presentation.tint ?? .orange)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(presentation.bannerTitle ?? "Direct Imports Unavailable")
-                    .font(.subheadline.weight(.semibold))
+                    .font(AppFont.subheadline(.semibold))
 
                 Text(presentation.bannerMessage ?? "")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(AppFont.footnote())
+                    .foregroundStyle(Color.textSecondary)
             }
         }
-        .padding(12)
-        .background((presentation.tint ?? .orange).opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(Spacing.sm)
+        .background((presentation.tint ?? .orange).opacity(0.12), in: RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
     }
 
     @ViewBuilder
     private var maintenanceSummaryView: some View {
         if let maintenanceRecord = viewModel.maintenanceRecord {
-            VStack(alignment: .leading, spacing: 2) {
-                LabeledContent("Latest Scan", value: maintenanceRecord.summaryLine)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let detailLine = maintenanceRecord.detailLine {
-                    Text(detailLine)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                .font(AppFont.caption())
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(2)
         } else if let summary = viewModel.lastInitializationSummary {
-            LabeledContent("Latest Scan", value: summary.summaryLine)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            Label(summary.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                .font(AppFont.caption())
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(2)
         }
     }
 
@@ -1224,45 +1311,14 @@ struct LibraryBrowserView: View {
     }
 
     @ViewBuilder
-    private func shortcutGridSection(_ section: LibraryDashboardShortcutSection) -> some View {
-        if !section.items.isEmpty {
-            gridSection(title: section.title) {
-                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
-                    ForEach(section.items) { item in
-                        NavigationLink {
-                            item.destination
-                        } label: {
-                            LibraryShortcutCard(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func shortcutListSection(_ section: LibraryDashboardShortcutSection) -> some View {
-        if !section.items.isEmpty {
-            Section(section.title) {
-                ForEach(section.items) { item in
-                    NavigationLink {
-                        item.destination
-                    } label: {
-                        LibraryShortcutRow(item: item)
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
     private func foldersSection(_ folders: [LibraryFolder]) -> some View {
         if !folders.isEmpty {
-            Section("Folders") {
+            Section {
                 ForEach(folders) { folder in
                     folderListNavigationLink(for: folder)
                 }
+            } header: {
+                sectionHeaderLabel("Folders", count: folders.count)
             }
         }
     }
@@ -1270,8 +1326,8 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func folderGridSection(_ folders: [LibraryFolder]) -> some View {
         if !folders.isEmpty {
-            gridSection(title: "Folders") {
-                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
+            gridSection(title: "Folders", count: folders.count) {
+                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(folders) { folder in
                         folderGridNavigationLink(for: folder)
                     }
@@ -1283,20 +1339,24 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func comicsSection(_ content: LibraryFolderContent, displayedComics: [LibraryComic]) -> some View {
         if !displayedComics.isEmpty {
-            Section("Comics") {
+            Section {
                 ForEach(displayedComics) { comic in
                     if isSelectionMode {
                         Button {
                             toggleSelection(for: comic)
                         } label: {
-                            LibraryComicRow(
-                                comic: comic,
-                                coverURL: viewModel.coverURL(for: comic),
-                                showsSelectionState: true,
-                                isSelected: selectedComicIDs.contains(comic.id)
-                            )
+                            InsetListRowCard {
+                                LibraryComicRow(
+                                    comic: comic,
+                                    coverURL: viewModel.coverURL(for: comic),
+                                    showsSelectionState: true,
+                                    isSelected: selectedComicIDs.contains(comic.id)
+                                )
+                                .equatable()
+                            }
                         }
                         .buttonStyle(.plain)
+                        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                     } else {
                         interactiveComicListNavigationLink(comic: comic) {
                             comicReaderDestination(
@@ -1310,11 +1370,14 @@ struct LibraryBrowserView: View {
                             LibraryComicRow(
                                 comic: comic,
                                 coverURL: viewModel.coverURL(for: comic),
-                                trailingAccessoryReservedWidth: 40
+                                trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
                             )
+                            .equatable()
                         }
                     }
                 }
+            } header: {
+                sectionHeaderLabel("Comics", count: displayedComics.count)
             }
         }
     }
@@ -1322,8 +1385,8 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func comicGridSection(_ content: LibraryFolderContent, displayedComics: [LibraryComic]) -> some View {
         if !displayedComics.isEmpty {
-            gridSection(title: "Comics") {
-                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: 16) {
+            gridSection(title: "Comics", count: displayedComics.count) {
+                LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(displayedComics) { comic in
                         if isSelectionMode {
                             Button {
@@ -1335,6 +1398,7 @@ struct LibraryBrowserView: View {
                                     showsSelectionState: true,
                                     isSelected: selectedComicIDs.contains(comic.id)
                                 )
+                                .equatable()
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -1348,6 +1412,7 @@ struct LibraryBrowserView: View {
                                 )
                             } label: {
                                 LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+                                    .equatable()
                             }
                         }
                     }
@@ -1358,11 +1423,20 @@ struct LibraryBrowserView: View {
 
     private func gridSection<Content: View>(
         title: String,
+        count: Int? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         gridSection {
-            Text(title)
-                .font(.headline)
+            HStack(spacing: Spacing.xs) {
+                Text(title)
+                    .font(AppFont.headline())
+
+                if let count {
+                    Text("(\(count))")
+                        .font(AppFont.headline())
+                        .foregroundStyle(Color.textTertiary)
+                }
+            }
         } content: {
             content()
         }
@@ -1372,10 +1446,19 @@ struct LibraryBrowserView: View {
         @ViewBuilder header: () -> Header,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             header()
             content()
         }
+    }
+
+    private func sectionHeaderLabel(_ title: String, count: Int) -> some View {
+        HStack(spacing: Spacing.xxs) {
+            Text(title)
+            Text("(\(count))")
+                .foregroundStyle(Color.textTertiary)
+        }
+        .textCase(nil)
     }
 
     private func folderDestination(for folder: LibraryFolder) -> some View {
@@ -1390,8 +1473,12 @@ struct LibraryBrowserView: View {
         NavigationLink {
             folderDestination(for: folder)
         } label: {
-            LibraryFolderRow(folder: folder, coverURL: viewModel.coverURL(for: folder))
+            InsetListRowCard {
+                LibraryFolderRow(folder: folder, coverURL: viewModel.coverURL(for: folder))
+            }
         }
+        .buttonStyle(.plain)
+        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
     }
 
     private func folderGridNavigationLink(for folder: LibraryFolder) -> some View {
@@ -1421,15 +1508,21 @@ struct LibraryBrowserView: View {
         @ViewBuilder destination: () -> Destination,
         @ViewBuilder label: () -> Label
     ) -> some View {
-        NavigationLink {
+        let rowLabel = label()
+
+        return NavigationLink {
             destination()
         } label: {
-            label()
+            InsetListRowCard {
+                rowLabel
+            }
         }
         .overlay(alignment: .trailing) {
             quickActionButton(for: comic)
                 .padding(.trailing, 8)
         }
+        .buttonStyle(.plain)
+        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         .contextMenu {
             comicContextActions(for: comic)
         }
@@ -1548,20 +1641,22 @@ struct LibraryBrowserView: View {
     private func collectionPreviewHeader(
         for kind: LibrarySpecialCollectionKind
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             Text(previewSectionTitle(for: kind))
-                .font(.headline)
+                .font(AppFont.headline())
 
-            Spacer(minLength: 12)
+            Spacer(minLength: Spacing.sm)
 
             NavigationLink {
                 specialCollectionDestination(kind)
             } label: {
-                Text("See All")
-                    .font(.subheadline.weight(.semibold))
+                CompactActionChip(
+                    title: "See All",
+                    systemImage: "arrow.right",
+                    tint: .blue
+                )
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.blue)
         }
     }
 
@@ -1571,6 +1666,7 @@ struct LibraryBrowserView: View {
     }
 
     private func toggleSelection(for comic: LibraryComic) {
+        AppHaptics.selection()
         if selectedComicIDs.contains(comic.id) {
             selectedComicIDs.remove(comic.id)
         } else {
@@ -1593,6 +1689,8 @@ struct LibraryBrowserView: View {
             return
         }
 
+        AppHaptics.selection()
+
         if areAllVisibleComicsSelected {
             selectedComicIDs.subtract(visibleIDs)
         } else {
@@ -1613,24 +1711,24 @@ struct LibraryBrowserView: View {
     }
 
     private func scanProgressPanel(_ progress: LibraryScanProgress) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(spacing: Spacing.sm) {
                 ProgressView()
                     .controlSize(.small)
 
                 Text(progress.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(AppFont.subheadline(.semibold))
             }
 
             Text(progress.detailLine)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(AppFont.caption())
+                .foregroundStyle(Color.textSecondary)
                 .lineLimit(2)
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
                 .fill(Color.accentColor.opacity(0.08))
         )
     }
@@ -1640,7 +1738,7 @@ struct LibraryBrowserView: View {
         if isSelectionMode {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
                 folderLocationControls(content)
 
                 if !(content.subfolders.isEmpty && content.comics.isEmpty) {
@@ -1650,9 +1748,11 @@ struct LibraryBrowserView: View {
                     )
 
                     if !content.comics.isEmpty {
-                        LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                            comicFilter = selectedFilter
-                        }
+                        FilterChipBar(
+                            items: LibraryComicQuickFilter.allCases.filter { $0 != .all },
+                            selection: comicFilterChipBinding,
+                            label: { $0.title }
+                        )
                     }
 
                     if hasActiveLocalFolderFilters {
@@ -1661,10 +1761,10 @@ struct LibraryBrowserView: View {
                             comicFilter = .all
                         } label: {
                             Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
-                                .font(.caption.weight(.semibold))
+                                .font(AppFont.caption(.semibold))
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.appAccent)
                     }
                 }
             }
@@ -1674,7 +1774,7 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func folderLocationControls(_ content: LibraryFolderContent) -> some View {
         if !content.folder.isRoot {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.sm) {
                 if let parentFolderID = parentFolderID(for: content) {
                     NavigationLink {
                         LibraryBrowserView(
@@ -1683,10 +1783,13 @@ struct LibraryBrowserView: View {
                             dependencies: dependencies
                         )
                     } label: {
-                        Label("Up One Level", systemImage: "arrow.up.backward")
-                            .font(.caption.weight(.semibold))
+                        CompactActionChip(
+                            title: "Up",
+                            systemImage: "arrow.up.backward",
+                            tint: .blue
+                        )
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                 }
 
                 if content.folder.parentID != 1 {
@@ -1697,10 +1800,13 @@ struct LibraryBrowserView: View {
                             dependencies: dependencies
                         )
                     } label: {
-                        Label("Library Root", systemImage: "house")
-                            .font(.caption.weight(.semibold))
+                        CompactActionChip(
+                            title: "Root",
+                            systemImage: "house",
+                            tint: .teal
+                        )
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -1885,8 +1991,9 @@ struct LibraryBrowserView: View {
                                     LibraryComicRow(
                                         comic: comic,
                                         coverURL: viewModel.coverURL(for: comic),
-                                        trailingAccessoryReservedWidth: 40
+                                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
                                     )
+                                    .equatable()
                                 }
                             }
                         }
@@ -1929,16 +2036,19 @@ struct LibraryBrowserView: View {
                             comicFilter = selectedFilter
                         }
                     }
-                } else if viewModel.isSearching {
-                    Text("Searching library database...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            } else if viewModel.isSearching {
+                Text("Searching library database...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .listRowInsets(EdgeInsets(top: 14, leading: 16, bottom: 10, trailing: 16))
-            .listRowBackground(Color.clear)
         }
+        .insetCardListRow(
+            horizontalInset: LayoutMetrics.horizontalInset,
+            top: 14,
+            bottom: 10
+        )
     }
+}
 
     private var searchResultBadgeItems: [StatusBadgeItem] {
         guard let results = viewModel.searchResults else {
@@ -2026,504 +2136,5 @@ private enum LibraryBrowserDisplayMode: String, CaseIterable, Identifiable {
         case .grid:
             return "square.grid.2x2"
         }
-    }
-}
-
-private struct LibraryShortcutCardItem: Identifiable {
-    let id: String
-    let title: String
-    let subtitle: String?
-    let systemImageName: String
-    let tint: Color
-    let badgeTitle: String?
-    let destination: AnyView
-
-    init(
-        id: String,
-        title: String,
-        subtitle: String? = nil,
-        systemImageName: String,
-        tint: Color,
-        badgeTitle: String? = nil,
-        destination: AnyView
-    ) {
-        self.id = id
-        self.title = title
-        self.subtitle = subtitle
-        self.systemImageName = systemImageName
-        self.tint = tint
-        self.badgeTitle = badgeTitle
-        self.destination = destination
-    }
-}
-
-private struct LibraryDashboardShortcutSection: Identifiable {
-    let id: String
-    let title: String
-    let items: [LibraryShortcutCardItem]
-
-    init(
-        id: String? = nil,
-        title: String,
-        items: [LibraryShortcutCardItem]
-    ) {
-        self.id = id ?? title
-        self.title = title
-        self.items = items
-    }
-}
-
-private struct ScanCompletionBanner: View {
-    let completion: LibraryScanCompletionState
-    let dismiss: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.green)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(completion.title)
-                    .font(.subheadline.weight(.semibold))
-
-                Text(completion.message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 12)
-
-            Button(action: dismiss) {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .padding(6)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color.black.opacity(0.06), lineWidth: 1)
-        }
-        .shadow(color: Color.black.opacity(0.06), radius: 12, y: 4)
-        .padding(.horizontal, 16)
-    }
-}
-
-private struct LibraryFolderRow: View {
-    let folder: LibraryFolder
-    let coverURL: URL?
-
-    var body: some View {
-        LibraryBrowserListRowShell {
-            EmptyView()
-        } thumbnail: {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "folder.fill"
-            )
-        } content: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(folder.displayName)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                if let childCountText = folder.childCountText {
-                    Text(childCountText)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(folder.path)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                AdaptiveStatusBadgeGroup(badges: folder.browserBadgeItems)
-            }
-        } trailingAccessory: {
-            EmptyView()
-        }
-    }
-}
-
-private struct LibraryShortcutCard: View {
-    let item: LibraryShortcutCardItem
-
-    var body: some View {
-        InsetCard(cornerRadius: 18, contentPadding: 18, strokeOpacity: 0.06) {
-            Label {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.title)
-                        .font(.headline)
-
-                    if let subtitle = item.subtitle {
-                        Text(subtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-            } icon: {
-                Image(systemName: item.systemImageName)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(item.tint)
-            }
-            .labelStyle(.titleAndIcon)
-
-            if let badgeTitle = item.badgeTitle {
-                StatusBadge(title: badgeTitle, tint: item.tint)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: item.subtitle == nil ? 108 : 132, alignment: .topLeading)
-    }
-}
-
-private struct LibraryShortcutRow: View {
-    let item: LibraryShortcutCardItem
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .font(.headline)
-
-                    if let subtitle = item.subtitle {
-                        Text(subtitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            } icon: {
-                Image(systemName: item.systemImageName)
-                    .font(.title3)
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(item.tint)
-            }
-            .labelStyle(.titleAndIcon)
-
-            Spacer(minLength: 12)
-
-            if let badgeTitle = item.badgeTitle {
-                StatusBadge(title: badgeTitle, tint: item.tint)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-private struct ContinueReadingRow: View {
-    let comic: LibraryComic
-    let coverURL: URL?
-    var trailingAccessoryReservedWidth: CGFloat = 0
-
-    var body: some View {
-        LibraryBrowserListRowShell(spacing: 14, trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
-            EmptyView()
-        } thumbnail: {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "book.closed.fill",
-                width: 64,
-                height: 92
-            )
-        } content: {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(comic.displayTitle)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                Text(comic.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                AdaptiveStatusBadgeGroup(badges: comic.continueReadingRowBadges)
-            }
-        } trailingAccessory: {
-            Image(systemName: "play.fill")
-                .foregroundStyle(.blue)
-        }
-    }
-}
-
-private struct ContinueReadingCard: View {
-    let comic: LibraryComic
-    let coverURL: URL?
-
-    var body: some View {
-        LibraryBrowserContentCard(minHeight: 188, cornerRadius: 20, contentPadding: 20) {
-            HStack(spacing: 18) {
-                LocalCoverThumbnailView(
-                    url: coverURL,
-                    placeholderSystemName: "book.closed.fill",
-                    width: 104,
-                    height: 148
-                )
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(comic.displayTitle)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(2)
-
-                    Text(comic.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-
-                    AdaptiveStatusBadgeGroup(badges: comic.continueReadingCardBadges)
-
-                    Spacer(minLength: 0)
-
-                    Label("Resume", systemImage: "play.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.blue)
-                }
-
-                Spacer(minLength: 0)
-            }
-        }
-    }
-}
-
-private struct LibraryFolderCard: View {
-    let folder: LibraryFolder
-    let coverURL: URL?
-
-    var body: some View {
-        LibraryBrowserContentCard(minHeight: 250) {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "folder.fill",
-                width: 96,
-                height: 120
-            )
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(folder.displayName)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                Text(folder.childCountText ?? folder.path)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-
-                AdaptiveStatusBadgeGroup(badges: folder.browserBadgeItems)
-            }
-        }
-    }
-}
-
-struct LibraryComicRow: View {
-    let comic: LibraryComic
-    let coverURL: URL?
-    var showsSelectionState = false
-    var isSelected = false
-    var trailingAccessoryReservedWidth: CGFloat = 0
-
-    var body: some View {
-        LibraryBrowserListRowShell(trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
-            if showsSelectionState {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
-            } else {
-                EmptyView()
-            }
-        } thumbnail: {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "book.closed.fill"
-            )
-        } content: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 8) {
-                    Text(comic.displayTitle)
-                        .font(.headline)
-                        .lineLimit(2)
-
-                    Spacer(minLength: 8)
-
-                    if let issueLabel = comic.issueLabel {
-                        StatusBadge(title: "#\(issueLabel)", tint: .blue)
-                    }
-                }
-
-                Text(comic.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                AdaptiveStatusBadgeGroup(badges: comic.browserRowBadges)
-            }
-        } trailingAccessory: {
-            EmptyView()
-        }
-    }
-}
-
-struct LibraryComicCard: View {
-    let comic: LibraryComic
-    let coverURL: URL?
-    var showsSelectionState = false
-    var isSelected = false
-
-    var body: some View {
-        LibraryBrowserContentCard(minHeight: 330, isSelected: showsSelectionState && isSelected) {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "book.closed.fill",
-                width: 120,
-                height: 168
-            )
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(comic.displayTitle)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                Text(comic.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-
-                AdaptiveStatusBadgeGroup(badges: comic.browserCardBadges)
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if showsSelectionState {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
-                    .padding(14)
-            }
-        }
-    }
-}
-
-private struct LibraryBrowserContentCard<Content: View>: View {
-    let minHeight: CGFloat
-    var cornerRadius: CGFloat = 18
-    var contentPadding: CGFloat = 18
-    var strokeOpacity: Double = 0.06
-    var isSelected = false
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        InsetCard(
-            cornerRadius: cornerRadius,
-            contentPadding: contentPadding,
-            strokeOpacity: strokeOpacity
-        ) {
-            content()
-        }
-        .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
-        .overlay {
-            if isSelected {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(Color.accentColor, lineWidth: 2)
-            }
-        }
-    }
-}
-
-private struct LibraryBrowserListRowShell<
-    LeadingAccessory: View,
-    Thumbnail: View,
-    Content: View,
-    TrailingAccessory: View
->: View {
-    var spacing: CGFloat = 12
-    var trailingAccessoryReservedWidth: CGFloat = 0
-    @ViewBuilder let leadingAccessory: () -> LeadingAccessory
-    @ViewBuilder let thumbnail: () -> Thumbnail
-    @ViewBuilder let content: () -> Content
-    @ViewBuilder let trailingAccessory: () -> TrailingAccessory
-
-    var body: some View {
-        HStack(spacing: spacing) {
-            leadingAccessory()
-            thumbnail()
-            content()
-            Spacer(minLength: 12)
-            trailingAccessory()
-        }
-        .padding(.vertical, 4)
-        .padding(.trailing, trailingAccessoryReservedWidth)
-    }
-}
-
-private extension LibraryFolder {
-    var browserBadgeItems: [StatusBadgeItem] {
-        var badges = [StatusBadgeItem(title: type.title, tint: .orange)]
-
-        if finished {
-            badges.append(StatusBadgeItem(title: "Finished", tint: .green))
-        } else if completed {
-            badges.append(StatusBadgeItem(title: "Complete", tint: .blue))
-        }
-
-        return badges
-    }
-}
-
-private extension LibraryComic {
-    var issueBadgeItem: StatusBadgeItem? {
-        issueLabel.map { StatusBadgeItem(title: "#\($0)", tint: .blue) }
-    }
-
-    var continueReadingRowBadges: [StatusBadgeItem] {
-        var badges = [StatusBadgeItem(title: progressText, tint: read ? .green : .orange)]
-
-        if !bookmarkPageIndices.isEmpty {
-            badges.append(StatusBadgeItem(title: "\(bookmarkPageIndices.count) bookmarks", tint: .blue))
-        }
-
-        return badges
-    }
-
-    var continueReadingCardBadges: [StatusBadgeItem] {
-        [
-            StatusBadgeItem(title: progressText, tint: read ? .green : .orange),
-            StatusBadgeItem(title: type.title, tint: .gray)
-        ]
-    }
-
-    var browserRowBadges: [StatusBadgeItem] {
-        var badges: [StatusBadgeItem] = []
-        badges.append(StatusBadgeItem(title: progressText, tint: read ? .green : .orange))
-        badges.append(StatusBadgeItem(title: type.title, tint: .gray))
-
-        if isFavorite {
-            badges.append(StatusBadgeItem(title: "Favorite", tint: .yellow))
-        }
-
-        if !bookmarkPageIndices.isEmpty {
-            badges.append(StatusBadgeItem(title: "\(bookmarkPageIndices.count) bookmarks", tint: .blue))
-        }
-
-        return badges
-    }
-
-    var browserCardBadges: [StatusBadgeItem] {
-        var badges = browserRowBadges
-
-        if let issueBadgeItem {
-            badges.insert(issueBadgeItem, at: 0)
-        }
-
-        return badges
     }
 }

@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class ComicReaderViewModel: ObservableObject {
+final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var comic: LibraryComic
     @Published private(set) var document: ComicDocument?
     @Published private(set) var isLoading = false
@@ -259,6 +259,7 @@ final class ComicReaderViewModel: ObservableObject {
     }
 
     func toggleBookmarkForCurrentPage() {
+        AppHaptics.light()
         applyBookmarks(
             ReaderBookmarkSupport.toggled(
                 bookmarkPageIndices,
@@ -271,6 +272,7 @@ final class ComicReaderViewModel: ObservableObject {
 
     func toggleFavoriteStatus() {
         let updatedValue = !isFavorite
+        AppHaptics.medium()
 
         do {
             try databaseWriter.setFavorite(
@@ -289,6 +291,8 @@ final class ComicReaderViewModel: ObservableObject {
         guard self.rating != normalizedRating else {
             return
         }
+
+        AppHaptics.selection()
 
         let ratingValue = normalizedRating > 0 ? Double(normalizedRating) : nil
         do {
@@ -311,6 +315,8 @@ final class ComicReaderViewModel: ObservableObject {
         guard comic.read != isRead else {
             return
         }
+
+        AppHaptics.light()
 
         let resolvedPageCount = document?.pageCount
 
