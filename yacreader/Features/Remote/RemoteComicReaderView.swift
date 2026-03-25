@@ -427,23 +427,26 @@ struct RemoteComicReaderView: View {
     private var readerTopBar: some View {
         ReaderTopBar(
             title: displayName,
-            subtitle: nil,
             onBack: dismiss.callAsFunction,
-            onTrailingAction: {
+            onMenu: {
                 readerSession.apply(.setChromeVisible(true))
                 isShowingReaderControls = true
             },
-            isTrailingDisabled: document == nil
-        ) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.headline)
-        }
+            isMenuDisabled: document == nil
+        )
     }
 
     @ViewBuilder
     private var readerBottomBar: some View {
-        if let pageIndicatorText {
-            ReaderPageJumpBar(pageIndicatorText: pageIndicatorText, onTap: presentPageJump)
+        if let currentPage = currentPageNumber, let pageCount = document?.pageCount {
+            ReaderBottomBar(
+                currentPage: currentPage,
+                pageCount: pageCount,
+                onPageSelected: { pageNumber in
+                    updateVisiblePage(to: pageNumber - 1)
+                },
+                onPageIndicatorTapped: presentPageJump
+            )
         }
     }
 
@@ -516,34 +519,15 @@ struct RemoteComicReaderView: View {
     }
 
     private func handleReaderTap(_ region: ReaderTapRegion) {
-        let action = ReaderTapRouter.action(
-            for: region,
-            isChromeVisible: readerSession.state.isChromeVisible,
+        ReaderGestureCoordinator.handleTap(
+            region,
+            session: readerSession,
             configuration: .remoteSingleComic
         )
-
-        withAnimation(.easeInOut(duration: 0.2)) {
-            switch action {
-            case .none:
-                break
-            case .toggleChrome:
-                readerSession.apply(.toggleChrome)
-            case .hideChrome:
-                readerSession.apply(.hideChrome)
-            case .invokeLeadingEdgeAction, .invokeTrailingEdgeAction:
-                break
-            }
-        }
     }
 
     private func hideReaderChrome() {
-        guard readerSession.state.isChromeVisible else {
-            return
-        }
-
-        withAnimation(.easeInOut(duration: 0.2)) {
-            readerSession.apply(.hideChrome)
-        }
+        ReaderGestureCoordinator.hideChrome(session: readerSession)
     }
 
     private var currentPageNumber: Int? {

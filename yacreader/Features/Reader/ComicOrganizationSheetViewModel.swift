@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class ComicOrganizationSheetViewModel: ObservableObject {
+final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var snapshot: LibraryOrganizationSnapshot = .empty
     @Published private(set) var isLoading = false
     @Published var alert: LibraryAlertState?

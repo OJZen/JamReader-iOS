@@ -113,7 +113,7 @@ struct ComicMetadataEditorSheet: View {
                                 }
                             }
                         } label: {
-                            Image(systemName: "doc.badge.arrow.down")
+                            Image(systemName: "square.and.arrow.down")
                         }
                         .disabled(viewModel.isLoading || viewModel.isSaving)
                     }

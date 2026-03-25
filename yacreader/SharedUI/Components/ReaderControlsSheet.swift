@@ -115,58 +115,31 @@ struct ReaderControlsSheet: View {
     }
 
     var body: some View {
-        ReaderControlsContainer(title: "Reader Controls", onDone: onDone) {
-            ReaderNavigationControlsSection(
-                pageIndicatorText: pageIndicatorText,
-                currentPageNumber: currentPageNumber,
-                pageCount: pageCount,
-                onOpenThumbnails: onOpenThumbnails,
-                onGoToPageNumber: onGoToPageNumber
-            )
-
-            ReaderReadingStatusControlsSection(
-                currentPageIsBookmarked: currentPageIsBookmarked,
-                isFavorite: isFavorite,
-                isRead: isRead,
-                rating: rating,
-                onToggleFavorite: onToggleFavorite,
-                onToggleReadStatus: onToggleReadStatus,
-                onToggleBookmark: onToggleBookmark,
-                onSetRating: onSetRating
-            )
-
-            ReaderBookmarksControlsSection(
-                bookmarkItems: bookmarkItems,
-                onGoToBookmark: onGoToBookmark
-            )
-
-            ReaderLibraryActionsControlsSection(
-                onOpenQuickMetadata: onOpenQuickMetadata,
-                onOpenMetadata: onOpenMetadata,
-                onOpenOrganization: onOpenOrganization
-            )
-
-            ReaderDisplaySettingsControlsSection(
+        ReaderControlsContainer(title: "Settings", onDone: onDone) {
+            ReaderLayoutControlsSection(
                 supportsImageLayoutControls: supportsImageLayoutControls,
                 supportsDoublePageSpread: supportsDoublePageSpread,
-                fitMode: fitMode,
                 pagingMode: pagingMode,
                 spreadMode: spreadMode,
                 readingDirection: readingDirection,
                 coverAsSinglePage: coverAsSinglePage,
-                onSetFitMode: onSetFitMode,
                 onSetPagingMode: onSetPagingMode,
                 onSetSpreadMode: onSetSpreadMode,
                 onSetReadingDirection: onSetReadingDirection,
                 onSetCoverAsSinglePage: onSetCoverAsSinglePage
             )
 
-            ReaderRotationControlsSection(
+            ReaderViewControlsSection(
                 supportsRotationControls: supportsRotationControls,
                 rotation: rotation,
                 onRotateCounterClockwise: onRotateCounterClockwise,
                 onRotateClockwise: onRotateClockwise,
                 onResetRotation: onResetRotation
+            )
+
+            ReaderBookmarksControlsSection(
+                bookmarkItems: bookmarkItems,
+                onGoToBookmark: onGoToBookmark
             )
         }
     }

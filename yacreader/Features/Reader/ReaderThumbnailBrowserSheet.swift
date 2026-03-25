@@ -38,7 +38,7 @@ struct ReaderThumbnailBrowserSheet: View {
                         .ignoresSafeArea()
 
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 22) {
+                        LazyVStack(alignment: .leading, spacing: 22) {
                             pageOverviewCard(proxy: proxy)
 
                             LazyVGrid(

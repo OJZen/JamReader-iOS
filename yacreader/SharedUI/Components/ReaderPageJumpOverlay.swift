@@ -10,7 +10,6 @@ struct ReaderPageJumpOverlay: View {
     let onJump: () -> Void
 
     @FocusState private var isPageFieldFocused: Bool
-    @State private var selectedPageNumber: Double
     @State private var keyboardLift: CGFloat = 0
 
     init(
@@ -25,10 +24,6 @@ struct ReaderPageJumpOverlay: View {
         self.pageCount = pageCount
         self.onCancel = onCancel
         self.onJump = onJump
-
-        let normalizedMaximum = max(pageCount, 1)
-        let initialSelection = Int(pageNumberText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)) ?? currentPageNumber
-        _selectedPageNumber = State(initialValue: Double(min(max(initialSelection, 1), normalizedMaximum)))
     }
 
     private var maximumPageCount: Int {
@@ -39,10 +34,6 @@ struct ReaderPageJumpOverlay: View {
         min(max(currentPageNumber, 1), maximumPageCount)
     }
 
-    private var clampedSelectedPage: Int {
-        min(max(Int(selectedPageNumber.rounded()), 1), maximumPageCount)
-    }
-
     private var isValidPageNumber: Bool {
         guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return false
@@ -51,155 +42,79 @@ struct ReaderPageJumpOverlay: View {
         return (1...maximumPageCount).contains(pageNumber)
     }
 
-    private var progressValue: Double {
-        Double(clampedSelectedPage) / Double(maximumPageCount)
-    }
-
     var body: some View {
         ZStack {
-            Color.black.opacity(0.26)
+            Color.black.opacity(0.36)
                 .ignoresSafeArea()
 
             ReaderPageJumpKeyboardDismissLayer()
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.12))
+            VStack(spacing: Spacing.md) {
+                HStack {
+                    Text("Page \(clampedCurrentPage) of \(maximumPageCount)")
+                        .font(AppFont.footnote(.medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.7))
 
-                        Image(systemName: "book.pages")
-                            .font(.headline.weight(.semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .frame(width: 36, height: 36)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Go to Page")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-
-                        Text("Pick a page and keep reading.")
-                            .font(.footnote)
-                            .foregroundStyle(Color.white.opacity(0.78))
-                    }
-
-                    Spacer(minLength: 0)
+                    Spacer()
 
                     Button(action: onCancel) {
-                        Image(systemName: "xmark")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(Color.white.opacity(0.12), in: Circle())
+                        Image(systemName: "xmark.circle.fill")
+                            .font(AppFont.title3())
+                            .foregroundStyle(.white.opacity(0.6))
                     }
                     .buttonStyle(.plain)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Selected")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(Color.white.opacity(0.8))
+                HStack(spacing: Spacing.sm) {
+                    TextField("Go to page\u{2026}", text: $pageNumberText)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .font(AppFont.title3(.semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, Spacing.md)
+                        .frame(height: 48)
+                        .background(
+                            Color.white.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
+                                .stroke(
+                                    isPageFieldFocused ? Color.white.opacity(0.8) : Color.white.opacity(0.15),
+                                    lineWidth: isPageFieldFocused ? 1.5 : 1
+                                )
+                        )
+                        .focused($isPageFieldFocused)
 
-                        Spacer()
-
-                        Text("Page \(clampedSelectedPage) of \(maximumPageCount)")
-                            .font(.footnote.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(.white)
-                    }
-
-                    Slider(
-                        value: $selectedPageNumber,
-                        in: 1...Double(maximumPageCount),
-                        step: 1
-                    )
-                    .tint(.white)
-
-                    HStack {
-                        Text("1")
-                        Spacer()
-                        Text("\(maximumPageCount)")
-                    }
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(Color.white.opacity(0.72))
-
-                    Text("\(Int((progressValue * 100).rounded()))% complete")
-                        .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.72))
-                }
-
-                HStack(alignment: .bottom, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Page Number")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(Color.white.opacity(0.72))
-
-                        TextField("Page", text: $pageNumberText)
-                            .keyboardType(.numberPad)
-                            .textContentType(.oneTimeCode)
-                            .font(.title3.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
-                            .frame(height: 46)
-                            .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(
-                                        isPageFieldFocused ? Color.white.opacity(0.9) : Color.white.opacity(0.16),
-                                        lineWidth: isPageFieldFocused ? 1.5 : 1
-                                    )
-                            )
-                            .focused($isPageFieldFocused)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Button("Jump", action: onJump)
+                    Button("Go", action: onJump)
                         .buttonStyle(.borderedProminent)
-                        .tint(.white.opacity(0.92))
+                        .tint(.white.opacity(0.9))
                         .foregroundStyle(.black)
                         .controlSize(.large)
                         .disabled(!isValidPageNumber)
-                        .frame(height: 46)
-                }
-
-                HStack(spacing: 10) {
-                    ReaderPageJumpMetaChip(
-                        systemImage: "location",
-                        text: "Current \(clampedCurrentPage)"
-                    )
-
-                    ReaderPageJumpMetaChip(
-                        systemImage: "arrow.left.and.right",
-                        text: "Range 1-\(maximumPageCount)"
-                    )
+                        .frame(height: 48)
                 }
             }
-            .padding(18)
-            .frame(maxWidth: 332)
+            .padding(Spacing.lg)
+            .frame(maxWidth: 320)
             .background(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
+                RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.18), radius: 22, y: 10)
-            .padding(.horizontal, 24)
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 8)
+            .padding(.horizontal, Spacing.xl)
             .offset(y: -keyboardLift)
+            .overlayTransition(true)
             .onAppear {
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 180_000_000)
                     isPageFieldFocused = true
                 }
-            }
-            .onChange(of: selectedPageNumber) { _, _ in
-                pageNumberText = "\(clampedSelectedPage)"
-            }
-            .onChange(of: pageNumberText) { _, _ in
-                synchronizeSelectionFromText()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
                 updateKeyboardLift(from: notification)
@@ -208,22 +123,7 @@ struct ReaderPageJumpOverlay: View {
                 updateKeyboardLift(from: notification)
             }
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-    }
-
-    private func synchronizeSelectionFromText() {
-        guard let pageNumber = Int(pageNumberText.trimmingCharacters(in: .whitespacesAndNewlines)),
-              (1...maximumPageCount).contains(pageNumber)
-        else {
-            return
-        }
-
-        let normalizedSelection = Double(pageNumber)
-        guard abs(selectedPageNumber - normalizedSelection) > 0.001 else {
-            return
-        }
-
-        selectedPageNumber = normalizedSelection
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
 
     private func updateKeyboardLift(from notification: Notification) {
@@ -239,25 +139,6 @@ struct ReaderPageJumpOverlay: View {
         withAnimation(.easeOut(duration: duration)) {
             keyboardLift = targetLift
         }
-    }
-}
-
-private struct ReaderPageJumpMetaChip: View {
-    let systemImage: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-
-            Text(text)
-                .font(.caption.monospacedDigit())
-        }
-        .foregroundStyle(Color.white.opacity(0.76))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.1), in: Capsule())
     }
 }
 

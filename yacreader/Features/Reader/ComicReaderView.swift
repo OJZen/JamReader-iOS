@@ -125,7 +125,7 @@ struct ComicReaderView: View {
             }
 
             readerSession.apply(.syncVisiblePage(newValue))
-            hideReaderChrome()
+            ReaderGestureCoordinator.hideChrome(session: readerSession)
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document = viewModel.document {
@@ -306,64 +306,41 @@ struct ComicReaderView: View {
     private var readerTopBar: some View {
         ReaderTopBar(
             title: viewModel.navigationTitle,
-            subtitle: nil,
             onBack: dismiss.callAsFunction,
-            onTrailingAction: {
+            onMenu: {
                 readerSession.setChromeVisible(true)
                 isShowingReaderControls = true
             },
-            isTrailingDisabled: viewModel.document == nil
-        ) {
-            Image(systemName: "slider.horizontal.3")
-                .font(.headline)
-        }
+            isMenuDisabled: viewModel.document == nil
+        )
     }
 
     @ViewBuilder
     private var readerBottomBar: some View {
-        if let pageIndicatorText = viewModel.pageIndicatorText {
-            ReaderPageJumpBar(pageIndicatorText: pageIndicatorText, onTap: presentPageJump)
-        }
-    }
-
-    private func toggleReaderChrome() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            readerSession.apply(.toggleChrome)
-        }
-    }
-
-    private func hideReaderChrome() {
-        guard readerSession.state.isChromeVisible else {
-            return
-        }
-
-        withAnimation(.easeInOut(duration: 0.2)) {
-            readerSession.apply(.hideChrome)
+        if let currentPage = viewModel.currentPageNumber, let pageCount = viewModel.pageCount {
+            ReaderBottomBar(
+                currentPage: currentPage,
+                pageCount: pageCount,
+                onPageSelected: { pageNumber in
+                    viewModel.goToPage(number: pageNumber)
+                    readerSession.apply(.goToPage(pageNumber - 1))
+                },
+                onPageIndicatorTapped: presentPageJump
+            )
         }
     }
 
     private func handleReaderTap(_ tapRegion: ReaderTapRegion) {
-        let action = ReaderTapRouter.action(
-            for: tapRegion,
-            isChromeVisible: readerSession.state.isChromeVisible,
+        ReaderGestureCoordinator.handleTap(
+            tapRegion,
+            session: readerSession,
             configuration: .localLibrary(
                 canOpenLeadingEdge: viewModel.canOpenPreviousComic,
                 canOpenTrailingEdge: viewModel.canOpenNextComic
-            )
+            ),
+            onLeadingEdge: { viewModel.openPreviousComic() },
+            onTrailingEdge: { viewModel.openNextComic() }
         )
-
-        switch action {
-        case .none:
-            break
-        case .toggleChrome:
-            toggleReaderChrome()
-        case .hideChrome:
-            hideReaderChrome()
-        case .invokeLeadingEdgeAction:
-            viewModel.openPreviousComic()
-        case .invokeTrailingEdgeAction:
-            viewModel.openNextComic()
-        }
     }
 
     private var pageJumpTextBinding: Binding<String> {

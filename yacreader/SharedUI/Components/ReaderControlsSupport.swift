@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Sheet Container
+
 struct ReaderControlsContainer<Content: View>: View {
     let title: String
     let onDone: () -> Void
@@ -7,16 +9,11 @@ struct ReaderControlsContainer<Content: View>: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                ReaderControlsHeader(title: title)
-
-                Form {
-                    content()
-                }
-                .scrollContentBackground(.hidden)
-                .background(Color(.systemGroupedBackground))
+            Form {
+                content()
             }
-            .background(Color(.systemGroupedBackground))
+            .scrollContentBackground(.hidden)
+            .background(Color.surfaceGrouped)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -25,44 +22,152 @@ struct ReaderControlsContainer<Content: View>: View {
                 }
             }
         }
-        .presentationBackground(Color(.systemGroupedBackground))
+        .presentationBackground(Color.surfaceGrouped)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 }
 
-private struct ReaderControlsHeader: View {
-    let title: String
+// MARK: - Layout Section (Page Mode + Direction)
+
+struct ReaderLayoutControlsSection: View {
+    let supportsImageLayoutControls: Bool
+    let supportsDoublePageSpread: Bool
+    let pagingMode: ReaderPagingMode
+    let spreadMode: ReaderSpreadMode
+    let readingDirection: ReaderReadingDirection
+    let coverAsSinglePage: Bool
+    let onSetPagingMode: (ReaderPagingMode) -> Void
+    let onSetSpreadMode: (ReaderSpreadMode) -> Void
+    let onSetReadingDirection: (ReaderReadingDirection) -> Void
+    let onSetCoverAsSinglePage: (Bool) -> Void
+
+    private var pagingModeBinding: Binding<ReaderPagingMode> {
+        Binding(get: { pagingMode }, set: onSetPagingMode)
+    }
+
+    private var spreadModeBinding: Binding<ReaderSpreadMode> {
+        Binding(get: { spreadMode }, set: onSetSpreadMode)
+    }
+
+    private var readingDirectionBinding: Binding<ReaderReadingDirection> {
+        Binding(get: { readingDirection }, set: onSetReadingDirection)
+    }
+
+    private var coverAsSinglePageBinding: Binding<Bool> {
+        Binding(get: { coverAsSinglePage }, set: onSetCoverAsSinglePage)
+    }
+
+    private var isVerticalContinuousMode: Bool {
+        pagingMode == .verticalContinuous
+    }
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.14))
+        if supportsImageLayoutControls {
+            Section("Layout") {
+                Picker("Page Mode", selection: pagingModeBinding) {
+                    ForEach(ReaderPagingMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
 
-                Image(systemName: "book.pages.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
+                if !isVerticalContinuousMode {
+                    if supportsDoublePageSpread {
+                        Picker("Spread", selection: spreadModeBinding) {
+                            ForEach(ReaderSpreadMode.allCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        if spreadMode == .doublePage {
+                            Toggle("Cover as Single Page", isOn: coverAsSinglePageBinding)
+                                .font(AppFont.subheadline())
+                        }
+                    }
+
+                    Picker("Direction", selection: readingDirectionBinding) {
+                        ForEach(ReaderReadingDirection.allCases, id: \.self) { dir in
+                            Text(dir.title).tag(dir)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
             }
-            .frame(width: 48, height: 48)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-
-                Text("Adjust navigation, reading layout, and library actions without leaving the page.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(Color(.systemGroupedBackground))
     }
 }
+
+// MARK: - View Section (Rotation Lock)
+
+struct ReaderViewControlsSection: View {
+    let supportsRotationControls: Bool
+    let rotation: ReaderRotationAngle
+    let onRotateCounterClockwise: () -> Void
+    let onRotateClockwise: () -> Void
+    let onResetRotation: () -> Void
+
+    var body: some View {
+        if supportsRotationControls {
+            Section("View") {
+                HStack {
+                    Text("Rotation")
+                        .font(AppFont.subheadline())
+
+                    Spacer()
+
+                    Text(rotation.title)
+                        .font(AppFont.subheadline())
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: Spacing.md) {
+                    Button(action: onRotateCounterClockwise) {
+                        Label("Left", systemImage: "rotate.left")
+                    }
+
+                    Spacer()
+
+                    Button(action: onRotateClockwise) {
+                        Label("Right", systemImage: "rotate.right")
+                    }
+
+                    Spacer()
+
+                    if rotation != .degrees0 {
+                        Button(action: onResetRotation) {
+                            Label("Reset", systemImage: "arrow.counterclockwise")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Bookmarks Section
+
+struct ReaderBookmarksControlsSection: View {
+    let bookmarkItems: [ReaderBookmarkItem]
+    let onGoToBookmark: (Int) -> Void
+
+    var body: some View {
+        if !bookmarkItems.isEmpty {
+            Section("Bookmarks") {
+                ForEach(bookmarkItems) { bookmark in
+                    Button {
+                        onGoToBookmark(bookmark.pageIndex)
+                    } label: {
+                        Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Navigation Section (kept for external callers)
 
 struct ReaderNavigationControlsSection: View {
     let pageIndicatorText: String?
@@ -114,15 +219,15 @@ struct ReaderNavigationControlsSection: View {
                 }
 
                 if canUsePageSlider, let pageCount {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         HStack {
                             Text("Quick Scrub")
-                                .font(.subheadline.weight(.medium))
+                                .font(AppFont.subheadline(.medium))
 
                             Spacer()
 
                             Text("Page \(normalizedSelectedPageNumber) / \(pageCount)")
-                                .font(.caption.monospacedDigit())
+                                .font(AppFont.caption().monospacedDigit())
                                 .foregroundStyle(.secondary)
                         }
 
@@ -138,7 +243,7 @@ struct ReaderNavigationControlsSection: View {
                             Label("Open Selected Page", systemImage: "play.circle")
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, Spacing.xxs)
                 }
             }
             .onChange(of: currentPageNumber) { _, newValue in
@@ -150,24 +255,7 @@ struct ReaderNavigationControlsSection: View {
     }
 }
 
-struct ReaderBookmarksControlsSection: View {
-    let bookmarkItems: [ReaderBookmarkItem]
-    let onGoToBookmark: (Int) -> Void
-
-    var body: some View {
-        if !bookmarkItems.isEmpty {
-            Section("Bookmarks") {
-                ForEach(bookmarkItems) { bookmark in
-                    Button {
-                        onGoToBookmark(bookmark.pageIndex)
-                    } label: {
-                        Label("Page \(bookmark.pageNumber)", systemImage: "bookmark.fill")
-                    }
-                }
-            }
-        }
-    }
-}
+// MARK: - Reading Status Section
 
 struct ReaderReadingStatusControlsSection: View {
     let currentPageIsBookmarked: Bool
@@ -229,6 +317,8 @@ struct ReaderReadingStatusControlsSection: View {
     }
 }
 
+// MARK: - Library Actions Section
+
 struct ReaderLibraryActionsControlsSection: View {
     let onOpenQuickMetadata: (() -> Void)?
     let onOpenMetadata: (() -> Void)?
@@ -262,6 +352,8 @@ struct ReaderLibraryActionsControlsSection: View {
         }
     }
 }
+
+// MARK: - Display Settings Section
 
 struct ReaderDisplaySettingsControlsSection: View {
     let supportsImageLayoutControls: Bool
@@ -333,9 +425,9 @@ struct ReaderDisplaySettingsControlsSection: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("Page Layout")
-                            .font(.subheadline.weight(.medium))
+                            .font(AppFont.subheadline(.medium))
 
                         if supportsDoublePageSpread {
                             Picker("Page Layout", selection: spreadModeBinding) {
@@ -347,15 +439,15 @@ struct ReaderDisplaySettingsControlsSection: View {
                         } else {
                             LabeledContent("Mode", value: ReaderSpreadMode.singlePage.title)
                             Text("iPhone uses single-page reading. Double-page mode is available on iPad.")
-                                .font(.caption)
+                                .font(AppFont.caption())
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, Spacing.xxs)
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("Reading Direction")
-                            .font(.subheadline.weight(.medium))
+                            .font(AppFont.subheadline(.medium))
 
                         Picker("Reading Direction", selection: readingDirectionBinding) {
                             ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
@@ -364,16 +456,16 @@ struct ReaderDisplaySettingsControlsSection: View {
                         }
                         .pickerStyle(.segmented)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, Spacing.xxs)
 
                     if supportsDoublePageSpread, spreadMode == .doublePage {
                         Toggle("Show Covers as Single Page", isOn: coverAsSinglePageBinding)
                     }
                 } else {
                     Text("Vertical mode is optimized for mobile scrolling. Page spread and rotation controls are hidden for consistency.")
-                        .font(.caption)
+                        .font(AppFont.caption())
                         .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
+                        .padding(.vertical, Spacing.xxs)
                 }
             } header: {
                 Text("Display")
@@ -383,6 +475,8 @@ struct ReaderDisplaySettingsControlsSection: View {
         }
     }
 }
+
+// MARK: - Rotation Section
 
 struct ReaderRotationControlsSection: View {
     let supportsRotationControls: Bool
@@ -413,6 +507,8 @@ struct ReaderRotationControlsSection: View {
         }
     }
 }
+
+// MARK: - Rotated Content Host
 
 struct ReaderRotatedContentHost<Content: View>: View {
     let rotation: ReaderRotationAngle

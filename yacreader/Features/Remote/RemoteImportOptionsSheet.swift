@@ -23,7 +23,7 @@ enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
     var summaryText: String {
         switch self {
         case .visibleResults:
-            return "Import only the comic files currently visible in this SMB browser, including search results."
+            return "Import only the comic files currently visible in this remote browser, including search results."
         case .currentFolderOnly:
             return "Import only the supported comics that are directly inside this folder."
         case .includeSubfolders:
