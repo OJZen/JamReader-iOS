@@ -134,6 +134,7 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
 @MainActor
 final class RemoteComicThumbnailPipeline {
     static let shared = RemoteComicThumbnailPipeline()
+    private static let semaphore = AsyncSemaphore(maxConcurrent: 6)
 
     private let cache = NSCache<NSString, UIImage>()
     private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
@@ -201,15 +202,17 @@ final class RemoteComicThumbnailPipeline {
             diskCache: diskCache
         )
         let task = Task<UIImage?, Never> {
-            await worker.buildThumbnail(
-                for: profile,
-                reference: reference,
-                browsingService: browsingService,
-                prefersLocalCache: prefersLocalCache,
-                maxPixelSize: maxPixelSize,
-                diskURL: diskURL,
-                allowsRemoteFetch: allowsRemoteFetch
-            )
+            await Self.semaphore.run {
+                await worker.buildThumbnail(
+                    for: profile,
+                    reference: reference,
+                    browsingService: browsingService,
+                    prefersLocalCache: prefersLocalCache,
+                    maxPixelSize: maxPixelSize,
+                    diskURL: diskURL,
+                    allowsRemoteFetch: allowsRemoteFetch
+                )
+            }
         }
 
         inFlightTasks[cacheKey] = task
@@ -639,45 +642,6 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
 
 }
 
-private actor RemoteThumbnailNetworkLimiter {
-    static let shared = RemoteThumbnailNetworkLimiter(maximumConcurrentOperations: 2)
-
-    private let maximumConcurrentOperations: Int
-    private var activeOperations = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    init(maximumConcurrentOperations: Int) {
-        self.maximumConcurrentOperations = max(1, maximumConcurrentOperations)
-    }
-
-    func run<T>(_ operation: @Sendable () async -> T) async -> T {
-        await acquire()
-        defer { release() }
-        return await operation()
-    }
-
-    private func acquire() async {
-        guard activeOperations >= maximumConcurrentOperations else {
-            activeOperations += 1
-            return
-        }
-
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-    }
-
-    private func release() {
-        if let waiter = waiters.first {
-            waiters.removeFirst()
-            waiter.resume()
-            return
-        }
-
-        activeOperations = max(0, activeOperations - 1)
-    }
-}
-
 private struct RemoteComicThumbnailWorker {
     let diskCache: RemoteThumbnailDiskCacheStore
 
@@ -704,13 +668,11 @@ private struct RemoteComicThumbnailWorker {
         }
 
         if allowsRemoteFetch,
-           let remoteImage = await RemoteThumbnailNetworkLimiter.shared.run({
-               await browsingService.fetchDirectThumbnail(
-                   for: profile,
-                   reference: reference,
-                   maxPixelSize: maxPixelSize
-               )
-           }) {
+           let remoteImage = await browsingService.fetchDirectThumbnail(
+               for: profile,
+               reference: reference,
+               maxPixelSize: maxPixelSize
+           ) {
             if let thumbnailData = Self.encodedThumbnailData(from: remoteImage) {
                 try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
             }
@@ -729,12 +691,10 @@ private struct RemoteComicThumbnailWorker {
             return nil
         }
 
-        let downloadResult = await RemoteThumbnailNetworkLimiter.shared.run {
-            try? await browsingService.downloadComicFile(
-                for: profile,
-                reference: reference
-            )
-        }
+        let downloadResult = try? await browsingService.downloadComicFile(
+            for: profile,
+            reference: reference
+        )
 
         guard let downloadResult else {
             return nil

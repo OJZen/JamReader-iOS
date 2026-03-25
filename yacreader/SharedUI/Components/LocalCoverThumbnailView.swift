@@ -84,6 +84,7 @@ private final class LocalCoverLoader: ObservableObject, ThumbnailLoading {
 
 private actor LocalCoverImagePipeline {
     static let shared = LocalCoverImagePipeline()
+    private static let semaphore = AsyncSemaphore(maxConcurrent: 4)
 
     private let cache = NSCache<NSString, UIImage>()
     private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
@@ -106,10 +107,12 @@ private actor LocalCoverImagePipeline {
         }
 
         let task = Task.detached(priority: .utility) {
-            Self.loadDownsampledImage(
-                from: url,
-                maxPixelSize: maxPixelSize
-            )
+            await Self.semaphore.run {
+                Self.loadDownsampledImage(
+                    from: url,
+                    maxPixelSize: maxPixelSize
+                )
+            }
         }
         inFlightTasks[cacheKey] = task
 
