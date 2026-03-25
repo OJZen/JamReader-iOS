@@ -1,9 +1,7 @@
 import Foundation
 
 final class RemoteReadingProgressStore {
-    private let fileManager: FileManager
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
+    private let storage: FileBackedJSONStore
     private let maximumStoredSessions: Int
     private var cachedSessions: [RemoteComicReadingSession]?
 
@@ -11,17 +9,8 @@ final class RemoteReadingProgressStore {
         fileManager: FileManager = .default,
         maximumStoredSessions: Int = 200
     ) {
-        self.fileManager = fileManager
+        self.storage = FileBackedJSONStore(fileName: "remote_reading_progress.json", fileManager: fileManager)
         self.maximumStoredSessions = maximumStoredSessions
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        self.encoder = encoder
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
     }
 
     func loadSessions() throws -> [RemoteComicReadingSession] {
@@ -29,14 +18,7 @@ final class RemoteReadingProgressStore {
             return cachedSessions
         }
 
-        let storageURL = try storageFileURL()
-        guard fileManager.fileExists(atPath: storageURL.path) else {
-            cachedSessions = []
-            return []
-        }
-
-        let data = try Data(contentsOf: storageURL)
-        let sessions = try decoder.decode([RemoteComicReadingSession].self, from: data)
+        let sessions = try storage.load([RemoteComicReadingSession].self) ?? []
         let sortedSessions = sessions.sorted { lhs, rhs in
             lhs.lastTimeOpened > rhs.lastTimeOpened
         }
@@ -47,9 +29,7 @@ final class RemoteReadingProgressStore {
     func loadProgress(
         for reference: RemoteComicFileReference
     ) throws -> RemoteComicReadingSession? {
-        try loadSessions().first { session in
-            session.serverID == reference.serverID && session.path == reference.path
-        }
+        try loadSessions().first { $0.matches(reference: reference) }
     }
 
     func mostRecentSession() throws -> RemoteComicReadingSession? {
@@ -88,9 +68,7 @@ final class RemoteReadingProgressStore {
             bookmarkPageIndices: bookmarkPageIndices
         )
 
-        sessions.removeAll { session in
-            session.serverID == reference.serverID && session.path == reference.path
-        }
+        sessions.removeAll { $0.matches(reference: reference) }
         sessions.append(updatedSession)
         sessions.sort { lhs, rhs in
             lhs.lastTimeOpened > rhs.lastTimeOpened
@@ -108,9 +86,14 @@ final class RemoteReadingProgressStore {
         try saveSessions(filteredSessions)
     }
 
+    func deleteSessions(for profile: RemoteServerProfile) throws {
+        let filteredSessions = try loadSessions().filter { !$0.matches(profile: profile) }
+        try saveSessions(filteredSessions)
+    }
+
     func deleteSession(_ session: RemoteComicReadingSession) throws {
         let filteredSessions = try loadSessions().filter { candidate in
-            candidate.serverID != session.serverID || candidate.path != session.path
+            candidate.id != session.id
         }
         try saveSessions(filteredSessions)
     }
@@ -120,24 +103,7 @@ final class RemoteReadingProgressStore {
     }
 
     private func saveSessions(_ sessions: [RemoteComicReadingSession]) throws {
-        let storageURL = try storageFileURL()
-        let data = try encoder.encode(sessions)
-        try data.write(to: storageURL, options: .atomic)
+        try storage.save(sessions)
         cachedSessions = sessions
-    }
-
-    private func storageFileURL() throws -> URL {
-        let directory = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ).appendingPathComponent("YACReader", isDirectory: true)
-
-        if !fileManager.fileExists(atPath: directory.path) {
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        }
-
-        return directory.appendingPathComponent("remote_reading_progress.json")
     }
 }

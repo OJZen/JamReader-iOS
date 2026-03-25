@@ -1,35 +1,17 @@
 import Foundation
 
 final class RemoteFolderShortcutStore {
-    private let fileManager: FileManager
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
+    private let storage: FileBackedJSONStore
 
     init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        self.encoder = encoder
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        self.decoder = decoder
+        self.storage = FileBackedJSONStore(fileName: "remote_folder_shortcuts.json", fileManager: fileManager)
     }
 
     func load() throws -> [RemoteFolderShortcut] {
-        let storageURL = try storageFileURL()
-        guard fileManager.fileExists(atPath: storageURL.path) else {
-            return []
-        }
-
-        let data = try Data(contentsOf: storageURL)
-        return try decoder.decode([RemoteFolderShortcut].self, from: data)
+        try storage.load([RemoteFolderShortcut].self) ?? []
     }
 
     func save(_ shortcuts: [RemoteFolderShortcut]) throws {
-        let storageURL = try storageFileURL()
         let sortedShortcuts = shortcuts.sorted { lhs, rhs in
             if lhs.updatedAt != rhs.updatedAt {
                 return lhs.updatedAt > rhs.updatedAt
@@ -37,26 +19,42 @@ final class RemoteFolderShortcutStore {
 
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
-        let data = try encoder.encode(sortedShortcuts)
-        try data.write(to: storageURL, options: .atomic)
+        try storage.save(sortedShortcuts)
     }
 
-    func containsShortcut(for serverID: UUID, path: String) -> Bool {
+    func containsShortcut(
+        for serverID: UUID,
+        providerKind: RemoteProviderKind,
+        providerRootIdentifier: String,
+        path: String
+    ) -> Bool {
         guard let shortcuts = try? load() else {
             return false
         }
 
         return shortcuts.contains(where: {
-            $0.serverID == serverID && $0.path == path
+            $0.serverID == serverID
+                && $0.providerKind == providerKind
+                && $0.providerRootIdentifier == providerRootIdentifier
+                && $0.path == path
         })
     }
 
-    func upsertShortcut(serverID: UUID, path: String, title: String) throws {
+    func upsertShortcut(
+        serverID: UUID,
+        providerKind: RemoteProviderKind,
+        providerRootIdentifier: String,
+        path: String,
+        title: String
+    ) throws {
         var shortcuts = try load()
         let now = Date()
 
         if let index = shortcuts.firstIndex(where: {
-            $0.serverID == serverID && $0.path == path
+            $0.serverID == serverID
+                && $0.providerKind == providerKind
+                && $0.providerRootIdentifier == providerRootIdentifier
+                && $0.path == path
         }) {
             shortcuts[index].title = title
             shortcuts[index].updatedAt = now
@@ -64,6 +62,8 @@ final class RemoteFolderShortcutStore {
             shortcuts.append(
                 RemoteFolderShortcut(
                     serverID: serverID,
+                    providerKind: providerKind,
+                    providerRootIdentifier: providerRootIdentifier,
                     path: path,
                     title: title,
                     createdAt: now,
@@ -75,10 +75,18 @@ final class RemoteFolderShortcutStore {
         try save(shortcuts)
     }
 
-    func removeShortcut(serverID: UUID, path: String) throws {
+    func removeShortcut(
+        serverID: UUID,
+        providerKind: RemoteProviderKind,
+        providerRootIdentifier: String,
+        path: String
+    ) throws {
         var shortcuts = try load()
         shortcuts.removeAll {
-            $0.serverID == serverID && $0.path == path
+            $0.serverID == serverID
+                && $0.providerKind == providerKind
+                && $0.providerRootIdentifier == providerRootIdentifier
+                && $0.path == path
         }
         try save(shortcuts)
     }
@@ -106,18 +114,18 @@ final class RemoteFolderShortcutStore {
         try save(shortcuts)
     }
 
-    private func storageFileURL() throws -> URL {
-        let directory = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ).appendingPathComponent("YACReader", isDirectory: true)
-
-        if !fileManager.fileExists(atPath: directory.path) {
-            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    func removeShortcuts(
+        for serverID: UUID,
+        providerKind: RemoteProviderKind,
+        providerRootIdentifier: String
+    ) throws {
+        var shortcuts = try load()
+        shortcuts.removeAll {
+            $0.serverID == serverID
+                && $0.providerKind == providerKind
+                && $0.providerRootIdentifier == providerRootIdentifier
         }
-
-        return directory.appendingPathComponent("remote_folder_shortcuts.json")
+        try save(shortcuts)
     }
+
 }
