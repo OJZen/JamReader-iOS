@@ -4,14 +4,10 @@ import SwiftUI
 import UIKit
 
 struct LocalCoverThumbnailView: View {
-    @Environment(\.displayScale) private var displayScale
-
     let url: URL?
     let placeholderSystemName: String
     let width: CGFloat
     let height: CGFloat
-
-    @StateObject private var loader = LocalCoverLoader()
 
     init(
         url: URL?,
@@ -26,46 +22,21 @@ struct LocalCoverThumbnailView: View {
     }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-
-            if let image = loader.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: placeholderSystemName)
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-            }
+        ThumbnailView(
+            loader: LocalCoverLoader(),
+            placeholderSystemName: placeholderSystemName,
+            width: width,
+            height: height,
+            cornerRadius: 12,
+            contentID: url?.path ?? "nil"
+        ) { loader, targetSize, scale in
+            loader.load(from: url, targetSize: targetSize, scale: scale)
         }
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        }
-        .task(id: loaderRequestID) {
-            loader.load(
-                from: url,
-                targetSize: CGSize(width: width, height: height),
-                scale: displayScale
-            )
-        }
-        .onDisappear {
-            loader.cancel()
-        }
-    }
-
-    private var loaderRequestID: String {
-        let path = url?.path ?? "nil"
-        return "\(path)#\(Int(width))x\(Int(height))@\(Int(displayScale * 100))"
     }
 }
 
 @MainActor
-private final class LocalCoverLoader: ObservableObject {
+private final class LocalCoverLoader: ObservableObject, ThumbnailLoading {
     @Published private(set) var image: UIImage?
     private var loadTask: Task<Void, Never>?
     private var requestID: String?

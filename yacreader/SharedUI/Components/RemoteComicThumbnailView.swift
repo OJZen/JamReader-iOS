@@ -27,22 +27,20 @@ struct RemoteThumbnailCacheSummary: Hashable {
 }
 
 struct RemoteComicThumbnailView: View {
-    @Environment(\.displayScale) private var displayScale
-
     let profile: RemoteServerProfile
     let item: RemoteDirectoryItem
     let browsingService: RemoteServerBrowsingService
     let placeholderSystemName: String
+    let prefersLocalCache: Bool
     let width: CGFloat
     let height: CGFloat
-
-    @StateObject private var loader = RemoteComicThumbnailLoader()
 
     init(
         profile: RemoteServerProfile,
         item: RemoteDirectoryItem,
         browsingService: RemoteServerBrowsingService,
         placeholderSystemName: String = "doc.richtext",
+        prefersLocalCache: Bool = false,
         width: CGFloat = 74,
         height: CGFloat = 104
     ) {
@@ -50,52 +48,34 @@ struct RemoteComicThumbnailView: View {
         self.item = item
         self.browsingService = browsingService
         self.placeholderSystemName = placeholderSystemName
+        self.prefersLocalCache = prefersLocalCache
         self.width = width
         self.height = height
     }
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-
-            if let image = loader.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: placeholderSystemName)
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        }
-        .task(id: loaderRequestID) {
+        ThumbnailView(
+            loader: RemoteComicThumbnailLoader(),
+            placeholderSystemName: placeholderSystemName,
+            width: width,
+            height: height,
+            cornerRadius: 14,
+            contentID: item.id
+        ) { loader, targetSize, scale in
             loader.load(
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                targetSize: CGSize(width: width, height: height),
-                scale: displayScale
+                prefersLocalCache: prefersLocalCache,
+                targetSize: targetSize,
+                scale: scale
             )
         }
-        .onDisappear {
-            loader.cancel()
-        }
-    }
-
-    private var loaderRequestID: String {
-        "\(item.id)#\(Int(width))x\(Int(height))@\(Int(displayScale * 100))"
     }
 }
 
 @MainActor
-private final class RemoteComicThumbnailLoader: ObservableObject {
+private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoading {
     @Published private(set) var image: UIImage?
     private var loadTask: Task<Void, Never>?
     private var requestID: String?
@@ -104,6 +84,7 @@ private final class RemoteComicThumbnailLoader: ObservableObject {
         profile: RemoteServerProfile,
         item: RemoteDirectoryItem,
         browsingService: RemoteServerBrowsingService,
+        prefersLocalCache: Bool,
         targetSize: CGSize,
         scale: CGFloat
     ) {
@@ -128,6 +109,7 @@ private final class RemoteComicThumbnailLoader: ObservableObject {
                 for: profile,
                 item: item,
                 browsingService: browsingService,
+                prefersLocalCache: prefersLocalCache,
                 maxPixelSize: maxPixelSize
             )
 
@@ -183,7 +165,9 @@ final class RemoteComicThumbnailPipeline {
         for profile: RemoteServerProfile,
         item: RemoteDirectoryItem,
         browsingService: RemoteServerBrowsingService,
-        maxPixelSize: Int
+        prefersLocalCache: Bool = false,
+        maxPixelSize: Int,
+        allowsRemoteFetch: Bool = true
     ) async -> UIImage? {
         guard item.canOpenAsComic,
               let reference = try? browsingService.makeComicFileReference(from: item)
@@ -221,8 +205,10 @@ final class RemoteComicThumbnailPipeline {
                 for: profile,
                 reference: reference,
                 browsingService: browsingService,
+                prefersLocalCache: prefersLocalCache,
                 maxPixelSize: maxPixelSize,
-                diskURL: diskURL
+                diskURL: diskURL,
+                allowsRemoteFetch: allowsRemoteFetch
             )
         }
 
@@ -256,6 +242,7 @@ final class RemoteComicThumbnailPipeline {
         for profile: RemoteServerProfile,
         items: [RemoteDirectoryItem],
         browsingService: RemoteServerBrowsingService,
+        prefersLocalCache: Bool = false,
         maxPixelSize: Int,
         limit: Int,
         skipCount: Int = 0,
@@ -291,7 +278,9 @@ final class RemoteComicThumbnailPipeline {
                         for: profile,
                         item: item,
                         browsingService: browsingService,
-                        maxPixelSize: maxPixelSize
+                        prefersLocalCache: prefersLocalCache,
+                        maxPixelSize: maxPixelSize,
+                        allowsRemoteFetch: false
                     )
                 }
             }
@@ -650,6 +639,45 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
 
 }
 
+private actor RemoteThumbnailNetworkLimiter {
+    static let shared = RemoteThumbnailNetworkLimiter(maximumConcurrentOperations: 2)
+
+    private let maximumConcurrentOperations: Int
+    private var activeOperations = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(maximumConcurrentOperations: Int) {
+        self.maximumConcurrentOperations = max(1, maximumConcurrentOperations)
+    }
+
+    func run<T>(_ operation: @Sendable () async -> T) async -> T {
+        await acquire()
+        defer { release() }
+        return await operation()
+    }
+
+    private func acquire() async {
+        guard activeOperations >= maximumConcurrentOperations else {
+            activeOperations += 1
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if let waiter = waiters.first {
+            waiters.removeFirst()
+            waiter.resume()
+            return
+        }
+
+        activeOperations = max(0, activeOperations - 1)
+    }
+}
+
 private struct RemoteComicThumbnailWorker {
     let diskCache: RemoteThumbnailDiskCacheStore
 
@@ -657,14 +685,32 @@ private struct RemoteComicThumbnailWorker {
         for profile: RemoteServerProfile,
         reference: RemoteComicFileReference,
         browsingService: RemoteServerBrowsingService,
+        prefersLocalCache: Bool,
         maxPixelSize: Int,
-        diskURL: URL
+        diskURL: URL,
+        allowsRemoteFetch: Bool
     ) async -> UIImage? {
-        if let remoteImage = await browsingService.fetchDirectThumbnail(
-            for: profile,
-            reference: reference,
-            maxPixelSize: maxPixelSize
-        ) {
+        guard !Task.isCancelled else {
+            return nil
+        }
+
+        if prefersLocalCache,
+           let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
+           let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize) {
+            if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
+                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+            }
+            return cachedImage
+        }
+
+        if allowsRemoteFetch,
+           let remoteImage = await RemoteThumbnailNetworkLimiter.shared.run({
+               await browsingService.fetchDirectThumbnail(
+                   for: profile,
+                   reference: reference,
+                   maxPixelSize: maxPixelSize
+               )
+           }) {
             if let thumbnailData = Self.encodedThumbnailData(from: remoteImage) {
                 try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
             }
@@ -679,27 +725,32 @@ private struct RemoteComicThumbnailWorker {
             return cachedImage
         }
 
-        do {
-            let downloadResult = try await browsingService.downloadComicFile(
+        guard allowsRemoteFetch else {
+            return nil
+        }
+
+        let downloadResult = await RemoteThumbnailNetworkLimiter.shared.run {
+            try? await browsingService.downloadComicFile(
                 for: profile,
                 reference: reference
             )
+        }
 
-            guard !Task.isCancelled,
-                  let image = await Self.extractThumbnail(
-                    from: downloadResult.localFileURL,
-                    maxPixelSize: maxPixelSize
-                  ) else {
-                return nil
-            }
-
-            if let thumbnailData = Self.encodedThumbnailData(from: image) {
-                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
-            }
-            return image
-        } catch {
+        guard let downloadResult else {
             return nil
         }
+        guard !Task.isCancelled,
+              let image = await Self.extractThumbnail(
+                from: downloadResult.localFileURL,
+                maxPixelSize: maxPixelSize
+              ) else {
+            return nil
+        }
+
+        if let thumbnailData = Self.encodedThumbnailData(from: image) {
+            try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+        }
+        return image
     }
 
     nonisolated private static func extractThumbnail(from fileURL: URL, maxPixelSize: Int) async -> UIImage? {
