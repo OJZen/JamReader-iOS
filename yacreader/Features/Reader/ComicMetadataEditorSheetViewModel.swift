@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 @MainActor
-final class ComicMetadataEditorSheetViewModel: ObservableObject {
+final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewModel {
     @Published var metadata: LibraryComicMetadata
     @Published private(set) var isLoading = false
     @Published private(set) var isSaving = false

@@ -75,7 +75,9 @@ struct RemoteServerEditorDraft: Identifiable {
     var hasStoredPassword: Bool
 
     var navigationTitle: String {
-        existingProfileID == nil ? "New SMB Server" : "Edit SMB Server"
+        existingProfileID == nil
+            ? "New \(providerKind.title) Server"
+            : "Edit \(providerKind.title) Server"
     }
 
     var actionTitle: String {
@@ -160,7 +162,7 @@ final class RemoteServerListViewModel: ObservableObject {
             name: "",
             providerKind: .smb,
             host: "",
-            portText: "445",
+            portText: String(RemoteProviderKind.smb.defaultPort),
             shareName: "",
             baseDirectoryPath: "",
             authenticationMode: .usernamePassword,
@@ -208,7 +210,7 @@ final class RemoteServerListViewModel: ObservableObject {
             return .failure(
                 RemoteAlertState(
                     title: "Invalid Port",
-                    message: "Enter a numeric port for the SMB server."
+                    message: "Enter a numeric port for this remote server."
                 )
             )
         }
@@ -243,7 +245,7 @@ final class RemoteServerListViewModel: ObservableObject {
             return .failure(
                 RemoteAlertState(
                     title: "Password Required",
-                    message: "Enter a password for this SMB server, or switch the connection to Guest."
+                    message: "Enter a password for this remote server, or switch the connection to Guest."
                 )
             )
         }
@@ -251,13 +253,15 @@ final class RemoteServerListViewModel: ObservableObject {
         if !blockingIssues.isEmpty {
             return .failure(
                 RemoteAlertState(
-                    title: "Incomplete SMB Server",
+                    title: "Incomplete Server",
                     message: blockingIssues.joined(separator: "\n")
                 )
             )
         }
 
         do {
+            let previousProfile = profiles.first(where: { $0.id == serverID })
+
             if draft.authenticationMode.requiresPassword {
                 if shouldPersistPassword {
                     try credentialStore.savePassword(password, for: passwordReferenceKey)
@@ -274,6 +278,19 @@ final class RemoteServerListViewModel: ObservableObject {
             }
 
             try profileStore.save(updatedProfiles)
+
+            if let previousProfile,
+               previousProfile.remoteScopeKey != profile.remoteScopeKey {
+                RemoteServerBrowserViewModel.clearRememberedPath(for: previousProfile)
+                try? readingProgressStore.deleteSessions(for: previousProfile)
+                try? folderShortcutStore.removeShortcuts(
+                    for: previousProfile.id,
+                    providerKind: previousProfile.providerKind,
+                    providerRootIdentifier: previousProfile.normalizedProviderRootIdentifier
+                )
+                try? browsingService.clearCachedComics(for: previousProfile)
+            }
+
             profiles = updatedProfiles.sorted {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
@@ -284,7 +301,7 @@ final class RemoteServerListViewModel: ObservableObject {
         } catch {
             return .failure(
                 RemoteAlertState(
-                    title: "Failed to Save SMB Server",
+                    title: "Failed to Save Server",
                     message: error.localizedDescription
                 )
             )
@@ -301,7 +318,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 try credentialStore.deletePassword(for: passwordReferenceKey)
             }
 
-            try? browsingService.clearCachedComics(for: profile)
+            try? browsingService.clearCachedComicsForServer(id: profile.id)
             try? readingProgressStore.deleteSessions(for: profile.id)
             try? folderShortcutStore.removeShortcuts(for: profile.id)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
@@ -313,7 +330,7 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshCacheSummaries()
         } catch {
             alert = RemoteAlertState(
-                title: "Failed to Remove SMB Server",
+                title: "Failed to Remove Server",
                 message: error.localizedDescription
             )
         }
@@ -330,7 +347,7 @@ final class RemoteServerListViewModel: ObservableObject {
     func clearCache(for profile: RemoteServerProfile) {
         do {
             try browsingService.clearCachedComics(for: profile)
-            try readingProgressStore.deleteSessions(for: profile.id)
+            try readingProgressStore.deleteSessions(for: profile)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             refreshCacheSummaries()
             refreshRecentActivity()
@@ -348,6 +365,8 @@ final class RemoteServerListViewModel: ObservableObject {
 
         latestSessionsByServerID = allSessions.reduce(into: [:]) { result, session in
             guard activeServerIDs.contains(session.serverID),
+                  let profile = profiles.first(where: { $0.id == session.serverID }),
+                  session.matches(profile: profile),
                   result[session.serverID] == nil
             else {
                 return
@@ -362,7 +381,7 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func recentSessions(for profile: RemoteServerProfile) -> [RemoteComicReadingSession] {
-        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.serverID == profile.id }
+        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.matches(profile: profile) }
     }
 
     func deleteRecentSession(_ session: RemoteComicReadingSession) {
@@ -379,7 +398,7 @@ final class RemoteServerListViewModel: ObservableObject {
 
     func clearRecentHistory(for profile: RemoteServerProfile) {
         do {
-            try readingProgressStore.deleteSessions(for: profile.id)
+            try readingProgressStore.deleteSessions(for: profile)
             refreshRecentActivity()
         } catch {
             alert = RemoteAlertState(
@@ -394,9 +413,15 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     private func refreshShortcutCount() {
-        let activeServerIDs = Set(profiles.map(\.id))
+        let activeProfilesByServerID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
         let allShortcuts = (try? folderShortcutStore.load()) ?? []
-        let scopedShortcuts = allShortcuts.filter { activeServerIDs.contains($0.serverID) }
+        let scopedShortcuts = allShortcuts.filter { shortcut in
+            guard let profile = activeProfilesByServerID[shortcut.serverID] else {
+                return false
+            }
+
+            return shortcut.matches(profile: profile)
+        }
         shortcutCount = scopedShortcuts.count
         shortcutCountByServerID = Dictionary(
             grouping: scopedShortcuts,

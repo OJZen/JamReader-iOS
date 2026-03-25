@@ -11,6 +11,15 @@ struct LibraryListItem: Identifiable, Equatable {
     var id: UUID {
         descriptor.id
     }
+
+    var rowSubtitle: String {
+        let comics = accessSnapshot.database.comicCount
+        let folders = accessSnapshot.database.folderCount
+        if comics > 0 || folders > 0 {
+            return "\(comics) comics · \(folders) folders"
+        }
+        return accessSnapshot.sourceStatus
+    }
 }
 
 struct LibraryAlertState: Identifiable {

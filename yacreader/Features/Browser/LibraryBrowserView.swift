@@ -1856,12 +1856,12 @@ struct LibraryBrowserView: View {
     }
 
     private func filteredContentEmptyStateView(_ content: LibraryFolderContent) -> some View {
-        ContentUnavailableView(
-            filteredContentEmptyStateTitle,
+        EmptyStateView(
             systemImage: filteredContentEmptyStateSystemImage,
-            description: Text(filteredContentEmptyStateDescription(content))
+            title: filteredContentEmptyStateTitle,
+            description: filteredContentEmptyStateDescription(content)
         )
-        .padding(.vertical, 24)
+        .padding(.vertical, Spacing.xl)
     }
 
     private var filteredContentEmptyStateTitle: String {
@@ -1888,12 +1888,12 @@ struct LibraryBrowserView: View {
     }
 
     private var filteredComicEmptyStateView: some View {
-        ContentUnavailableView(
-            "No Matching Comics",
+        EmptyStateView(
             systemImage: comicFilter.systemImageName,
-            description: Text("No comics match the current \(comicFilter.title.lowercased()) filter.")
+            title: "No Matching Comics",
+            description: "No comics match the current \(comicFilter.title.lowercased()) filter."
         )
-        .padding(.vertical, 24)
+        .padding(.vertical, Spacing.xl)
     }
 
     private func configurePreferredDisplayModeIfNeeded() {
@@ -1953,31 +1953,33 @@ struct LibraryBrowserView: View {
                         ProgressView("Searching Library")
                         Spacer()
                     }
-                    .padding(.vertical, 16)
+                    .padding(.vertical, Spacing.md)
                 }
             } else if let results = viewModel.searchResults {
                 let displayedSearchComics = filteredSortedComics(results.comics)
 
                 if results.isEmpty {
                     Section {
-                        ContentUnavailableView(
-                            "No Results",
+                        EmptyStateView(
                             systemImage: "magnifyingglass",
-                            description: Text("No folders or comics matched \"\(results.query)\".")
+                            title: "No Results",
+                            description: "No folders or comics matched \"\(results.query)\"."
                         )
-                        .padding(.vertical, 24)
+                        .padding(.vertical, Spacing.xl)
                     }
                 } else {
                     if !results.folders.isEmpty {
-                        Section("Matching Folders") {
+                        Section {
                             ForEach(results.folders) { folder in
                                 folderListNavigationLink(for: folder)
                             }
+                        } header: {
+                            sectionHeaderLabel("Matching Folders", count: results.folders.count)
                         }
                     }
 
                     if !displayedSearchComics.isEmpty {
-                        Section("Matching Comics") {
+                        Section {
                             ForEach(displayedSearchComics) { comic in
                                 interactiveComicListNavigationLink(comic: comic) {
                                     comicReaderDestination(
@@ -1996,6 +1998,8 @@ struct LibraryBrowserView: View {
                                     .equatable()
                                 }
                             }
+                        } header: {
+                            sectionHeaderLabel("Matching Comics", count: displayedSearchComics.count)
                         }
                     } else if results.folders.isEmpty, !results.comics.isEmpty {
                         Section {
@@ -2012,9 +2016,9 @@ struct LibraryBrowserView: View {
             SectionSummaryCard(
                 title: "Search",
                 badges: searchResultBadgeItems,
-                titleFont: .headline,
-                cornerRadius: 20,
-                contentPadding: 16,
+                titleFont: AppFont.headline(),
+                cornerRadius: CornerRadius.xl,
+                contentPadding: Spacing.md,
                 strokeOpacity: 0.04
             ) {
                 if let results = viewModel.searchResults {
@@ -2024,28 +2028,30 @@ struct LibraryBrowserView: View {
                     )
 
                     Text(results.summaryText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(AppFont.caption())
+                        .foregroundStyle(Color.textSecondary)
 
                     if !results.comics.isEmpty {
                         Text(searchFilterSummaryText(totalCount: results.comics.count))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .font(AppFont.caption())
+                            .foregroundStyle(Color.textSecondary)
 
-                        LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                            comicFilter = selectedFilter
-                        }
+                        FilterChipBar(
+                            items: LibraryComicQuickFilter.allCases.filter { $0 != .all },
+                            selection: comicFilterChipBinding,
+                            label: { $0.title }
+                        )
                     }
             } else if viewModel.isSearching {
                 Text("Searching library database...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(AppFont.caption())
+                    .foregroundStyle(Color.textSecondary)
             }
         }
         .insetCardListRow(
             horizontalInset: LayoutMetrics.horizontalInset,
-            top: 14,
-            bottom: 10
+            top: Spacing.sm,
+            bottom: Spacing.sm
         )
     }
 }
