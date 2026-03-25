@@ -118,19 +118,76 @@ public class Connection {
   }
 
   private func receive(completion: @escaping (Result<Data, Error>) -> Void) {
+    receiveTransportPacket { result in
+      switch result {
+      case .success(let data):
+        let reader = ByteReader(data)
+        var offset = 0
+
+        var header: Header
+        var response = Data()
+        repeat {
+          header = reader.read()
+
+          switch NTStatus(header.status) {
+          case
+            .success,
+            .moreProcessingRequired,
+            .noMoreFiles,
+            .endOfFile:
+            response += data
+          case .pending:
+            if let pendingData = self.dequeueTransportPacketFromBuffer() {
+              let reader = ByteReader(pendingData)
+              let header: Header = reader.read()
+
+              switch NTStatus(header.status) {
+              case
+                .success,
+                .moreProcessingRequired,
+                .noMoreFiles,
+                .endOfFile:
+                response += pendingData
+              default:
+                completion(.failure(ErrorResponse(data: pendingData)))
+                return
+              }
+            } else {
+              self.receive(completion: completion)
+              return
+            }
+          default:
+            completion(.failure(ErrorResponse(data: Data(data[offset...]))))
+            return
+          }
+
+          offset += Int(header.nextCommand)
+          reader.seek(to: offset)
+        } while header.nextCommand > 0
+
+        completion(.success(response))
+      case .failure(let error):
+        completion(.failure(error))
+      }
+    }
+  }
+
+  private func receiveTransportPacket(completion: @escaping (Result<Data, Error>) -> Void) {
+    if let packet = dequeueTransportPacketFromBuffer() {
+      completion(.success(packet))
+      return
+    }
+
     let minimumIncompleteLength = 0
     let maximumLength = 65536
 
-    connection.receive(
-      minimumIncompleteLength: minimumIncompleteLength,
-      maximumLength: maximumLength)
-    { (content, contentContext, isComplete, error) in
+    self.connection.receive(minimumIncompleteLength: minimumIncompleteLength, maximumLength: maximumLength) { (data, _, isComplete, error) in
       if let error = error {
         completion(.failure(error))
         return
       }
 
-      guard let content else {
+      guard let data else {
         if isComplete {
           completion(.failure(ConnectionError.disconnected))
         } else {
@@ -139,108 +196,30 @@ public class Connection {
         return
       }
 
-      let transportPacket = DirectTCPPacket(response: content)
-      let length = Int(transportPacket.protocolLength)
-
-      self.buffer.append(Data(transportPacket.smb2Message))
-
-      self.receive(upTo: length) { (result) in
-        switch result {
-        case .success:
-          let data = Data(self.buffer.prefix(length))
-          self.buffer = Data(self.buffer.suffix(from: length))
-
-          let reader = ByteReader(data)
-          var offset = 0
-
-          var header: Header
-          var response = Data()
-          repeat {
-            header = reader.read()
-
-            switch NTStatus(header.status) {
-            case
-              .success,
-              .moreProcessingRequired,
-              .noMoreFiles,
-              .endOfFile:
-              response += data
-            case .pending:
-              if self.buffer.count > 0 {
-                let transportPacket = DirectTCPPacket(response: self.buffer)
-                let length = Int(transportPacket.protocolLength)
-
-                if self.buffer.count < length {
-                  self.receive(completion: completion)
-                  return
-                }
-
-                let data = transportPacket.smb2Message
-                self.buffer = Data(self.buffer.suffix(from: 4 + length))
-
-                let reader = ByteReader(data)
-                let header: Header = reader.read()
-
-                switch NTStatus(header.status) {
-                case
-                  .success,
-                  .moreProcessingRequired,
-                  .noMoreFiles,
-                  .endOfFile:
-                  response += data
-                  break
-                default:
-                  completion(.failure(ErrorResponse(data: data)))
-                  return
-                }
-              } else {
-                self.receive(completion: completion)
-                return
-              }
-            default:
-              completion(.failure(ErrorResponse(data: Data(data[offset...]))))
-              return
-            }
-
-            offset += Int(header.nextCommand)
-            reader.seek(to: offset)
-          } while header.nextCommand > 0
-
-          completion(.success(response))
-        case .failure(let error):
-          completion(.failure(error))
-        }
-      }
+      self.buffer.append(data)
+      self.receiveTransportPacket(completion: completion)
     }
   }
 
-  private func receive(upTo byteCount: Int, completion: @escaping (Result<(), Error>) -> Void) {
-    let minimumIncompleteLength = 0
-    let maximumLength = 65536
-
-    if self.buffer.count < byteCount {
-      self.connection.receive(minimumIncompleteLength: minimumIncompleteLength, maximumLength: maximumLength) { (data, _, isComplete, error) in
-        if let error = error {
-          completion(.failure(error))
-          return
-        }
-
-        guard let data else {
-          if isComplete {
-            completion(.failure(ConnectionError.disconnected))
-          } else {
-            completion(.failure(ConnectionError.noData))
-          }
-          return
-        }
-
-        self.buffer.append(data)
-        self.receive(upTo: byteCount, completion: completion)
-      }
-      return
+  private func dequeueTransportPacketFromBuffer() -> Data? {
+    guard buffer.count >= 4 else {
+      return nil
     }
 
-    completion(.success(()))
+    let packetLength =
+      (UInt32(buffer[0]) << 24)
+      | (UInt32(buffer[1]) << 16)
+      | (UInt32(buffer[2]) << 8)
+      | UInt32(buffer[3])
+    let totalPacketLength = 4 + Int(packetLength)
+
+    guard buffer.count >= totalPacketLength else {
+      return nil
+    }
+
+    let packet = Data(buffer[4..<totalPacketLength])
+    buffer.removeSubrange(0..<totalPacketLength)
+    return packet
   }
 }
 
