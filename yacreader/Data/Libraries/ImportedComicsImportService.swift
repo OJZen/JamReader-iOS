@@ -62,6 +62,7 @@ final class ImportedComicsImportService {
     enum ImportDestinationValidationError: LocalizedError {
         case destinationLibraryNotWritable(String)
         case destinationLibraryMirrored(String)
+        case destinationLibraryIncompatible(String)
 
         var errorDescription: String? {
             switch self {
@@ -69,6 +70,8 @@ final class ImportedComicsImportService {
                 return "\(libraryName) is currently read-only. Choose a writable local library or Imported Comics instead."
             case .destinationLibraryMirrored(let libraryName):
                 return "\(libraryName) is mirrored from an external source and is kept compatible for browsing. Import new comics into a writable in-place library instead."
+            case .destinationLibraryIncompatible(let libraryName):
+                return "\(libraryName) uses a library.ydb version that this iOS build cannot safely write to yet."
             }
         }
     }
@@ -249,6 +252,9 @@ final class ImportedComicsImportService {
         }
 
         let accessSnapshot = sourceAccessSnapshot(for: descriptor)
+        if accessSnapshot.database.exists, !accessSnapshot.database.hasCompatibleSchemaVersion {
+            throw ImportDestinationValidationError.destinationLibraryIncompatible(descriptor.name)
+        }
         guard accessSnapshot.sourceWritable else {
             throw ImportDestinationValidationError.destinationLibraryNotWritable(descriptor.name)
         }
@@ -278,7 +284,7 @@ final class ImportedComicsImportService {
         let databaseURL = storageManager.databaseURL(for: descriptor)
         let accessSession = try storageManager.makeAccessSession(for: descriptor)
         let summary = try withExtendedLifetime(accessSession) {
-            try databaseBootstrapper.createDatabaseIfNeeded(at: databaseURL)
+            try databaseBootstrapper.ensureDatabaseExists(at: databaseURL)
             return try libraryScanner.rescanLibrary(
                 sourceRootURL: accessSession.sourceURL,
                 databaseURL: databaseURL
@@ -303,6 +309,13 @@ final class ImportedComicsImportService {
     ) -> LibraryImportDestinationOption.Availability {
         if descriptor.storageMode == .mirrored {
             return .unavailable("Mirrored desktop library. Keep using it for browsing, not direct imports.")
+        }
+
+        if accessSnapshot.database.exists, !accessSnapshot.database.hasCompatibleSchemaVersion {
+            let versionText = accessSnapshot.database.version ?? "Unknown"
+            return .unavailable(
+                "This library uses DB \(versionText). iOS currently writes only to compatible local databases."
+            )
         }
 
         if !accessSnapshot.sourceWritable {

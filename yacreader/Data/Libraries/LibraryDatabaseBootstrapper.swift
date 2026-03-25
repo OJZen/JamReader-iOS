@@ -26,11 +26,29 @@ enum LibraryDatabaseBootstrapError: LocalizedError {
 
 final class LibraryDatabaseBootstrapper {
     static let currentDatabaseVersion = "9.16.0"
+    static let supportedDatabaseMajorVersion = currentDatabaseVersion.split(separator: ".").first.map(String.init) ?? currentDatabaseVersion
 
     private let fileManager: FileManager
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
+    }
+
+    func ensureDatabaseExists(at databaseURL: URL) throws {
+        if fileManager.fileExists(atPath: databaseURL.path) {
+            return
+        }
+
+        try createDatabaseIfNeeded(at: databaseURL)
+    }
+
+    static func supportsDatabaseVersion(_ version: String?) -> Bool {
+        guard let version,
+              let versionMajor = version.split(separator: ".").first.map(String.init) else {
+            return false
+        }
+
+        return versionMajor == supportedDatabaseMajorVersion
     }
 
     func createDatabaseIfNeeded(at databaseURL: URL) throws {

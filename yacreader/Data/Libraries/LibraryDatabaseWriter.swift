@@ -7,6 +7,7 @@ import SQLite3
 enum LibraryDatabaseWriteError: LocalizedError {
     case sqliteUnavailable
     case databaseMissing
+    case incompatibleDatabaseVersion(String)
     case openDatabaseFailed(String)
     case updateFailed(String)
 
@@ -16,6 +17,8 @@ enum LibraryDatabaseWriteError: LocalizedError {
             return "SQLite3 is unavailable in this build."
         case .databaseMissing:
             return "The library database does not exist yet."
+        case .incompatibleDatabaseVersion(let reason):
+            return reason
         case .openDatabaseFailed(let reason):
             return "Unable to open library database for writing. \(reason)"
         case .updateFailed(let reason):
@@ -1435,6 +1438,14 @@ final class LibraryDatabaseWriter {
     private func openDatabase(at databaseURL: URL) throws -> OpaquePointer {
         guard fileManager.fileExists(atPath: databaseURL.path) else {
             throw LibraryDatabaseWriteError.databaseMissing
+        }
+
+        let summary = SQLiteDatabaseInspector().inspectDatabase(at: databaseURL)
+        guard summary.hasCompatibleSchemaVersion else {
+            let versionText = summary.version ?? "Unknown"
+            throw LibraryDatabaseWriteError.incompatibleDatabaseVersion(
+                "This library uses DB \(versionText), which is not writable from this iOS build."
+            )
         }
 
         var database: OpaquePointer?

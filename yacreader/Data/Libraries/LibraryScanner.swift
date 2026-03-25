@@ -8,6 +8,7 @@ import SQLite3
 enum LibraryScannerError: LocalizedError {
     case sqliteUnavailable
     case databaseMissing
+    case incompatibleDatabaseVersion(String)
     case openDatabaseFailed(String)
     case scanFailed(String)
 
@@ -17,6 +18,8 @@ enum LibraryScannerError: LocalizedError {
             return "SQLite3 is unavailable in this build."
         case .databaseMissing:
             return "The library database must exist before scanning."
+        case .incompatibleDatabaseVersion(let reason):
+            return reason
         case .openDatabaseFailed(let reason):
             return "Unable to open the library database for scanning. \(reason)"
         case .scanFailed(let reason):
@@ -192,6 +195,14 @@ final class LibraryScanner {
             throw LibraryScannerError.databaseMissing
         }
 
+        let summary = SQLiteDatabaseInspector().inspectDatabase(at: databaseURL)
+        guard summary.hasCompatibleSchemaVersion else {
+            let versionText = summary.version ?? "Unknown"
+            throw LibraryScannerError.incompatibleDatabaseVersion(
+                "This library uses DB \(versionText), which is not supported for scanning on this iOS build."
+            )
+        }
+
         var database: OpaquePointer?
         let openResult = sqlite3_open_v2(
             databaseURL.path,
@@ -300,6 +311,14 @@ final class LibraryScanner {
     ) throws -> LibraryScanSummary {
         guard fileManager.fileExists(atPath: databaseURL.path) else {
             throw LibraryScannerError.databaseMissing
+        }
+
+        let summary = SQLiteDatabaseInspector().inspectDatabase(at: databaseURL)
+        guard summary.hasCompatibleSchemaVersion else {
+            let versionText = summary.version ?? "Unknown"
+            throw LibraryScannerError.incompatibleDatabaseVersion(
+                "This library uses DB \(versionText), which is not supported for scanning on this iOS build."
+            )
         }
 
         let targetDirectoryURL = resolveDirectoryURL(for: folder, sourceRootURL: sourceRootURL)

@@ -14,6 +14,10 @@ struct LibraryCompatibilityPresentation {
         descriptor: LibraryDescriptor,
         accessSnapshot: LibraryAccessSnapshot
     ) -> LibraryCompatibilityPresentation {
+        if accessSnapshot.database.exists, !accessSnapshot.database.hasCompatibleSchemaVersion {
+            return .versionMismatch(accessSnapshot.database.version)
+        }
+
         if descriptor.storageMode == .mirrored {
             return .mirrored
         }
@@ -73,4 +77,18 @@ struct LibraryCompatibilityPresentation {
         iconName: "lock.fill",
         tint: .orange
     )
+
+    private static func versionMismatch(_ version: String?) -> LibraryCompatibilityPresentation {
+        let versionText = version ?? "Unknown"
+        return LibraryCompatibilityPresentation(
+            directImportsTitle: "Unavailable",
+            badgeTitle: "Check DB Version",
+            rowHint: "This library database uses version \(versionText). Open it in read-only mode until compatibility is confirmed.",
+            bannerTitle: "Library Version Not Supported",
+            bannerMessage: "This library uses database version \(versionText). The current iOS build only writes to compatible YACReader databases.",
+            infoDetail: "The detected library.ydb version is \(versionText), while this iOS build expects a compatible \(LibraryDatabaseBootstrapper.currentDatabaseVersion) schema family. Browsing may still work, but direct imports and write operations should stay blocked until compatibility is confirmed.",
+            iconName: "exclamationmark.triangle.fill",
+            tint: .orange
+        )
+    }
 }

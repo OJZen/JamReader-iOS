@@ -104,7 +104,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     }
 
     var id: String {
-        "\(serverID.uuidString)|\(path)"
+        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(path)"
     }
 
     var displayName: String {
@@ -170,6 +170,21 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
             fileSize: fileSize,
             modifiedAt: modifiedAt
         )
+    }
+
+    func matches(profile: RemoteServerProfile) -> Bool {
+        serverID == profile.id
+            && profile.matchesRemoteScope(
+                providerKind: providerKind,
+                providerRootIdentifier: shareName
+            )
+    }
+
+    func matches(reference: RemoteComicFileReference) -> Bool {
+        serverID == reference.serverID
+            && providerKind == reference.providerKind
+            && shareName == reference.shareName
+            && path == reference.path
     }
 
     private static func normalizedBookmarkPageIndices(_ indices: [Int]) -> [Int] {

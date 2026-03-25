@@ -3,6 +3,7 @@ import SwiftUI
 
 enum RemoteProviderKind: String, Codable, Hashable, CaseIterable, Identifiable {
     case smb
+    case webdav
 
     var id: String {
         rawValue
@@ -12,6 +13,8 @@ enum RemoteProviderKind: String, Codable, Hashable, CaseIterable, Identifiable {
         switch self {
         case .smb:
             return "SMB"
+        case .webdav:
+            return "WebDAV"
         }
     }
 
@@ -19,6 +22,8 @@ enum RemoteProviderKind: String, Codable, Hashable, CaseIterable, Identifiable {
         switch self {
         case .smb:
             return "server.rack"
+        case .webdav:
+            return "globe"
         }
     }
 
@@ -26,6 +31,17 @@ enum RemoteProviderKind: String, Codable, Hashable, CaseIterable, Identifiable {
         switch self {
         case .smb:
             return .blue
+        case .webdav:
+            return .indigo
+        }
+    }
+
+    var defaultPort: Int {
+        switch self {
+        case .smb:
+            return 445
+        case .webdav:
+            return 443
         }
     }
 }

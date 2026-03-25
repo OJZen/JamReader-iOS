@@ -17,7 +17,7 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
     let modifiedAt: Date?
 
     var id: String {
-        "\(serverID.uuidString)|\(path)"
+        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(path)"
     }
 
     var isDirectory: Bool {
@@ -39,6 +39,6 @@ struct RemoteComicFileReference: Identifiable, Hashable {
     let modifiedAt: Date?
 
     var id: String {
-        "\(serverID.uuidString)|\(path)"
+        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(path)"
     }
 }

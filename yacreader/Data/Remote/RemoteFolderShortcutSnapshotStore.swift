@@ -27,7 +27,8 @@ final class RemoteFolderShortcutSnapshotStore {
         let shortcuts = try remoteFolderShortcutStore.load()
 
         return shortcuts.compactMap { shortcut -> RemoteResolvedFolderShortcut? in
-            guard let profile = profilesByID[shortcut.serverID] else {
+            guard let profile = profilesByID[shortcut.serverID],
+                  shortcut.matches(profile: profile) else {
                 return nil
             }
 
