@@ -147,9 +147,9 @@ struct LibraryShortcutRow: View {
     let item: LibraryShortcutCardItem
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             Label {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Spacing.xxxs) {
                     Text(item.title)
                         .font(.headline)
 
@@ -173,7 +173,7 @@ struct LibraryShortcutRow: View {
                 StatusBadge(title: badgeTitle, tint: item.tint)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xxs)
     }
 }
 
@@ -183,7 +183,7 @@ struct ContinueReadingRow: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
-        LibraryBrowserListRowShell(spacing: 14, trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
+        LibraryBrowserListRowShell(spacing: Spacing.sm, trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
             EmptyView()
         } thumbnail: {
             LocalCoverThumbnailView(
@@ -193,7 +193,7 @@ struct ContinueReadingRow: View {
                 height: 92
             )
         } content: {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(comic.displayTitle)
                     .font(.headline)
                     .lineLimit(2)
@@ -218,7 +218,7 @@ struct ContinueReadingCard: View {
 
     var body: some View {
         LibraryBrowserContentCard(minHeight: 188, cornerRadius: 20, contentPadding: 20) {
-            HStack(spacing: 18) {
+            HStack(spacing: Spacing.md) {
                 LocalCoverThumbnailView(
                     url: coverURL,
                     placeholderSystemName: "book.closed.fill",
@@ -226,7 +226,7 @@ struct ContinueReadingCard: View {
                     height: 148
                 )
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
                     Text(comic.displayTitle)
                         .font(.title3.weight(.semibold))
                         .lineLimit(2)
@@ -264,7 +264,7 @@ struct LibraryFolderCard: View {
                 height: 120
             )
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(folder.displayName)
                     .font(.headline)
                     .lineLimit(2)
@@ -302,8 +302,8 @@ struct LibraryComicRow: View {
                 placeholderSystemName: "book.closed.fill"
             )
         } content: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(alignment: .top, spacing: Spacing.xs) {
                     Text(comic.displayTitle)
                         .font(.headline)
                         .lineLimit(2)
@@ -353,7 +353,7 @@ struct LibraryComicCard: View {
                 height: 168
             )
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text(comic.displayTitle)
                     .font(.headline)
                     .lineLimit(2)
@@ -371,7 +371,7 @@ struct LibraryComicCard: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
-                    .padding(14)
+                    .padding(Spacing.sm)
             }
         }
     }
@@ -418,7 +418,7 @@ struct LibraryBrowserListRowShell<
     Content: View,
     TrailingAccessory: View
 >: View {
-    var spacing: CGFloat = 12
+    var spacing: CGFloat = Spacing.sm
     var trailingAccessoryReservedWidth: CGFloat = 0
     @ViewBuilder let leadingAccessory: () -> LeadingAccessory
     @ViewBuilder let thumbnail: () -> Thumbnail
@@ -433,7 +433,7 @@ struct LibraryBrowserListRowShell<
                 .frame(maxWidth: .infinity, alignment: .leading)
             trailingAccessory()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xxs)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
 }

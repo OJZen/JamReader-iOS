@@ -29,7 +29,7 @@ struct RemoteBrowserQuickActionLabel: View {
     var tint: Color = .blue
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.xs) {
             Image(systemName: systemImage)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(tint)
@@ -44,8 +44,8 @@ struct RemoteBrowserQuickActionLabel: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.vertical, Spacing.sm)
         .background(
             Color(.secondarySystemBackground),
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -62,10 +62,10 @@ struct RemoteDirectoryItemListRow: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Spacing.sm) {
             leadingVisual
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(item.name)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -79,7 +79,7 @@ struct RemoteDirectoryItemListRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xxs)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
 
@@ -231,13 +231,21 @@ struct RemoteDirectoryGridCard: View {
     }
 
     var body: some View {
-        InsetCard(cornerRadius: 18, contentPadding: 0, strokeOpacity: 0.06) {
+        VStack(alignment: .leading, spacing: 0) {
             leadingVisual
                 .frame(maxWidth: .infinity)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: CornerRadius.card,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: CornerRadius.card
+                    )
+                )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(item.name)
-                    .font(.subheadline.weight(.semibold))
+                    .font(AppFont.subheadline(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
@@ -245,17 +253,24 @@ struct RemoteDirectoryGridCard: View {
 
                 compactStatusLine
             }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 10)
+            .padding(.horizontal, Spacing.sm)
+            .padding(.vertical, Spacing.xs)
         }
+        .background(Color.surfaceSecondary)
+        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
     }
 
     @ViewBuilder
     private var compactStatusLine: some View {
         RemoteInlineMetadataLine(
             items: presentation.metadataItems,
-            horizontalSpacing: 8,
-            verticalSpacing: 4
+            horizontalSpacing: Spacing.xs,
+            verticalSpacing: Spacing.xxs
         )
     }
 
@@ -276,41 +291,68 @@ struct RemoteDirectoryGridCard: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                width: 136,
-                height: 190
+                width: 160,
+                height: 224
             )
+            .frame(maxWidth: .infinity)
+            .clipped()
             .overlay(alignment: .bottomTrailing) {
-                gridCacheStatusDot
+                gridCacheStatusBadge
             }
-            .padding(10)
+            .overlay(alignment: .bottom) {
+                readingProgressBar
+            }
         } else {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.blue.opacity(0.14))
-                .frame(height: 190)
+            RoundedRectangle(cornerRadius: 0, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.10), Color.blue.opacity(0.18)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .aspectRatio(AppLayout.coverAspectRatio, contentMode: .fill)
+                .frame(maxWidth: .infinity)
                 .overlay {
                     Image(systemName: "folder.fill")
-                        .font(.system(size: 34, weight: .semibold))
+                        .font(.system(size: 32, weight: .semibold))
                         .foregroundStyle(.blue)
                 }
-                .padding(10)
         }
     }
 
     @ViewBuilder
-    private var gridCacheStatusDot: some View {
+    private var readingProgressBar: some View {
+        if let session = readingSession, session.hasBeenOpened, !session.read,
+           let pageCount = session.pageCount, pageCount > 0 {
+            GeometryReader { proxy in
+                let progress = CGFloat(session.currentPage) / CGFloat(pageCount)
+                Rectangle()
+                    .fill(Color.blue.opacity(0.8))
+                    .frame(width: proxy.size.width * progress, height: 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: 3)
+        }
+    }
+
+    @ViewBuilder
+    private var gridCacheStatusBadge: some View {
         switch cacheAvailability.kind {
         case .current:
-            Image(systemName: "circle.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(Color.statusCached)
-                .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 0.5)
-                .offset(x: Spacing.xxs, y: Spacing.xxs)
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+                .background(Circle().fill(Color.statusCached).padding(-1))
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                .padding(Spacing.xs)
         case .stale:
-            Image(systemName: "circle.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(Color.statusStale)
-                .shadow(color: .black.opacity(0.25), radius: 1, x: 0, y: 0.5)
-                .offset(x: Spacing.xxs, y: Spacing.xxs)
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+                .background(Circle().fill(Color.statusStale).padding(-1))
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                .padding(Spacing.xs)
         case .unavailable:
             EmptyView()
         }
@@ -410,12 +452,12 @@ private struct RemoteDirectorySupportingLine: View {
     var lineLimit = 1
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: Spacing.xs) {
             Image(systemName: systemImage)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
                 .frame(width: 14)
-                .padding(.top, 2)
+                .padding(.top, Spacing.xxxs)
 
             Text(text)
                 .font(.caption)
@@ -455,7 +497,7 @@ struct RemoteBrowserImportProgressView: View {
 
     var body: some View {
         RemoteBrowserOverlaySurface {
-            HStack(spacing: 12) {
+            HStack(spacing: Spacing.sm) {
                 ProgressView()
                     .controlSize(.small)
 
@@ -476,13 +518,13 @@ struct RemoteBrowserFeedbackCard: View {
 
     var body: some View {
         RemoteBrowserOverlaySurface {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: Spacing.sm) {
                 Image(systemName: iconName)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(iconTint)
                     .frame(width: 24, height: 24)
 
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(feedback.title)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(2)
@@ -508,7 +550,7 @@ struct RemoteBrowserFeedbackCard: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
-                        .padding(6)
+                        .padding(Spacing.xs)
                 }
                 .buttonStyle(.plain)
             }
@@ -541,7 +583,7 @@ private struct RemoteBrowserOverlaySurface<Content: View>: View {
         InsetCard(cornerRadius: 20, contentPadding: 14, strokeOpacity: 0.05) {
             content()
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+        .padding(.horizontal, Spacing.md)
+        .padding(.bottom, Spacing.sm)
     }
 }

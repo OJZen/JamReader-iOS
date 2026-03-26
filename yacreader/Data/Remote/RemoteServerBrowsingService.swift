@@ -353,17 +353,19 @@ final class RemoteServerBrowsingService {
 
         switch profile.providerKind {
         case .smb:
-            return try await withConnectedSMBClient(for: profile) { client in
-                try await downloadComicFileCore(
-                    for: profile,
-                    reference: reference,
-                    forceRefresh: forceRefresh
-                ) { temporaryDownloadURL in
-                    try await client.download(
-                        path: smbRelativePath(forDisplayPath: reference.path),
-                        localPath: temporaryDownloadURL,
-                        overwrite: true
-                    )
+            return try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
+                try await withConnectedSMBClient(for: profile) { client in
+                    try await downloadComicFileCore(
+                        for: profile,
+                        reference: reference,
+                        forceRefresh: forceRefresh
+                    ) { temporaryDownloadURL in
+                        try await client.download(
+                            path: smbRelativePath(forDisplayPath: reference.path),
+                            localPath: temporaryDownloadURL,
+                            overwrite: true
+                        )
+                    }
                 }
             }
         case .webdav:
@@ -689,9 +691,14 @@ final class RemoteServerBrowsingService {
 
     private func withConnectedSMBClient<T>(
         for profile: RemoteServerProfile,
+        connectTimeout: TimeInterval = 30,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
-        let client = SMBClient(host: profile.normalizedHost, port: profile.port)
+        let client = SMBClient(
+            host: profile.normalizedHost,
+            port: profile.port,
+            connectTimeout: connectTimeout
+        )
         let credentials = try resolvedCredentials(for: profile)
 
         do {
@@ -714,6 +721,49 @@ final class RemoteServerBrowsingService {
                 remotePath: profile.connectionDisplayPath
             )
         }
+    }
+
+    /// Retries a throwing async operation with exponential backoff.
+    /// Only retries on connection-level errors; authentication and path errors are not retried.
+    private func withRetry<T>(
+        maxAttempts: Int,
+        baseDelay: TimeInterval,
+        operation: () async throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+        for attempt in 0..<maxAttempts {
+            do {
+                return try await operation()
+            } catch {
+                lastError = error
+                guard isRetryableError(error), attempt < maxAttempts - 1 else {
+                    throw error
+                }
+                let delay = baseDelay * pow(2.0, Double(attempt))
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+        }
+        throw lastError!
+    }
+
+    private func isRetryableError(_ error: Error) -> Bool {
+        if let browsingError = error as? RemoteServerBrowsingError {
+            switch browsingError {
+            case .connectionFailed:
+                return true
+            case .authenticationFailed, .accessDenied, .invalidProfile,
+                 .missingCredentials, .unsupportedComicFile,
+                 .shareUnavailable, .remotePathUnavailable,
+                 .providerIntegrationUnavailable, .cacheMaintenanceFailed,
+                 .operationFailed:
+                return false
+            }
+        }
+        if error is ConnectionError {
+            return true
+        }
+        let nsError = error as NSError
+        return nsError.domain == NSPOSIXErrorDomain
     }
 
     private func recursivelyListComicFiles(
@@ -1322,6 +1372,10 @@ final class RemoteServerBrowsingService {
             switch connectionError {
             case .noData, .disconnected, .cancelled, .unknown:
                 return RemoteServerBrowsingError.connectionFailed(profile.endpointDisplayHost)
+            case .connectionTimeout:
+                return RemoteServerBrowsingError.connectionFailed(
+                    "\(profile.endpointDisplayHost) (connection timed out)"
+                )
             }
         }
 

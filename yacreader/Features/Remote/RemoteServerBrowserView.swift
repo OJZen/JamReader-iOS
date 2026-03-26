@@ -86,7 +86,7 @@ struct RemoteServerBrowserView: View {
             prompt: "Filter this folder"
         )
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 10) {
+            VStack(spacing: Spacing.sm) {
                 if let activeImportDescription = viewModel.activeImportDescription {
                     RemoteBrowserImportProgressView(description: activeImportDescription)
                 }
@@ -383,7 +383,7 @@ struct RemoteServerBrowserView: View {
         if viewModel.isLoading {
             Section {
                 LoadingStateView(message: "Connecting to Remote Library")
-                    .padding(.vertical, 20)
+                    .padding(.vertical, Spacing.lg)
             }
         } else if viewModel.loadIssue != nil {
             Section {
@@ -572,7 +572,7 @@ struct RemoteServerBrowserView: View {
     private var gridContentSections: some View {
         if viewModel.isLoading {
             LoadingStateView(message: "Connecting to Remote Library")
-                .padding(.vertical, 20)
+                .padding(.vertical, Spacing.lg)
         } else if viewModel.loadIssue != nil {
             remoteErrorContent()
                 .frame(maxWidth: .infinity)
@@ -616,7 +616,7 @@ struct RemoteServerBrowserView: View {
         metadataItems: [RemoteInlineMetadataItem],
         items: [RemoteDirectoryItem]
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             contentSectionHeader(title: title, metadataItems: metadataItems)
 
             LazyVGrid(
@@ -1370,7 +1370,7 @@ struct RemoteBrowserHeaderActionChip: View {
     var tint: Color = .blue
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Spacing.xs) {
             Image(systemName: systemImage)
                 .font(AppFont.caption(.semibold))
                 .foregroundStyle(tint)
@@ -1381,7 +1381,7 @@ struct RemoteBrowserHeaderActionChip: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, Spacing.sm)
-        .padding(.vertical, 7)
+        .padding(.vertical, Spacing.xs)
         .background(
             Color.surfaceSecondary,
             in: RoundedRectangle(cornerRadius: CornerRadius.sm * 2, style: .continuous)

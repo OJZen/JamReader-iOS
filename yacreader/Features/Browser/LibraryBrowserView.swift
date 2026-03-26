@@ -601,7 +601,7 @@ struct LibraryBrowserView: View {
                 recentWindowRawValue = option.rawValue
             } label: {
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
                         Text(option.title)
                         Text(option.subtitle)
                             .font(AppFont.caption())
@@ -1213,7 +1213,7 @@ struct LibraryBrowserView: View {
                     .foregroundStyle(content.folder.isRoot ? .blue : .orange)
                     .frame(width: 30, height: 30)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(content.folder.displayName)
                         .font(titleFont)
 
@@ -1519,7 +1519,7 @@ struct LibraryBrowserView: View {
         }
         .overlay(alignment: .trailing) {
             quickActionButton(for: comic)
-                .padding(.trailing, 8)
+                .padding(.trailing, Spacing.xs)
         }
         .buttonStyle(.plain)
         .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
@@ -1547,7 +1547,7 @@ struct LibraryBrowserView: View {
         .buttonStyle(.plain)
         .overlay(alignment: .topTrailing) {
             quickActionButton(for: comic, compact: true)
-                .padding(12)
+                .padding(Spacing.sm)
         }
         .contextMenu {
             comicContextActions(for: comic)
@@ -1556,7 +1556,7 @@ struct LibraryBrowserView: View {
 
     private var cardGridColumns: [GridItem] {
         [
-            GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 16, alignment: .top)
+            GridItem(.adaptive(minimum: 240, maximum: 320), spacing: Spacing.md, alignment: .top)
         ]
     }
 

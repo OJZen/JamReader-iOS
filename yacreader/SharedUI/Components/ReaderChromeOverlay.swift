@@ -107,7 +107,18 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
             topBar()
                 .padding(.top, safeAreaInsets.top)
                 .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
-                .background(.ultraThinMaterial.opacity(isHidden ? 0 : 1))
+                .background(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(isHidden ? 0 : 0.55), location: 0),
+                            .init(color: .black.opacity(isHidden ? 0 : 0.25), location: 0.6),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .allowsHitTesting(false)
+                )
                 .ignoresSafeArea(.container, edges: .top)
 
             Spacer(minLength: 0)
@@ -115,7 +126,18 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
             bottomBar()
                 .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
                 .padding(.bottom, max(safeAreaInsets.bottom, Spacing.xs))
-                .background(.ultraThinMaterial.opacity(isHidden ? 0 : 1))
+                .background(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black.opacity(isHidden ? 0 : 0.25), location: 0.4),
+                            .init(color: .black.opacity(isHidden ? 0 : 0.55), location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .allowsHitTesting(false)
+                )
                 .ignoresSafeArea(.container, edges: .bottom)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,10 +169,11 @@ struct ReaderTopBar: View {
         HStack(spacing: Spacing.sm) {
             Button(action: onBack) {
                 Image(systemName: "chevron.left")
-                    .font(AppFont.headline())
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                    .contentShape(Rectangle())
+                    .background(.white.opacity(0.12), in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
 
@@ -162,11 +185,12 @@ struct ReaderTopBar: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Button(action: onMenu) {
-                Image(systemName: "ellipsis.circle")
-                    .font(AppFont.headline())
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                    .contentShape(Rectangle())
+                    .background(.white.opacity(0.12), in: Circle())
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .disabled(isMenuDisabled)
@@ -204,7 +228,7 @@ struct ReaderBottomBar: View {
     }
 
     var body: some View {
-        VStack(spacing: Spacing.xs) {
+        VStack(spacing: Spacing.sm) {
             if pageCount > 1 {
                 Slider(
                     value: $sliderValue,
@@ -219,9 +243,22 @@ struct ReaderBottomBar: View {
             }
 
             Button(action: onPageIndicatorTapped) {
-                Text("Page \(clampedPage) of \(max(pageCount, 1))")
-                    .font(AppFont.caption(.medium).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: Spacing.xs) {
+                    Text("\(clampedPage) / \(max(pageCount, 1))")
+                        .font(AppFont.caption(.semibold).monospacedDigit())
+                        .foregroundStyle(.white)
+
+                    if pageCount > 0 {
+                        Text("·")
+                            .foregroundStyle(.white.opacity(0.5))
+                        Text("\(progressPercent)%")
+                            .font(AppFont.caption(.medium).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
+                }
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xxs)
+                .background(.white.opacity(0.12), in: Capsule())
             }
             .buttonStyle(.plain)
         }
@@ -229,6 +266,11 @@ struct ReaderBottomBar: View {
         .onChange(of: currentPage) { _, newValue in
             sliderValue = Double(newValue)
         }
+    }
+
+    private var progressPercent: Int {
+        guard pageCount > 0 else { return 0 }
+        return Int((Double(clampedPage) / Double(pageCount) * 100).rounded())
     }
 }
 

@@ -24,12 +24,12 @@ public class Session {
 
   private let connection: Connection
 
-  public convenience init(host: String) {
-    self.init(Connection(host: host))
+  public convenience init(host: String, connectTimeout: TimeInterval = 30) {
+    self.init(Connection(host: host, connectTimeout: connectTimeout))
   }
 
-  public convenience init(host: String, port: Int) {
-    self.init(Connection(host: host, port: port))
+  public convenience init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
+    self.init(Connection(host: host, port: port, connectTimeout: connectTimeout))
   }
 
   private init(_ connection: Connection) {

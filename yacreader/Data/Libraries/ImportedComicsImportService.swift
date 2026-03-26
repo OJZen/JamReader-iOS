@@ -134,7 +134,7 @@ final class ImportedComicsImportService {
             }
 
             for url in urls {
-                try importResource(
+                importResource(
                     at: url.standardizedFileURL,
                     into: destinationDirectoryURL,
                     traverseDirectories: traverseDirectories,
@@ -361,7 +361,7 @@ final class ImportedComicsImportService {
         importedComicCount: inout Int,
         unsupportedItemNames: inout [String],
         failedItemNames: inout [String]
-    ) throws {
+    ) {
         let scopedAccess = accessSecurityScopedResources
             ? sourceURL.startAccessingSecurityScopedResource()
             : false
@@ -371,7 +371,13 @@ final class ImportedComicsImportService {
             }
         }
 
-        let values = try sourceURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+        let values: URLResourceValues
+        do {
+            values = try sourceURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+        } catch {
+            failedItemNames.append(sourceURL.lastPathComponent)
+            return
+        }
 
         if values.isDirectory == true {
             guard traverseDirectories else {
@@ -379,7 +385,7 @@ final class ImportedComicsImportService {
                 return
             }
 
-            try importDirectoryContents(
+            importDirectoryContents(
                 at: sourceURL,
                 into: destinationDirectoryURL,
                 importedComicCount: &importedComicCount,
@@ -416,7 +422,7 @@ final class ImportedComicsImportService {
         importedComicCount: inout Int,
         unsupportedItemNames: inout [String],
         failedItemNames: inout [String]
-    ) throws {
+    ) {
         guard let enumerator = fileManager.enumerator(
             at: directoryURL,
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],

@@ -85,6 +85,10 @@ struct ComicReaderView: View {
                 )
             }
         }
+        .pullDownToDismiss(
+            isEnabled: !readerSession.state.isPageJumpPresented,
+            onDismiss: { dismiss() }
+        )
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)

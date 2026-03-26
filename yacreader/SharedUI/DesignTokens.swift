@@ -121,7 +121,7 @@ enum AppShadow {
 // MARK: - Animation
 
 enum AppAnimation {
-    static let chromeToggle = Animation.easeInOut(duration: 0.25)
+    static let chromeToggle = Animation.spring(response: 0.35, dampingFraction: 0.82)
     static let sheetPresent = Animation.spring(response: 0.35, dampingFraction: 0.85)
     static let overlayPop = Animation.spring(response: 0.3, dampingFraction: 0.75)
     static let quickFade = Animation.easeInOut(duration: 0.15)

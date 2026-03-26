@@ -127,12 +127,12 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.minimumZoomScale = 1
         scrollView.maximumZoomScale = 4
-        scrollView.decelerationRate = .fast
+        scrollView.decelerationRate = .normal
         scrollView.isDirectionalLockEnabled = true
-        scrollView.bounces = false
+        scrollView.bounces = true
         scrollView.alwaysBounceHorizontal = false
         scrollView.alwaysBounceVertical = false
-        scrollView.bouncesZoom = false
+        scrollView.bouncesZoom = true
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
 
@@ -247,7 +247,15 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         let maximumZoomScale = scrollView.maximumZoomScale
 
         if scrollView.zoomScale > minimumZoomScale + 0.01 {
-            scrollView.setZoomScale(minimumZoomScale, animated: true)
+            UIView.animate(
+                withDuration: 0.4,
+                delay: 0,
+                usingSpringWithDamping: 0.8,
+                initialSpringVelocity: 0,
+                options: [.allowUserInteraction]
+            ) {
+                self.scrollView.zoomScale = minimumZoomScale
+            }
             return
         }
 
@@ -264,6 +272,14 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
             height: zoomRectSize.height
         )
 
-        scrollView.zoom(to: zoomRect, animated: true)
+        UIView.animate(
+            withDuration: 0.4,
+            delay: 0,
+            usingSpringWithDamping: 0.8,
+            initialSpringVelocity: 0,
+            options: [.allowUserInteraction]
+        ) {
+            self.scrollView.zoom(to: zoomRect, animated: false)
+        }
     }
 }

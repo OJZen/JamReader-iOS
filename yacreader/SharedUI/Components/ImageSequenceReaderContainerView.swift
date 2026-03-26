@@ -53,7 +53,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         collectionView.showsVerticalScrollIndicator = false
         collectionView.isPagingEnabled = true
         collectionView.alwaysBounceVertical = false
-        collectionView.decelerationRate = .fast
+        collectionView.alwaysBounceHorizontal = true
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(ReaderPagedCollectionViewCell.self, forCellWithReuseIdentifier: ReaderPagedCollectionViewCell.reuseIdentifier)

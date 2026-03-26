@@ -13,17 +13,17 @@ public class SMBClient {
     }
   }
 
-  public init(host: String) {
+  public init(host: String, connectTimeout: TimeInterval = 30) {
     self.host = host
     port = 445
-    session = Session(host: host)
+    session = Session(host: host, connectTimeout: connectTimeout)
     onDisconnected = { _ in }
   }
 
-  public init(host: String, port: Int) {
+  public init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
     self.host = host
     self.port = port
-    session = Session(host: host, port: port)
+    session = Session(host: host, port: port, connectTimeout: connectTimeout)
     onDisconnected = { _ in }
   }
 

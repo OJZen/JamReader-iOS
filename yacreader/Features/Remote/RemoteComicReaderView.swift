@@ -252,6 +252,10 @@ struct RemoteComicReaderView: View {
                 )
             }
         }
+        .pullDownToDismiss(
+            isEnabled: !readerSession.state.isPageJumpPresented,
+            onDismiss: { dismiss() }
+        )
         .navigationTitle(displayName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)

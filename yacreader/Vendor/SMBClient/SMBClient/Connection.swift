@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import os
 
 public class Connection {
   let host: String
@@ -7,6 +8,7 @@ public class Connection {
 
   private let connection: NWConnection
   private var buffer = Data()
+  private let connectTimeout: TimeInterval
 
   private let semaphore = Semaphore(value: 1)
 
@@ -14,44 +16,75 @@ public class Connection {
     connection.state
   }
 
-  public init(host: String) {
+  public init(host: String, connectTimeout: TimeInterval = 30) {
     self.host = host
+    self.connectTimeout = connectTimeout
     let endpoint = NWEndpoint.hostPort(
       host: NWEndpoint.Host(host),
       port: NWEndpoint.Port(integerLiteral: 445)
     )
-    connection = NWConnection(to: endpoint, using: .tcp)
+    connection = NWConnection(to: endpoint, using: Self.smbTCPParameters())
     onDisconnected = { _ in }
   }
 
-  public init(host: String, port: Int) {
+  public init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
     self.host = host
+    self.connectTimeout = connectTimeout
     let endpoint = NWEndpoint.hostPort(
       host: NWEndpoint.Host(host),
       port: NWEndpoint.Port(rawValue: UInt16(port))!
     )
-    connection = NWConnection(to: endpoint, using: .tcp)
+    connection = NWConnection(to: endpoint, using: Self.smbTCPParameters())
     onDisconnected = { _ in }
   }
 
+  private static func smbTCPParameters() -> NWParameters {
+    let tcp = NWProtocolTCP.Options()
+    tcp.enableKeepalive = true
+    tcp.keepaliveInterval = 15
+    tcp.keepaliveCount = 3
+    tcp.connectionTimeout = 30
+    tcp.noDelay = true
+    return NWParameters(tls: nil, tcp: tcp)
+  }
+
   public func connect() async throws {
-    return try await withCheckedThrowingContinuation { (continuation) in
-      connection.stateUpdateHandler = { (state) in
+    let resumed = OSAllocatedUnfairLock(initialState: false)
+
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+      let timeoutWork = DispatchWorkItem { [weak self] in
+        guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
+        self?.connection.stateUpdateHandler = nil
+        continuation.resume(throwing: ConnectionError.connectionTimeout)
+      }
+      DispatchQueue.global().asyncAfter(
+        deadline: .now() + connectTimeout,
+        execute: timeoutWork
+      )
+
+      connection.stateUpdateHandler = { [weak self] (state) in
         switch state {
         case .setup, .preparing:
           break
-        case .waiting(let error):
-          continuation.resume(throwing: error)
-          self.connection.stateUpdateHandler = nil
+        case .waiting:
+          // On VPN / high-latency networks, `.waiting` is transient — let
+          // the connection timeout handle it instead of failing immediately.
+          break
         case .ready:
+          guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
+          timeoutWork.cancel()
+          self?.connection.stateUpdateHandler = stateUpdateHandler
           continuation.resume()
-          self.connection.stateUpdateHandler = stateUpdateHandler
         case .failed(let error):
+          guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
+          timeoutWork.cancel()
+          self?.connection.stateUpdateHandler = nil
           continuation.resume(throwing: error)
-          self.connection.stateUpdateHandler = nil
         case .cancelled:
+          guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
+          timeoutWork.cancel()
+          self?.connection.stateUpdateHandler = nil
           continuation.resume(throwing: ConnectionError.cancelled)
-          self.connection.stateUpdateHandler = nil
         @unknown default:
           break
         }
@@ -227,5 +260,6 @@ public enum ConnectionError: Error {
   case noData
   case disconnected
   case cancelled
+  case connectionTimeout
   case unknown
 }
