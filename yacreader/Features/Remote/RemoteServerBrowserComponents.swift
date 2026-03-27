@@ -243,17 +243,16 @@ struct RemoteDirectoryGridCard: View {
                     )
                 )
 
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.name)
-                    .font(AppFont.subheadline(.semibold))
+                    .font(AppFont.footnote(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(2)
-
-                supportingSummaryLine
+                    .fixedSize(horizontal: false, vertical: true)
 
                 compactStatusLine
             }
-            .padding(.horizontal, Spacing.sm)
+            .padding(.horizontal, Spacing.xs)
             .padding(.vertical, Spacing.xs)
         }
         .background(Color.surfaceSecondary)
@@ -286,39 +285,41 @@ struct RemoteDirectoryGridCard: View {
 
     @ViewBuilder
     private var leadingVisual: some View {
-        if item.canOpenAsComic {
-            RemoteComicThumbnailView(
-                profile: profile,
-                item: item,
-                browsingService: browsingService,
-                width: 160,
-                height: 224
-            )
-            .frame(maxWidth: .infinity)
-            .clipped()
-            .overlay(alignment: .bottomTrailing) {
-                gridCacheStatusBadge
-            }
-            .overlay(alignment: .bottom) {
-                readingProgressBar
-            }
-        } else {
-            RoundedRectangle(cornerRadius: 0, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Color.blue.opacity(0.10), Color.blue.opacity(0.18)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
+        GeometryReader { geo in
+            let cardWidth = geo.size.width
+            let imageHeight = cardWidth / AppLayout.coverAspectRatio
+
+            if item.canOpenAsComic {
+                RemoteComicThumbnailView(
+                    profile: profile,
+                    item: item,
+                    browsingService: browsingService,
+                    width: cardWidth,
+                    height: imageHeight
                 )
-                .aspectRatio(AppLayout.coverAspectRatio, contentMode: .fill)
-                .frame(maxWidth: .infinity)
+                .frame(width: cardWidth, height: imageHeight)
+                .clipped()
+                .overlay(alignment: .bottomTrailing) {
+                    gridCacheStatusBadge
+                }
+                .overlay(alignment: .bottom) {
+                    readingProgressBar
+                }
+            } else {
+                LinearGradient(
+                    colors: [Color.blue.opacity(0.12), Color.blue.opacity(0.22)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(width: cardWidth, height: imageHeight)
                 .overlay {
                     Image(systemName: "folder.fill")
-                        .font(.system(size: 32, weight: .semibold))
-                        .foregroundStyle(.blue)
+                        .font(.system(size: cardWidth * 0.22, weight: .semibold))
+                        .foregroundStyle(.blue.opacity(0.75))
                 }
+            }
         }
+        .aspectRatio(AppLayout.coverAspectRatio, contentMode: .fit)
     }
 
     @ViewBuilder

@@ -30,6 +30,7 @@ struct LibraryBrowserView: View {
     @State private var isShowingBatchOrganizationSheet = false
     @State private var isShowingSelectionActionsSheet = false
     @State private var isShowingComicFileImporter = false
+    @State private var presentedComic: LibraryComicPresentation?
 
     init(
         descriptor: LibraryDescriptor,
@@ -406,6 +407,15 @@ struct LibraryBrowserView: View {
                 title: Text(alert.title),
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
+            )
+        }
+        .fullScreenCover(item: $presentedComic) { presentation in
+            ComicReaderView(
+                descriptor: viewModel.descriptor,
+                comic: presentation.comic,
+                navigationContext: presentation.navigationContext,
+                onComicUpdated: handleReaderComicUpdate,
+                dependencies: dependencies
             )
         }
         .onChange(of: quickActionsComic) { _, newValue in
@@ -1106,11 +1116,11 @@ struct LibraryBrowserView: View {
         for kind: LibrarySpecialCollectionKind,
         comic: LibraryComic
     ) -> some View {
-        interactiveComicListNavigationLink(comic: comic) {
-            previewReaderDestination(for: kind, comic: comic)
-        } label: {
-            previewListRow(for: kind, comic: comic)
-        }
+        interactiveComicListNavigationLink(
+            comic: comic,
+            context: previewNavigationContext(for: kind),
+            label: { previewListRow(for: kind, comic: comic) }
+        )
     }
 
     @ViewBuilder
@@ -1138,11 +1148,11 @@ struct LibraryBrowserView: View {
         for kind: LibrarySpecialCollectionKind,
         comic: LibraryComic
     ) -> some View {
-        interactiveComicGridNavigationLink(comic: comic) {
-            previewReaderDestination(for: kind, comic: comic)
-        } label: {
-            previewGridCard(for: kind, comic: comic)
-        }
+        interactiveComicGridNavigationLink(
+            comic: comic,
+            context: previewNavigationContext(for: kind),
+            label: { previewGridCard(for: kind, comic: comic) }
+        )
     }
 
     @ViewBuilder
@@ -1358,22 +1368,21 @@ struct LibraryBrowserView: View {
                         .buttonStyle(.plain)
                         .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                     } else {
-                        interactiveComicListNavigationLink(comic: comic) {
-                            comicReaderDestination(
+                        interactiveComicListNavigationLink(
                                 comic: comic,
-                                navigationContext: ReaderNavigationContext(
+                                context: ReaderNavigationContext(
                                     title: content.folder.displayName,
                                     comics: displayedComics
-                                )
+                                ),
+                                label: {
+                                    LibraryComicRow(
+                                        comic: comic,
+                                        coverURL: viewModel.coverURL(for: comic),
+                                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                                    )
+                                    .equatable()
+                                }
                             )
-                        } label: {
-                            LibraryComicRow(
-                                comic: comic,
-                                coverURL: viewModel.coverURL(for: comic),
-                                trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
-                            )
-                            .equatable()
-                        }
                     }
                 }
             } header: {
@@ -1402,18 +1411,17 @@ struct LibraryBrowserView: View {
                             }
                             .buttonStyle(.plain)
                         } else {
-                            interactiveComicGridNavigationLink(comic: comic) {
-                                comicReaderDestination(
-                                    comic: comic,
-                                    navigationContext: ReaderNavigationContext(
-                                        title: content.folder.displayName,
-                                        comics: displayedComics
-                                    )
-                                )
-                            } label: {
-                                LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-                                    .equatable()
-                            }
+                            interactiveComicGridNavigationLink(
+                                comic: comic,
+                                context: ReaderNavigationContext(
+                                    title: content.folder.displayName,
+                                    comics: displayedComics
+                                ),
+                                label: {
+                                    LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+                                        .equatable()
+                                }
+                            )
                         }
                     }
                 }
@@ -1503,15 +1511,15 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private func interactiveComicListNavigationLink<Destination: View, Label: View>(
+    private func interactiveComicListNavigationLink<Label: View>(
         comic: LibraryComic,
-        @ViewBuilder destination: () -> Destination,
+        context: ReaderNavigationContext,
         @ViewBuilder label: () -> Label
     ) -> some View {
         let rowLabel = label()
 
-        return NavigationLink {
-            destination()
+        return Button {
+            presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
         } label: {
             InsetListRowCard {
                 rowLabel
@@ -1534,13 +1542,13 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private func interactiveComicGridNavigationLink<Destination: View, Label: View>(
+    private func interactiveComicGridNavigationLink<Label: View>(
         comic: LibraryComic,
-        @ViewBuilder destination: () -> Destination,
+        context: ReaderNavigationContext,
         @ViewBuilder label: () -> Label
     ) -> some View {
-        NavigationLink {
-            destination()
+        Button {
+            presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
         } label: {
             label()
         }
@@ -1981,22 +1989,21 @@ struct LibraryBrowserView: View {
                     if !displayedSearchComics.isEmpty {
                         Section {
                             ForEach(displayedSearchComics) { comic in
-                                interactiveComicListNavigationLink(comic: comic) {
-                                    comicReaderDestination(
-                                        comic: comic,
-                                        navigationContext: ReaderNavigationContext(
-                                            title: "Search",
-                                            comics: displayedSearchComics
+                                interactiveComicListNavigationLink(
+                                    comic: comic,
+                                    context: ReaderNavigationContext(
+                                        title: "Search",
+                                        comics: displayedSearchComics
+                                    ),
+                                    label: {
+                                        LibraryComicRow(
+                                            comic: comic,
+                                            coverURL: viewModel.coverURL(for: comic),
+                                            trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
                                         )
-                                    )
-                                } label: {
-                                    LibraryComicRow(
-                                        comic: comic,
-                                        coverURL: viewModel.coverURL(for: comic),
-                                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
-                                    )
-                                    .equatable()
-                                }
+                                        .equatable()
+                                    }
+                                )
                             }
                         } header: {
                             sectionHeaderLabel("Matching Comics", count: displayedSearchComics.count)
@@ -2116,6 +2123,12 @@ struct LibraryBrowserView: View {
 private enum PendingComicQuickAction {
     case edit(LibraryComic)
     case organize(LibraryComic)
+}
+
+private struct LibraryComicPresentation: Identifiable {
+    let id: UUID = UUID()
+    let comic: LibraryComic
+    let navigationContext: ReaderNavigationContext
 }
 
 private enum LibraryBrowserDisplayMode: String, CaseIterable, Identifiable {

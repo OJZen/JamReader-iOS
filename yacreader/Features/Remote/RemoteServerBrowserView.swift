@@ -19,6 +19,7 @@ struct RemoteServerBrowserView: View {
     @State private var searchText = ""
     @State private var importRequest: RemoteBrowserImportRequest?
     @State private var navigationRequest: RemoteBrowserNavigationRequest?
+    @State private var presentedComicItem: RemoteComicOpenItem?
     @State private var pendingOfflineRemoval: PendingRemoteOfflineRemoval?
     @State private var feedbackDismissTask: Task<Void, Never>?
     @StateObject private var visibilityTracker = RemoteComicVisibilityTracker()
@@ -139,6 +140,14 @@ struct RemoteServerBrowserView: View {
         }
         .sheet(item: $importRequest, content: importSheet)
         .navigationDestination(item: $navigationRequest, destination: navigationDestination)
+        .fullScreenCover(item: $presentedComicItem) { open in
+            RemoteComicLoadingView(
+                profile: viewModel.profile,
+                item: open.item,
+                dependencies: dependencies,
+                openMode: open.mode
+            )
+        }
     }
 
     @ViewBuilder
@@ -292,13 +301,8 @@ struct RemoteServerBrowserView: View {
                 currentPath: path,
                 dependencies: dependencies
             )
-        case .comic(let item, let openMode):
-            RemoteComicLoadingView(
-                profile: viewModel.profile,
-                item: item,
-                dependencies: dependencies,
-                openMode: openMode
-            )
+        case .comic:
+            EmptyView() // Comics are now presented via fullScreenCover
         }
     }
 
@@ -1137,7 +1141,7 @@ struct RemoteServerBrowserView: View {
         if item.isDirectory {
             navigationRequest = .directory(item.path)
         } else if item.canOpenAsComic {
-            navigationRequest = .comic(item, .automatic)
+            presentedComicItem = RemoteComicOpenItem(item: item, mode: .automatic)
         }
     }
 
@@ -1146,7 +1150,7 @@ struct RemoteServerBrowserView: View {
             return
         }
 
-        navigationRequest = .comic(item, .preferLocalCache)
+        presentedComicItem = RemoteComicOpenItem(item: item, mode: .preferLocalCache)
     }
 
     @ViewBuilder
@@ -1480,6 +1484,18 @@ struct PendingRemoteOfflineRemoval {
     let title: String
     let buttonTitle: String
     let message: String
+}
+
+struct RemoteComicOpenItem: Identifiable {
+    let id: String
+    let item: RemoteDirectoryItem
+    let mode: RemoteComicOpenMode
+
+    init(item: RemoteDirectoryItem, mode: RemoteComicOpenMode) {
+        self.item = item
+        self.mode = mode
+        self.id = "\(item.id):\(mode == .automatic ? "auto" : "offline")"
+    }
 }
 
 struct RemoteBrowserItemActionMenuContent: View {

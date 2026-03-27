@@ -87,7 +87,10 @@ struct ComicReaderView: View {
         }
         .pullDownToDismiss(
             isEnabled: !readerSession.state.isPageJumpPresented,
-            onDismiss: { dismiss() }
+            onDismiss: {
+                var t = Transaction(animation: .none)
+                withTransaction(t) { dismiss() }
+            }
         )
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)

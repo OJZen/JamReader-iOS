@@ -6,6 +6,9 @@ import UIKit
 extension View {
     /// Adds a pull-down-to-dismiss gesture similar to the Photos app.
     /// Only activates when the content is not zoomed in.
+    /// - Parameter onDismiss: Called after the exit animation completes.
+    ///   Wrap your `dismiss()` call in `withTransaction(Transaction(animation: .none))`
+    ///   to prevent the system presentation animation from competing with ours.
     func pullDownToDismiss(
         isEnabled: Bool = true,
         isZoomed: Bool = false,
@@ -82,9 +85,11 @@ private struct PullDownToDismissModifier: ViewModifier {
                 let verticalVelocity = value.predictedEndTranslation.height - value.translation.height
 
                 if dragOffset.height > dismissThreshold || verticalVelocity > velocityThreshold {
-                    // Dismiss
+                    // Animate content off screen, then call dismiss with no competing animation.
                     dragOffset = CGSize(width: 0, height: UIScreen.main.bounds.height)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    // Delay matches the spring response (~0.35s) so the content is fully gone
+                    // before the caller's dismiss() runs, preventing a competing slide animation.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
                         onDismiss()
                     }
                 } else {
