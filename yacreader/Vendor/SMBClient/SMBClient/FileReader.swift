@@ -1,6 +1,8 @@
 import Foundation
 
 public class FileReader {
+  private static let preferredDownloadChunkSize: UInt32 = 256 * 1024
+
   private let session: Session
   private let path: String
 
@@ -44,6 +46,7 @@ public class FileReader {
 
   public func download(progressHandler: (_ progress: Double) -> Void = { _ in }) async throws -> Data {
     let fileProxy = try await fileProxy()
+    let downloadChunkSize = min(session.maxReadSize, Self.preferredDownloadChunkSize)
 
     var offset: UInt64 = 0
     var buffer = Data()
@@ -52,7 +55,8 @@ public class FileReader {
     repeat {
       response = try await session.read(
         fileId: fileProxy.id,
-        offset: offset
+        offset: offset,
+        length: downloadChunkSize
       )
 
       buffer.append(response.buffer)
@@ -92,13 +96,15 @@ public class FileReader {
 
   public func download(fileHandle: FileHandle, progressHandler: (_ progress: Double) -> Void = { _ in }) async throws {
     let fileProxy = try await fileProxy()
+    let downloadChunkSize = min(session.maxReadSize, Self.preferredDownloadChunkSize)
 
     var offset: UInt64 = 0
     var response: Read.Response
     repeat {
       response = try await session.read(
         fileId: fileProxy.id,
-        offset: offset
+        offset: offset,
+        length: downloadChunkSize
       )
 
       fileHandle.seekToEndOfFile()

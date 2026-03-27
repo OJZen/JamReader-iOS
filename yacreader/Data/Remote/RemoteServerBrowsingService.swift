@@ -139,7 +139,8 @@ final class RemoteServerBrowsingService {
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
-    private let smbClientSemaphore = AsyncSemaphore(maxConcurrent: 1)
+    private let smbClientSemaphore = AsyncSemaphore(maxConcurrent: 3)
+    private let smbConnectionPool = SMBConnectionPool()
 
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
@@ -345,6 +346,20 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         forceRefresh: Bool = false
     ) async throws -> RemoteComicDownloadResult {
+        try await downloadComicFile(
+            for: profile,
+            reference: reference,
+            forceRefresh: forceRefresh,
+            progressHandler: { _ in }
+        )
+    }
+
+    func downloadComicFile(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference,
+        forceRefresh: Bool = false,
+        progressHandler: @escaping @Sendable (Double) -> Void
+    ) async throws -> RemoteComicDownloadResult {
         await downloadSemaphore.wait()
         defer { Task { await downloadSemaphore.signal() } }
 
@@ -364,7 +379,8 @@ final class RemoteServerBrowsingService {
                         try await client.download(
                             path: smbRelativePath(forDisplayPath: reference.path),
                             localPath: temporaryDownloadURL,
-                            overwrite: true
+                            overwrite: true,
+                            progressHandler: progressHandler
                         )
                     }
                 }
@@ -698,27 +714,18 @@ final class RemoteServerBrowsingService {
         await smbClientSemaphore.wait()
         defer { Task { await smbClientSemaphore.signal() } }
 
-        let client = SMBClient(
-            host: profile.normalizedHost,
-            port: profile.port,
-            connectTimeout: connectTimeout
-        )
         let credentials = try resolvedCredentials(for: profile)
 
         do {
-            try await client.login(
+            return try await smbConnectionPool.withConnection(
+                host: profile.normalizedHost,
+                port: profile.port,
+                shareName: profile.normalizedShareName,
                 username: credentials.username,
-                password: credentials.password
+                password: credentials.password,
+                operation: operation
             )
-            try await client.connectShare(profile.normalizedShareName)
-
-            defer {
-                client.session.disconnect()
-            }
-
-            return try await operation(client)
         } catch {
-            client.session.disconnect()
             throw normalizeBrowsingError(
                 error,
                 profile: profile,

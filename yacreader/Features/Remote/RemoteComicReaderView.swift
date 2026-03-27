@@ -46,6 +46,9 @@ struct RemoteComicLoadingView: View {
     @State private var loadErrorMessage: String?
     @State private var noticeMessage: String?
     @State private var accessState: RemoteComicAccessState = .liveRemoteCopy
+    @State private var downloadProgress: Double = 0
+    @State private var downloadStartTime: Date?
+    @State private var downloadSpeed: String = ""
 
     init(
         profile: RemoteServerProfile,
@@ -79,8 +82,27 @@ struct RemoteComicLoadingView: View {
                     description: Text(loadErrorMessage)
                 )
             } else {
-                ProgressView("Downloading Remote Comic")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 16) {
+                    if downloadProgress > 0 {
+                        ProgressView(value: downloadProgress)
+                            .progressViewStyle(.linear)
+                            .frame(width: 200)
+                        Text("\(Int(downloadProgress * 100))%")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if !downloadSpeed.isEmpty {
+                            Text(downloadSpeed)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    } else {
+                        ProgressView()
+                    }
+                    Text("Downloading…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle(item.name)
@@ -116,6 +138,9 @@ struct RemoteComicLoadingView: View {
 
         isLoading = true
         loadErrorMessage = nil
+        downloadProgress = 0
+        downloadSpeed = ""
+        downloadStartTime = nil
         defer {
             isLoading = false
         }
@@ -140,9 +165,24 @@ struct RemoteComicLoadingView: View {
         }
 
         do {
+            downloadStartTime = Date()
+            let fileSize = reference.fileSize ?? 0
             let result = try await dependencies.remoteServerBrowsingService.downloadComicFile(
                 for: profile,
-                reference: reference
+                reference: reference,
+                progressHandler: { @Sendable [weak downloadStartTimeRef = UnsafeSendableBox(downloadStartTime)] progress in
+                    Task { @MainActor in
+                        self.downloadProgress = progress
+                        if let startTime = downloadStartTimeRef?.value, fileSize > 0 {
+                            let elapsed = Date().timeIntervalSince(startTime)
+                            if elapsed > 0.5 {
+                                let bytesDownloaded = Double(fileSize) * progress
+                                let bytesPerSecond = bytesDownloaded / elapsed
+                                self.downloadSpeed = Self.formatSpeed(bytesPerSecond)
+                            }
+                        }
+                    }
+                }
             )
             localFileURL = result.localFileURL
             let resolvedAccessState = RemoteComicAccessState(source: result.source)
@@ -152,6 +192,21 @@ struct RemoteComicLoadingView: View {
             loadErrorMessage = error.localizedDescription
         }
     }
+
+    private static func formatSpeed(_ bytesPerSecond: Double) -> String {
+        if bytesPerSecond >= 1_048_576 {
+            return String(format: "%.1f MB/s", bytesPerSecond / 1_048_576)
+        } else if bytesPerSecond >= 1024 {
+            return String(format: "%.0f KB/s", bytesPerSecond / 1024)
+        } else {
+            return String(format: "%.0f B/s", bytesPerSecond)
+        }
+    }
+}
+
+private final class UnsafeSendableBox<T>: @unchecked Sendable {
+    let value: T?
+    init(_ value: T?) { self.value = value }
 }
 
 struct RemoteComicReaderView: View {
