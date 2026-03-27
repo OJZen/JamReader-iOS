@@ -139,6 +139,7 @@ final class RemoteServerBrowsingService {
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
+    private let smbClientSemaphore = AsyncSemaphore(maxConcurrent: 1)
 
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
@@ -694,6 +695,9 @@ final class RemoteServerBrowsingService {
         connectTimeout: TimeInterval = 30,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
+        await smbClientSemaphore.wait()
+        defer { Task { await smbClientSemaphore.signal() } }
+
         let client = SMBClient(
             host: profile.normalizedHost,
             port: profile.port,

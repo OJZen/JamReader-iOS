@@ -62,10 +62,14 @@ public class TreeAccessor {
   public func download(path: String) async throws -> Data {
     let fileReader = try await fileReader(path: Pathname.normalize(path))
 
-    let data = try await fileReader.download()
-    try await fileReader.close()
-
-    return data
+    do {
+      let data = try await fileReader.download()
+      try? await fileReader.close()
+      return data
+    } catch {
+      try? await fileReader.close()
+      throw error
+    }
   }
 
   public func upload(content: Data, path: String) async throws {
