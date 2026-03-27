@@ -525,14 +525,12 @@ final class LibraryScanner {
             database: database
         )
         let comicInfoID = comicInfoResolution.id
-        let preferredCoverPage = try loadCoverPage(comicInfoID: comicInfoID, database: database)
-        if let extractedMetadata = try? metadataExtractor.extractMetadata(for: fileURL, coverPage: preferredCoverPage) {
-            try applyExtractedMetadata(
-                extractedMetadata,
+        // Lightweight import: only extract page count (no cover image, no ComicInfo.xml).
+        // Cover and metadata will be extracted lazily when the comic is first opened.
+        if let pageCount = metadataExtractor.extractPageCountOnly(for: fileURL), pageCount > 0 {
+            try applyPageCount(
+                pageCount,
                 comicInfoID: comicInfoID,
-                hash: hash,
-                coversRootURL: context.coversRootURL,
-                shouldImportComicInfoXML: comicInfoResolution.isNew,
                 database: database
             )
         }
@@ -687,6 +685,30 @@ final class LibraryScanner {
                 comicInfoID: comicInfoID,
                 database: database
             )
+        }
+    }
+
+    private func applyPageCount(
+        _ pageCount: Int,
+        comicInfoID: Int64,
+        database: OpaquePointer
+    ) throws {
+        let sql = """
+        UPDATE comic_info
+        SET numPages = ?
+        WHERE id = ?
+        """
+
+        let statement = try prepareStatement(sql, database: database)
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, Int64(pageCount))
+        sqlite3_bind_int64(statement, 2, comicInfoID)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw LibraryScannerError.scanFailed(lastDatabaseError(database: database))
         }
     }
 

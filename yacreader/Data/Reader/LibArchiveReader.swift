@@ -49,6 +49,12 @@ final class LibArchiveReader {
         )
     }
 
+    /// Lightweight: count pages without decompressing any data.
+    func countPages(at archiveURL: URL) throws -> Int {
+        let archiveReader = try YRLibArchiveReader(archiveURL: archiveURL)
+        return try orderedPageEntries(from: archiveReader.entryPaths).count
+    }
+
     private func orderedPageEntries(from entryPaths: [String]) throws -> [LibArchiveEntry] {
         let pageEntries = entryPaths.enumerated().compactMap { archiveIndex, path -> LibArchiveEntry? in
             guard ComicPageNameSorter.isSupportedImagePath(path) else {

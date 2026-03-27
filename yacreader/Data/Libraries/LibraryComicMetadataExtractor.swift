@@ -76,6 +76,24 @@ final class LibraryComicMetadataExtractor {
         }
     }
 
+    /// Lightweight extraction: only page count, no cover image or ComicInfo.xml.
+    /// Much faster for initial library import since it avoids decompressing image data.
+    func extractPageCountOnly(for fileURL: URL) -> Int? {
+        let fileExtension = fileURL.pathExtension.lowercased()
+        switch fileExtension {
+        case "pdf":
+            return PDFDocument(url: fileURL)?.pageCount
+        case "cbz", "zip":
+            return (try? zipArchiveReader.countPages(at: fileURL)) ?? (try? libArchiveReader.countPages(at: fileURL))
+        case "cbr", "rar", "cb7", "7z", "arj":
+            return try? libArchiveReader.countPages(at: fileURL)
+        case "cbt", "tar":
+            return try? tarArchiveReader.countPages(at: fileURL)
+        default:
+            return nil
+        }
+    }
+
     func saveCover(_ image: UIImage, to coverURL: URL) throws {
         let parentURL = coverURL.deletingLastPathComponent()
         if !fileManager.fileExists(atPath: parentURL.path) {

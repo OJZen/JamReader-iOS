@@ -61,6 +61,12 @@ final class TARArchiveReader {
         )
     }
 
+    /// Lightweight: count pages by parsing headers only (no data extraction).
+    func countPages(at archiveURL: URL) throws -> Int {
+        let entries = try TARArchiveParser(archiveURL: archiveURL).parseEntries()
+        return try orderedPageEntries(from: entries).count
+    }
+
     private func orderedPageEntries(from entries: [TARArchiveEntry]) throws -> [TARArchiveEntry] {
         let pageEntries = entries
             .filter { !$0.isDirectory && ComicPageNameSorter.isSupportedImagePath($0.path) }

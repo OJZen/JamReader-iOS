@@ -113,6 +113,12 @@ final class ZIPArchiveReader {
         }
     }
 
+    /// Lightweight: count pages by reading only the central directory (no decompression).
+    func countPages(at archiveURL: URL) throws -> Int {
+        let entries = try ZIPArchiveParser(archiveURL: archiveURL).parseEntries()
+        return try orderedPageEntries(from: entries).count
+    }
+
     private func orderedPageEntries(from entries: [ZIPArchiveEntry]) throws -> [ZIPArchiveEntry] {
         let pageEntries = entries
             .filter { !$0.isDirectory && ComicPageNameSorter.isSupportedImagePath($0.path) }
