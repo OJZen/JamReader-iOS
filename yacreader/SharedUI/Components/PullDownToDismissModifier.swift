@@ -41,7 +41,7 @@ private struct PullDownToDismissModifier: ViewModifier {
         content
             .offset(y: isEnabled ? dragOffset.height : 0)
             .scaleEffect(isEnabled ? scaleForDrag : 1)
-            .background(Color.black.opacity(isEnabled ? backgroundOpacity : 1))
+            .background(Color.black.ignoresSafeArea())
             .simultaneousGesture(isEnabled && !isZoomed ? dragGesture : nil)
             .animation(isDragging ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragOffset)
     }
@@ -49,11 +49,6 @@ private struct PullDownToDismissModifier: ViewModifier {
     private var scaleForDrag: CGFloat {
         let progress = min(abs(dragOffset.height) / 400, 1)
         return 1 - progress * 0.15
-    }
-
-    private var backgroundOpacity: Double {
-        let progress = min(abs(dragOffset.height) / 300, 1)
-        return 1 - progress * 0.6
     }
 
     private var dragGesture: some Gesture {
@@ -67,33 +62,22 @@ private struct PullDownToDismissModifier: ViewModifier {
                 }
 
                 isDragging = true
-                // Apply rubber-band resistance for upward drags
-                if translation.height < 0 {
-                    dragOffset = CGSize(
-                        width: 0,
-                        height: translation.height * 0.3
-                    )
-                } else {
-                    dragOffset = CGSize(
-                        width: 0,
-                        height: translation.height
-                    )
-                }
+                // Clamp upward drags to zero — no upward offset
+                dragOffset = CGSize(
+                    width: 0,
+                    height: max(translation.height, 0)
+                )
             }
             .onEnded { value in
                 isDragging = false
                 let verticalVelocity = value.predictedEndTranslation.height - value.translation.height
 
                 if dragOffset.height > dismissThreshold || verticalVelocity > velocityThreshold {
-                    // Animate content off screen, then call dismiss with no competing animation.
                     dragOffset = CGSize(width: 0, height: UIScreen.main.bounds.height)
-                    // Delay matches the spring response (~0.35s) so the content is fully gone
-                    // before the caller's dismiss() runs, preventing a competing slide animation.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
                         onDismiss()
                     }
                 } else {
-                    // Snap back
                     dragOffset = .zero
                 }
             }
