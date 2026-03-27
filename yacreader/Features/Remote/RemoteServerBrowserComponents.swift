@@ -409,6 +409,13 @@ private struct RemoteDirectoryItemPresentation {
         }
 
         if let fileSize = item.fileSize, item.canOpenAsComic {
+            metadataItems.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "internaldrive",
+                    text: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file),
+                    tint: .secondary
+                )
+            )
             overviewSegments.append(
                 ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
             )

@@ -140,7 +140,9 @@ struct RemoteServerBrowserView: View {
         }
         .sheet(item: $importRequest, content: importSheet)
         .navigationDestination(item: $navigationRequest, destination: navigationDestination)
-        .fullScreenCover(item: $presentedComicItem) { open in
+        .fullScreenCover(item: $presentedComicItem, onDismiss: {
+            viewModel.refreshProgressState()
+        }) { open in
             RemoteComicLoadingView(
                 profile: viewModel.profile,
                 item: open.item,
