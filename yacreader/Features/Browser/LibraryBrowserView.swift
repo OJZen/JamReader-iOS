@@ -31,6 +31,7 @@ struct LibraryBrowserView: View {
     @State private var isShowingSelectionActionsSheet = false
     @State private var isShowingComicFileImporter = false
     @State private var presentedComic: LibraryComicPresentation?
+    @State private var heroSourceFrame: CGRect = .zero
 
     init(
         descriptor: LibraryDescriptor,
@@ -409,15 +410,17 @@ struct LibraryBrowserView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
-        .fullScreenCover(item: $presentedComic) { presentation in
-            ComicReaderView(
-                descriptor: viewModel.descriptor,
-                comic: presentation.comic,
-                navigationContext: presentation.navigationContext,
-                onComicUpdated: handleReaderComicUpdate,
-                dependencies: dependencies
-            )
-        }
+        .background(
+            HeroReaderPresenter(item: $presentedComic, sourceFrame: heroSourceFrame) { presentation in
+                ComicReaderView(
+                    descriptor: viewModel.descriptor,
+                    comic: presentation.comic,
+                    navigationContext: presentation.navigationContext,
+                    onComicUpdated: handleReaderComicUpdate,
+                    dependencies: dependencies
+                )
+            }
+        )
         .onChange(of: quickActionsComic) { _, newValue in
             guard newValue == nil, let pendingQuickAction else {
                 return
@@ -1518,7 +1521,8 @@ struct LibraryBrowserView: View {
     ) -> some View {
         let rowLabel = label()
 
-        return Button {
+        return HeroTapButton { frame in
+            heroSourceFrame = frame
             presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
         } label: {
             InsetListRowCard {
@@ -1545,9 +1549,10 @@ struct LibraryBrowserView: View {
     private func interactiveComicGridNavigationLink<Label: View>(
         comic: LibraryComic,
         context: ReaderNavigationContext,
-        @ViewBuilder label: () -> Label
+        @ViewBuilder label: @escaping () -> Label
     ) -> some View {
-        Button {
+        HeroTapButton { frame in
+            heroSourceFrame = frame
             presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
         } label: {
             label()

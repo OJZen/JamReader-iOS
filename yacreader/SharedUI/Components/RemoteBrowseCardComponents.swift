@@ -240,6 +240,7 @@ struct RemoteOfflineComicCard: View {
     let profile: RemoteServerProfile
     let availability: RemoteComicCachedAvailability
     let browsingService: RemoteServerBrowsingService
+    var heroSourceID: String? = nil
     var showsNavigationIndicator = true
     var showsServerName = true
     var trailingAccessoryReservedWidth: CGFloat = 0
@@ -273,6 +274,7 @@ struct RemoteOfflineComicCard: View {
                 item: session.directoryItem,
                 browsingService: browsingService,
                 prefersLocalCache: availability.hasLocalCopy,
+                heroSourceID: heroSourceID,
                 width: 60,
                 height: 84
             )

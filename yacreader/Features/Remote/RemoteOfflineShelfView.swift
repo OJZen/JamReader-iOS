@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 
 private enum RemoteOfflineShelfLayoutMetrics {
     static let horizontalInset: CGFloat = 12
@@ -286,6 +287,9 @@ struct RemoteOfflineShelfView: View {
     @State private var pendingRemovalEntry: RemoteOfflineComicEntry?
     @State private var pendingServerClearProfile: RemoteServerProfile?
     @State private var pendingServerClearCount = 0
+    @State private var presentedEntry: RemoteOfflineComicEntry?
+    @State private var heroSourceFrame: CGRect = .zero
+    @State private var heroPreviewImage: UIImage?
 
     init(
         dependencies: AppDependencies,
@@ -326,13 +330,9 @@ struct RemoteOfflineShelfView: View {
                 ForEach(displayedSections) { section in
                     Section {
                         ForEach(section.entries) { entry in
-                            NavigationLink {
-                                RemoteComicLoadingView(
-                                    profile: entry.profile,
-                                    item: entry.session.directoryItem,
-                                    dependencies: dependencies,
-                                    openMode: .preferLocalCache
-                                )
+                            HeroTapButton { frame in
+                                prepareHeroTransition(for: entry, fallbackFrame: frame)
+                                presentedEntry = entry
                             } label: {
                                 RemoteInsetListRowCard(contentPadding: 12) {
                                     RemoteOfflineComicCard(
@@ -340,6 +340,7 @@ struct RemoteOfflineShelfView: View {
                                         profile: entry.profile,
                                         availability: entry.availability,
                                         browsingService: dependencies.remoteServerBrowsingService,
+                                        heroSourceID: entry.session.directoryItem.id,
                                         showsNavigationIndicator: false,
                                         showsServerName: false
                                     )
@@ -364,6 +365,7 @@ struct RemoteOfflineShelfView: View {
         }
         .scrollContentBackground(.hidden)
         .background(background)
+        .background(readerPresenter)
         .navigationTitle("Offline Shelf")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -510,6 +512,37 @@ struct RemoteOfflineShelfView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    @ViewBuilder
+    private var readerPresenter: some View {
+        HeroReaderPresenter(
+            item: $presentedEntry,
+            sourceFrame: heroSourceFrame,
+            previewImage: heroPreviewImage,
+            onDismiss: {
+                heroSourceFrame = .zero
+                heroPreviewImage = nil
+            }
+        ) { entry in
+            RemoteComicLoadingView(
+                profile: entry.profile,
+                item: entry.session.directoryItem,
+                dependencies: dependencies,
+                openMode: .preferLocalCache
+            )
+        }
+    }
+
+    @MainActor
+    private func prepareHeroTransition(for entry: RemoteOfflineComicEntry, fallbackFrame: CGRect) {
+        let item = entry.session.directoryItem
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: item.id)
+        heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
+        heroPreviewImage = RemoteComicThumbnailPipeline.shared.cachedTransitionImage(
+            for: item,
+            browsingService: dependencies.remoteServerBrowsingService
+        )
     }
 
     private var displayedEntries: [RemoteOfflineComicEntry] {

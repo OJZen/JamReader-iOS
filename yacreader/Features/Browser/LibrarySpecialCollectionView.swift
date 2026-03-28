@@ -28,6 +28,8 @@ struct LibrarySpecialCollectionView: View {
     @State private var isShowingComicInfoImportSheet = false
     @State private var isShowingBatchOrganizationSheet = false
     @State private var isShowingSelectionActionsSheet = false
+    @State private var presentedComic: PresentedComic?
+    @State private var heroSourceFrame: CGRect = .zero
 
     init(
         descriptor: LibraryDescriptor,
@@ -282,6 +284,7 @@ struct LibrarySpecialCollectionView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .background(readerPresenter)
         .onChange(of: quickActionsComic) { _, newValue in
             guard newValue == nil, let pendingQuickAction else {
                 return
@@ -307,6 +310,25 @@ struct LibrarySpecialCollectionView: View {
         }
         .onChange(of: recentWindowRawValue) { _, _ in
             viewModel.setRecentDays(recentWindowOption.dayCount)
+        }
+    }
+
+    @ViewBuilder
+    private var readerPresenter: some View {
+        HeroReaderPresenter(
+            item: $presentedComic,
+            sourceFrame: heroSourceFrame,
+            onDismiss: {
+                heroSourceFrame = .zero
+            }
+        ) { presentation in
+            ComicReaderView(
+                descriptor: viewModel.descriptor,
+                comic: presentation.comic,
+                navigationContext: presentation.navigationContext,
+                onComicUpdated: handleReaderComicUpdate,
+                dependencies: dependencies
+            )
         }
     }
 
@@ -471,17 +493,8 @@ struct LibrarySpecialCollectionView: View {
             .buttonStyle(.plain)
             .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         } else {
-            NavigationLink {
-                ComicReaderView(
-                    descriptor: viewModel.descriptor,
-                    comic: comic,
-                    navigationContext: ReaderNavigationContext(
-                        title: viewModel.kind.title,
-                        comics: displayedComics
-                    ),
-                    onComicUpdated: handleReaderComicUpdate,
-                    dependencies: dependencies
-                )
+            HeroTapButton { frame in
+                presentComic(comic, sourceFrame: frame)
             } label: {
                 InsetListRowCard {
                     LibraryComicRow(
@@ -524,17 +537,8 @@ struct LibrarySpecialCollectionView: View {
             }
             .buttonStyle(.plain)
         } else {
-            NavigationLink {
-                ComicReaderView(
-                    descriptor: viewModel.descriptor,
-                    comic: comic,
-                    navigationContext: ReaderNavigationContext(
-                        title: viewModel.kind.title,
-                        comics: displayedComics
-                    ),
-                    onComicUpdated: handleReaderComicUpdate,
-                    dependencies: dependencies
-                )
+            HeroTapButton { frame in
+                presentComic(comic, sourceFrame: frame)
             } label: {
                 LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
             }
@@ -593,6 +597,17 @@ struct LibrarySpecialCollectionView: View {
 
     private var supportsGridDisplay: Bool {
         horizontalSizeClass == .regular
+    }
+
+    private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
+        heroSourceFrame = sourceFrame
+        presentedComic = PresentedComic(
+            comic: comic,
+            navigationContext: ReaderNavigationContext(
+                title: viewModel.kind.title,
+                comics: displayedComics
+            )
+        )
     }
 
     private var usesCondensedTopBarActions: Bool {
@@ -1094,6 +1109,13 @@ struct LibrarySpecialCollectionView: View {
             displayMode = .list
         }
     }
+}
+
+private struct PresentedComic: Identifiable {
+    let comic: LibraryComic
+    let navigationContext: ReaderNavigationContext
+
+    var id: Int64 { comic.id }
 }
 
 private enum PendingComicQuickAction {

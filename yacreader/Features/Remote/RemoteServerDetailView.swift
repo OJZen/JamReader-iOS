@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum RemoteServerDetailLayoutMetrics {
     static let horizontalInset: CGFloat = 12
@@ -14,6 +15,9 @@ struct RemoteServerDetailView: View {
     @State private var recentSessions: [RemoteComicReadingSession] = []
     @State private var editorDraft: RemoteServerEditorDraft?
     @State private var navigationRequest: RemoteServerDetailNavigationRequest?
+    @State private var presentedRecentSession: RemoteComicReadingSession?
+    @State private var heroSourceFrame: CGRect = .zero
+    @State private var heroPreviewImage: UIImage?
 
     init(profile: RemoteServerProfile, dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -96,6 +100,26 @@ struct RemoteServerDetailView: View {
                 )
             }
         }
+        .background(readerPresenter)
+    }
+
+    @ViewBuilder
+    private var readerPresenter: some View {
+        HeroReaderPresenter(
+            item: $presentedRecentSession,
+            sourceFrame: heroSourceFrame,
+            previewImage: heroPreviewImage,
+            onDismiss: {
+                heroSourceFrame = .zero
+                heroPreviewImage = nil
+            }
+        ) { session in
+            RemoteComicLoadingView(
+                profile: profile,
+                item: session.directoryItem,
+                dependencies: dependencies
+            )
+        }
     }
 
     private var summarySection: some View {
@@ -166,8 +190,9 @@ struct RemoteServerDetailView: View {
                 .padding(.vertical, 24)
             } else {
                 ForEach(recentSessions) { session in
-                    Button {
-                        navigationRequest = .comic(session.directoryItem)
+                    HeroTapButton { frame in
+                        prepareHeroTransition(for: session, fallbackFrame: frame)
+                        presentedRecentSession = session
                     } label: {
                         RemoteInsetListRowCard {
                             RemoteOfflineComicCard(
@@ -177,6 +202,7 @@ struct RemoteServerDetailView: View {
                                     for: session.comicFileReference
                                 ),
                                 browsingService: dependencies.remoteServerBrowsingService,
+                                heroSourceID: session.directoryItem.id,
                                 showsNavigationIndicator: false,
                                 showsServerName: false
                             )
@@ -195,6 +221,17 @@ struct RemoteServerDetailView: View {
                 }
             }
         }
+    }
+
+    @MainActor
+    private func prepareHeroTransition(for session: RemoteComicReadingSession, fallbackFrame: CGRect) {
+        let item = session.directoryItem
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: item.id)
+        heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
+        heroPreviewImage = RemoteComicThumbnailPipeline.shared.cachedTransitionImage(
+            for: item,
+            browsingService: dependencies.remoteServerBrowsingService
+        )
     }
 
     private var recentHistoryCount: Int {

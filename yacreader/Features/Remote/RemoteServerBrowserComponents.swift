@@ -59,6 +59,7 @@ struct RemoteDirectoryItemListRow: View {
     let cacheAvailability: RemoteComicCachedAvailability
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
+    var heroSourceID: String? = nil
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
@@ -167,6 +168,8 @@ struct RemoteDirectoryItemListRow: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
+                prefersLocalCache: cacheAvailability.hasLocalCopy,
+                heroSourceID: heroSourceID,
                 width: 54,
                 height: 76
             )
@@ -211,6 +214,7 @@ extension RemoteDirectoryItemListRow: Equatable {
             && lhs.readingSession == rhs.readingSession
             && lhs.cacheAvailability == rhs.cacheAvailability
             && lhs.profile.id == rhs.profile.id
+            && lhs.heroSourceID == rhs.heroSourceID
             && lhs.trailingAccessoryReservedWidth == rhs.trailingAccessoryReservedWidth
     }
 }
@@ -221,6 +225,7 @@ struct RemoteDirectoryGridCard: View {
     let cacheAvailability: RemoteComicCachedAvailability
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
+    var heroSourceID: String? = nil
 
     private var presentation: RemoteDirectoryItemPresentation {
         RemoteDirectoryItemPresentation(
@@ -294,6 +299,8 @@ struct RemoteDirectoryGridCard: View {
                     profile: profile,
                     item: item,
                     browsingService: browsingService,
+                    prefersLocalCache: cacheAvailability.hasLocalCopy,
+                    heroSourceID: heroSourceID,
                     width: cardWidth,
                     height: imageHeight
                 )
@@ -367,6 +374,7 @@ extension RemoteDirectoryGridCard: Equatable {
             && lhs.readingSession == rhs.readingSession
             && lhs.cacheAvailability == rhs.cacheAvailability
             && lhs.profile.id == rhs.profile.id
+            && lhs.heroSourceID == rhs.heroSourceID
     }
 }
 

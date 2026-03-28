@@ -32,6 +32,7 @@ struct RemoteComicThumbnailView: View {
     let browsingService: RemoteServerBrowsingService
     let placeholderSystemName: String
     let prefersLocalCache: Bool
+    let heroSourceID: String?
     let width: CGFloat
     let height: CGFloat
 
@@ -41,6 +42,7 @@ struct RemoteComicThumbnailView: View {
         browsingService: RemoteServerBrowsingService,
         placeholderSystemName: String = "doc.richtext",
         prefersLocalCache: Bool = false,
+        heroSourceID: String? = nil,
         width: CGFloat = 74,
         height: CGFloat = 104
     ) {
@@ -49,6 +51,7 @@ struct RemoteComicThumbnailView: View {
         self.browsingService = browsingService
         self.placeholderSystemName = placeholderSystemName
         self.prefersLocalCache = prefersLocalCache
+        self.heroSourceID = heroSourceID
         self.width = width
         self.height = height
     }
@@ -71,6 +74,12 @@ struct RemoteComicThumbnailView: View {
                 scale: scale
             )
         }
+        .overlay {
+            if let heroSourceID {
+                HeroSourceAnchorView(id: heroSourceID)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 }
 
@@ -79,6 +88,10 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
     @Published private(set) var image: UIImage?
     private var loadTask: Task<Void, Never>?
     private var requestID: String?
+    // Tracks item identity separately from size so we only clear the displayed
+    // image when the item changes — not when the caller switches between grid
+    // (208 px) and list (76 px) for the same item.
+    private var loadedItemID: String?
 
     func load(
         profile: RemoteServerProfile,
@@ -92,25 +105,39 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
 
         guard item.canOpenAsComic else {
             requestID = nil
+            loadedItemID = nil
             image = nil
             return
         }
 
-        let maxPixelSize = Int(max(targetSize.width, targetSize.height) * max(scale, 1))
-        let requestID = "\(item.id)#\(maxPixelSize)"
+        let requestedMaxPixelSize = Int(max(targetSize.width, targetSize.height) * max(scale, 1))
+        let normalizedMaxPixelSize = RemoteComicThumbnailPipeline.normalizedPixelSize(
+            for: requestedMaxPixelSize
+        )
+        let requestID = "\(item.id)#\(normalizedMaxPixelSize)"
+        let itemID = "\(item.id)#\(item.fileSize ?? 0)"
+        let seededImage = RemoteComicThumbnailPipeline.shared.cachedImage(
+            for: item,
+            browsingService: browsingService,
+            maxPixelSize: normalizedMaxPixelSize
+        )
 
-        if self.requestID != requestID {
-            image = nil
+        if self.loadedItemID != itemID {
+            image = seededImage
+        } else if image == nil {
+            image = seededImage
         }
+        // Same item, different size — keep existing image visible until new size arrives
 
         self.requestID = requestID
+        self.loadedItemID = itemID
         loadTask = Task { [weak self] in
             let image = await RemoteComicThumbnailPipeline.shared.image(
                 for: profile,
                 item: item,
                 browsingService: browsingService,
                 prefersLocalCache: prefersLocalCache,
-                maxPixelSize: maxPixelSize
+                maxPixelSize: normalizedMaxPixelSize
             )
 
             guard let self, !Task.isCancelled, self.requestID == requestID else {
@@ -124,6 +151,7 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
     func cancel() {
         loadTask?.cancel()
         loadTask = nil
+        loadedItemID = nil
     }
 
     deinit {
@@ -137,6 +165,11 @@ final class RemoteComicThumbnailPipeline {
     private static let semaphore = AsyncSemaphore(maxConcurrent: 6)
 
     private let cache = NSCache<NSString, UIImage>()
+    // Secondary cache keyed by item identity (no pixel size).
+    // Stores the highest-quality (largest) image fetched for each item so that
+    // switching from grid to list can downsample from this cache instead of
+    // re-fetching from the network.
+    private let highQualityCache = NSCache<NSString, UIImage>()
     private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
     private let fileManager: FileManager
     private let thumbnailCacheRootURL: URL
@@ -160,6 +193,10 @@ final class RemoteComicThumbnailPipeline {
         )
         cache.countLimit = 256
         cache.totalCostLimit = 64 * 1_024 * 1_024
+        // Smaller limit for the HQ cache — it stores at most one image per item
+        // (the largest fetched size) and memory cost is higher per entry.
+        highQualityCache.countLimit = 200
+        highQualityCache.totalCostLimit = 48 * 1_024 * 1_024
     }
 
     func image(
@@ -176,10 +213,13 @@ final class RemoteComicThumbnailPipeline {
             return nil
         }
 
+        let requestedMaxPixelSize = maxPixelSize
+        let maxPixelSize = Self.normalizedPixelSize(for: requestedMaxPixelSize)
         let cacheKey = Self.cacheKey(for: reference, maxPixelSize: maxPixelSize)
         let nsCacheKey = cacheKey as NSString
 
         if let cachedImage = cache.object(forKey: nsCacheKey) {
+            promoteToTransitionCache(cachedImage, for: reference)
             return cachedImage
         }
 
@@ -190,8 +230,53 @@ final class RemoteComicThumbnailPipeline {
                 forKey: nsCacheKey,
                 cost: Self.cacheCost(for: diskCachedImage)
             )
+            promoteToTransitionCache(diskCachedImage, for: reference)
             diskCache.touchCachedThumbnail(at: diskURL)
             return diskCachedImage
+        }
+
+        if requestedMaxPixelSize != maxPixelSize {
+            let legacyCacheKey = Self.cacheKey(for: reference, maxPixelSize: requestedMaxPixelSize)
+            let legacyNSCacheKey = legacyCacheKey as NSString
+
+            if let legacyCachedImage = cache.object(forKey: legacyNSCacheKey) {
+                cache.setObject(
+                    legacyCachedImage,
+                    forKey: nsCacheKey,
+                    cost: Self.cacheCost(for: legacyCachedImage)
+                )
+                promoteToTransitionCache(legacyCachedImage, for: reference)
+                return legacyCachedImage
+            }
+
+            let legacyDiskURL = cachedThumbnailURL(forCacheKey: legacyCacheKey)
+            if let legacyDiskCachedImage = diskCache.loadCachedImage(at: legacyDiskURL) {
+                cache.setObject(
+                    legacyDiskCachedImage,
+                    forKey: nsCacheKey,
+                    cost: Self.cacheCost(for: legacyDiskCachedImage)
+                )
+                promoteToTransitionCache(legacyDiskCachedImage, for: reference)
+                if let thumbnailData = Self.encodedThumbnailData(from: legacyDiskCachedImage) {
+                    try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                }
+                diskCache.touchCachedThumbnail(at: legacyDiskURL)
+                return legacyDiskCachedImage
+            }
+        }
+
+        // Before going to the network, check whether we already have a larger version
+        // of this item in the high-quality cache (e.g. the grid loaded 416 px and now
+        // the list wants 152 px).  Downsampling in memory is instant and avoids any
+        // SMB round-trip.
+        let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
+        if let hqImage = highQualityCache.object(forKey: hqKey) {
+            let hqPixels = Int(max(hqImage.size.width, hqImage.size.height) * hqImage.scale)
+            if hqPixels >= maxPixelSize {
+                let downsampled = Self.downsampledImage(from: hqImage, maxPixelSize: maxPixelSize)
+                cache.setObject(downsampled, forKey: nsCacheKey, cost: Self.cacheCost(for: downsampled))
+                return downsampled
+            }
         }
 
         if let inFlightTask = inFlightTasks[cacheKey] {
@@ -225,6 +310,7 @@ final class RemoteComicThumbnailPipeline {
                 forKey: nsCacheKey,
                 cost: Self.cacheCost(for: image)
             )
+            promoteToTransitionCache(image, for: reference)
         }
 
         return image
@@ -241,6 +327,93 @@ final class RemoteComicThumbnailPipeline {
         try diskCache.clearCache()
     }
 
+    func cachedTransitionImage(
+        for item: RemoteDirectoryItem,
+        browsingService: RemoteServerBrowsingService
+    ) -> UIImage? {
+        guard item.canOpenAsComic,
+              let reference = try? browsingService.makeComicFileReference(from: item)
+        else {
+            return nil
+        }
+
+        let cacheKey = Self.itemQualityCacheKey(for: reference) as NSString
+        return highQualityCache.object(forKey: cacheKey)
+    }
+
+    func cachedImage(
+        for item: RemoteDirectoryItem,
+        browsingService: RemoteServerBrowsingService,
+        maxPixelSize: Int
+    ) -> UIImage? {
+        guard item.canOpenAsComic,
+              let reference = try? browsingService.makeComicFileReference(from: item)
+        else {
+            return nil
+        }
+
+        let requestedMaxPixelSize = maxPixelSize
+        let maxPixelSize = Self.normalizedPixelSize(for: requestedMaxPixelSize)
+        let cacheKey = Self.cacheKey(for: reference, maxPixelSize: maxPixelSize)
+        let nsCacheKey = cacheKey as NSString
+
+        if let cachedImage = cache.object(forKey: nsCacheKey) {
+            promoteToTransitionCache(cachedImage, for: reference)
+            return cachedImage
+        }
+
+        let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
+        if let diskCachedImage = diskCache.loadCachedImage(at: diskURL) {
+            cache.setObject(
+                diskCachedImage,
+                forKey: nsCacheKey,
+                cost: Self.cacheCost(for: diskCachedImage)
+            )
+            promoteToTransitionCache(diskCachedImage, for: reference)
+            diskCache.touchCachedThumbnail(at: diskURL)
+            return diskCachedImage
+        }
+
+        if requestedMaxPixelSize != maxPixelSize {
+            let legacyCacheKey = Self.cacheKey(for: reference, maxPixelSize: requestedMaxPixelSize)
+            let legacyNSCacheKey = legacyCacheKey as NSString
+
+            if let legacyCachedImage = cache.object(forKey: legacyNSCacheKey) {
+                cache.setObject(
+                    legacyCachedImage,
+                    forKey: nsCacheKey,
+                    cost: Self.cacheCost(for: legacyCachedImage)
+                )
+                promoteToTransitionCache(legacyCachedImage, for: reference)
+                return legacyCachedImage
+            }
+
+            let legacyDiskURL = cachedThumbnailURL(forCacheKey: legacyCacheKey)
+            if let legacyDiskCachedImage = diskCache.loadCachedImage(at: legacyDiskURL) {
+                cache.setObject(
+                    legacyDiskCachedImage,
+                    forKey: nsCacheKey,
+                    cost: Self.cacheCost(for: legacyDiskCachedImage)
+                )
+                promoteToTransitionCache(legacyDiskCachedImage, for: reference)
+                diskCache.touchCachedThumbnail(at: legacyDiskURL)
+                return legacyDiskCachedImage
+            }
+        }
+
+        let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
+        if let hqImage = highQualityCache.object(forKey: hqKey) {
+            let hqPixels = Int(max(hqImage.size.width, hqImage.size.height) * hqImage.scale)
+            if hqPixels >= maxPixelSize {
+                return Self.downsampledImage(from: hqImage, maxPixelSize: maxPixelSize)
+            }
+
+            return hqImage
+        }
+
+        return nil
+    }
+
     func preheat(
         for profile: RemoteServerProfile,
         items: [RemoteDirectoryItem],
@@ -249,7 +422,8 @@ final class RemoteComicThumbnailPipeline {
         maxPixelSize: Int,
         limit: Int,
         skipCount: Int = 0,
-        concurrency: Int
+        concurrency: Int,
+        allowsRemoteFetch: Bool = false
     ) async {
         let candidates = Array(
             items
@@ -261,29 +435,43 @@ final class RemoteComicThumbnailPipeline {
             return
         }
 
-        let maximumConcurrency = max(1, min(concurrency, candidates.count))
+        let workItems = candidates.map { item in
+            let itemPrefersLocalCache: Bool
+            if let reference = try? browsingService.makeComicFileReference(from: item) {
+                itemPrefersLocalCache = prefersLocalCache
+                    || browsingService.cachedAvailability(for: reference).hasLocalCopy
+            } else {
+                itemPrefersLocalCache = prefersLocalCache
+            }
+
+            return (item: item, prefersLocalCache: itemPrefersLocalCache)
+        }
+
+        let maximumConcurrency = max(1, min(concurrency, workItems.count))
         var nextIndex = 0
 
         await withTaskGroup(of: Void.self) { group in
             func enqueueNextIfNeeded() {
-                guard nextIndex < candidates.count else {
+                guard nextIndex < workItems.count else {
                     return
                 }
 
-                let item = candidates[nextIndex]
+                let workItem = workItems[nextIndex]
                 nextIndex += 1
-                group.addTask { [weak self] in
+                let taskPriority: TaskPriority = allowsRemoteFetch ? .utility : .background
+
+                group.addTask(priority: taskPriority) { [weak self] in
                     guard let self else {
                         return
                     }
 
                     _ = await self.image(
                         for: profile,
-                        item: item,
+                        item: workItem.item,
                         browsingService: browsingService,
-                        prefersLocalCache: prefersLocalCache,
+                        prefersLocalCache: workItem.prefersLocalCache,
                         maxPixelSize: maxPixelSize,
-                        allowsRemoteFetch: false
+                        allowsRemoteFetch: allowsRemoteFetch
                     )
                 }
             }
@@ -310,10 +498,66 @@ final class RemoteComicThumbnailPipeline {
         let modifiedAt = Int(reference.modifiedAt?.timeIntervalSince1970 ?? 0)
         return "\(reference.id)#\(reference.fileSize ?? 0)#\(modifiedAt)#\(maxPixelSize)"
     }
+
+    // Cache key that identifies an item regardless of requested pixel size.
+    private static func itemQualityCacheKey(for reference: RemoteComicFileReference) -> String {
+        let modifiedAt = Int(reference.modifiedAt?.timeIntervalSince1970 ?? 0)
+        return "\(reference.id)#\(reference.fileSize ?? 0)#\(modifiedAt)"
+    }
+
+    static func normalizedPixelSize(for requestedPixelSize: Int) -> Int {
+        let clampedPixelSize = min(max(160, requestedPixelSize), 512)
+
+        switch clampedPixelSize {
+        case ...160:
+            return 160
+        case ...256:
+            return 256
+        case ...384:
+            return 384
+        default:
+            return 512
+        }
+    }
+
+    private static func downsampledImage(from source: UIImage, maxPixelSize: Int) -> UIImage {
+        let maxDim = max(source.size.width, source.size.height) * source.scale
+        guard maxDim > CGFloat(maxPixelSize) else { return source }
+        let scale = CGFloat(maxPixelSize) / maxDim
+        let newSize = CGSize(
+            width: (source.size.width * source.scale * scale).rounded(),
+            height: (source.size.height * source.scale * scale).rounded()
+        )
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in source.draw(in: CGRect(origin: .zero, size: newSize)) }
+    }
+
     private static func cacheCost(for image: UIImage) -> Int {
         let width = image.size.width * image.scale
         let height = image.size.height * image.scale
         return Int(width * height * 4)
+    }
+
+    private static func encodedThumbnailData(from image: UIImage) -> Data? {
+        if let jpegData = image.jpegData(compressionQuality: 0.82) {
+            return jpegData
+        }
+
+        return image.pngData()
+    }
+
+    private func promoteToTransitionCache(_ image: UIImage, for reference: RemoteComicFileReference) {
+        let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
+        let newPixels = Int(max(image.size.width, image.size.height) * image.scale)
+
+        if let existing = highQualityCache.object(forKey: hqKey) {
+            let existingPixels = Int(max(existing.size.width, existing.size.height) * existing.scale)
+            guard newPixels > existingPixels else {
+                return
+            }
+        }
+
+        highQualityCache.setObject(image, forKey: hqKey, cost: Self.cacheCost(for: image))
     }
 
     private func cachedThumbnailURL(forCacheKey cacheKey: String) -> URL {

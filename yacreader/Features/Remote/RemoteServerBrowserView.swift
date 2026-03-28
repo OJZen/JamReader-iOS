@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 
 struct RemoteServerBrowserView: View {
     private enum LayoutMetrics {
@@ -20,6 +21,9 @@ struct RemoteServerBrowserView: View {
     @State private var importRequest: RemoteBrowserImportRequest?
     @State private var navigationRequest: RemoteBrowserNavigationRequest?
     @State private var presentedComicItem: RemoteComicOpenItem?
+    @State private var heroSourceFrame: CGRect = .zero
+    @State private var heroPreviewImage: UIImage?
+    @State private var lastDismissRefreshItem: RemoteDirectoryItem?
     @State private var pendingOfflineRemoval: PendingRemoteOfflineRemoval?
     @State private var feedbackDismissTask: Task<Void, Never>?
     @StateObject private var visibilityTracker = RemoteComicVisibilityTracker()
@@ -140,9 +144,26 @@ struct RemoteServerBrowserView: View {
         }
         .sheet(item: $importRequest, content: importSheet)
         .navigationDestination(item: $navigationRequest, destination: navigationDestination)
-        .fullScreenCover(item: $presentedComicItem, onDismiss: {
-            viewModel.refreshProgressState()
-        }) { open in
+        .background(readerPresenter)
+    }
+
+    @ViewBuilder
+    private var readerPresenter: some View {
+        HeroReaderPresenter(
+            item: $presentedComicItem,
+            sourceFrame: heroSourceFrame,
+            previewImage: heroPreviewImage,
+            onDismiss: {
+                heroSourceFrame = .zero
+                heroPreviewImage = nil
+                if let lastDismissRefreshItem {
+                    viewModel.refreshProgressState(for: lastDismissRefreshItem)
+                    self.lastDismissRefreshItem = nil
+                } else {
+                    viewModel.refreshProgressState()
+                }
+            }
+        ) { open in
             RemoteComicLoadingView(
                 profile: viewModel.profile,
                 item: open.item,
@@ -451,7 +472,8 @@ struct RemoteServerBrowserView: View {
                     ForEach(displayedComicFiles) { item in
                         let availability = viewModel.cacheAvailability(for: item)
 
-                        Button {
+                        HeroTapButton { frame in
+                            prepareHeroTransition(for: item, fallbackFrame: frame)
                             openPrimaryAction(for: item)
                         } label: {
                             RemoteInsetListRowCard {
@@ -460,7 +482,8 @@ struct RemoteServerBrowserView: View {
                                     readingSession: viewModel.progress(for: item),
                                     cacheAvailability: availability,
                                     profile: viewModel.profile,
-                                    browsingService: dependencies.remoteServerBrowsingService
+                                    browsingService: dependencies.remoteServerBrowsingService,
+                                    heroSourceID: item.id
                                 )
                                 .equatable()
                             }
@@ -636,7 +659,8 @@ struct RemoteServerBrowserView: View {
                     let availability = viewModel.cacheAvailability(for: item)
 
                     ZStack(alignment: .topTrailing) {
-                        Button {
+                        HeroTapButton { frame in
+                            prepareHeroTransition(for: item, fallbackFrame: frame)
                             openPrimaryAction(for: item)
                         } label: {
                             RemoteDirectoryGridCard(
@@ -644,7 +668,8 @@ struct RemoteServerBrowserView: View {
                                 readingSession: viewModel.progress(for: item),
                                 cacheAvailability: availability,
                                 profile: viewModel.profile,
-                                browsingService: dependencies.remoteServerBrowsingService
+                                browsingService: dependencies.remoteServerBrowsingService,
+                                heroSourceID: item.id
                             )
                             .equatable()
                         }
@@ -774,12 +799,9 @@ struct RemoteServerBrowserView: View {
         if let recoverySession = viewModel.recoverySession,
            let loadIssue = viewModel.loadIssue,
            loadIssue.allowsOfflineRecovery {
-            NavigationLink {
-                RemoteComicLoadingView(
-                    profile: viewModel.profile,
-                    item: recoverySession.directoryItem,
-                    dependencies: dependencies
-                )
+            HeroTapButton { frame in
+                prepareHeroTransition(for: recoverySession.directoryItem, fallbackFrame: frame)
+                openPrimaryAction(for: recoverySession.directoryItem)
             } label: {
                 Label("Open Last Comic", systemImage: "book.closed")
             }
@@ -919,7 +941,8 @@ struct RemoteServerBrowserView: View {
         await preheatThumbnails(
             in: plan.primaryRange,
             maxPixelSize: maxPixelSize,
-            concurrency: displayMode == .grid ? 4 : 3
+            concurrency: displayMode == .grid ? 3 : 2,
+            allowsRemoteFetch: true
         )
 
         guard !Task.isCancelled else {
@@ -930,7 +953,8 @@ struct RemoteServerBrowserView: View {
             await preheatThumbnails(
                 in: secondaryRange,
                 maxPixelSize: maxPixelSize,
-                concurrency: 2
+                concurrency: 2,
+                allowsRemoteFetch: false
             )
 
             guard !Task.isCancelled else {
@@ -995,7 +1019,8 @@ struct RemoteServerBrowserView: View {
     private func preheatThumbnails(
         in range: Range<Int>,
         maxPixelSize: Int,
-        concurrency: Int
+        concurrency: Int,
+        allowsRemoteFetch: Bool
     ) async {
         guard !range.isEmpty else {
             return
@@ -1008,7 +1033,8 @@ struct RemoteServerBrowserView: View {
             maxPixelSize: maxPixelSize,
             limit: range.count,
             skipCount: range.lowerBound,
-            concurrency: concurrency
+            concurrency: concurrency,
+            allowsRemoteFetch: allowsRemoteFetch
         )
     }
 
@@ -1152,7 +1178,19 @@ struct RemoteServerBrowserView: View {
             return
         }
 
+        prepareHeroTransition(for: item, fallbackFrame: .zero)
         presentedComicItem = RemoteComicOpenItem(item: item, mode: .preferLocalCache)
+    }
+
+    @MainActor
+    private func prepareHeroTransition(for item: RemoteDirectoryItem, fallbackFrame: CGRect) {
+        lastDismissRefreshItem = item
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: item.id)
+        heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
+        heroPreviewImage = RemoteComicThumbnailPipeline.shared.cachedTransitionImage(
+            for: item,
+            browsingService: dependencies.remoteServerBrowsingService
+        )
     }
 
     @ViewBuilder
