@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -9,6 +10,22 @@ private enum ReaderChromeMetrics {
     static let buttonSize: CGFloat = 44
     static let compactButtonSize: CGFloat = 28
     static let statusTopOffset: CGFloat = 78
+    static let scrubberThumbnailWidth: CGFloat = 40
+    static let scrubberThumbnailHeight: CGFloat = 58
+    static let scrubberItemWidth: CGFloat = 46
+    static let scrubberItemHeight: CGFloat = 76
+    static let scrubberFrameHeight: CGFloat = 100
+    static let scrubberTopInset: CGFloat = 18
+    static let scrubberBottomInset: CGFloat = 4
+    static let scrubberItemSpacing: CGFloat = 4
+    static let scrubberFocusDistance: CGFloat = 150
+    static let scrubberMaxScale: CGFloat = 1.34
+    static let scrubberMinScale: CGFloat = 0.78
+    static let scrubberMaxLift: CGFloat = 7
+    static let floatingPreviewCornerRadius: CGFloat = 18
+    static let floatingPreviewWidthFraction: CGFloat = 0.6
+    static let floatingPreviewMinWidth: CGFloat = 220
+    static let floatingPreviewMaxWidth: CGFloat = 420
 }
 
 // MARK: - Surface Container
@@ -47,14 +64,13 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
                 ) {
                     statusOverlay()
                 }
-                .allowsHitTesting(!isInteractionLocked)
+                .allowsHitTesting(false)
 
                 modalOverlay()
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
-        .background(Color.black.ignoresSafeArea())
         .ignoresSafeArea(.keyboard)
     }
 }
@@ -91,6 +107,23 @@ private enum ReaderSafeAreaResolver {
             bottom: insets.bottom,
             trailing: insets.right
         )
+    }
+}
+
+private enum ReaderViewportResolver {
+    static var currentBounds: CGRect {
+        guard
+            let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: {
+                    $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive
+                }),
+            let window = windowScene.windows.first(where: \.isKeyWindow) ?? windowScene.windows.first
+        else {
+            return UIScreen.main.bounds
+        }
+
+        return window.bounds
     }
 }
 
@@ -200,51 +233,58 @@ struct ReaderTopBar: View {
     }
 }
 
-// MARK: - Bottom Bar (Slider + Page Label)
+// MARK: - Bottom Bar (Thumbnail Scrubber + Page Label)
 
 struct ReaderBottomBar: View {
+    let document: ComicDocument
     let currentPage: Int
     let pageCount: Int
     let onPageSelected: (Int) -> Void
     let onPageIndicatorTapped: () -> Void
+    let onScrubberInteractionChanged: (Bool) -> Void
 
-    @State private var sliderValue: Double
+    @StateObject private var scrubberCoordinator: ReaderThumbnailScrubberCoordinator
 
     init(
+        document: ComicDocument,
         currentPage: Int,
         pageCount: Int,
         onPageSelected: @escaping (Int) -> Void,
-        onPageIndicatorTapped: @escaping () -> Void
+        onPageIndicatorTapped: @escaping () -> Void,
+        onScrubberInteractionChanged: @escaping (Bool) -> Void = { _ in }
     ) {
+        self.document = document
         self.currentPage = currentPage
         self.pageCount = pageCount
         self.onPageSelected = onPageSelected
         self.onPageIndicatorTapped = onPageIndicatorTapped
-        _sliderValue = State(initialValue: Double(currentPage))
+        self.onScrubberInteractionChanged = onScrubberInteractionChanged
+        _scrubberCoordinator = StateObject(
+            wrappedValue: ReaderThumbnailScrubberCoordinator(
+                initialPageIndex: max(min(currentPage - 1, max(pageCount - 1, 0)), 0)
+            )
+        )
     }
 
-    private var clampedPage: Int {
-        min(max(Int(sliderValue.rounded()), 1), max(pageCount, 1))
+    private var displayedPage: Int {
+        min(max(scrubberCoordinator.focusedPageIndex + 1, 1), max(pageCount, 1))
     }
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
             if pageCount > 1 {
-                Slider(
-                    value: $sliderValue,
-                    in: 1...Double(max(pageCount, 1)),
-                    step: 1
-                ) { isEditing in
-                    if !isEditing {
-                        onPageSelected(clampedPage)
-                    }
+                ReaderThumbnailScrubber(
+                    document: document,
+                    pageCount: pageCount,
+                    coordinator: scrubberCoordinator
+                ) { pageIndex in
+                    onPageSelected(pageIndex + 1)
                 }
-                .tint(.white)
             }
 
             Button(action: onPageIndicatorTapped) {
                 HStack(spacing: Spacing.xs) {
-                    Text("\(clampedPage) / \(max(pageCount, 1))")
+                    Text("\(displayedPage) / \(max(pageCount, 1))")
                         .font(AppFont.caption(.semibold).monospacedDigit())
                         .foregroundStyle(.white)
 
@@ -263,14 +303,508 @@ struct ReaderBottomBar: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, ReaderChromeMetrics.barVerticalPadding)
+        .overlay(alignment: .top) {
+            GeometryReader { proxy in
+                if scrubberCoordinator.isPreviewVisible {
+                    let previewWidth = floatingPreviewWidth(for: proxy.size.width)
+                    ReaderFloatingPagePreview(
+                        document: document,
+                        pageIndex: scrubberCoordinator.focusedPageIndex,
+                        previewWidth: previewWidth
+                    )
+                    .frame(maxWidth: .infinity)
+                    .offset(
+                        y: floatingPreviewOffsetY(
+                            bottomBarFrame: proxy.frame(in: .global),
+                            previewCardHeight: floatingPreviewCardHeight(for: previewWidth)
+                        )
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.scale(scale: 0.92).combined(with: .opacity))
+                }
+            }
+        }
         .onChange(of: currentPage) { _, newValue in
-            sliderValue = Double(newValue)
+            let pageIndex = max(min(newValue - 1, max(pageCount - 1, 0)), 0)
+            DispatchQueue.main.async {
+                scrubberCoordinator.syncCurrentPage(pageIndex)
+            }
+        }
+        .onChange(of: scrubberCoordinator.isInteracting) { _, isInteracting in
+            DispatchQueue.main.async {
+                onScrubberInteractionChanged(isInteracting)
+            }
+        }
+        .onDisappear {
+            DispatchQueue.main.async {
+                onScrubberInteractionChanged(false)
+                scrubberCoordinator.cancelPendingWork()
+            }
         }
     }
 
     private var progressPercent: Int {
         guard pageCount > 0 else { return 0 }
-        return Int((Double(clampedPage) / Double(pageCount) * 100).rounded())
+        return Int((Double(displayedPage) / Double(pageCount) * 100).rounded())
+    }
+
+    private func floatingPreviewWidth(for availableWidth: CGFloat) -> CGFloat {
+        min(
+            max(
+                availableWidth * ReaderChromeMetrics.floatingPreviewWidthFraction,
+                ReaderChromeMetrics.floatingPreviewMinWidth
+            ),
+            ReaderChromeMetrics.floatingPreviewMaxWidth
+        )
+    }
+
+    private func floatingPreviewCardHeight(for previewWidth: CGFloat) -> CGFloat {
+        let previewHeight = previewWidth * 1.42
+        return previewHeight + 52
+    }
+
+    private func floatingPreviewOffsetY(bottomBarFrame: CGRect, previewCardHeight: CGFloat) -> CGFloat {
+        let viewportMidY = ReaderViewportResolver.currentBounds.midY
+        let previewHalfHeight = previewCardHeight / 2
+        return viewportMidY - bottomBarFrame.minY - previewHalfHeight
+    }
+}
+
+private struct ReaderThumbnailScrubber: View {
+    let document: ComicDocument
+    let pageCount: Int
+    @ObservedObject var coordinator: ReaderThumbnailScrubberCoordinator
+    let onPageCommitted: (Int) -> Void
+
+    private let coordinateSpaceName = "ReaderThumbnailScrubberSpace"
+
+    var body: some View {
+        GeometryReader { proxy in
+            let viewportWidth = proxy.size.width
+            let horizontalInset = max((viewportWidth - ReaderChromeMetrics.scrubberItemWidth) / 2, 0)
+
+            ScrollViewReader { scrollProxy in
+                ZStack {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        LazyHStack(spacing: ReaderChromeMetrics.scrubberItemSpacing) {
+                            ForEach(0..<pageCount, id: \.self) { pageIndex in
+                                ReaderThumbnailScrubberItem(
+                                    document: document,
+                                    pageIndex: pageIndex,
+                                    viewportWidth: viewportWidth,
+                                    coordinateSpaceName: coordinateSpaceName,
+                                    isFocused: pageIndex == coordinator.focusedPageIndex
+                                )
+                                .id(pageIndex)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    coordinator.commitTap(on: pageIndex)
+                                }
+                                .background {
+                                    GeometryReader { itemProxy in
+                                        Color.clear.preference(
+                                            key: ReaderThumbnailMidpointPreferenceKey.self,
+                                            value: [pageIndex: itemProxy.frame(in: .named(coordinateSpaceName)).midX]
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, horizontalInset)
+                        .padding(.top, ReaderChromeMetrics.scrubberTopInset)
+                        .padding(.bottom, ReaderChromeMetrics.scrubberBottomInset)
+                    }
+                    .coordinateSpace(name: coordinateSpaceName)
+                    .mask {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: 0.08),
+                                .init(color: .black, location: 0.92),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                coordinator.beginInteraction()
+                            }
+                            .onEnded { _ in
+                                coordinator.endInteraction()
+                            }
+                    )
+                    .onAppear {
+                        DispatchQueue.main.async {
+                            coordinator.handleAppear()
+                        }
+                    }
+                    .onChange(of: proxy.size.width) { _, _ in
+                        DispatchQueue.main.async {
+                            coordinator.handleViewportChange()
+                        }
+                    }
+                    .onPreferenceChange(ReaderThumbnailMidpointPreferenceKey.self) { midpoints in
+                        if let nearestPageIndex = nearestPageIndex(
+                            from: midpoints,
+                            viewportWidth: viewportWidth
+                        ) {
+                            coordinator.queueNearestPageIndexUpdate(nearestPageIndex)
+                        }
+                    }
+                    .onChange(of: coordinator.scrollRequest) { _, request in
+                        guard let request else {
+                            return
+                        }
+
+                        if request.animated {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                                scrollProxy.scrollTo(request.pageIndex, anchor: .center)
+                            }
+                        } else {
+                            scrollProxy.scrollTo(request.pageIndex, anchor: .center)
+                        }
+                    }
+                    .onChange(of: coordinator.commitRequest) { _, request in
+                        guard let request else {
+                            return
+                        }
+
+                        DispatchQueue.main.async {
+                            onPageCommitted(request.pageIndex)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: ReaderChromeMetrics.scrubberFrameHeight)
+    }
+
+    private func nearestPageIndex(from midpoints: [Int: CGFloat], viewportWidth: CGFloat) -> Int? {
+        guard !midpoints.isEmpty else {
+            return nil
+        }
+
+        let targetMidX = viewportWidth / 2
+        return midpoints.min { lhs, rhs in
+            abs(lhs.value - targetMidX) < abs(rhs.value - targetMidX)
+        }?.key
+    }
+}
+
+private struct ReaderThumbnailScrubberItem: View {
+    let document: ComicDocument
+    let pageIndex: Int
+    let viewportWidth: CGFloat
+    let coordinateSpaceName: String
+    let isFocused: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            let distance = abs(proxy.frame(in: .named(coordinateSpaceName)).midX - viewportWidth / 2)
+            let normalizedDistance = min(distance / ReaderChromeMetrics.scrubberFocusDistance, 1)
+            let scale = ReaderChromeMetrics.scrubberMaxScale
+                - ((ReaderChromeMetrics.scrubberMaxScale - ReaderChromeMetrics.scrubberMinScale) * normalizedDistance)
+            let opacity = 1 - (normalizedDistance * 0.28)
+            let lift = (1 - normalizedDistance) * ReaderChromeMetrics.scrubberMaxLift
+
+            VStack(spacing: 0) {
+                ReaderPageThumbnailView(
+                    document: document,
+                    pageIndex: pageIndex,
+                    width: ReaderChromeMetrics.scrubberThumbnailWidth,
+                    height: ReaderChromeMetrics.scrubberThumbnailHeight,
+                    cornerRadius: 13,
+                    style: .scrubber
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(
+                            isFocused ? .white.opacity(0.92) : .clear,
+                            lineWidth: isFocused ? 1.6 : 0
+                        )
+                }
+            }
+            .frame(
+                width: ReaderChromeMetrics.scrubberThumbnailWidth,
+                height: ReaderChromeMetrics.scrubberThumbnailHeight,
+                alignment: .bottom
+            )
+            .scaleEffect(scale, anchor: .bottom)
+            .opacity(opacity)
+            .offset(y: -lift)
+            .shadow(
+                color: .black.opacity(isFocused ? 0.34 : 0.18),
+                radius: isFocused ? 10 : 5,
+                y: isFocused ? 7 : 3
+            )
+            .frame(
+                maxWidth: .infinity,
+                maxHeight: .infinity,
+                alignment: .bottom
+            )
+        }
+        .frame(
+            width: ReaderChromeMetrics.scrubberItemWidth,
+            height: ReaderChromeMetrics.scrubberItemHeight
+        )
+    }
+}
+
+private struct ReaderFloatingPagePreview: View {
+    let document: ComicDocument
+    let pageIndex: Int
+    let previewWidth: CGFloat
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ReaderPageThumbnailView(
+                document: document,
+                pageIndex: pageIndex,
+                width: previewWidth,
+                height: previewWidth * 1.42,
+                cornerRadius: ReaderChromeMetrics.floatingPreviewCornerRadius,
+                style: .floatingPreview
+            )
+
+            Text("Page \(pageIndex + 1)")
+                .font(AppFont.caption(.semibold).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.9))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .background(.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.32), radius: 20, y: 14)
+    }
+}
+
+private struct ReaderThumbnailMidpointPreferenceKey: PreferenceKey {
+    static var defaultValue: [Int: CGFloat] = [:]
+
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private struct ReaderThumbnailScrollRequest: Equatable {
+    let id: Int
+    let pageIndex: Int
+    let animated: Bool
+}
+
+private struct ReaderThumbnailCommitRequest: Equatable {
+    let id: Int
+    let pageIndex: Int
+}
+
+@MainActor
+private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
+    @Published private(set) var focusedPageIndex: Int
+    @Published private(set) var isInteracting = false
+    @Published private(set) var isPreviewVisible = false
+    @Published fileprivate var scrollRequest: ReaderThumbnailScrollRequest?
+    @Published fileprivate var commitRequest: ReaderThumbnailCommitRequest?
+
+    private var requestSequence = 0
+    private var settleTask: Task<Void, Never>?
+    private var previewDismissTask: Task<Void, Never>?
+    private var lastCommittedPageIndex: Int
+    private var isTouchActive = false
+    private var pendingNearestPageIndex: Int?
+    private var hasQueuedNearestPageIndexFlush = false
+
+    init(initialPageIndex: Int) {
+        self.focusedPageIndex = initialPageIndex
+        self.lastCommittedPageIndex = initialPageIndex
+    }
+
+    deinit {
+        settleTask?.cancel()
+        previewDismissTask?.cancel()
+    }
+
+    func handleAppear() {
+        enqueueScroll(to: focusedPageIndex, animated: false)
+    }
+
+    func handleViewportChange() {
+        guard !isInteracting else {
+            return
+        }
+
+        enqueueScroll(to: focusedPageIndex, animated: false)
+    }
+
+    func syncCurrentPage(_ pageIndex: Int) {
+        let clampedIndex = max(pageIndex, 0)
+        let didChange = focusedPageIndex != clampedIndex
+        focusedPageIndex = clampedIndex
+        lastCommittedPageIndex = clampedIndex
+
+        guard !isInteracting, didChange else {
+            return
+        }
+
+        enqueueScroll(to: clampedIndex, animated: true)
+    }
+
+    func beginInteraction() {
+        guard !(isTouchActive && isInteracting && isPreviewVisible) else {
+            return
+        }
+
+        settleTask?.cancel()
+        settleTask = nil
+        previewDismissTask?.cancel()
+        previewDismissTask = nil
+        if !isTouchActive {
+            isTouchActive = true
+        }
+        if !isInteracting {
+            isInteracting = true
+        }
+        if !isPreviewVisible {
+            isPreviewVisible = true
+        }
+    }
+
+    func updateNearestPageIndex(_ pageIndex: Int) {
+        guard focusedPageIndex != pageIndex else {
+            return
+        }
+
+        focusedPageIndex = pageIndex
+
+        guard isInteracting else {
+            return
+        }
+
+        guard !isTouchActive else {
+            return
+        }
+
+        scheduleSettledCommit(for: pageIndex)
+    }
+
+    func queueNearestPageIndexUpdate(_ pageIndex: Int) {
+        pendingNearestPageIndex = pageIndex
+
+        guard !hasQueuedNearestPageIndexFlush else {
+            return
+        }
+
+        hasQueuedNearestPageIndexFlush = true
+        DispatchQueue.main.async { [weak self] in
+            self?.flushQueuedNearestPageIndexUpdate()
+        }
+    }
+
+    func endInteraction() {
+        guard isInteracting else {
+            return
+        }
+
+        isTouchActive = false
+        scheduleSettledCommit(for: focusedPageIndex)
+    }
+
+    func commitTap(on pageIndex: Int) {
+        settleTask?.cancel()
+        settleTask = nil
+        previewDismissTask?.cancel()
+        previewDismissTask = nil
+        isTouchActive = false
+        isInteracting = false
+        isPreviewVisible = true
+        focusedPageIndex = pageIndex
+        enqueueScroll(to: pageIndex, animated: true)
+        enqueueCommit(for: pageIndex)
+        schedulePreviewDismiss(after: 0.32)
+    }
+
+    func cancelPendingWork() {
+        settleTask?.cancel()
+        settleTask = nil
+        previewDismissTask?.cancel()
+        previewDismissTask = nil
+        pendingNearestPageIndex = nil
+        hasQueuedNearestPageIndexFlush = false
+        isTouchActive = false
+        isInteracting = false
+        isPreviewVisible = false
+    }
+
+    private func scheduleSettledCommit(for pageIndex: Int) {
+        settleTask?.cancel()
+        settleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self?.completeSettledInteraction(at: pageIndex)
+        }
+    }
+
+    private func completeSettledInteraction(at pageIndex: Int) {
+        guard isInteracting, !isTouchActive else {
+            return
+        }
+
+        isInteracting = false
+        enqueueScroll(to: pageIndex, animated: true)
+        enqueueCommit(for: pageIndex)
+        schedulePreviewDismiss(after: 0.24)
+    }
+
+    private func flushQueuedNearestPageIndexUpdate() {
+        hasQueuedNearestPageIndexFlush = false
+        guard let pageIndex = pendingNearestPageIndex else {
+            return
+        }
+
+        pendingNearestPageIndex = nil
+        updateNearestPageIndex(pageIndex)
+    }
+
+    private func enqueueScroll(to pageIndex: Int, animated: Bool) {
+        requestSequence += 1
+        scrollRequest = ReaderThumbnailScrollRequest(
+            id: requestSequence,
+            pageIndex: pageIndex,
+            animated: animated
+        )
+    }
+
+    private func enqueueCommit(for pageIndex: Int) {
+        guard pageIndex != lastCommittedPageIndex else {
+            return
+        }
+
+        lastCommittedPageIndex = pageIndex
+        requestSequence += 1
+        commitRequest = ReaderThumbnailCommitRequest(
+            id: requestSequence,
+            pageIndex: pageIndex
+        )
+    }
+
+    private func schedulePreviewDismiss(after delay: TimeInterval) {
+        previewDismissTask?.cancel()
+        previewDismissTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self?.isPreviewVisible = false
+        }
     }
 }
 

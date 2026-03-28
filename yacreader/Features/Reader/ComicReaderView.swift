@@ -16,6 +16,9 @@ struct ComicReaderView: View {
     @State private var isShowingReaderControls = false
     @State private var isShowingThumbnailBrowser = false
     @State private var pendingReaderAction: ReaderSecondaryAction?
+    @State private var isContentZoomed = false
+    @State private var isDismissGestureActive = false
+    @State private var isProgressScrubberInteracting = false
 
     init(
         descriptor: LibraryDescriptor,
@@ -86,7 +89,11 @@ struct ComicReaderView: View {
             }
         }
         .pullDownToDismiss(
-            isEnabled: !readerSession.state.isPageJumpPresented,
+            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting,
+            isZoomed: isContentZoomed,
+            onDismissGestureActiveChanged: { active in
+                isDismissGestureActive = active
+            },
             onDismiss: {
                 var t = Transaction(animation: .none)
                 withTransaction(t) { dismiss() }
@@ -131,8 +138,10 @@ struct ComicReaderView: View {
                 return
             }
 
-            readerSession.apply(.syncVisiblePage(newValue))
-            ReaderGestureCoordinator.hideChrome(session: readerSession)
+            DispatchQueue.main.async {
+                readerSession.apply(.syncVisiblePage(newValue))
+                ReaderGestureCoordinator.hideChrome(session: readerSession)
+            }
         }
         .sheet(isPresented: $isShowingThumbnailBrowser) {
             if let document = viewModel.document {
@@ -214,8 +223,14 @@ struct ComicReaderView: View {
             document: document,
             pageIndex: readerSession.state.currentPageIndex,
             layout: readerSession.state.layout,
+            isHorizontalScrollingDisabled: isDismissGestureActive,
             onPageChanged: handleVisiblePageChange(to:),
-            onReaderTap: handleReaderTap
+            onReaderTap: handleReaderTap,
+            onZoomStateChanged: { zoomed in
+                DispatchQueue.main.async {
+                    isContentZoomed = zoomed
+                }
+            }
         ) { unsupportedDocument in
             ContentUnavailableView(
                 "Reader Not Ready",
@@ -324,15 +339,21 @@ struct ComicReaderView: View {
 
     @ViewBuilder
     private var readerBottomBar: some View {
-        if let currentPage = viewModel.currentPageNumber, let pageCount = viewModel.pageCount {
+        if let document = viewModel.document,
+           let currentPage = viewModel.currentPageNumber,
+           let pageCount = viewModel.pageCount {
             ReaderBottomBar(
+                document: document,
                 currentPage: currentPage,
                 pageCount: pageCount,
                 onPageSelected: { pageNumber in
                     viewModel.goToPage(number: pageNumber)
                     readerSession.apply(.goToPage(pageNumber - 1))
                 },
-                onPageIndicatorTapped: presentPageJump
+                onPageIndicatorTapped: presentPageJump,
+                onScrubberInteractionChanged: { isInteracting in
+                    isProgressScrubberInteracting = isInteracting
+                }
             )
         }
     }

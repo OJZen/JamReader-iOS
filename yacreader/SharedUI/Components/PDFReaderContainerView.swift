@@ -126,6 +126,17 @@ struct PDFReaderContainerView: UIViewRepresentable {
             self.pageTurnFeedbackGenerator.prepare()
         }
 
+        private func notifyPageChangedIfNeeded(_ pageIndex: Int) {
+            guard lastReportedPageIndex != pageIndex else {
+                return
+            }
+
+            lastReportedPageIndex = pageIndex
+            DispatchQueue.main.async { [onPageChanged] in
+                onPageChanged(pageIndex)
+            }
+        }
+
         @objc
         func pageDidChange(_ notification: Notification) {
             guard let pdfView = notification.object as? PDFView,
@@ -136,8 +147,7 @@ struct PDFReaderContainerView: UIViewRepresentable {
             }
 
             let pageIndex = document.index(for: currentPage)
-            lastReportedPageIndex = pageIndex
-            onPageChanged(pageIndex)
+            notifyPageChangedIfNeeded(pageIndex)
         }
 
         @objc
@@ -193,8 +203,7 @@ struct PDFReaderContainerView: UIViewRepresentable {
             }
 
             pdfView.go(to: targetPage)
-            lastReportedPageIndex = targetIndex
-            onPageChanged(targetIndex)
+            notifyPageChangedIfNeeded(targetIndex)
             return true
         }
 
@@ -214,8 +223,7 @@ struct PDFReaderContainerView: UIViewRepresentable {
             }
 
             pdfView.go(to: targetPage)
-            lastReportedPageIndex = targetIndex
-            onPageChanged(targetIndex)
+            notifyPageChangedIfNeeded(targetIndex)
             return true
         }
     }

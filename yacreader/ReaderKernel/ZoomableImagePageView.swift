@@ -4,6 +4,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
     let contentContainerView = UIView()
 
     var onTapRegion: ((ReaderTapRegion) -> Void)?
+    var onZoomStateChanged: ((Bool) -> Void)?
     var tapEdgeRatio: CGFloat = 0.24
 
     var maximumZoomScale: CGFloat {
@@ -16,6 +17,9 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
 
     private let scrollView = UIScrollView()
     private var naturalContentSize: CGSize = .zero
+    private var lastReportedZoomState: Bool?
+    private var pendingZoomState: Bool?
+    private var hasQueuedZoomStateFlush = false
 
     private lazy var doubleTapGestureRecognizer: UITapGestureRecognizer = {
         let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
@@ -85,6 +89,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
 
         scrollView.layoutIfNeeded()
         syncContentGeometry()
+        queueZoomStateChanged(!isAtPreferredZoom)
     }
 
     func restorePreferredViewportState() {
@@ -98,6 +103,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         scrollView.contentOffset = .zero
         scrollView.layoutIfNeeded()
         syncContentGeometry()
+        queueZoomStateChanged(false)
     }
 
     func clearContentLayout() {
@@ -109,6 +115,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         scrollView.zoomScale = 1
         scrollView.contentOffset = .zero
         scrollView.panGestureRecognizer.isEnabled = false
+        queueZoomStateChanged(false)
     }
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
@@ -117,6 +124,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         syncContentGeometry()
+        queueZoomStateChanged(!isAtPreferredZoom)
     }
 
     private func configureSubviews() {
@@ -209,6 +217,34 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         let hasScrollableOverflow = contentFrame.width > scrollView.bounds.width + 1
             || contentFrame.height > scrollView.bounds.height + 1
         scrollView.panGestureRecognizer.isEnabled = hasScrollableOverflow
+    }
+
+    private func queueZoomStateChanged(_ isZoomed: Bool) {
+        pendingZoomState = isZoomed
+
+        guard !hasQueuedZoomStateFlush else {
+            return
+        }
+
+        hasQueuedZoomStateFlush = true
+        DispatchQueue.main.async { [weak self] in
+            self?.flushQueuedZoomStateChanged()
+        }
+    }
+
+    private func flushQueuedZoomStateChanged() {
+        hasQueuedZoomStateFlush = false
+        guard let pendingZoomState else {
+            return
+        }
+
+        self.pendingZoomState = nil
+        guard lastReportedZoomState != pendingZoomState else {
+            return
+        }
+
+        lastReportedZoomState = pendingZoomState
+        onZoomStateChanged?(pendingZoomState)
     }
 
     @objc

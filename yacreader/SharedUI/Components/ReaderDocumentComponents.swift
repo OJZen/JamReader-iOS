@@ -4,8 +4,10 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
     let document: ComicDocument
     let pageIndex: Int
     let layout: ReaderDisplayLayout
+    let isHorizontalScrollingDisabled: Bool
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
+    let onZoomStateChanged: ((Bool) -> Void)?
     @ViewBuilder let unsupportedContent: (UnsupportedComicDocument) -> UnsupportedContent
 
     var body: some View {
@@ -46,8 +48,10 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 document: document,
                 initialPageIndex: pageIndex,
                 layout: layout,
+                isHorizontalScrollingDisabled: isHorizontalScrollingDisabled,
                 onPageChanged: onPageChanged,
-                onReaderTap: onReaderTap
+                onReaderTap: onReaderTap,
+                onZoomStateChanged: onZoomStateChanged
             )
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())

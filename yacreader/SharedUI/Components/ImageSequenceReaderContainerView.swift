@@ -6,8 +6,10 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
+    let isHorizontalScrollingDisabled: Bool
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
+    let onZoomStateChanged: ((Bool) -> Void)?
 
     func makeUIViewController(context: Context) -> ReaderPagedCollectionViewController {
         ReaderPagedCollectionViewController(
@@ -22,6 +24,8 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     func updateUIViewController(_ viewController: ReaderPagedCollectionViewController, context: Context) {
         viewController.onPageChanged = onPageChanged
         viewController.onReaderTap = onReaderTap
+        viewController.onZoomStateChanged = onZoomStateChanged
+        viewController.isDismissGestureActive = isHorizontalScrollingDisabled
         viewController.update(
             document: document,
             layout: layout,
@@ -42,6 +46,14 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
 final class ReaderPagedCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     var onPageChanged: (Int) -> Void
     var onReaderTap: (ReaderTapRegion) -> Void
+    var onZoomStateChanged: ((Bool) -> Void)?
+
+    var isDismissGestureActive: Bool = false {
+        didSet {
+            guard isDismissGestureActive != oldValue else { return }
+            collectionView.isScrollEnabled = !isDismissGestureActive
+        }
+    }
 
     private let flowLayout = UICollectionViewFlowLayout()
     private lazy var collectionView: UICollectionView = {
@@ -217,7 +229,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         layout: ReaderDisplayLayout,
         requestedPageIndex: Int
     ) {
-        let documentChanged = self.document.url != document.url || self.document.pageNames != document.pageNames
+        let documentChanged = self.document.url != document.url
+            || self.document.pageNames != document.pageNames
+            || ObjectIdentifier(self.document.pageSource) != ObjectIdentifier(document.pageSource)
         let layoutChanged = self.layout != layout
 
         self.document = document
@@ -296,6 +310,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         scrollToSpread(spreadIndex, animated: animated)
 
         if !animated {
+            ensureControllerHosted(forSpreadIndex: spreadIndex)
             finalizeVisibleSpread()
         }
     }
@@ -306,12 +321,18 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             return
         }
 
+        guard collectionView.numberOfItems(inSection: 0) > spreadIndex else {
+            pendingScrollSpreadIndex = spreadIndex
+            return
+        }
+
         pendingScrollSpreadIndex = nil
-        let targetOffset = CGPoint(
-            x: CGFloat(spreadIndex) * collectionView.bounds.width,
-            y: 0
-        )
-        collectionView.setContentOffset(targetOffset, animated: animated)
+        let indexPath = IndexPath(item: spreadIndex, section: 0)
+        collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+
+        if !animated {
+            collectionView.layoutIfNeeded()
+        }
     }
 
     private func prepareAndScrollToCurrentSpreadIfNeeded(animated: Bool) {
@@ -321,6 +342,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
         controller(forSpreadIndex: currentSpreadIndex)?.prepareForPresentation()
         scrollToSpread(currentSpreadIndex, animated: animated)
+        if !animated {
+            ensureControllerHosted(forSpreadIndex: currentSpreadIndex)
+        }
     }
 
     private func finalizeVisibleSpread() {
@@ -338,9 +362,28 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         if spreadIndex != previousSpreadIndex {
             controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
         }
+        ensureControllerHosted(forSpreadIndex: spreadIndex)
         notifyPageChangedIfNeeded(spread.primaryPageIndex)
         trimCache(around: spreadIndex)
         prefetchAround(spreadIndex: spreadIndex)
+    }
+
+    private func ensureControllerHosted(forSpreadIndex spreadIndex: Int) {
+        guard spreads.indices.contains(spreadIndex) else {
+            return
+        }
+
+        let indexPath = IndexPath(item: spreadIndex, section: 0)
+        collectionView.layoutIfNeeded()
+
+        guard let cell = collectionView.cellForItem(at: indexPath) as? ReaderPagedCollectionViewCell,
+              let controller = controller(forSpreadIndex: spreadIndex)
+        else {
+            return
+        }
+
+        cell.setHostedView(controller.view)
+        controller.prepareForPresentation()
     }
 
     private func controller(forSpreadIndex spreadIndex: Int) -> ComicImageSpreadViewController? {
@@ -361,6 +404,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
                 self?.handleTapRegion(tapRegion)
             }
         )
+        controller.onZoomStateChanged = { [weak self, spreadIndex] isZoomed in
+            guard let self, spreadIndex == self.currentSpreadIndex else { return }
+            self.onZoomStateChanged?(isZoomed)
+        }
         addChild(controller)
         controller.didMove(toParent: self)
         controllerCache[spreadIndex] = controller
@@ -566,7 +613,10 @@ private final class ComicImageSpreadViewController: UIViewController {
     private var loadTask: Task<Void, Never>?
     private var lastViewportSize: CGSize = .zero
     private var needsViewportResetOnNextLayout = true
+    private let previewNamespace: String
+    private var previewObserver: NSObjectProtocol?
     private let onTapRegion: (ReaderTapRegion) -> Void
+    var onZoomStateChanged: ((Bool) -> Void)?
 
     init(
         spreadIndex: Int,
@@ -579,6 +629,7 @@ private final class ComicImageSpreadViewController: UIViewController {
         self.spread = spread
         self.document = document
         self.layout = layout
+        self.previewNamespace = ReaderPageCache.namespace(for: document.url)
         self.onTapRegion = onTapRegion
         super.init(nibName: nil, bundle: nil)
     }
@@ -590,6 +641,9 @@ private final class ComicImageSpreadViewController: UIViewController {
 
     deinit {
         loadTask?.cancel()
+        if let previewObserver {
+            NotificationCenter.default.removeObserver(previewObserver)
+        }
     }
 
     override func viewDidLoad() {
@@ -624,6 +678,9 @@ private final class ComicImageSpreadViewController: UIViewController {
         zoomablePageView.tapEdgeRatio = preferredTapEdgeRatio()
         zoomablePageView.onTapRegion = { [weak self] tapRegion in
             self?.onTapRegion(tapRegion)
+        }
+        zoomablePageView.onZoomStateChanged = { [weak self] isZoomed in
+            self?.onZoomStateChanged?(isZoomed)
         }
 
         rotationContainerView.backgroundColor = .black
@@ -675,6 +732,9 @@ private final class ComicImageSpreadViewController: UIViewController {
         let shouldPreferFullResolution = layout.fitMode == .originalSize
         let decodeMaxPixelSize = preferredDecodeMaxPixelSize()
 
+        observePreviewUpdates(for: pageIndices)
+        applyPreviewIfAvailable(for: pageIndices, resetZoomScale: true)
+
         loadTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) { () -> Result<[LoadedComicPage], Error> in
                 do {
@@ -704,14 +764,23 @@ private final class ComicImageSpreadViewController: UIViewController {
                 return
             }
 
+            self.removePreviewObserver()
             self.activityIndicator.stopAnimating()
 
             switch result {
             case .success(let loadedPages):
+                let shouldResetZoomScale = self.imageViews.isEmpty
+                loadedPages.forEach { loadedPage in
+                    ReaderPagePreviewStore.shared.store(
+                        loadedPage.image,
+                        namespace: self.previewNamespace,
+                        pageIndex: loadedPage.index
+                    )
+                }
                 self.loadedPages = loadedPages
                 self.messageLabel.isHidden = true
                 self.configureImageViews(with: loadedPages)
-                if self.layoutLoadedPages(resetZoomScale: true) {
+                if self.layoutLoadedPages(resetZoomScale: shouldResetZoomScale) {
                     self.needsViewportResetOnNextLayout = false
                 }
             case .failure(let error):
@@ -722,6 +791,64 @@ private final class ComicImageSpreadViewController: UIViewController {
                         : error.localizedDescription
                 )
             }
+        }
+    }
+
+    private func observePreviewUpdates(for pageIndices: [Int]) {
+        removePreviewObserver()
+
+        previewObserver = NotificationCenter.default.addObserver(
+            forName: .readerPagePreviewDidUpdate,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let info = readerPagePreviewUpdateInfo(from: notification)
+            Task { @MainActor [weak self, info] in
+                guard let self,
+                      let info,
+                      info.namespace == self.previewNamespace,
+                      pageIndices.contains(info.pageIndex)
+                else {
+                    return
+                }
+
+                self.applyPreviewIfAvailable(
+                    for: pageIndices,
+                    resetZoomScale: self.imageViews.isEmpty
+                )
+            }
+        }
+    }
+
+    private func removePreviewObserver() {
+        if let previewObserver {
+            NotificationCenter.default.removeObserver(previewObserver)
+            self.previewObserver = nil
+        }
+    }
+
+    private func applyPreviewIfAvailable(for pageIndices: [Int], resetZoomScale: Bool) {
+        let previewPages = pageIndices.compactMap { index -> LoadedComicPage? in
+            guard let image = ReaderPagePreviewStore.shared.image(
+                namespace: previewNamespace,
+                pageIndex: index
+            ) else {
+                return nil
+            }
+
+            return LoadedComicPage(index: index, image: image)
+        }
+
+        guard previewPages.count == pageIndices.count else {
+            return
+        }
+
+        activityIndicator.stopAnimating()
+        messageLabel.isHidden = true
+        loadedPages = previewPages
+        configureImageViews(with: previewPages)
+        if layoutLoadedPages(resetZoomScale: resetZoomScale) {
+            needsViewportResetOnNextLayout = false
         }
     }
 

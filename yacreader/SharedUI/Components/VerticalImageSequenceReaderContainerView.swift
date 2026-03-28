@@ -51,12 +51,14 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         private var pageAspectRatios: [Int: CGFloat] = [:]
         private var pageLoadTasks: [Int: Task<Void, Never>] = [:]
         private var memoryWarningObserver: NSObjectProtocol?
+        private var previewObserver: NSObjectProtocol?
 
         private(set) var document: ImageSequenceComicDocument
         private(set) var layout: ReaderDisplayLayout
         private(set) var currentPageIndex: Int
         var onPageChanged: (Int) -> Void
         var onReaderTap: (ReaderTapRegion) -> Void
+        private var lastReportedPageIndex: Int?
 
         init(
             document: ImageSequenceComicDocument,
@@ -68,6 +70,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             self.document = document
             self.layout = layout
             self.currentPageIndex = currentPageIndex
+            self.lastReportedPageIndex = currentPageIndex
             self.onPageChanged = onPageChanged
             self.onReaderTap = onReaderTap
 
@@ -82,6 +85,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             if let memoryWarningObserver {
                 NotificationCenter.default.removeObserver(memoryWarningObserver)
             }
+            removePreviewObserver()
         }
 
         func attach(to viewController: VerticalReaderViewController) {
@@ -107,11 +111,14 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             }
 
             observeMemoryWarningsIfNeeded()
+            observePreviewUpdatesIfNeeded()
             viewController.collectionView.reloadData()
         }
 
         func update(document: ImageSequenceComicDocument, layout: ReaderDisplayLayout, requestedPageIndex: Int) {
-            let documentChanged = self.document.url != document.url || self.document.pageNames != document.pageNames
+            let documentChanged = self.document.url != document.url
+                || self.document.pageNames != document.pageNames
+                || ObjectIdentifier(self.document.pageSource) != ObjectIdentifier(document.pageSource)
             let layoutChanged = self.layout != layout
 
             self.document = document
@@ -162,7 +169,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
             }
             if pageDidChange {
-                onPageChanged(clampedIndex)
+                notifyPageChangedIfNeeded(clampedIndex)
                 prefetchAround(pageIndex: clampedIndex)
             }
         }
@@ -190,6 +197,11 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             if let image = imageCache.object(forKey: NSNumber(value: indexPath.item)) {
                 cell.setImage(image)
             } else {
+                applyPreviewIfAvailable(
+                    at: indexPath.item,
+                    to: cell,
+                    in: collectionView
+                )
                 ensurePageLoaded(at: indexPath.item, priority: .userInitiated)
             }
 
@@ -276,8 +288,19 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
             if bestIndexPath.item != currentPageIndex {
                 currentPageIndex = bestIndexPath.item
-                onPageChanged(bestIndexPath.item)
+                notifyPageChangedIfNeeded(bestIndexPath.item)
                 prefetchAround(pageIndex: bestIndexPath.item)
+            }
+        }
+
+        private func notifyPageChangedIfNeeded(_ pageIndex: Int) {
+            guard lastReportedPageIndex != pageIndex else {
+                return
+            }
+
+            lastReportedPageIndex = pageIndex
+            DispatchQueue.main.async { [onPageChanged] in
+                onPageChanged(pageIndex)
             }
         }
 
@@ -360,6 +383,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
             let pageSource = document.pageSource
             let maxPixelSize = preferredDecodeMaxPixelSize()
+            let previewNamespace = self.previewNamespace
 
             pageLoadTasks[index] = Task(priority: priority) { [weak self] in
                 guard let self else {
@@ -396,6 +420,11 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
                     switch result {
                     case .success(let (image, ratio)):
+                        ReaderPagePreviewStore.shared.store(
+                            image,
+                            namespace: previewNamespace,
+                            pageIndex: index
+                        )
                         self.imageCache.setObject(
                             image,
                             forKey: cacheKey,
@@ -436,6 +465,86 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             let upper = min(document.pageCount - 1, pageIndex + 2)
             for index in lower...upper where index != pageIndex {
                 ensurePageLoaded(at: index, priority: .utility)
+            }
+        }
+
+        private var previewNamespace: String {
+            ReaderPageCache.namespace(for: document.url)
+        }
+
+        private func observePreviewUpdatesIfNeeded() {
+            guard previewObserver == nil else {
+                return
+            }
+
+            previewObserver = NotificationCenter.default.addObserver(
+                forName: .readerPagePreviewDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self,
+                      let info = readerPagePreviewUpdateInfo(from: notification),
+                      info.namespace == self.previewNamespace,
+                      self.imageCache.object(forKey: NSNumber(value: info.pageIndex)) == nil,
+                      let collectionView = self.viewController?.collectionView,
+                      let cell = collectionView.cellForItem(at: IndexPath(item: info.pageIndex, section: 0))
+                        as? VerticalReaderPageCell
+                else {
+                    return
+                }
+
+                self.applyPreviewIfAvailable(
+                    at: info.pageIndex,
+                    to: cell,
+                    in: collectionView
+                )
+            }
+        }
+
+        private func removePreviewObserver() {
+            if let previewObserver {
+                NotificationCenter.default.removeObserver(previewObserver)
+                self.previewObserver = nil
+            }
+        }
+
+        private func applyPreviewIfAvailable(
+            at index: Int,
+            to cell: VerticalReaderPageCell,
+            in collectionView: UICollectionView
+        ) {
+            guard let image = ReaderPagePreviewStore.shared.image(
+                namespace: previewNamespace,
+                pageIndex: index
+            ) else {
+                return
+            }
+
+            cell.setImage(image)
+            updateAspectRatioIfNeeded(
+                for: index,
+                ratio: image.size.height / max(image.size.width, 1),
+                in: collectionView
+            )
+        }
+
+        private func updateAspectRatioIfNeeded(
+            for index: Int,
+            ratio: CGFloat,
+            in collectionView: UICollectionView
+        ) {
+            let previousRatio = pageAspectRatios[index]
+            pageAspectRatios[index] = ratio
+
+            guard previousRatio == nil || abs((previousRatio ?? ratio) - ratio) > 0.01 else {
+                return
+            }
+
+            let shouldKeepCurrentPageAnchored = index == currentPageIndex
+            collectionView.collectionViewLayout.invalidateLayout()
+            if shouldKeepCurrentPageAnchored {
+                collectionView.layoutIfNeeded()
+                scrollToPage(index: currentPageIndex, animated: false)
             }
         }
 
