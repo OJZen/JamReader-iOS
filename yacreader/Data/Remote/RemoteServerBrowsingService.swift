@@ -127,6 +127,7 @@ struct RemoteComicCachedAvailability: Hashable {
 }
 
 final class RemoteServerBrowsingService {
+    private static let resumableDownloadChunkSize: UInt32 = 256 * 1024
     private let supportedComicFileExtensions: Set<String> = [
         "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf"
     ]
@@ -261,7 +262,7 @@ final class RemoteServerBrowsingService {
         let requestedPath = normalizeDisplayPath(path ?? profile.normalizedBaseDirectoryPath)
         switch profile.providerKind {
         case .smb:
-            return try await withConnectedSMBClient(for: profile) { client in
+            return try await withConnectedSMBClient(for: profile, priority: .userInitiated) { client in
                 let shareRelativePath = smbRelativePath(forDisplayPath: requestedPath)
                 let entries = try await client.listDirectory(path: shareRelativePath)
 
@@ -326,7 +327,7 @@ final class RemoteServerBrowsingService {
         let requestedPath = normalizeDisplayPath(path ?? profile.normalizedBaseDirectoryPath)
         switch profile.providerKind {
         case .smb:
-            return try await withConnectedSMBClient(for: profile) { client in
+            return try await withConnectedSMBClient(for: profile, priority: .userInitiated) { client in
                 try await recursivelyListComicFiles(
                     with: client,
                     for: profile,
@@ -370,16 +371,19 @@ final class RemoteServerBrowsingService {
         switch profile.providerKind {
         case .smb:
             return try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
-                try await withConnectedSMBClient(for: profile) { client in
+                try await withConnectedSMBClient(for: profile, priority: .utility) { client in
                     try await downloadComicFileCore(
                         for: profile,
                         reference: reference,
                         forceRefresh: forceRefresh
-                    ) { temporaryDownloadURL in
-                        try await client.download(
-                            path: smbRelativePath(forDisplayPath: reference.path),
-                            localPath: temporaryDownloadURL,
-                            overwrite: true,
+                    ) { temporaryDownloadURL, resumeOffset in
+                        let reader = client.fileReader(
+                            path: smbRelativePath(forDisplayPath: reference.path)
+                        )
+                        try await downloadRemoteFile(
+                            using: reader,
+                            to: temporaryDownloadURL,
+                            resumeOffset: resumeOffset,
                             progressHandler: progressHandler
                         )
                     }
@@ -391,16 +395,36 @@ final class RemoteServerBrowsingService {
                 for: profile,
                 reference: reference,
                 forceRefresh: forceRefresh
-            ) { temporaryDownloadURL in
-                try await webDAVClient.download(
-                    from: try webDAVURL(
-                        for: profile,
-                        displayPath: reference.path,
-                        isDirectory: false
-                    ),
-                    authorizationHeader: authorizationHeader,
-                    to: temporaryDownloadURL
+            ) { temporaryDownloadURL, resumeOffset in
+                let fileURL = try webDAVURL(
+                    for: profile,
+                    displayPath: reference.path,
+                    isDirectory: false
                 )
+                let reader = RemoteHTTPRangeFileReader(
+                    url: fileURL,
+                    authorizationHeader: authorizationHeader
+                )
+
+                do {
+                    try await downloadRemoteFile(
+                        using: reader,
+                        to: temporaryDownloadURL,
+                        resumeOffset: resumeOffset,
+                        progressHandler: progressHandler
+                    )
+                } catch RemoteHTTPRangeFileReaderError.rangeRequestsUnsupported {
+                    try? await reader.close()
+                    if resumeOffset > 0 {
+                        try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+                    }
+                    try await webDAVClient.download(
+                        from: fileURL,
+                        authorizationHeader: authorizationHeader,
+                        to: temporaryDownloadURL
+                    )
+                    progressHandler(1.0)
+                }
             }
         }
     }
@@ -416,7 +440,7 @@ final class RemoteServerBrowsingService {
 
         switch profile.providerKind {
         case .smb:
-            return try await withConnectedSMBClient(for: profile) { [downloadSemaphore] client in
+            return try await withConnectedSMBClient(for: profile, priority: .utility) { [downloadSemaphore] client in
                 await references.asyncMap { reference in
                     await downloadSemaphore.wait()
                     defer { Task { await downloadSemaphore.signal() } }
@@ -425,11 +449,14 @@ final class RemoteServerBrowsingService {
                             for: profile,
                             reference: reference,
                             forceRefresh: forceRefresh
-                        ) { temporaryDownloadURL in
-                            try await client.download(
-                                path: smbRelativePath(forDisplayPath: reference.path),
-                                localPath: temporaryDownloadURL,
-                                overwrite: true
+                        ) { temporaryDownloadURL, resumeOffset in
+                            let reader = client.fileReader(
+                                path: smbRelativePath(forDisplayPath: reference.path)
+                            )
+                            try await downloadRemoteFile(
+                                using: reader,
+                                to: temporaryDownloadURL,
+                                resumeOffset: resumeOffset
                             )
                         }
                     }
@@ -445,16 +472,34 @@ final class RemoteServerBrowsingService {
                         for: profile,
                         reference: reference,
                         forceRefresh: forceRefresh
-                    ) { temporaryDownloadURL in
-                        try await webDAVClient.download(
-                            from: try webDAVURL(
-                                for: profile,
-                                displayPath: reference.path,
-                                isDirectory: false
-                            ),
-                            authorizationHeader: authorizationHeader,
-                            to: temporaryDownloadURL
+                    ) { temporaryDownloadURL, resumeOffset in
+                        let fileURL = try webDAVURL(
+                            for: profile,
+                            displayPath: reference.path,
+                            isDirectory: false
                         )
+                        let reader = RemoteHTTPRangeFileReader(
+                            url: fileURL,
+                            authorizationHeader: authorizationHeader
+                        )
+
+                        do {
+                            try await downloadRemoteFile(
+                                using: reader,
+                                to: temporaryDownloadURL,
+                                resumeOffset: resumeOffset
+                            )
+                        } catch RemoteHTTPRangeFileReaderError.rangeRequestsUnsupported {
+                            try? await reader.close()
+                            if resumeOffset > 0 {
+                                try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+                            }
+                            try await webDAVClient.download(
+                                from: fileURL,
+                                authorizationHeader: authorizationHeader,
+                                to: temporaryDownloadURL
+                            )
+                        }
                     }
                 }
             }
@@ -491,7 +536,7 @@ final class RemoteServerBrowsingService {
         for case let fileURL as URL in enumerator {
             let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard resourceValues?.isRegularFile == true,
-                  !isCachedMetadataSidecar(fileURL) else {
+                  !isCacheAuxiliaryFile(fileURL) else {
                 continue
             }
 
@@ -555,12 +600,14 @@ final class RemoteServerBrowsingService {
         let fileURL = cachedFileURL(for: reference)
         guard fileManager.fileExists(atPath: fileURL.path) else {
             try? removeCachedMetadata(for: fileURL)
+            try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
             return
         }
 
         do {
             try fileManager.removeItem(at: fileURL)
             try? removeCachedMetadata(for: fileURL)
+            try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
             try removeEmptyParentDirectories(
                 from: fileURL.deletingLastPathComponent(),
                 stoppingAt: cacheRootURL(for: nil)
@@ -595,12 +642,71 @@ final class RemoteServerBrowsingService {
         return destinationURL
     }
 
+    func plannedCachedFileURL(for reference: RemoteComicFileReference) -> URL {
+        cachedFileURL(for: reference)
+    }
+
+    func supportsStreamingOpen(for reference: RemoteComicFileReference) -> Bool {
+        let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
+        switch fileExtension {
+        case "cbz", "zip":
+            return true
+        default:
+            return false
+        }
+    }
+
+    func makeStreamingFileReader(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference
+    ) async throws -> any RemoteRandomAccessFileReader {
+        guard validateProfile(profile).allSatisfy({ $0.severity != .error }) else {
+            throw RemoteServerBrowsingError.invalidProfile("The remote server profile is incomplete.")
+        }
+
+        switch profile.providerKind {
+        case .smb:
+            let credentials = try resolvedCredentials(for: profile)
+            return try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
+                do {
+                    let client = SMBClient(host: profile.normalizedHost, port: profile.port, connectTimeout: 30)
+                    try await client.login(
+                        username: credentials.username,
+                        password: credentials.password
+                    )
+                    try await client.connectShare(profile.normalizedShareName)
+                    return ManagedSMBRemoteFileReader(
+                        client: client,
+                        fileReader: client.fileReader(
+                            path: smbRelativePath(forDisplayPath: reference.path)
+                        )
+                    )
+                } catch {
+                    throw normalizeBrowsingError(
+                        error,
+                        profile: profile,
+                        remotePath: reference.path
+                    )
+                }
+            }
+        case .webdav:
+            return RemoteHTTPRangeFileReader(
+                url: try webDAVURL(
+                    for: profile,
+                    displayPath: reference.path,
+                    isDirectory: false
+                ),
+                authorizationHeader: try resolvedAuthorizationHeader(for: profile)
+            )
+        }
+    }
+
     func fetchDirectThumbnail(
         for profile: RemoteServerProfile,
         reference: RemoteComicFileReference,
         maxPixelSize: Int
     ) async -> UIImage? {
-        await thumbnailSemaphore.wait()
+        await thumbnailSemaphore.wait(priority: .utility)
         defer { Task { await thumbnailSemaphore.signal() } }
 
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
@@ -610,7 +716,7 @@ final class RemoteServerBrowsingService {
 
         switch profile.providerKind {
         case .smb:
-            return try? await withConnectedSMBClient(for: profile) { client in
+            return try? await withConnectedSMBClient(for: profile, priority: .utility) { client in
                 let reader = client.fileReader(path: smbRelativePath(forDisplayPath: reference.path))
                 do {
                     let image = try await extractDirectThumbnail(
@@ -709,9 +815,10 @@ final class RemoteServerBrowsingService {
     private func withConnectedSMBClient<T>(
         for profile: RemoteServerProfile,
         connectTimeout: TimeInterval = 30,
+        priority: TaskPriority = .medium,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
-        await smbClientSemaphore.wait()
+        await smbClientSemaphore.wait(priority: priority)
         defer { Task { await smbClientSemaphore.signal() } }
 
         let credentials = try resolvedCredentials(for: profile)
@@ -1098,7 +1205,7 @@ final class RemoteServerBrowsingService {
         for profile: RemoteServerProfile,
         reference: RemoteComicFileReference,
         forceRefresh: Bool,
-        downloader: (URL) async throws -> Void
+        downloader: (URL, UInt64) async throws -> Void
     ) async throws -> RemoteComicDownloadResult {
         let destinationURL = cachedFileURL(for: reference)
         if !forceRefresh, isCachedComicCurrent(at: destinationURL, reference: reference) {
@@ -1111,23 +1218,29 @@ final class RemoteServerBrowsingService {
             withIntermediateDirectories: true
         )
 
-        let temporaryDownloadURL = destinationURL.appendingPathExtension("download")
-        try? fileManager.removeItem(at: temporaryDownloadURL)
+        let temporaryDownloadURL = temporaryDownloadURL(for: destinationURL)
+        let resumeOffset = try preparePartialDownload(
+            at: temporaryDownloadURL,
+            reference: reference
+        )
 
         do {
-            try await downloader(temporaryDownloadURL)
+            try await downloader(temporaryDownloadURL, resumeOffset)
+            try Task.checkCancellation()
 
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.moveItem(at: temporaryDownloadURL, to: destinationURL)
+            try? removePartialDownloadMetadata(at: temporaryDownloadURL)
             try? storeCachedMetadata(for: reference, at: destinationURL)
             touchCachedFile(at: destinationURL)
             try? trimCacheIfNeeded()
             invalidateCachedSummaries()
             return RemoteComicDownloadResult(localFileURL: destinationURL, source: .downloaded)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            try? fileManager.removeItem(at: temporaryDownloadURL)
             if fileManager.fileExists(atPath: destinationURL.path) {
                 touchCachedFile(at: destinationURL)
                 return RemoteComicDownloadResult(
@@ -1222,6 +1335,20 @@ final class RemoteServerBrowsingService {
         fileURL.pathExtension == "yacmeta"
     }
 
+    private func isPartialDownloadMetadataSidecar(_ fileURL: URL) -> Bool {
+        fileURL.pathExtension == "yacpartial"
+    }
+
+    private func isPartialDownloadFile(_ fileURL: URL) -> Bool {
+        fileURL.pathExtension == "download"
+    }
+
+    private func isCacheAuxiliaryFile(_ fileURL: URL) -> Bool {
+        isCachedMetadataSidecar(fileURL)
+            || isPartialDownloadMetadataSidecar(fileURL)
+            || isPartialDownloadFile(fileURL)
+    }
+
     private func loadCachedMetadata(at fileURL: URL) -> CachedRemoteComicMetadata? {
         let metadataURL = cachedMetadataURL(for: fileURL)
         guard fileManager.fileExists(atPath: metadataURL.path),
@@ -1304,7 +1431,7 @@ final class RemoteServerBrowsingService {
                 forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
             )
             guard values?.isRegularFile == true,
-                  !isCachedMetadataSidecar(fileURL) else {
+                  !isCacheAuxiliaryFile(fileURL) else {
                 continue
             }
 
@@ -1367,6 +1494,170 @@ final class RemoteServerBrowsingService {
 
             try fileManager.removeItem(at: currentURL)
             currentURL.deleteLastPathComponent()
+        }
+    }
+
+    private func temporaryDownloadURL(for destinationURL: URL) -> URL {
+        destinationURL.appendingPathExtension("download")
+    }
+
+    private func partialDownloadMetadataURL(for temporaryDownloadURL: URL) -> URL {
+        temporaryDownloadURL.appendingPathExtension("yacpartial")
+    }
+
+    private func loadPartialDownloadMetadata(at temporaryDownloadURL: URL) -> CachedRemoteComicMetadata? {
+        let metadataURL = partialDownloadMetadataURL(for: temporaryDownloadURL)
+        guard fileManager.fileExists(atPath: metadataURL.path),
+              let data = try? Data(contentsOf: metadataURL)
+        else {
+            return nil
+        }
+
+        return try? JSONDecoder().decode(CachedRemoteComicMetadata.self, from: data)
+    }
+
+    private func storePartialDownloadMetadata(
+        for reference: RemoteComicFileReference,
+        at temporaryDownloadURL: URL
+    ) throws {
+        let metadata = CachedRemoteComicMetadata(
+            fileSize: reference.fileSize,
+            modifiedAt: reference.modifiedAt
+        )
+        let data = try JSONEncoder().encode(metadata)
+        try data.write(to: partialDownloadMetadataURL(for: temporaryDownloadURL), options: .atomic)
+    }
+
+    private func removePartialDownloadMetadata(at temporaryDownloadURL: URL) throws {
+        let metadataURL = partialDownloadMetadataURL(for: temporaryDownloadURL)
+        guard fileManager.fileExists(atPath: metadataURL.path) else {
+            return
+        }
+
+        try fileManager.removeItem(at: metadataURL)
+    }
+
+    private func resetPartialDownloadArtifacts(at temporaryDownloadURL: URL) throws {
+        if fileManager.fileExists(atPath: temporaryDownloadURL.path) {
+            try fileManager.removeItem(at: temporaryDownloadURL)
+        }
+        try? removePartialDownloadMetadata(at: temporaryDownloadURL)
+    }
+
+    private func preparePartialDownload(
+        at temporaryDownloadURL: URL,
+        reference: RemoteComicFileReference
+    ) throws -> UInt64 {
+        let hasPartialFile = fileManager.fileExists(atPath: temporaryDownloadURL.path)
+        let hasCompatibleMetadata: Bool
+
+        if let metadata = loadPartialDownloadMetadata(at: temporaryDownloadURL) {
+            hasCompatibleMetadata = partialDownloadMetadataMatches(metadata, reference: reference)
+        } else {
+            hasCompatibleMetadata = false
+        }
+
+        if hasPartialFile && !hasCompatibleMetadata {
+            try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+        } else if !hasPartialFile {
+            try? removePartialDownloadMetadata(at: temporaryDownloadURL)
+        }
+
+        if !fileManager.fileExists(atPath: temporaryDownloadURL.path) {
+            try Data().write(to: temporaryDownloadURL, options: .atomic)
+        }
+
+        try storePartialDownloadMetadata(for: reference, at: temporaryDownloadURL)
+
+        let values = try temporaryDownloadURL.resourceValues(forKeys: [.fileSizeKey])
+        let partialSize = max(values.fileSize ?? 0, 0)
+        return UInt64(partialSize)
+    }
+
+    private func partialDownloadMetadataMatches(
+        _ metadata: CachedRemoteComicMetadata,
+        reference: RemoteComicFileReference
+    ) -> Bool {
+        if let expectedFileSize = reference.fileSize,
+           metadata.fileSize != expectedFileSize {
+            return false
+        }
+
+        if let expectedModifiedAt = reference.modifiedAt {
+            guard let cachedModifiedAt = metadata.modifiedAt else {
+                return false
+            }
+
+            if abs(cachedModifiedAt.timeIntervalSince(expectedModifiedAt)) > 1 {
+                return false
+            }
+        }
+
+        if reference.fileSize != nil || reference.modifiedAt != nil {
+            return true
+        }
+
+        return metadata.fileSize == nil && metadata.modifiedAt == nil
+    }
+
+    private func downloadRemoteFile(
+        using reader: any RemoteRandomAccessFileReader,
+        to temporaryDownloadURL: URL,
+        resumeOffset requestedResumeOffset: UInt64,
+        progressHandler: @escaping @Sendable (Double) -> Void = { _ in }
+    ) async throws {
+        do {
+            try Task.checkCancellation()
+            let remoteFileSize = try await reader.fileSize
+
+            guard let fileHandle = FileHandle(forWritingAtPath: temporaryDownloadURL.path) else {
+                throw URLError(.cannotWriteToFile)
+            }
+            defer {
+                fileHandle.closeFile()
+            }
+
+            let resumeOffset: UInt64
+            if requestedResumeOffset > remoteFileSize {
+                fileHandle.truncateFile(atOffset: 0)
+                resumeOffset = 0
+            } else {
+                fileHandle.truncateFile(atOffset: requestedResumeOffset)
+                resumeOffset = requestedResumeOffset
+            }
+
+            guard remoteFileSize > 0 else {
+                progressHandler(1.0)
+                try? await reader.close()
+                return
+            }
+
+            progressHandler(Double(resumeOffset) / Double(remoteFileSize))
+
+            var offset = resumeOffset
+            while offset < remoteFileSize {
+                try Task.checkCancellation()
+
+                let remainingBytes = remoteFileSize - offset
+                let chunkLength = UInt32(min(UInt64(Self.resumableDownloadChunkSize), remainingBytes))
+                let data = try await reader.read(offset: offset, length: chunkLength)
+                guard !data.isEmpty else {
+                    throw RemoteServerBrowsingError.operationFailed(
+                        "The remote download stopped before the file was complete."
+                    )
+                }
+
+                fileHandle.seekToEndOfFile()
+                fileHandle.write(data)
+                offset += UInt64(data.count)
+                progressHandler(min(Double(offset) / Double(remoteFileSize), 1.0))
+            }
+
+            progressHandler(1.0)
+            try? await reader.close()
+        } catch {
+            try? await reader.close()
+            throw error
         }
     }
 

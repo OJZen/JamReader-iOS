@@ -4,6 +4,7 @@ import PDFKit
 enum ComicDocumentLoadError: LocalizedError {
     case fileMissing
     case unreadablePDF
+    case unsupportedRemoteStreamingFormat(String)
 
     var errorDescription: String? {
         switch self {
@@ -11,6 +12,8 @@ enum ComicDocumentLoadError: LocalizedError {
             return "The selected comic file could not be found."
         case .unreadablePDF:
             return "The PDF could not be opened."
+        case .unsupportedRemoteStreamingFormat(let fileName):
+            return "\(fileName) still needs a full download before it can be opened."
         }
     }
 }
@@ -21,19 +24,22 @@ final class ComicDocumentLoader {
     private let libArchiveReader: LibArchiveReader
     private let zipArchiveReader: ZIPArchiveReader
     private let tarArchiveReader: TARArchiveReader
+    private let remoteZIPArchiveReader: RemoteZIPArchiveReader
 
     init(
         fileManager: FileManager = .default,
         directoryImageSequenceReader: DirectoryImageSequenceReader = DirectoryImageSequenceReader(),
         libArchiveReader: LibArchiveReader = LibArchiveReader(),
         zipArchiveReader: ZIPArchiveReader = ZIPArchiveReader(),
-        tarArchiveReader: TARArchiveReader = TARArchiveReader()
+        tarArchiveReader: TARArchiveReader = TARArchiveReader(),
+        remoteZIPArchiveReader: RemoteZIPArchiveReader = RemoteZIPArchiveReader()
     ) {
         self.fileManager = fileManager
         self.directoryImageSequenceReader = directoryImageSequenceReader
         self.libArchiveReader = libArchiveReader
         self.zipArchiveReader = zipArchiveReader
         self.tarArchiveReader = tarArchiveReader
+        self.remoteZIPArchiveReader = remoteZIPArchiveReader
     }
 
     func loadDocument(for comic: LibraryComic, sourceRootURL: URL) throws -> ComicDocument {
@@ -77,6 +83,33 @@ final class ComicDocumentLoader {
                     reason: "Archive and image-stream readers are the next migration step."
                 )
             )
+        }
+    }
+
+    func supportsRemoteStreaming(for fileName: String) -> Bool {
+        switch URL(fileURLWithPath: fileName).pathExtension.lowercased() {
+        case "cbz", "zip":
+            return true
+        default:
+            return false
+        }
+    }
+
+    func loadRemoteDocument(
+        named fileName: String,
+        documentURL: URL,
+        reader: any RemoteRandomAccessFileReader
+    ) async throws -> ComicDocument {
+        switch URL(fileURLWithPath: fileName).pathExtension.lowercased() {
+        case "cbz", "zip":
+            return .imageSequence(
+                try await remoteZIPArchiveReader.loadDocument(
+                    from: reader,
+                    documentURL: documentURL
+                )
+            )
+        default:
+            throw ComicDocumentLoadError.unsupportedRemoteStreamingFormat(fileName)
         }
     }
 

@@ -54,6 +54,8 @@ final class RemoteHTTPRangeFileReader: RemoteRandomAccessFileReader {
             return Data()
         }
 
+        try Task.checkCancellation()
+
         if let supportsRangeRequests = await rangeSupportCache.value,
            supportsRangeRequests == false {
             throw RemoteHTTPRangeFileReaderError.rangeRequestsUnsupported
@@ -91,6 +93,8 @@ final class RemoteHTTPRangeFileReader: RemoteRandomAccessFileReader {
     }
 
     private func resolveFileSize() async throws -> UInt64 {
+        try Task.checkCancellation()
+
         var headRequest = URLRequest(url: url)
         headRequest.httpMethod = "HEAD"
         headRequest.setValue("identity", forHTTPHeaderField: "Accept-Encoding")

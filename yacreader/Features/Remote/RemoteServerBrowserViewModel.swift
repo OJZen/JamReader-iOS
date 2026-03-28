@@ -68,6 +68,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private let importedComicsImportService: ImportedComicsImportService
     private let folderShortcutStore: RemoteFolderShortcutStore
     private var hasLoaded = false
+    private var progressRefreshTask: Task<Void, Never>?
 
     init(
         profile: RemoteServerProfile,
@@ -206,12 +207,16 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
                 return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
             }
-            refreshProgressState()
-            recentSessions = recentSessionsForProfile()
+            progressByItemID = [:]
+            cacheAvailabilityByItemID = [:]
+            recentSessions = []
             loadIssue = nil
             Self.rememberLastBrowsedPath(currentPath, for: profile)
             refreshShortcutState()
+            scheduleProgressStateRefresh()
         } catch {
+            progressRefreshTask?.cancel()
+            progressRefreshTask = nil
             items = []
             progressByItemID = [:]
             cacheAvailabilityByItemID = [:]
@@ -250,6 +255,39 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         progressByItemID = nextProgressByItemID
         cacheAvailabilityByItemID = nextCacheAvailabilityByItemID
+    }
+
+    func refreshProgressState(for item: RemoteDirectoryItem) {
+        recentSessions = recentSessionsForProfile()
+
+        guard item.canOpenAsComic,
+              let reference = try? browsingService.makeComicFileReference(from: item) else {
+            progressByItemID.removeValue(forKey: item.id)
+            cacheAvailabilityByItemID.removeValue(forKey: item.id)
+            return
+        }
+
+        if let session = try? readingProgressStore.loadProgress(for: reference) {
+            progressByItemID[item.id] = session
+        } else {
+            progressByItemID.removeValue(forKey: item.id)
+        }
+
+        cacheAvailabilityByItemID[item.id] = browsingService.cachedAvailability(for: reference)
+    }
+
+    private func scheduleProgressStateRefresh() {
+        progressRefreshTask?.cancel()
+        progressRefreshTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled else {
+                return
+            }
+
+            self.refreshProgressState()
+            self.recentSessions = self.recentSessionsForProfile()
+            self.progressRefreshTask = nil
+        }
     }
 
     func progress(for item: RemoteDirectoryItem) -> RemoteComicReadingSession? {
@@ -339,6 +377,18 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 reference: reference
             )
+            guard importUsesCurrentRemoteCopy(downloadResult) else {
+                alert = RemoteAlertState(
+                    title: "Import Requires Current Remote Copy",
+                    message: importUnavailableMessage(for: downloadResult)
+                )
+                return
+            }
+
+            defer {
+                cleanupTemporaryImportDownloads([(reference, downloadResult)])
+            }
+
             let importResult = try importedComicsImportService.importComicResources(
                 from: [downloadResult.localFileURL],
                 traverseDirectories: false,
@@ -880,9 +930,11 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         var failedDownloadNames: [String] = []
+        var stagedResultsForImport: [(RemoteComicFileReference, RemoteComicDownloadResult)] = []
         activeImportDescription = "\(progressPrefix)…"
         defer {
             activeImportDescription = nil
+            cleanupTemporaryImportDownloads(stagedResultsForImport)
         }
 
         let preparedDownloads = sortedItems.compactMap { item -> (RemoteDirectoryItem, RemoteComicFileReference)? in
@@ -906,6 +958,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
             downloadedFileURLs = outcomes.compactMap { outcome in
                 if let result = outcome.result {
+                    guard importUsesCurrentRemoteCopy(result) else {
+                        failedDownloadNames.append(itemNameByReferenceID[outcome.reference.id] ?? outcome.reference.fileName)
+                        return nil
+                    }
+
+                    stagedResultsForImport.append((outcome.reference, result))
                     return result.localFileURL
                 }
 
@@ -999,6 +1057,36 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         return segments.joined(separator: " ")
+    }
+
+    private func importUsesCurrentRemoteCopy(_ result: RemoteComicDownloadResult) -> Bool {
+        switch result.source {
+        case .downloaded, .cachedCurrent:
+            return true
+        case .cachedFallback:
+            return false
+        }
+    }
+
+    private func importUnavailableMessage(for result: RemoteComicDownloadResult) -> String {
+        switch result.source {
+        case .downloaded, .cachedCurrent:
+            return "The selected remote comic is ready to import."
+        case .cachedFallback(let message):
+            return "The latest remote copy could not be fetched, so importing an older downloaded copy into the library was skipped to keep library data in sync.\n\n\(message)"
+        }
+    }
+
+    private func cleanupTemporaryImportDownloads(
+        _ stagedResults: [(RemoteComicFileReference, RemoteComicDownloadResult)]
+    ) {
+        for (reference, result) in stagedResults {
+            guard case .downloaded = result.source else {
+                continue
+            }
+
+            try? browsingService.clearCachedComic(for: reference)
+        }
     }
 
     private func offlineSaveMessage(

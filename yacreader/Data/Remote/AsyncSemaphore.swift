@@ -1,26 +1,32 @@
 actor AsyncSemaphore {
     private let maxConcurrent: Int
     private var currentCount: Int = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var waiters: [(priority: UInt8, continuation: CheckedContinuation<Void, Never>)] = []
 
     init(maxConcurrent: Int) {
         self.maxConcurrent = maxConcurrent
     }
 
-    func wait() async {
+    /// Acquires the semaphore. Higher-priority callers jump ahead of lower-priority ones
+    /// already waiting, so interactive work is never starved by background prefetch.
+    func wait(priority: TaskPriority = .medium) async {
         if currentCount < maxConcurrent {
             currentCount += 1
             return
         }
+        let raw = priority.rawValue
         await withCheckedContinuation { continuation in
-            waiters.append(continuation)
+            // Insert in descending priority order so the highest-priority waiter
+            // is always at index 0 and gets the next available slot.
+            let insertIndex = waiters.firstIndex(where: { $0.priority < raw }) ?? waiters.endIndex
+            waiters.insert((priority: raw, continuation: continuation), at: insertIndex)
         }
     }
 
     func signal() {
         if let waiter = waiters.first {
             waiters.removeFirst()
-            waiter.resume()
+            waiter.continuation.resume()
         } else {
             currentCount -= 1
         }

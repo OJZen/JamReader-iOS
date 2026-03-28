@@ -38,14 +38,18 @@ struct PDFComicDocument {
     }
 }
 
-protocol ComicPageDataSource: Sendable {
+protocol ComicPageDataSource: AnyObject, Sendable {
     func dataForPage(at index: Int) async throws -> Data
     func prefetchPages(at indices: [Int]) async
+    func close() async
 }
 
 extension ComicPageDataSource {
     func prefetchPages(at indices: [Int]) async {
         _ = indices
+    }
+
+    func close() async {
     }
 }
 

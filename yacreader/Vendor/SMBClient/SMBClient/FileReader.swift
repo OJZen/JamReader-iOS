@@ -25,6 +25,7 @@ public class FileReader {
   }
 
   public func read(offset: UInt64, length: UInt32) async throws -> Data {
+    try Task.checkCancellation()
     let readSize = min(length, session.maxReadSize)
     let fileProxy = try await fileProxy()
 
@@ -32,6 +33,7 @@ public class FileReader {
 
     var response: Read.Response
     repeat {
+      try Task.checkCancellation()
       response = try await session.read(
         fileId: fileProxy.id,
         offset: offset + UInt64(buffer.count),
@@ -53,6 +55,7 @@ public class FileReader {
 
     var response: Read.Response
     repeat {
+      try Task.checkCancellation()
       response = try await session.read(
         fileId: fileProxy.id,
         offset: offset,
@@ -101,6 +104,7 @@ public class FileReader {
     var offset: UInt64 = 0
     var response: Read.Response
     repeat {
+      try Task.checkCancellation()
       response = try await session.read(
         fileId: fileProxy.id,
         offset: offset,

@@ -34,14 +34,22 @@ enum RemoteComicOpenMode: Hashable {
     case preferLocalCache
 }
 
+private struct RemoteComicReaderConfiguration {
+    let fileURL: URL
+    let initialDocument: ComicDocument?
+    let shouldStartBackgroundDownload: Bool
+}
+
 struct RemoteComicLoadingView: View {
+    @Environment(\.dismiss) private var dismiss
+
     private let profile: RemoteServerProfile
     private let item: RemoteDirectoryItem
     private let dependencies: AppDependencies
     private let openMode: RemoteComicOpenMode
     private let reference: RemoteComicFileReference?
 
-    @State private var localFileURL: URL?
+    @State private var readerConfiguration: RemoteComicReaderConfiguration?
     @State private var isLoading = false
     @State private var loadErrorMessage: String?
     @State private var noticeMessage: String?
@@ -49,6 +57,8 @@ struct RemoteComicLoadingView: View {
     @State private var downloadProgress: Double = 0
     @State private var downloadStartTime: Date?
     @State private var downloadSpeed: String = ""
+    @State private var loadingMessage = "Downloading…"
+    @State private var loadTask: Task<Void, Never>?
 
     init(
         profile: RemoteServerProfile,
@@ -64,56 +74,125 @@ struct RemoteComicLoadingView: View {
     }
 
     var body: some View {
-        Group {
-            if let localFileURL, let reference {
-                RemoteComicReaderView(
-                    profile: profile,
-                    reference: reference,
-                    fileURL: localFileURL,
-                    displayName: item.name,
-                    accessState: accessState,
-                    noticeMessage: noticeMessage,
-                    dependencies: dependencies
-                )
-            } else if let loadErrorMessage {
-                ContentUnavailableView(
-                    "Remote Comic Unavailable",
-                    systemImage: "wifi.exclamationmark",
-                    description: Text(loadErrorMessage)
-                )
-            } else {
-                VStack(spacing: 16) {
-                    if downloadProgress > 0 {
-                        ProgressView(value: downloadProgress)
-                            .progressViewStyle(.linear)
-                            .frame(width: 200)
-                        Text("\(Int(downloadProgress * 100))%")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if !downloadSpeed.isEmpty {
-                            Text(downloadSpeed)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    Color(red: 0.08, green: 0.09, blue: 0.12)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            RadialGradient(
+                colors: [
+                    Color.white.opacity(0.12),
+                    .clear
+                ],
+                center: .top,
+                startRadius: 24,
+                endRadius: 420
+            )
+            .ignoresSafeArea()
+
+            Group {
+                if let readerConfiguration, let reference {
+                    RemoteComicReaderView(
+                        profile: profile,
+                        reference: reference,
+                        fileURL: readerConfiguration.fileURL,
+                        displayName: item.name,
+                        accessState: accessState,
+                        noticeMessage: noticeMessage,
+                        initialDocument: readerConfiguration.initialDocument,
+                        shouldStartBackgroundDownload: readerConfiguration.shouldStartBackgroundDownload,
+                        dependencies: dependencies
+                    )
+                } else if let loadErrorMessage {
+                    RemoteComicLoadingCard {
+                        VStack(spacing: 16) {
+                            Image(systemName: "wifi.exclamationmark")
+                                .font(.system(size: 30, weight: .semibold))
+                                .foregroundStyle(.white)
+
+                            Text("Remote Comic Unavailable")
+                                .font(.headline.weight(.semibold))
+                                .foregroundStyle(.white)
+
+                            Text(loadErrorMessage)
+                                .font(.subheadline)
+                                .foregroundStyle(Color.white.opacity(0.78))
+                                .multilineTextAlignment(.center)
+
+                            HStack(spacing: 12) {
+                                RemoteComicLoadingActionButton(
+                                    title: "Back",
+                                    kind: .secondary,
+                                    action: cancelCurrentLoadAndDismiss
+                                )
+
+                                RemoteComicLoadingActionButton(
+                                    title: "Retry",
+                                    kind: .primary,
+                                    action: { startLoading(force: true) }
+                                )
+                            }
                         }
-                    } else {
-                        ProgressView()
                     }
-                    Text("Downloading…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                } else {
+                    RemoteComicLoadingCard {
+                        VStack(spacing: 16) {
+                            if downloadProgress > 0 {
+                                ProgressView(value: downloadProgress)
+                                    .progressViewStyle(.linear)
+                                    .tint(.white)
+                                    .frame(width: 220)
+                                Text("\(Int(downloadProgress * 100))%")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.white.opacity(0.82))
+                                if !downloadSpeed.isEmpty {
+                                    Text(downloadSpeed)
+                                        .font(.caption2)
+                                        .foregroundStyle(Color.white.opacity(0.64))
+                                }
+                            } else {
+                                ProgressView()
+                                    .tint(.white)
+                            }
+
+                            Text(loadingMessage)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .multilineTextAlignment(.center)
+
+                            HStack(spacing: 12) {
+                                RemoteComicLoadingActionButton(
+                                    title: downloadProgress > 0 ? "Cancel Download" : "Cancel",
+                                    kind: .secondary,
+                                    action: { cancelCurrentLoad() }
+                                )
+
+                                RemoteComicLoadingActionButton(
+                                    title: "Back",
+                                    kind: .primary,
+                                    action: cancelCurrentLoadAndDismiss
+                                )
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle(item.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             if loadErrorMessage != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Task {
-                            await loadComicIfNeeded(force: true)
-                        }
+                        startLoading(force: true)
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -121,33 +200,55 @@ struct RemoteComicLoadingView: View {
             }
         }
         .task {
-            await loadComicIfNeeded()
+            startLoading()
+        }
+        .onDisappear {
+            loadTask?.cancel()
+            loadTask = nil
+        }
+    }
+
+    @MainActor
+    private func startLoading(force: Bool = false) {
+        guard force || (!isLoading && readerConfiguration == nil && loadErrorMessage == nil && loadTask == nil) else {
+            return
+        }
+
+        loadTask?.cancel()
+        loadTask = Task {
+            await loadComicIfNeeded(force: force)
         }
     }
 
     @MainActor
     private func loadComicIfNeeded(force: Bool = false) async {
-        guard force || (!isLoading && localFileURL == nil && loadErrorMessage == nil) else {
-            return
-        }
-
         guard let reference else {
             loadErrorMessage = "This remote file is no longer a supported comic format."
+            loadTask = nil
             return
         }
 
         isLoading = true
+        if force {
+            readerConfiguration = nil
+        }
         loadErrorMessage = nil
         downloadProgress = 0
         downloadSpeed = ""
         downloadStartTime = nil
+        loadingMessage = "Downloading…"
         defer {
             isLoading = false
+            loadTask = nil
         }
 
         if openMode == .preferLocalCache,
            let cachedFileURL = dependencies.remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
-            localFileURL = cachedFileURL
+            readerConfiguration = RemoteComicReaderConfiguration(
+                fileURL: cachedFileURL,
+                initialDocument: nil,
+                shouldStartBackgroundDownload: false
+            )
             let availability = dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
             switch availability.kind {
             case .unavailable:
@@ -165,15 +266,61 @@ struct RemoteComicLoadingView: View {
         }
 
         do {
-            downloadStartTime = Date()
+            let cachedAvailability = dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
+            if cachedAvailability.kind == .current,
+               let cachedFileURL = dependencies.remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
+                readerConfiguration = RemoteComicReaderConfiguration(
+                    fileURL: cachedFileURL,
+                    initialDocument: nil,
+                    shouldStartBackgroundDownload: false
+                )
+                accessState = .cachedCurrent
+                noticeMessage = "Opened the downloaded copy saved on this device."
+                return
+            }
+
+            if dependencies.remoteServerBrowsingService.supportsStreamingOpen(for: reference),
+               dependencies.comicDocumentLoader.supportsRemoteStreaming(for: reference.fileName) {
+                loadingMessage = "Preparing Pages…"
+                let documentURL = dependencies.remoteServerBrowsingService.plannedCachedFileURL(for: reference)
+                let reader = try await dependencies.remoteServerBrowsingService.makeStreamingFileReader(
+                    for: profile,
+                    reference: reference
+                )
+
+                do {
+                    let document = try await dependencies.comicDocumentLoader.loadRemoteDocument(
+                        named: reference.fileName,
+                        documentURL: documentURL,
+                        reader: reader
+                    )
+                    try Task.checkCancellation()
+
+                    readerConfiguration = RemoteComicReaderConfiguration(
+                        fileURL: documentURL,
+                        initialDocument: document,
+                        shouldStartBackgroundDownload: true
+                    )
+                    accessState = .liveRemoteCopy
+                    noticeMessage = nil
+                    return
+                } catch {
+                    try? await reader.close()
+                    throw error
+                }
+            }
+
+            loadingMessage = "Downloading…"
+            let startTime = Date()
+            downloadStartTime = startTime
             let fileSize = reference.fileSize ?? 0
             let result = try await dependencies.remoteServerBrowsingService.downloadComicFile(
                 for: profile,
                 reference: reference,
-                progressHandler: { @Sendable [weak downloadStartTimeRef = UnsafeSendableBox(downloadStartTime)] progress in
+                progressHandler: { @Sendable [startTime] progress in
                     Task { @MainActor in
                         self.downloadProgress = progress
-                        if let startTime = downloadStartTimeRef?.value, fileSize > 0 {
+                        if fileSize > 0 {
                             let elapsed = Date().timeIntervalSince(startTime)
                             if elapsed > 0.5 {
                                 let bytesDownloaded = Double(fileSize) * progress
@@ -184,13 +331,43 @@ struct RemoteComicLoadingView: View {
                     }
                 }
             )
-            localFileURL = result.localFileURL
+            try Task.checkCancellation()
+
+            readerConfiguration = RemoteComicReaderConfiguration(
+                fileURL: result.localFileURL,
+                initialDocument: nil,
+                shouldStartBackgroundDownload: false
+            )
             let resolvedAccessState = RemoteComicAccessState(source: result.source)
             accessState = resolvedAccessState
             noticeMessage = resolvedAccessState.transientNoticeMessage
+        } catch is CancellationError {
+            if readerConfiguration == nil {
+                loadErrorMessage = "The remote comic open was canceled."
+            }
         } catch {
             loadErrorMessage = error.localizedDescription
         }
+    }
+
+    @MainActor
+    private func cancelCurrentLoad(showCancellationMessage: Bool = true) {
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+        downloadProgress = 0
+        downloadSpeed = ""
+        downloadStartTime = nil
+
+        if showCancellationMessage, readerConfiguration == nil {
+            loadErrorMessage = "The remote comic open was canceled."
+        }
+    }
+
+    @MainActor
+    private func cancelCurrentLoadAndDismiss() {
+        cancelCurrentLoad(showCancellationMessage: false)
+        dismiss()
     }
 
     private static func formatSpeed(_ bytesPerSecond: Double) -> String {
@@ -204,9 +381,60 @@ struct RemoteComicLoadingView: View {
     }
 }
 
-private final class UnsafeSendableBox<T>: @unchecked Sendable {
-    let value: T?
-    init(_ value: T?) { self.value = value }
+private struct RemoteComicLoadingCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack {
+            content()
+        }
+        .frame(maxWidth: 360)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 22)
+        .background(
+            Color.white.opacity(0.09),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.34), radius: 24, y: 18)
+        .padding(.horizontal, 24)
+        .environment(\.colorScheme, .dark)
+    }
+}
+
+private struct RemoteComicLoadingActionButton: View {
+    enum Kind {
+        case primary
+        case secondary
+    }
+
+    let title: String
+    let kind: Kind
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(kind == .primary ? Color.black : Color.white)
+        .background(
+            kind == .primary ? Color.white : Color.white.opacity(0.10),
+            in: Capsule()
+        )
+        .overlay {
+            if kind == .secondary {
+                Capsule()
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+            }
+        }
+    }
 }
 
 struct RemoteComicReaderView: View {
@@ -219,6 +447,8 @@ struct RemoteComicReaderView: View {
     private let fileURL: URL
     private let displayName: String
     private let initialNoticeMessage: String?
+    private let initialDocument: ComicDocument?
+    private let shouldStartBackgroundDownload: Bool
     private let dependencies: AppDependencies
     private let initialStoredProgress: RemoteComicReadingSession?
 
@@ -236,6 +466,11 @@ struct RemoteComicReaderView: View {
     @State private var pendingProgressPersistenceTask: Task<Void, Never>?
     @State private var accessState: RemoteComicAccessState
     @State private var transientNoticeMessage: String?
+    @State private var backgroundDownloadTask: Task<Void, Never>?
+    @State private var backgroundDownloadProgress: Double?
+    @State private var isContentZoomed = false
+    @State private var isDismissGestureActive = false
+    @State private var isProgressScrubberInteracting = false
 
     init(
         profile: RemoteServerProfile,
@@ -244,6 +479,8 @@ struct RemoteComicReaderView: View {
         displayName: String,
         accessState: RemoteComicAccessState,
         noticeMessage: String?,
+        initialDocument: ComicDocument? = nil,
+        shouldStartBackgroundDownload: Bool = false,
         dependencies: AppDependencies
     ) {
         self.profile = profile
@@ -251,6 +488,8 @@ struct RemoteComicReaderView: View {
         self.fileURL = fileURL
         self.displayName = displayName
         self.initialNoticeMessage = noticeMessage
+        self.initialDocument = initialDocument
+        self.shouldStartBackgroundDownload = shouldStartBackgroundDownload
         self.dependencies = dependencies
         let storedProgress = try? dependencies.remoteReadingProgressStore.loadProgress(for: reference)
         self.initialStoredProgress = storedProgress
@@ -308,7 +547,11 @@ struct RemoteComicReaderView: View {
             }
         }
         .pullDownToDismiss(
-            isEnabled: !readerSession.state.isPageJumpPresented,
+            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting,
+            isZoomed: isContentZoomed,
+            onDismissGestureActiveChanged: { active in
+                isDismissGestureActive = active
+            },
             onDismiss: {
                 var t = Transaction(animation: .none)
                 withTransaction(t) { dismiss() }
@@ -331,6 +574,8 @@ struct RemoteComicReaderView: View {
         .onDisappear {
             persistProgress(force: true)
             pendingProgressPersistenceTask?.cancel()
+            backgroundDownloadTask?.cancel()
+            closeResources(for: document)
             UIApplication.shared.isIdleTimerDisabled = false
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -350,8 +595,10 @@ struct RemoteComicReaderView: View {
             synchronizeReaderSession()
         }
         .onChange(of: currentPageIndex) { _, _ in
-            persistProgress()
-            hideReaderChrome()
+            DispatchQueue.main.async {
+                persistProgress()
+                hideReaderChrome()
+            }
         }
         .onChange(of: transientNoticeMessage) { _, message in
             guard message != nil else {
@@ -500,20 +747,42 @@ struct RemoteComicReaderView: View {
 
     @ViewBuilder
     private var readerBottomBar: some View {
-        if let currentPage = currentPageNumber, let pageCount = document?.pageCount {
+        if let document,
+           let currentPage = currentPageNumber,
+           let pageCount = document.pageCount {
             ReaderBottomBar(
+                document: document,
                 currentPage: currentPage,
                 pageCount: pageCount,
                 onPageSelected: { pageNumber in
                     updateVisiblePage(to: pageNumber - 1)
                 },
-                onPageIndicatorTapped: presentPageJump
+                onPageIndicatorTapped: presentPageJump,
+                onScrubberInteractionChanged: { isInteracting in
+                    isProgressScrubberInteracting = isInteracting
+                }
             )
         }
     }
 
     @ViewBuilder
     private var readerStatusOverlay: some View {
+        if let backgroundDownloadProgress {
+            ReaderStatusBadge {
+                HStack(spacing: 10) {
+                    if backgroundDownloadProgress > 0 {
+                        ProgressView(value: backgroundDownloadProgress)
+                            .frame(width: 56)
+                    } else {
+                        ProgressView()
+                    }
+
+                    Text(backgroundDownloadStatusText(for: backgroundDownloadProgress))
+                        .font(.caption.weight(.semibold))
+                }
+            }
+        }
+
         if isRefreshingRemoteCopy {
             ReaderStatusBadge {
                 ProgressView("Refreshing Remote Copy")
@@ -536,8 +805,14 @@ struct RemoteComicReaderView: View {
             document: document,
             pageIndex: currentPageIndex,
             layout: effectiveReaderLayout,
+            isHorizontalScrollingDisabled: isDismissGestureActive,
             onPageChanged: handleVisiblePageChange(to:),
-            onReaderTap: handleReaderTap
+            onReaderTap: handleReaderTap,
+            onZoomStateChanged: { zoomed in
+                DispatchQueue.main.async {
+                    isContentZoomed = zoomed
+                }
+            }
         ) { unsupportedDocument in
             ContentUnavailableView(
                 "Unsupported Comic",
@@ -560,18 +835,18 @@ struct RemoteComicReaderView: View {
         }
 
         do {
+            if let initialDocument {
+                let preferredPageIndex = initialPageIndex(for: initialDocument.pageCount)
+                presentDocument(initialDocument, preferredPageIndex: preferredPageIndex)
+                startBackgroundDownloadIfNeeded()
+                return
+            }
+
             let loadedDocument = try dependencies.comicDocumentLoader.loadDocument(at: fileURL)
-            document = loadedDocument
-            readerSession.updateDescriptor(
-                .resolved(
-                    document: loadedDocument,
-                    currentPageIndex: initialPageIndex(for: loadedDocument.pageCount),
-                    layout: effectiveReaderLayout
-                ),
+            presentDocument(
+                loadedDocument,
                 preferredPageIndex: initialPageIndex(for: loadedDocument.pageCount)
             )
-            normalizeBookmarks(for: loadedDocument.pageCount)
-            persistProgress(force: true)
         } catch {
             alert = RemoteAlertState(
                 title: "Failed to Open Remote Comic",
@@ -760,6 +1035,106 @@ struct RemoteComicReaderView: View {
         return min(max(0, storedPageIndex), pageCount - 1)
     }
 
+    @MainActor
+    private func presentDocument(
+        _ loadedDocument: ComicDocument,
+        preferredPageIndex: Int
+    ) {
+        let previousDocument = document
+        document = loadedDocument
+        readerSession.updateDescriptor(
+            .resolved(
+                document: loadedDocument,
+                currentPageIndex: preferredPageIndex,
+                layout: effectiveReaderLayout
+            ),
+            preferredPageIndex: preferredPageIndex
+        )
+        normalizeBookmarks(for: loadedDocument.pageCount)
+        persistProgress(force: true)
+        closeResources(for: previousDocument, keeping: loadedDocument)
+    }
+
+    private func backgroundDownloadStatusText(for progress: Double) -> String {
+        if progress > 0 {
+            return "Saving Offline Copy \(Int(progress * 100))%"
+        }
+
+        return "Saving Offline Copy"
+    }
+
+    @MainActor
+    private func startBackgroundDownloadIfNeeded() {
+        guard shouldStartBackgroundDownload,
+              initialDocument != nil,
+              backgroundDownloadTask == nil else {
+            return
+        }
+
+        backgroundDownloadProgress = 0
+        backgroundDownloadTask = Task(priority: .utility) {
+            defer {
+                Task { @MainActor in
+                    self.backgroundDownloadTask = nil
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            guard !Task.isCancelled else {
+                await MainActor.run {
+                    self.backgroundDownloadProgress = nil
+                }
+                return
+            }
+
+            do {
+                let result = try await dependencies.remoteServerBrowsingService.downloadComicFile(
+                    for: profile,
+                    reference: reference,
+                    progressHandler: { @Sendable progress in
+                        Task { @MainActor in
+                            self.backgroundDownloadProgress = progress
+                        }
+                    }
+                )
+
+                guard !Task.isCancelled else {
+                    await MainActor.run {
+                        self.backgroundDownloadProgress = nil
+                    }
+                    return
+                }
+
+                switch result.source {
+                case .downloaded, .cachedCurrent:
+                    let loadedDocument = try dependencies.comicDocumentLoader.loadDocument(at: result.localFileURL)
+                    await MainActor.run {
+                        let preferredPageIndex = min(
+                            self.currentPageIndex,
+                            max((loadedDocument.pageCount ?? 1) - 1, 0)
+                        )
+                        self.presentDocument(loadedDocument, preferredPageIndex: preferredPageIndex)
+                        self.accessState = .cachedCurrent
+                        self.transientNoticeMessage = "Offline copy ready."
+                        self.backgroundDownloadProgress = nil
+                    }
+                case .cachedFallback:
+                    await MainActor.run {
+                        self.backgroundDownloadProgress = nil
+                    }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.backgroundDownloadProgress = nil
+                }
+            } catch {
+                await MainActor.run {
+                    self.backgroundDownloadProgress = nil
+                }
+            }
+        }
+    }
+
     private func persistProgress(force: Bool = false) {
         guard let pageCount = document?.pageCount else {
             return
@@ -868,17 +1243,8 @@ struct RemoteComicReaderView: View {
                 forceRefresh: true
             )
             let loadedDocument = try dependencies.comicDocumentLoader.loadDocument(at: result.localFileURL)
-            document = loadedDocument
-            readerSession.updateDescriptor(
-                .resolved(
-                    document: loadedDocument,
-                    currentPageIndex: min(preservedPageIndex, max((loadedDocument.pageCount ?? 1) - 1, 0)),
-                    layout: effectiveReaderLayout
-                ),
-                preferredPageIndex: min(preservedPageIndex, max((loadedDocument.pageCount ?? 1) - 1, 0))
-            )
-            normalizeBookmarks(for: loadedDocument.pageCount)
-            persistProgress(force: true)
+            let preferredPageIndex = min(preservedPageIndex, max((loadedDocument.pageCount ?? 1) - 1, 0))
+            presentDocument(loadedDocument, preferredPageIndex: preferredPageIndex)
 
             switch result.source {
             case .downloaded:
@@ -932,6 +1298,27 @@ struct RemoteComicReaderView: View {
         )
         if normalizedBookmarks != bookmarkPageIndices {
             bookmarkPageIndices = normalizedBookmarks
+        }
+    }
+
+    private func closeResources(
+        for document: ComicDocument?,
+        keeping keptDocument: ComicDocument? = nil
+    ) {
+        guard let document,
+              case .imageSequence(let imageDocument) = document else {
+            return
+        }
+
+        if let keptDocument,
+           case .imageSequence(let keptImageDocument) = keptDocument,
+           ObjectIdentifier(imageDocument.pageSource) == ObjectIdentifier(keptImageDocument.pageSource) {
+            return
+        }
+
+        let pageSource = imageDocument.pageSource
+        Task {
+            await pageSource.close()
         }
     }
 }

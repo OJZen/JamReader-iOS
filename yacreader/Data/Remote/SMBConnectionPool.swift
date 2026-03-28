@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 /// Manages a pool of reusable SMB connections keyed by server profile ID.
 /// Connections are kept alive with an idle timeout and shared across operations.
@@ -10,13 +11,14 @@ actor SMBConnectionPool {
     }
 
     private struct PooledConnection {
+        let id: ObjectIdentifier
         let client: SMBClient
         let key: PoolKey
         var lastUsedAt: Date
-        var activeOperations: Int
+        var isInUse: Bool
     }
 
-    private var connections: [PoolKey: PooledConnection] = [:]
+    private var connections: [PoolKey: [PooledConnection]] = [:]
     private let idleTimeout: TimeInterval = 60
     private let connectTimeout: TimeInterval = 15
     private var cleanupTask: Task<Void, Never>?
@@ -45,19 +47,24 @@ actor SMBConnectionPool {
 
         do {
             let result = try await operation(client)
-            markOperationComplete(key: key)
+            releaseConnection(client, for: key)
             return result
         } catch {
-            // On error, evict the connection (it may be broken)
-            evictConnection(key: key)
+            if shouldEvictConnection(for: error) {
+                evictConnection(client, for: key)
+            } else {
+                releaseConnection(client, for: key)
+            }
             throw error
         }
     }
 
     /// Close all pooled connections immediately.
     func closeAll() {
-        for entry in connections.values {
-            entry.client.session.disconnect()
+        for entries in connections.values {
+            for entry in entries {
+                disconnect(entry.client)
+            }
         }
         connections.removeAll()
     }
@@ -66,7 +73,7 @@ actor SMBConnectionPool {
     func evictConnections(host: String, port: Int) {
         let keysToRemove = connections.keys.filter { $0.host == host && $0.port == port }
         for key in keysToRemove {
-            connections[key]?.client.session.disconnect()
+            connections[key]?.forEach { disconnect($0.client) }
             connections.removeValue(forKey: key)
         }
     }
@@ -78,48 +85,69 @@ actor SMBConnectionPool {
         username: String?,
         password: String?
     ) async throws -> SMBClient {
-        // Try reusing existing connection
-        if var entry = connections[key] {
-            entry.activeOperations += 1
-            entry.lastUsedAt = Date()
-            connections[key] = entry
-            return entry.client
+        if var entries = connections[key],
+           let idleIndex = entries.firstIndex(where: { !$0.isInUse }) {
+            entries[idleIndex].isInUse = true
+            entries[idleIndex].lastUsedAt = Date()
+            let client = entries[idleIndex].client
+            connections[key] = entries
+            return client
         }
 
         // Create new connection
         let client = SMBClient(host: key.host, port: key.port, connectTimeout: connectTimeout)
 
-        client.onDisconnected = { [weak self] _ in
+        client.onDisconnected = { [weak self, weak client] _ in
+            guard let client else {
+                return
+            }
+
             Task { [weak self] in
-                await self?.evictConnection(key: key)
+                await self?.handleUnexpectedDisconnect(client, for: key)
             }
         }
 
         try await client.login(username: username, password: password)
         try await client.connectShare(key.shareName)
 
-        connections[key] = PooledConnection(
+        let entry = PooledConnection(
+            id: ObjectIdentifier(client),
             client: client,
             key: key,
             lastUsedAt: Date(),
-            activeOperations: 1
+            isInUse: true
         )
+        connections[key, default: []].append(entry)
 
         scheduleCleanupIfNeeded()
         return client
     }
 
-    private func markOperationComplete(key: PoolKey) {
-        guard var entry = connections[key] else { return }
-        entry.activeOperations = max(entry.activeOperations - 1, 0)
-        entry.lastUsedAt = Date()
-        connections[key] = entry
+    private func releaseConnection(_ client: SMBClient, for key: PoolKey) {
+        guard var entries = connections[key] else { return }
+        let clientID = ObjectIdentifier(client)
+        guard let index = entries.firstIndex(where: { $0.id == clientID }) else { return }
+        entries[index].isInUse = false
+        entries[index].lastUsedAt = Date()
+        connections[key] = entries
     }
 
-    private func evictConnection(key: PoolKey) {
-        if let entry = connections.removeValue(forKey: key) {
-            entry.client.session.disconnect()
+    private func evictConnection(_ client: SMBClient, for key: PoolKey) {
+        guard var entries = connections[key] else { return }
+        let clientID = ObjectIdentifier(client)
+        guard let index = entries.firstIndex(where: { $0.id == clientID }) else { return }
+
+        let entry = entries.remove(at: index)
+        if entries.isEmpty {
+            connections.removeValue(forKey: key)
+        } else {
+            connections[key] = entries
         }
+        disconnect(entry.client)
+    }
+
+    private func handleUnexpectedDisconnect(_ client: SMBClient, for key: PoolKey) {
+        evictConnection(client, for: key)
     }
 
     private func scheduleCleanupIfNeeded() {
@@ -142,12 +170,35 @@ actor SMBConnectionPool {
 
     private func cleanupIdleConnections() {
         let now = Date()
-        let expiredKeys = connections.filter { _, entry in
-            entry.activeOperations == 0 && now.timeIntervalSince(entry.lastUsedAt) > idleTimeout
-        }.map(\.key)
+        for key in Array(connections.keys) {
+            guard var entries = connections[key] else {
+                continue
+            }
 
-        for key in expiredKeys {
-            evictConnection(key: key)
+            let expiredEntries = entries.filter {
+                !$0.isInUse && now.timeIntervalSince($0.lastUsedAt) > idleTimeout
+            }
+            entries.removeAll {
+                !$0.isInUse && now.timeIntervalSince($0.lastUsedAt) > idleTimeout
+            }
+
+            if entries.isEmpty {
+                connections.removeValue(forKey: key)
+            } else {
+                connections[key] = entries
+            }
+
+            expiredEntries.forEach { disconnect($0.client) }
+        }
+    }
+
+    private func shouldEvictConnection(for error: Error) -> Bool {
+        error is ConnectionError || error is NWError || error is POSIXError
+    }
+
+    private func disconnect(_ client: SMBClient) {
+        Task { @MainActor in
+            client.session.disconnect()
         }
     }
 }
