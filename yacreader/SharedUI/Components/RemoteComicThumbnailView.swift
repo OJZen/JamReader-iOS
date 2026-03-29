@@ -223,8 +223,9 @@ final class RemoteComicThumbnailPipeline {
             return cachedImage
         }
 
+        // Disk check runs on the maintenance queue — never blocks the main thread.
         let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
-        if let diskCachedImage = diskCache.loadCachedImage(at: diskURL) {
+        if let diskCachedImage = await diskCache.loadCachedImageAsync(at: diskURL) {
             cache.setObject(
                 diskCachedImage,
                 forKey: nsCacheKey,
@@ -250,7 +251,7 @@ final class RemoteComicThumbnailPipeline {
             }
 
             let legacyDiskURL = cachedThumbnailURL(forCacheKey: legacyCacheKey)
-            if let legacyDiskCachedImage = diskCache.loadCachedImage(at: legacyDiskURL) {
+            if let legacyDiskCachedImage = await diskCache.loadCachedImageAsync(at: legacyDiskURL) {
                 cache.setObject(
                     legacyDiskCachedImage,
                     forKey: nsCacheKey,
@@ -357,47 +358,21 @@ final class RemoteComicThumbnailPipeline {
         let cacheKey = Self.cacheKey(for: reference, maxPixelSize: maxPixelSize)
         let nsCacheKey = cacheKey as NSString
 
+        // Memory-only fast path — no disk I/O on the main thread.
+        // The async image(for:) method handles disk + network and will
+        // update the displayed image once it resolves.
+
         if let cachedImage = cache.object(forKey: nsCacheKey) {
             promoteToTransitionCache(cachedImage, for: reference)
             return cachedImage
         }
 
-        let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
-        if let diskCachedImage = diskCache.loadCachedImage(at: diskURL) {
-            cache.setObject(
-                diskCachedImage,
-                forKey: nsCacheKey,
-                cost: Self.cacheCost(for: diskCachedImage)
-            )
-            promoteToTransitionCache(diskCachedImage, for: reference)
-            diskCache.touchCachedThumbnail(at: diskURL)
-            return diskCachedImage
-        }
-
         if requestedMaxPixelSize != maxPixelSize {
             let legacyCacheKey = Self.cacheKey(for: reference, maxPixelSize: requestedMaxPixelSize)
-            let legacyNSCacheKey = legacyCacheKey as NSString
-
-            if let legacyCachedImage = cache.object(forKey: legacyNSCacheKey) {
-                cache.setObject(
-                    legacyCachedImage,
-                    forKey: nsCacheKey,
-                    cost: Self.cacheCost(for: legacyCachedImage)
-                )
+            if let legacyCachedImage = cache.object(forKey: legacyCacheKey as NSString) {
+                cache.setObject(legacyCachedImage, forKey: nsCacheKey, cost: Self.cacheCost(for: legacyCachedImage))
                 promoteToTransitionCache(legacyCachedImage, for: reference)
                 return legacyCachedImage
-            }
-
-            let legacyDiskURL = cachedThumbnailURL(forCacheKey: legacyCacheKey)
-            if let legacyDiskCachedImage = diskCache.loadCachedImage(at: legacyDiskURL) {
-                cache.setObject(
-                    legacyDiskCachedImage,
-                    forKey: nsCacheKey,
-                    cost: Self.cacheCost(for: legacyDiskCachedImage)
-                )
-                promoteToTransitionCache(legacyDiskCachedImage, for: reference)
-                diskCache.touchCachedThumbnail(at: legacyDiskURL)
-                return legacyDiskCachedImage
             }
         }
 
@@ -641,6 +616,22 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         }
 
         return image
+    }
+
+    /// Async variant — performs the disk read on the maintenance queue so the
+    /// caller's thread (typically the main actor) is never blocked by file I/O.
+    nonisolated func loadCachedImageAsync(at fileURL: URL) async -> UIImage? {
+        await withCheckedContinuation { continuation in
+            maintenanceQueue.async { [self] in
+                guard fileManager.fileExists(atPath: fileURL.path),
+                      let image = UIImage(contentsOfFile: fileURL.path)
+                else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: image)
+            }
+        }
     }
 
     nonisolated func storeEncodedThumbnailData(_ data: Data, at fileURL: URL) throws {

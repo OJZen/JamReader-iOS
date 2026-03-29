@@ -119,9 +119,21 @@ actor ReaderPageCache {
         guard now.timeIntervalSince(lastTrimDate) >= 30 else {
             return
         }
-
         lastTrimDate = now
 
+        // Capture values before leaving the actor so the background task
+        // doesn't need to hop back onto the actor to read them.
+        let diskRootURL = self.diskRootURL
+        let maxDiskBytes = self.maxDiskBytes
+        let fileManager = self.fileManager
+
+        Task.detached(priority: .background) {
+            Self.performTrim(diskRootURL: diskRootURL, maxDiskBytes: maxDiskBytes, fileManager: fileManager)
+        }
+    }
+
+    // Runs entirely off the actor — only touches the file system.
+    nonisolated private static func performTrim(diskRootURL: URL, maxDiskBytes: Int64, fileManager: FileManager) {
         let resourceKeys: Set<URLResourceKey> = [
             .isRegularFileKey,
             .fileSizeKey,
@@ -143,9 +155,7 @@ actor ReaderPageCache {
 
         for case let fileURL as URL in enumerator {
             let values = try? fileURL.resourceValues(forKeys: resourceKeys)
-            guard values?.isRegularFile == true else {
-                continue
-            }
+            guard values?.isRegularFile == true else { continue }
 
             let fileSize = Int64(values?.fileSize ?? 0)
             let lastAccess = values?.contentAccessDate
@@ -157,9 +167,7 @@ actor ReaderPageCache {
             totalSize += fileSize
         }
 
-        guard totalSize > maxDiskBytes else {
-            return
-        }
+        guard totalSize > maxDiskBytes else { return }
 
         for file in files.sorted(by: { $0.lastAccess < $1.lastAccess }) {
             do {
@@ -168,10 +176,7 @@ actor ReaderPageCache {
             } catch {
                 continue
             }
-
-            if totalSize <= maxDiskBytes {
-                break
-            }
+            if totalSize <= maxDiskBytes { break }
         }
     }
 
