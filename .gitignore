@@ -27,3 +27,5 @@ res/*.cbz
 res/*.cbr
 res/*.cb7
 res/*.cbt
+.cache/
+.cache/

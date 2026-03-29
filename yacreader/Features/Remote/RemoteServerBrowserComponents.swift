@@ -80,7 +80,7 @@ struct RemoteDirectoryItemListRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, Spacing.xxs)
+        .padding(.vertical, Spacing.xs)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
 
@@ -170,8 +170,8 @@ struct RemoteDirectoryItemListRow: View {
                 browsingService: browsingService,
                 prefersLocalCache: cacheAvailability.hasLocalCopy,
                 heroSourceID: heroSourceID,
-                width: 54,
-                height: 76
+                width: 44,
+                height: 62
             )
             .overlay(alignment: .bottomTrailing) {
                 cacheStatusDot(size: 8)
@@ -180,8 +180,8 @@ struct RemoteDirectoryItemListRow: View {
             RemoteDirectorySymbolTile(
                 systemImage: item.isDirectory ? "folder.fill" : "doc.richtext.fill",
                 tint: item.isDirectory ? .blue : .green,
-                width: 54,
-                height: 76
+                width: 44,
+                height: 62
             )
         }
     }

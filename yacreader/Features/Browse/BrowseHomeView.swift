@@ -1,8 +1,6 @@
 import SwiftUI
 
-private enum BrowseLayoutMetrics {
-    static let iconSize: CGFloat = 32
-}
+private enum BrowseLayoutMetrics {}
 
 struct BrowseHomeView: View {
 
@@ -278,20 +276,10 @@ private struct BrowseHomeServerRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: protocolSystemImage)
-                .font(AppFont.body(.semibold))
-                .foregroundStyle(.white)
-                .frame(
-                    width: BrowseLayoutMetrics.iconSize,
-                    height: BrowseLayoutMetrics.iconSize
-                )
-                .background(
-                    profile.providerKind.tintColor,
-                    in: RoundedRectangle(
-                        cornerRadius: CornerRadius.sm,
-                        style: .continuous
-                    )
-                )
+            ListIconBadge(
+                systemImage: protocolSystemImage,
+                tint: profile.providerKind.tintColor
+            )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 Text(profile.name)
@@ -338,20 +326,7 @@ private struct BrowseHomeQuickAccessRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: item.systemImage)
-                .font(AppFont.body(.semibold))
-                .foregroundStyle(.white)
-                .frame(
-                    width: BrowseLayoutMetrics.iconSize,
-                    height: BrowseLayoutMetrics.iconSize
-                )
-                .background(
-                    item.tint,
-                    in: RoundedRectangle(
-                        cornerRadius: CornerRadius.sm,
-                        style: .continuous
-                    )
-                )
+            ListIconBadge(systemImage: item.systemImage, tint: item.tint)
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 Text(item.title)

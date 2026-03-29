@@ -43,6 +43,73 @@ struct InsetListRowCard<Content: View>: View {
     }
 }
 
+// MARK: - List Icon Badge
+
+/// Standard iOS-style icon badge for navigation list rows.
+/// Matches the visual pattern from iOS Settings.app — colored rounded-square background with white icon.
+struct ListIconBadge: View {
+    let systemImage: String
+    let tint: Color
+    var size: CGFloat = 30
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: size * 0.46, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(tint, in: RoundedRectangle(cornerRadius: size * 0.23, style: .continuous))
+    }
+}
+
+// MARK: - Comic Status Meta Row
+
+/// Compact single-line reading status for comic list rows.
+/// Shows a status icon + progress text, then optional favorite/bookmark indicators.
+/// Designed to replace AdaptiveStatusBadgeGroup in narrow list-row contexts.
+struct ComicStatusMetaRow: View {
+    let progressText: String
+    let isRead: Bool
+    var isFavorite: Bool = false
+    var bookmarkCount: Int = 0
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: isRead ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(isRead ? Color.statusRead : Color(.quaternaryLabel))
+
+            Text(progressText)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(isRead ? Color.statusRead : .secondary)
+
+            if isFavorite {
+                dot
+                Image(systemName: "star.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.appFavorite)
+            }
+
+            if bookmarkCount > 0 {
+                dot
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.appAccent)
+                Text("\(bookmarkCount)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var dot: some View {
+        Text("·")
+            .font(.caption)
+            .foregroundStyle(Color(.quaternaryLabel))
+    }
+}
+
 struct CompactActionChip: View {
     let title: String
     let systemImage: String

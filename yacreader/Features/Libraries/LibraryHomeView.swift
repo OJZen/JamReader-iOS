@@ -549,10 +549,10 @@ private struct LibraryRowView: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: "books.vertical.fill")
-                .font(AppFont.title3())
-                .foregroundStyle(item.descriptor.storageMode.tintColor)
-                .frame(width: 30, height: 30)
+            ListIconBadge(
+                systemImage: "books.vertical.fill",
+                tint: item.descriptor.storageMode.tintColor
+            )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 Text(item.descriptor.name)
@@ -581,10 +581,10 @@ private struct LibrarySidebarRowView: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: "books.vertical.fill")
-                .font(AppFont.title3())
-                .foregroundStyle(item.descriptor.storageMode.tintColor)
-                .frame(width: 28, height: 28)
+            ListIconBadge(
+                systemImage: "books.vertical.fill",
+                tint: item.descriptor.storageMode.tintColor
+            )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 Text(item.descriptor.name)

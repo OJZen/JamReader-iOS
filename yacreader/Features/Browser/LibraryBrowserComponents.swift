@@ -82,7 +82,9 @@ struct LibraryFolderRow: View {
         } thumbnail: {
             LocalCoverThumbnailView(
                 url: coverURL,
-                placeholderSystemName: "folder.fill"
+                placeholderSystemName: "folder.fill",
+                width: 44,
+                height: 62
             )
         } content: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -314,13 +316,15 @@ struct LibraryComicRow: View {
                 fallbackSource: coverSource,
                 placeholderSystemName: "book.closed.fill",
                 transitionKey: heroSourceID,
-                heroSourceID: heroSourceID
+                heroSourceID: heroSourceID,
+                width: 44,
+                height: 62
             )
         } content: {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
+            VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .top, spacing: Spacing.xs) {
                     Text(comic.displayTitle)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(2)
 
                     Spacer(minLength: 8)
@@ -330,12 +334,19 @@ struct LibraryComicRow: View {
                     }
                 }
 
-                Text(comic.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                if comic.subtitle != comic.fileName {
+                    Text(comic.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
-                AdaptiveStatusBadgeGroup(badges: comic.browserRowBadges)
+                ComicStatusMetaRow(
+                    progressText: comic.progressText,
+                    isRead: comic.read,
+                    isFavorite: comic.isFavorite,
+                    bookmarkCount: comic.bookmarkPageIndices.count
+                )
             }
         } trailingAccessory: {
             EmptyView()
@@ -457,7 +468,7 @@ struct LibraryBrowserListRowShell<
                 .frame(maxWidth: .infinity, alignment: .leading)
             trailingAccessory()
         }
-        .padding(.vertical, Spacing.xxs)
+        .padding(.vertical, Spacing.xs)
         .padding(.trailing, trailingAccessoryReservedWidth)
     }
 }
