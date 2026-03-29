@@ -44,9 +44,30 @@ struct RemoteBrowserLoadIssue: Hashable {
     }
 }
 
+struct RemoteBrowserProgressState: Equatable {
+    let title: String
+    let detail: String?
+    let fraction: Double?
+    let isCancellable: Bool
+
+    var clampedFraction: Double? {
+        guard let fraction else {
+            return nil
+        }
+
+        return min(max(fraction, 0), 1)
+    }
+}
+
 @MainActor
 final class RemoteServerBrowserViewModel: ObservableObject {
     private static let lastBrowsedPathKeyPrefix = "remoteServerBrowser.lastPath."
+
+    private struct ProgressStateSnapshot {
+        let progressByItemID: [String: RemoteComicReadingSession]
+        let cacheAvailabilityByItemID: [String: RemoteComicCachedAvailability]
+        let recentSessions: [RemoteComicReadingSession]
+    }
 
     @Published private(set) var items: [RemoteDirectoryItem] = []
     @Published private(set) var progressByItemID: [String: RemoteComicReadingSession] = [:]
@@ -54,7 +75,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     @Published private(set) var recentSessions: [RemoteComicReadingSession] = []
     @Published private(set) var isLoading = false
     @Published private(set) var loadIssue: RemoteBrowserLoadIssue?
-    @Published private(set) var activeImportDescription: String?
+    @Published private(set) var activeProgress: RemoteBrowserProgressState?
     @Published private(set) var isCurrentFolderSaved = false
     @Published var feedback: RemoteBrowserFeedbackState?
     @Published var alert: RemoteAlertState?
@@ -67,6 +88,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private let readingProgressStore: RemoteReadingProgressStore
     private let importedComicsImportService: ImportedComicsImportService
     private let folderShortcutStore: RemoteFolderShortcutStore
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
     private var hasLoaded = false
     private var progressRefreshTask: Task<Void, Never>?
 
@@ -76,7 +98,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         browsingService: RemoteServerBrowsingService,
         readingProgressStore: RemoteReadingProgressStore,
         importedComicsImportService: ImportedComicsImportService,
-        folderShortcutStore: RemoteFolderShortcutStore
+        folderShortcutStore: RemoteFolderShortcutStore,
+        remoteBackgroundImportController: RemoteBackgroundImportController
     ) {
         self.profile = profile
         self.currentPath = Self.initialPath(for: profile, explicitPath: currentPath)
@@ -85,6 +108,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         self.readingProgressStore = readingProgressStore
         self.importedComicsImportService = importedComicsImportService
         self.folderShortcutStore = folderShortcutStore
+        self.remoteBackgroundImportController = remoteBackgroundImportController
         self.isCurrentFolderSaved = folderShortcutStore.containsShortcut(
             for: profile.id,
             providerKind: profile.providerKind,
@@ -176,6 +200,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         offlineRecoverySessions.count
     }
 
+    var canCancelActiveImport: Bool {
+        remoteBackgroundImportController.canCancelActiveImport
+    }
+
     func loadIfNeeded() async {
         guard !hasLoaded else {
             return
@@ -227,34 +255,30 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     func refreshProgressState() {
-        let sessionsByPath = ((try? readingProgressStore.loadSessions()) ?? [])
-            .reduce(into: [String: RemoteComicReadingSession]()) { result, session in
-                guard session.matches(profile: profile),
-                      result[session.path] == nil else {
-                    return
-                }
+        let itemsSnapshot = items
+        let profileSnapshot = profile
 
-                result[session.path] = session
+        progressRefreshTask?.cancel()
+        progressRefreshTask = Task { @MainActor [weak self] in
+            guard let self else {
+                return
             }
 
-        var nextProgressByItemID: [String: RemoteComicReadingSession] = [:]
-        var nextCacheAvailabilityByItemID: [String: RemoteComicCachedAvailability] = [:]
-
-        for item in items {
-            guard item.canOpenAsComic,
-                  let reference = try? browsingService.makeComicFileReference(from: item) else {
-                continue
+            let snapshot = await Self.loadProgressStateSnapshot(
+                items: itemsSnapshot,
+                profile: profileSnapshot,
+                browsingService: self.browsingService,
+                readingProgressStore: self.readingProgressStore
+            )
+            guard !Task.isCancelled else {
+                return
             }
 
-            if let session = sessionsByPath[reference.path] {
-                nextProgressByItemID[item.id] = session
-            }
-
-            nextCacheAvailabilityByItemID[item.id] = browsingService.cachedAvailability(for: reference)
+            self.progressByItemID = snapshot.progressByItemID
+            self.cacheAvailabilityByItemID = snapshot.cacheAvailabilityByItemID
+            self.recentSessions = snapshot.recentSessions
+            self.progressRefreshTask = nil
         }
-
-        progressByItemID = nextProgressByItemID
-        cacheAvailabilityByItemID = nextCacheAvailabilityByItemID
     }
 
     func refreshProgressState(for item: RemoteDirectoryItem) {
@@ -285,8 +309,52 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             }
 
             self.refreshProgressState()
-            self.recentSessions = self.recentSessionsForProfile()
-            self.progressRefreshTask = nil
+        }
+    }
+
+    private static func loadProgressStateSnapshot(
+        items: [RemoteDirectoryItem],
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService,
+        readingProgressStore: RemoteReadingProgressStore
+    ) async -> ProgressStateSnapshot {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                let sessions = (try? readingProgressStore.loadSessions()) ?? []
+                let recentSessions = sessions.filter { $0.matches(profile: profile) }
+                let sessionsByPath = sessions.reduce(into: [String: RemoteComicReadingSession]()) { result, session in
+                    guard session.matches(profile: profile),
+                          result[session.path] == nil else {
+                        return
+                    }
+
+                    result[session.path] = session
+                }
+
+                var progressByItemID: [String: RemoteComicReadingSession] = [:]
+                var cacheAvailabilityByItemID: [String: RemoteComicCachedAvailability] = [:]
+
+                for item in items {
+                    guard item.canOpenAsComic,
+                          let reference = try? browsingService.makeComicFileReference(from: item) else {
+                        continue
+                    }
+
+                    if let session = sessionsByPath[reference.path] {
+                        progressByItemID[item.id] = session
+                    }
+
+                    cacheAvailabilityByItemID[item.id] = browsingService.cachedAvailability(for: reference)
+                }
+
+                continuation.resume(
+                    returning: ProgressStateSnapshot(
+                        progressByItemID: progressByItemID,
+                        cacheAvailabilityByItemID: cacheAvailabilityByItemID,
+                        recentSessions: recentSessions
+                    )
+                )
+            }
         }
     }
 
@@ -347,10 +415,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func importComic(
         _ item: RemoteDirectoryItem,
-        destinationSelection: LibraryImportDestinationSelection = .importedComics
+        destinationSelection: LibraryImportDestinationSelection = .importedComics,
+        cancellationController: RemoteImportCancellationController
     ) async {
-        feedback = nil
-
         guard item.canOpenAsComic else {
             alert = RemoteAlertState(
                 title: "Import Unavailable",
@@ -367,15 +434,31 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = "Importing \(item.name)…"
+        setBackgroundImportProgress(
+            title: "Downloading Comic",
+            detail: item.name,
+            fraction: 0,
+            isCancellable: true
+        )
         defer {
-            activeImportDescription = nil
+            clearBackgroundImportProgress()
         }
 
         do {
             let downloadResult = try await browsingService.downloadComicFile(
                 for: profile,
-                reference: reference
+                reference: reference,
+                trimCacheAfterDownload: false,
+                progressHandler: { [weak self] fraction in
+                    Task { @MainActor in
+                        self?.setBackgroundImportProgress(
+                            title: "Downloading Comic",
+                            detail: item.name,
+                            fraction: fraction,
+                            isCancellable: true
+                        )
+                    }
+                }
             )
             guard importUsesCurrentRemoteCopy(downloadResult) else {
                 alert = RemoteAlertState(
@@ -389,19 +472,31 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 cleanupTemporaryImportDownloads([(reference, downloadResult)])
             }
 
-            let importResult = try importedComicsImportService.importComicResources(
+            let importResult = try await importedComicsImportService.importComicResourcesAsync(
                 from: [downloadResult.localFileURL],
                 traverseDirectories: false,
                 accessSecurityScopedResources: false,
-                destinationSelection: destinationSelection
+                destinationSelection: destinationSelection,
+                consumeSourceURLs: downloadableImportSourceURLs(from: [downloadResult]),
+                progressHandler: { [weak self] progress in
+                    Task { @MainActor in
+                        self?.applyImportProgress(
+                            progress,
+                            contextTitle: item.name
+                        )
+                    }
+                },
+                cancellationCheck: cancellationController.checkCancelled
             )
             presentImportResult(
                 importResult,
                 extraFailedItemNames: [],
                 successTitle: "Imported to Library"
             )
+        } catch is CancellationError {
+            presentImportCancellationFeedback()
         } catch {
-            alert = RemoteAlertState(
+            presentImportFailureFeedback(
                 title: "Failed to Import Comic",
                 message: error.localizedDescription
             )
@@ -411,10 +506,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     func importDirectory(
         _ item: RemoteDirectoryItem,
         destinationSelection: LibraryImportDestinationSelection = .importedComics,
-        scope: RemoteDirectoryImportScope = .includeSubfolders
+        scope: RemoteDirectoryImportScope = .includeSubfolders,
+        cancellationController: RemoteImportCancellationController
     ) async {
-        feedback = nil
-
         guard item.isDirectory else {
             alert = RemoteAlertState(
                 title: "Import Unavailable",
@@ -423,14 +517,19 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = scope == .includeSubfolders ? "Scanning \(item.name)…" : "Checking \(item.name)…"
         do {
+            setBackgroundImportProgress(
+                title: scope == .includeSubfolders ? "Scanning Remote Folder" : "Checking Folder",
+                detail: item.name,
+                isCancellable: true
+            )
             let importableItems = try await importableComicItems(
                 at: item.path,
-                scope: scope
+                scope: scope,
+                progressName: item.name
             )
             guard !importableItems.isEmpty else {
-                activeImportDescription = nil
+                clearBackgroundImportProgress()
                 alert = RemoteAlertState(
                     title: "Nothing to Import",
                     message: scope == .includeSubfolders
@@ -444,11 +543,15 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 importableItems,
                 progressPrefix: "Importing \(item.name)",
                 successTitle: "Folder Imported to Library",
-                destinationSelection: destinationSelection
+                destinationSelection: destinationSelection,
+                cancellationController: cancellationController
             )
+        } catch is CancellationError {
+            clearBackgroundImportProgress()
+            presentImportCancellationFeedback()
         } catch {
-            activeImportDescription = nil
-            alert = RemoteAlertState(
+            clearBackgroundImportProgress()
+            presentImportFailureFeedback(
                 title: "Folder Import Failed",
                 message: error.localizedDescription
             )
@@ -457,10 +560,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func importCurrentFolder(
         destinationSelection: LibraryImportDestinationSelection = .importedComics,
-        scope: RemoteDirectoryImportScope = .includeSubfolders
+        scope: RemoteDirectoryImportScope = .includeSubfolders,
+        cancellationController: RemoteImportCancellationController
     ) async {
-        feedback = nil
-
         guard canImportCurrentFolderRecursively else {
             alert = RemoteAlertState(
                 title: "Nothing to Import",
@@ -469,14 +571,37 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = scope == .includeSubfolders ? "Scanning \(navigationTitle)…" : "Checking \(navigationTitle)…"
         do {
-            let importableItems = try await importableComicItems(
-                at: currentPath,
-                scope: scope
-            )
+            let importableItems: [RemoteDirectoryItem]
+            switch scope {
+            case .currentFolderOnly:
+                setBackgroundImportProgress(
+                    title: "Checking Folder",
+                    detail: navigationTitle,
+                    isCancellable: true
+                )
+                importableItems = comicFiles
+            case .visibleResults:
+                setBackgroundImportProgress(
+                    title: "Checking Visible Comics",
+                    detail: navigationTitle,
+                    isCancellable: true
+                )
+                importableItems = comicFiles
+            case .includeSubfolders:
+                setBackgroundImportProgress(
+                    title: "Scanning Remote Folder",
+                    detail: navigationTitle,
+                    isCancellable: true
+                )
+                importableItems = try await importableComicItems(
+                    at: currentPath,
+                    scope: scope,
+                    progressName: navigationTitle
+                )
+            }
             guard !importableItems.isEmpty else {
-                activeImportDescription = nil
+                clearBackgroundImportProgress()
                 alert = RemoteAlertState(
                     title: "Nothing to Import",
                     message: scope == .includeSubfolders
@@ -490,11 +615,15 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 importableItems,
                 progressPrefix: "Importing \(navigationTitle)",
                 successTitle: "Folder Imported to Library",
-                destinationSelection: destinationSelection
+                destinationSelection: destinationSelection,
+                cancellationController: cancellationController
             )
+        } catch is CancellationError {
+            clearBackgroundImportProgress()
+            presentImportCancellationFeedback()
         } catch {
-            activeImportDescription = nil
-            alert = RemoteAlertState(
+            clearBackgroundImportProgress()
+            presentImportFailureFeedback(
                 title: "Folder Import Failed",
                 message: error.localizedDescription
             )
@@ -503,10 +632,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func importVisibleComics(
         _ items: [RemoteDirectoryItem],
-        destinationSelection: LibraryImportDestinationSelection = .importedComics
+        destinationSelection: LibraryImportDestinationSelection = .importedComics,
+        cancellationController: RemoteImportCancellationController
     ) async {
-        feedback = nil
-
         let visibleComics = items.filter(\.canOpenAsComic)
         guard !visibleComics.isEmpty else {
             alert = RemoteAlertState(
@@ -520,7 +648,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             visibleComics,
             progressPrefix: "Importing visible comics",
             successTitle: "Visible Comics Imported",
-            destinationSelection: destinationSelection
+            destinationSelection: destinationSelection,
+            cancellationController: cancellationController
         )
     }
 
@@ -546,18 +675,29 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = forceRefresh
-            ? "Refreshing downloaded copy…"
-            : "Saving \(item.name)…"
+        setActiveProgress(
+            title: forceRefresh ? "Refreshing Downloaded Copy" : "Saving Offline Copy",
+            detail: item.name,
+            fraction: 0
+        )
         defer {
-            activeImportDescription = nil
+            clearActiveProgress()
         }
 
         do {
             let result = try await browsingService.downloadComicFile(
                 for: profile,
                 reference: reference,
-                forceRefresh: forceRefresh
+                forceRefresh: forceRefresh,
+                progressHandler: { [weak self] fraction in
+                    Task { @MainActor in
+                        self?.setActiveProgress(
+                            title: forceRefresh ? "Refreshing Downloaded Copy" : "Saving Offline Copy",
+                            detail: item.name,
+                            fraction: fraction
+                        )
+                    }
+                }
             )
             refreshProgressState()
             feedback = RemoteBrowserFeedbackState(
@@ -586,9 +726,13 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        activeImportDescription = "Saving visible comics…"
+        setActiveProgress(
+            title: "Saving Visible Comics",
+            detail: "Preparing downloads",
+            fraction: 0
+        )
         defer {
-            activeImportDescription = nil
+            clearActiveProgress()
         }
 
         var failedNames: [String] = []
@@ -602,9 +746,28 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         do {
+            let downloadProgressTracker = RemoteBatchProgressTracker(
+                totalCount: max(preparedDownloads.count, 1)
+            )
             let outcomes = try await browsingService.downloadComicFiles(
                 for: profile,
-                references: preparedDownloads.map { $0.1 }
+                references: preparedDownloads.map { $0.1 },
+                trimCacheAfterDownload: false,
+                progressHandler: { [weak self] reference, fraction in
+                    Task {
+                        let snapshot = await downloadProgressTracker.update(
+                            referenceID: reference.id,
+                            fraction: fraction
+                        )
+                        await MainActor.run {
+                            self?.setActiveProgress(
+                                title: "Saving Visible Comics",
+                                detail: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)",
+                                fraction: snapshot.fraction
+                            )
+                        }
+                    }
+                }
             )
             let itemNameByReferenceID = Dictionary(
                 uniqueKeysWithValues: preparedDownloads.map { ($0.1.id, $0.0.name) }
@@ -846,22 +1009,27 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         if result.importedComicCount > 0 {
             AppHaptics.success()
-            feedback = RemoteBrowserFeedbackState(
-                title: successTitle,
-                message: importFeedbackMessage(
-                    from: result,
-                    extraFailedItemNames: extraFailedItemNames
-                ),
-                kind: .success,
-                primaryAction: primaryAction
+            remoteBackgroundImportController.presentFeedback(
+                RemoteBrowserFeedbackState(
+                    title: successTitle,
+                    message: importFeedbackMessage(
+                        from: result,
+                        extraFailedItemNames: extraFailedItemNames
+                    ),
+                    kind: .success,
+                    primaryAction: primaryAction
+                )
             )
             return
         }
 
-        alert = RemoteAlertState(
-            title: "Import Finished with Warnings",
-            message: messageLines.joined(separator: "\n"),
-            primaryAction: primaryAction
+        remoteBackgroundImportController.presentFeedback(
+            RemoteBrowserFeedbackState(
+                title: "Import Finished with Warnings",
+                message: messageLines.joined(separator: "\n"),
+                kind: .info,
+                primaryAction: primaryAction
+            )
         )
     }
 
@@ -923,17 +1091,21 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         _ items: [RemoteDirectoryItem],
         progressPrefix: String,
         successTitle: String,
-        destinationSelection: LibraryImportDestinationSelection
+        destinationSelection: LibraryImportDestinationSelection,
+        cancellationController: RemoteImportCancellationController
     ) async {
-        let sortedItems = items.sorted { lhs, rhs in
+        var seenPaths = Set<String>()
+        let uniqueItems = items.filter { item in
+            seenPaths.insert(Self.normalizedPath(item.path)).inserted
+        }
+        let sortedItems = uniqueItems.sorted { lhs, rhs in
             lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
         }
 
         var failedDownloadNames: [String] = []
         var stagedResultsForImport: [(RemoteComicFileReference, RemoteComicDownloadResult)] = []
-        activeImportDescription = "\(progressPrefix)…"
         defer {
-            activeImportDescription = nil
+            clearBackgroundImportProgress()
             cleanupTemporaryImportDownloads(stagedResultsForImport)
         }
 
@@ -948,9 +1120,35 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         let downloadedFileURLs: [URL]
         do {
+            let downloadProgressTracker = RemoteBatchProgressTracker(
+                totalCount: max(preparedDownloads.count, 1)
+            )
+            setBackgroundImportProgress(
+                title: progressPrefix,
+                detail: preparedDownloads.isEmpty ? "Preparing downloads" : "Downloaded 0 of \(preparedDownloads.count)",
+                fraction: preparedDownloads.isEmpty ? nil : 0,
+                isCancellable: true
+            )
             let outcomes = try await browsingService.downloadComicFiles(
                 for: profile,
-                references: preparedDownloads.map { $0.1 }
+                references: preparedDownloads.map { $0.1 },
+                trimCacheAfterDownload: false,
+                progressHandler: { [weak self] reference, fraction in
+                    Task {
+                        let snapshot = await downloadProgressTracker.update(
+                            referenceID: reference.id,
+                            fraction: fraction
+                        )
+                        await MainActor.run {
+                            self?.setBackgroundImportProgress(
+                                title: progressPrefix,
+                                detail: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)",
+                                fraction: snapshot.fraction,
+                                isCancellable: true
+                            )
+                        }
+                    }
+                }
             )
             let itemNameByReferenceID = Dictionary(
                 uniqueKeysWithValues: preparedDownloads.map { ($0.1.id, $0.0.name) }
@@ -970,8 +1168,11 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 failedDownloadNames.append(itemNameByReferenceID[outcome.reference.id] ?? outcome.reference.fileName)
                 return nil
             }
+        } catch is CancellationError {
+            presentImportCancellationFeedback()
+            return
         } catch {
-            alert = RemoteAlertState(
+            presentImportFailureFeedback(
                 title: "Folder Import Failed",
                 message: error.localizedDescription
             )
@@ -979,7 +1180,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         guard !downloadedFileURLs.isEmpty else {
-            alert = RemoteAlertState(
+            presentImportFailureFeedback(
                 title: "Folder Import Failed",
                 message: "No remote comics could be downloaded for import."
             )
@@ -987,19 +1188,33 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         do {
-            let importResult = try importedComicsImportService.importComicResources(
+            let importResult = try await importedComicsImportService.importComicResourcesAsync(
                 from: downloadedFileURLs,
                 traverseDirectories: false,
                 accessSecurityScopedResources: false,
-                destinationSelection: destinationSelection
+                destinationSelection: destinationSelection,
+                consumeSourceURLs: downloadableImportSourceURLs(
+                    from: stagedResultsForImport.map(\.1)
+                ),
+                progressHandler: { [weak self] progress in
+                    Task { @MainActor in
+                        self?.applyImportProgress(
+                            progress,
+                            contextTitle: successTitle
+                        )
+                    }
+                },
+                cancellationCheck: cancellationController.checkCancelled
             )
             presentImportResult(
                 importResult,
                 extraFailedItemNames: failedDownloadNames,
                 successTitle: successTitle
             )
+        } catch is CancellationError {
+            presentImportCancellationFeedback()
         } catch {
-            alert = RemoteAlertState(
+            presentImportFailureFeedback(
                 title: "Folder Import Failed",
                 message: error.localizedDescription
             )
@@ -1008,21 +1223,39 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     private func importableComicItems(
         at path: String,
-        scope: RemoteDirectoryImportScope
+        scope: RemoteDirectoryImportScope,
+        progressName: String
     ) async throws -> [RemoteDirectoryItem] {
         switch scope {
         case .visibleResults:
+            if path == currentPath {
+                return comicFiles
+            }
             return try await browsingService
                 .listDirectory(for: profile, path: path)
                 .filter(\.canOpenAsComic)
         case .currentFolderOnly:
+            if path == currentPath {
+                return comicFiles
+            }
             return try await browsingService
                 .listDirectory(for: profile, path: path)
                 .filter(\.canOpenAsComic)
         case .includeSubfolders:
             return try await browsingService.listComicFilesRecursively(
                 for: profile,
-                path: path
+                path: path,
+                progressHandler: { [weak self] discoveredCount, currentPath in
+                    Task { @MainActor in
+                        let currentPathSuffix = currentPath.map { " · \($0)" } ?? ""
+                        let detail = "Found \(discoveredCount) comics\(currentPathSuffix)"
+                        self?.setBackgroundImportProgress(
+                            title: "Scanning \(progressName)",
+                            detail: detail,
+                            isCancellable: true
+                        )
+                    }
+                }
             )
         }
     }
@@ -1104,5 +1337,149 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         case .cachedFallback:
             return "A downloaded copy of \(item.name) is already available on this device."
         }
+    }
+
+    private func setActiveProgress(
+        title: String,
+        detail: String? = nil,
+        fraction: Double? = nil,
+        isCancellable: Bool = false
+    ) {
+        activeProgress = RemoteBrowserProgressState(
+            title: title,
+            detail: detail,
+            fraction: fraction,
+            isCancellable: isCancellable
+        )
+    }
+
+    private func clearActiveProgress() {
+        activeProgress = nil
+    }
+
+    private func applyImportProgress(
+        _ progress: ImportedComicsImportProgress,
+        contextTitle: String
+    ) {
+        switch progress.phase {
+        case .transferring:
+            let detail: String
+            if let totalCount = progress.totalCount {
+                let currentSuffix = progress.currentItemName.map { " · \($0)" } ?? ""
+                detail = "Prepared \(progress.completedCount) of \(totalCount)\(currentSuffix)"
+                setBackgroundImportProgress(
+                    title: "Adding to Library",
+                    detail: detail,
+                    fraction: totalCount > 0 ? Double(progress.completedCount) / Double(totalCount) : nil,
+                    isCancellable: true
+                )
+            } else {
+                detail = progress.currentItemName ?? contextTitle
+                setBackgroundImportProgress(
+                    title: "Adding to Library",
+                    detail: detail,
+                    isCancellable: true
+                )
+            }
+        case .indexing:
+            let currentSuffix = progress.currentItemName.map { " · \($0)" } ?? ""
+            if let totalCount = progress.totalCount, totalCount > 0 {
+                setBackgroundImportProgress(
+                    title: "Indexing Library",
+                    detail: "Indexed \(min(progress.completedCount, totalCount)) of \(totalCount)\(currentSuffix)",
+                    fraction: Double(min(progress.completedCount, totalCount)) / Double(totalCount),
+                    isCancellable: true
+                )
+            } else {
+                setBackgroundImportProgress(
+                    title: progress.scanProgress?.title ?? "Indexing Library",
+                    detail: progress.scanProgress?.detailLine ?? "Updating imported comics",
+                    isCancellable: true
+                )
+            }
+        }
+    }
+
+    private func presentImportCancellationFeedback() {
+        remoteBackgroundImportController.presentFeedback(
+            RemoteBrowserFeedbackState(
+                title: "Import Canceled",
+                message: "The current remote import was stopped. Finished downloads stay available for reuse.",
+                kind: .info,
+                autoDismissAfter: 3
+            )
+        )
+    }
+
+    private func presentImportFailureFeedback(title: String, message: String) {
+        remoteBackgroundImportController.presentFeedback(
+            RemoteBrowserFeedbackState(
+                title: title,
+                message: message,
+                kind: .info
+            )
+        )
+    }
+
+    private func setBackgroundImportProgress(
+        title: String,
+        detail: String? = nil,
+        fraction: Double? = nil,
+        isCancellable: Bool = false
+    ) {
+        remoteBackgroundImportController.setActiveProgress(
+            title: title,
+            detail: detail,
+            fraction: fraction,
+            isCancellable: isCancellable
+        )
+    }
+
+    private func clearBackgroundImportProgress() {
+        remoteBackgroundImportController.clearActiveProgress()
+    }
+
+    private func downloadableImportSourceURLs(
+        from results: [RemoteComicDownloadResult]
+    ) -> Set<URL> {
+        // Keep remote import staging files in place until the whole import finishes,
+        // then clean them up in one pass. This avoids source files disappearing
+        // mid-import while the library transfer is still in progress.
+        _ = results
+        return []
+    }
+}
+
+private actor RemoteBatchProgressTracker {
+    struct Snapshot {
+        let completedCount: Int
+        let totalCount: Int
+        let fraction: Double
+    }
+
+    private let totalCount: Int
+    private var fractionsByReferenceID: [String: Double] = [:]
+
+    init(totalCount: Int) {
+        self.totalCount = totalCount
+    }
+
+    func update(referenceID: String, fraction: Double) -> Snapshot {
+        let clampedFraction = min(max(fraction, 0), 1)
+        let previousFraction = fractionsByReferenceID[referenceID] ?? 0
+        fractionsByReferenceID[referenceID] = max(previousFraction, clampedFraction)
+
+        let allFractions = fractionsByReferenceID.values
+        let sum = allFractions.reduce(0, +)
+        let completedCount = allFractions.filter { $0 >= 0.999 }.count
+        let normalizedFraction = totalCount > 0
+            ? min(max(sum / Double(totalCount), 0), 1)
+            : 1
+
+        return Snapshot(
+            completedCount: completedCount,
+            totalCount: totalCount,
+            fraction: normalizedFraction
+        )
     }
 }

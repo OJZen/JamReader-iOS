@@ -21,6 +21,7 @@ struct AppDependencies {
     let remoteServerBrowsingService: RemoteServerBrowsingService
     let remoteReadingProgressStore: RemoteReadingProgressStore
     let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
+    let remoteBackgroundImportController: RemoteBackgroundImportController
     let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
 
@@ -36,6 +37,7 @@ struct AppDependencies {
         let remoteReadingProgressStore = RemoteReadingProgressStore()
         let remoteServerProfileStore = RemoteServerProfileStore()
         let remoteFolderShortcutStore = RemoteFolderShortcutStore()
+        let remoteBackgroundImportController = RemoteBackgroundImportController()
         let remoteServerBrowsingService = RemoteServerBrowsingService(
             credentialStore: remoteServerCredentialStore,
             cachePolicyStore: remoteCachePolicyStore
@@ -77,6 +79,7 @@ struct AppDependencies {
                 remoteReadingProgressStore: remoteReadingProgressStore,
                 remoteServerBrowsingService: remoteServerBrowsingService
             ),
+            remoteBackgroundImportController: remoteBackgroundImportController,
             remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore(),
             readerLayoutPreferencesStore: ReaderLayoutPreferencesStore()
         )

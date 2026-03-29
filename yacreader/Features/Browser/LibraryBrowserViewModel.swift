@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
@@ -869,6 +870,23 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         coverLocator.coverURL(for: comic, metadataRootURL: metadataRootURL)
     }
 
+    func coverSource(for comic: LibraryComic) -> LocalComicCoverSource? {
+        let sourceRootURL = accessSession?.sourceURL
+            ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+        return LocalComicCoverSource(
+            fileURL: resolveComicFileURL(for: comic, sourceRootURL: sourceRootURL),
+            cacheURL: coverLocator.plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
+        )
+    }
+
+    func heroSourceID(for comic: LibraryComic) -> String {
+        "library-comic-\(descriptor.id.uuidString)-\(comic.id)"
+    }
+
+    func cachedTransitionImage(for comic: LibraryComic) -> UIImage? {
+        LocalCoverTransitionCache.shared.image(for: heroSourceID(for: comic))
+    }
+
     func dismissScanCompletion() {
         scanCompletionDismissTask?.cancel()
         scanCompletionDismissTask = nil
@@ -899,6 +917,26 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
 
         return sourceRootURL.appendingPathComponent(relativePath, isDirectory: true)
+    }
+
+    private func resolveComicFileURL(
+        for comic: LibraryComic,
+        sourceRootURL: URL
+    ) -> URL {
+        let relativePath = {
+            let rawPath = comic.path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if rawPath.isEmpty {
+                return comic.fileName
+            }
+
+            return rawPath
+        }()
+
+        if relativePath.hasPrefix("/") {
+            return sourceRootURL.appendingPathComponent(String(relativePath.dropFirst()))
+        }
+
+        return sourceRootURL.appendingPathComponent(relativePath)
     }
 
     private func uniqueDestinationURL(for sourceURL: URL, in directoryURL: URL) -> URL {

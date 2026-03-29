@@ -5,6 +5,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     let providerKind: RemoteProviderKind
     let serverName: String
     let shareName: String
+    let cacheScopeKey: String?
     let path: String
     let fileName: String
     let pageCount: Int?
@@ -21,6 +22,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         providerKind: RemoteProviderKind,
         serverName: String,
         shareName: String,
+        cacheScopeKey: String? = nil,
         path: String,
         fileName: String,
         pageCount: Int?,
@@ -36,6 +38,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         self.providerKind = providerKind
         self.serverName = serverName
         self.shareName = shareName
+        self.cacheScopeKey = cacheScopeKey
         self.path = path
         self.fileName = fileName
         self.pageCount = pageCount
@@ -53,6 +56,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         case providerKind
         case serverName
         case shareName
+        case cacheScopeKey
         case path
         case fileName
         case pageCount
@@ -71,6 +75,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         self.providerKind = try container.decode(RemoteProviderKind.self, forKey: .providerKind)
         self.serverName = try container.decode(String.self, forKey: .serverName)
         self.shareName = try container.decode(String.self, forKey: .shareName)
+        self.cacheScopeKey = try container.decodeIfPresent(String.self, forKey: .cacheScopeKey)
         self.path = try container.decode(String.self, forKey: .path)
         self.fileName = try container.decode(String.self, forKey: .fileName)
         self.pageCount = try container.decodeIfPresent(Int.self, forKey: .pageCount)
@@ -91,6 +96,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         try container.encode(providerKind, forKey: .providerKind)
         try container.encode(serverName, forKey: .serverName)
         try container.encode(shareName, forKey: .shareName)
+        try container.encodeIfPresent(cacheScopeKey, forKey: .cacheScopeKey)
         try container.encode(path, forKey: .path)
         try container.encode(fileName, forKey: .fileName)
         try container.encodeIfPresent(pageCount, forKey: .pageCount)
@@ -104,7 +110,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     }
 
     var id: String {
-        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(path)"
+        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey ?? "legacy")|\(path)"
     }
 
     var displayName: String {
@@ -140,6 +146,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
             serverID: serverID,
             providerKind: providerKind,
             shareName: shareName,
+            cacheScopeKey: cacheScopeKey ?? "legacy",
             path: path,
             name: fileName,
             kind: .comicFile,
@@ -165,6 +172,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
             serverID: serverID,
             providerKind: providerKind,
             shareName: shareName,
+            cacheScopeKey: cacheScopeKey,
             path: path,
             fileName: fileName,
             fileSize: fileSize,
@@ -173,18 +181,34 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     }
 
     func matches(profile: RemoteServerProfile) -> Bool {
-        serverID == profile.id
-            && profile.matchesRemoteScope(
-                providerKind: providerKind,
-                providerRootIdentifier: shareName
-            )
+        guard serverID == profile.id,
+              profile.matchesRemoteScope(
+                  providerKind: providerKind,
+                  providerRootIdentifier: shareName
+              ) else {
+            return false
+        }
+
+        if let cacheScopeKey {
+            return cacheScopeKey == profile.remoteCacheScopeKey
+        }
+
+        return true
     }
 
     func matches(reference: RemoteComicFileReference) -> Bool {
-        serverID == reference.serverID
-            && providerKind == reference.providerKind
-            && shareName == reference.shareName
-            && path == reference.path
+        guard serverID == reference.serverID,
+              providerKind == reference.providerKind,
+              shareName == reference.shareName,
+              path == reference.path else {
+            return false
+        }
+
+        if let referenceCacheScopeKey = reference.cacheScopeKey {
+            return cacheScopeKey == referenceCacheScopeKey
+        }
+
+        return true
     }
 
     private static func normalizedBookmarkPageIndices(_ indices: [Int]) -> [Int] {

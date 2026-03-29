@@ -379,11 +379,13 @@ struct ComicReaderView: View {
     }
 
     private func handleVisiblePageChange(to pageIndex: Int) {
+        isContentZoomed = false
         readerSession.apply(.syncVisiblePage(pageIndex))
         viewModel.updateCurrentPage(to: pageIndex)
     }
 
     private func updateVisiblePage(to pageIndex: Int) {
+        isContentZoomed = false
         readerSession.apply(.goToPage(pageIndex))
         viewModel.updateCurrentPage(to: pageIndex)
     }

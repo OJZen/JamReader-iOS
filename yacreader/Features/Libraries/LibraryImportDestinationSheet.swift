@@ -3,6 +3,7 @@ import SwiftUI
 
 enum ImportDestinationSheetCopy {
     static let destinationFooter = "Files are copied into the selected library and indexed automatically. Mirrored or read-only libraries stay browse-only."
+    static let remoteImportNotice = "Remote imports download the selected comics to this device first, then copy them into the chosen local library."
 }
 
 struct ImportSheetContextRow: View {
@@ -193,6 +194,7 @@ struct LibraryImportDestinationSheet: View {
 
     let title: String
     let message: String
+    let supplementaryNotice: String?
     let confirmLabel: String
     let onSelect: (LibraryImportDestinationSelection) -> Void
 
@@ -201,6 +203,7 @@ struct LibraryImportDestinationSheet: View {
     init(
         title: String,
         message: String,
+        supplementaryNotice: String? = nil,
         confirmLabel: String = "Use This Library",
         dependencies: AppDependencies,
         preferredSelection: LibraryImportDestinationSelection? = nil,
@@ -208,6 +211,7 @@ struct LibraryImportDestinationSheet: View {
     ) {
         self.title = title
         self.message = message
+        self.supplementaryNotice = supplementaryNotice
         self.confirmLabel = confirmLabel
         self.onSelect = onSelect
         _viewModel = StateObject(
@@ -224,7 +228,7 @@ struct LibraryImportDestinationSheet: View {
                 Section {
                     ImportSheetContextRow(title: title)
                 } footer: {
-                    Text(message)
+                    Text(introductionFooterText)
                 }
 
                 Section {
@@ -272,5 +276,14 @@ struct LibraryImportDestinationSheet: View {
                 )
             }
         }
+    }
+
+    private var introductionFooterText: String {
+        [message, supplementaryNotice]
+            .compactMap { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            .joined(separator: "\n\n")
     }
 }

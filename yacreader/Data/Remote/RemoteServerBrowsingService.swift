@@ -129,6 +129,8 @@ struct RemoteComicCachedAvailability: Hashable {
 
 final class RemoteServerBrowsingService {
     private static let resumableDownloadChunkSize: UInt32 = 256 * 1024
+    private static let downloadProgressReportingStep: Double = 0.01
+    private static let batchDownloadWorkerLimit = 3
     private let supportedComicFileExtensions: Set<String> = [
         "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf"
     ]
@@ -140,6 +142,7 @@ final class RemoteServerBrowsingService {
     private let cacheSummaryLock = NSLock()
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
+    private let thumbnailSMBClientSemaphore = AsyncSemaphore(maxConcurrent: 2)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
     private let smbClientSemaphore = AsyncSemaphore(maxConcurrent: 3)
     private let smbConnectionPool = SMBConnectionPool()
@@ -454,9 +457,20 @@ final class RemoteServerBrowsingService {
 
         switch profile.providerKind {
         case .smb:
-            let outcomes = await concurrentBatchDownloadOutcomes(for: references) { [downloadSemaphore] reference in
+            let outcomes = await concurrentBatchDownloadOutcomes(
+                for: references,
+                maximumConcurrency: Self.batchDownloadWorkerLimit
+            ) { [downloadSemaphore] reference in
                 await downloadSemaphore.wait(priority: .utility)
                 defer { Task { await downloadSemaphore.signal() } }
+
+                guard !Task.isCancelled else {
+                    return RemoteComicBatchDownloadOutcome(
+                        reference: reference,
+                        result: nil,
+                        error: CancellationError()
+                    )
+                }
 
                 return await self.batchDownloadOutcome(for: reference) {
                     let result = try await self.withRetry(maxAttempts: 3, baseDelay: 1.0) {
@@ -489,9 +503,20 @@ final class RemoteServerBrowsingService {
             return outcomes
         case .webdav:
             let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
-            let outcomes = await concurrentBatchDownloadOutcomes(for: references) { [downloadSemaphore] reference in
+            let outcomes = await concurrentBatchDownloadOutcomes(
+                for: references,
+                maximumConcurrency: Self.batchDownloadWorkerLimit
+            ) { [downloadSemaphore] reference in
                 await downloadSemaphore.wait(priority: .utility)
                 defer { Task { await downloadSemaphore.signal() } }
+
+                guard !Task.isCancelled else {
+                    return RemoteComicBatchDownloadOutcome(
+                        reference: reference,
+                        result: nil,
+                        error: CancellationError()
+                    )
+                }
 
                 return await self.batchDownloadOutcome(for: reference) {
                     let result = try await self.downloadComicFileCore(
@@ -659,49 +684,50 @@ final class RemoteServerBrowsingService {
     }
 
     func clearCachedComic(for reference: RemoteComicFileReference) throws {
-        let fileURL = cachedFileURL(for: reference)
-        guard fileManager.fileExists(atPath: fileURL.path) else {
-            try? removeCachedMetadata(for: fileURL)
-            try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
-            return
+        var removedAnyCachedFile = false
+
+        for fileURL in cachedFileCandidateURLs(for: reference) {
+            guard fileManager.fileExists(atPath: fileURL.path) else {
+                try? removeCachedMetadata(for: fileURL)
+                try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
+                continue
+            }
+
+            do {
+                try fileManager.removeItem(at: fileURL)
+                try? removeCachedMetadata(for: fileURL)
+                try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
+                try removeEmptyParentDirectories(
+                    from: fileURL.deletingLastPathComponent(),
+                    stoppingAt: cacheRootURL(for: nil)
+                )
+                removedAnyCachedFile = true
+            } catch {
+                throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                    "The downloaded copy could not be removed from this device. \(error.localizedDescription)"
+                )
+            }
         }
 
-        do {
-            try fileManager.removeItem(at: fileURL)
-            try? removeCachedMetadata(for: fileURL)
-            try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
-            try removeEmptyParentDirectories(
-                from: fileURL.deletingLastPathComponent(),
-                stoppingAt: cacheRootURL(for: nil)
-            )
+        if removedAnyCachedFile {
             invalidateCachedSummaries()
-        } catch {
-            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
-                "The downloaded copy could not be removed from this device. \(error.localizedDescription)"
-            )
         }
     }
 
     func cachedAvailability(for reference: RemoteComicFileReference) -> RemoteComicCachedAvailability {
-        let destinationURL = cachedFileURL(for: reference)
-        guard fileManager.fileExists(atPath: destinationURL.path) else {
-            return .unavailable
-        }
-
-        if isCachedComicCurrent(at: destinationURL, reference: reference) {
+        if currentCachedFileURL(for: reference) != nil {
             return RemoteComicCachedAvailability(kind: .current)
         }
 
-        return RemoteComicCachedAvailability(kind: .stale)
+        if anyCachedFileURL(for: reference) != nil {
+            return RemoteComicCachedAvailability(kind: .stale)
+        }
+
+        return .unavailable
     }
 
     func cachedFileURLIfAvailable(for reference: RemoteComicFileReference) -> URL? {
-        let destinationURL = cachedFileURL(for: reference)
-        guard fileManager.fileExists(atPath: destinationURL.path) else {
-            return nil
-        }
-
-        return destinationURL
+        currentCachedFileURL(for: reference) ?? anyCachedFileURL(for: reference)
     }
 
     func plannedCachedFileURL(for reference: RemoteComicFileReference) -> URL {
@@ -908,13 +934,16 @@ final class RemoteServerBrowsingService {
     }
 
     /// Lightweight SMB connection accessor for thumbnail operations.
-    /// Does NOT acquire `smbClientSemaphore` — thumbnail fetches are already
-    /// bounded by `thumbnailSemaphore` (6 slots), so adding a second gate
-    /// would block thumbnails whenever comic downloads saturate those 3 slots.
+    /// Does NOT acquire `smbClientSemaphore`; thumbnail work uses its own
+    /// narrower SMB gate so cover requests do not get starved by downloads
+    /// or open an unbounded number of extra SMB sessions.
     private func withThumbnailSMBClient<T>(
         for profile: RemoteServerProfile,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
+        await thumbnailSMBClientSemaphore.wait(priority: .utility)
+        defer { Task { await thumbnailSMBClientSemaphore.signal() } }
+
         let credentials = try resolvedCredentials(for: profile)
         do {
             return try await smbConnectionPool.withConnection(
@@ -1238,8 +1267,6 @@ final class RemoteServerBrowsingService {
     }
 
     private func cachedFileURL(for reference: RemoteComicFileReference) -> URL {
-        var destinationURL = remoteComicCacheRootURL
-            .appendingPathComponent(reference.serverID.uuidString, isDirectory: true)
         let rootComponents: [String]
         if let cacheScopeKey = reference.cacheScopeKey {
             rootComponents = cacheRootPathComponents(cacheScopeKey: cacheScopeKey)
@@ -1250,6 +1277,25 @@ final class RemoteServerBrowsingService {
             )
         }
 
+        return cachedFileURL(for: reference, rootComponents: rootComponents)
+    }
+
+    private func legacyCachedFileURL(for reference: RemoteComicFileReference) -> URL {
+        cachedFileURL(
+            for: reference,
+            rootComponents: legacyCacheRootPathComponents(
+                providerKind: reference.providerKind,
+                providerRootIdentifier: reference.shareName
+            )
+        )
+    }
+
+    private func cachedFileURL(
+        for reference: RemoteComicFileReference,
+        rootComponents: [String]
+    ) -> URL {
+        var destinationURL = remoteComicCacheRootURL
+            .appendingPathComponent(reference.serverID.uuidString, isDirectory: true)
         for component in rootComponents {
             destinationURL.appendPathComponent(component, isDirectory: true)
         }
@@ -1271,6 +1317,17 @@ final class RemoteServerBrowsingService {
             components.last ?? reference.fileName,
             isDirectory: false
         )
+    }
+
+    private func cachedFileCandidateURLs(for reference: RemoteComicFileReference) -> [URL] {
+        let preferredURL = cachedFileURL(for: reference)
+        let legacyURL = legacyCachedFileURL(for: reference)
+
+        guard preferredURL.standardizedFileURL.path != legacyURL.standardizedFileURL.path else {
+            return [preferredURL]
+        }
+
+        return [preferredURL, legacyURL]
     }
 
     private func legacyCacheRootPathComponents(
@@ -1328,9 +1385,10 @@ final class RemoteServerBrowsingService {
         downloader: (URL, UInt64) async throws -> Void
     ) async throws -> RemoteComicDownloadResult {
         let destinationURL = cachedFileURL(for: reference)
-        if !forceRefresh, isCachedComicCurrent(at: destinationURL, reference: reference) {
-            touchCachedFile(at: destinationURL)
-            return RemoteComicDownloadResult(localFileURL: destinationURL, source: .cachedCurrent)
+        if !forceRefresh,
+           let currentCachedFileURL = currentCachedFileURL(for: reference) {
+            touchCachedFile(at: currentCachedFileURL)
+            return RemoteComicDownloadResult(localFileURL: currentCachedFileURL, source: .cachedCurrent)
         }
 
         try fileManager.createDirectory(
@@ -1400,17 +1458,33 @@ final class RemoteServerBrowsingService {
 
     private func concurrentBatchDownloadOutcomes(
         for references: [RemoteComicFileReference],
+        maximumConcurrency: Int,
         operation: @escaping @Sendable (RemoteComicFileReference) async -> RemoteComicBatchDownloadOutcome
     ) async -> [RemoteComicBatchDownloadOutcome] {
         guard !references.isEmpty else {
             return []
         }
 
+        let workerCount = max(1, min(maximumConcurrency, references.count))
+
         return await withTaskGroup(of: (Int, RemoteComicBatchDownloadOutcome).self) { group in
-            for (index, reference) in references.enumerated() {
+            var nextIndex = 0
+
+            func enqueueNextIfNeeded() {
+                guard nextIndex < references.count else {
+                    return
+                }
+
+                let index = nextIndex
+                let reference = references[index]
+                nextIndex += 1
                 group.addTask(priority: .utility) {
                     (index, await operation(reference))
                 }
+            }
+
+            for _ in 0..<workerCount {
+                enqueueNextIfNeeded()
             }
 
             var orderedOutcomes: [RemoteComicBatchDownloadOutcome?] = Array(
@@ -1419,6 +1493,13 @@ final class RemoteServerBrowsingService {
             )
             for await (index, outcome) in group {
                 orderedOutcomes[index] = outcome
+
+                if Task.isCancelled {
+                    group.cancelAll()
+                    continue
+                }
+
+                enqueueNextIfNeeded()
             }
 
             return orderedOutcomes.compactMap { $0 }
@@ -1435,7 +1516,8 @@ final class RemoteServerBrowsingService {
 
         if let metadata = loadCachedMetadata(at: fileURL) {
             if let referenceCacheScopeKey = reference.cacheScopeKey {
-                guard metadata.cacheScopeKey == referenceCacheScopeKey else {
+                if let metadataCacheScopeKey = metadata.cacheScopeKey,
+                   metadataCacheScopeKey != referenceCacheScopeKey {
                     return false
                 }
             }
@@ -1463,6 +1545,19 @@ final class RemoteServerBrowsingService {
         let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey])
         let cachedFileSize = values?.fileSize.map(Int64.init)
         return cachedFileSize == expectedFileSize
+    }
+
+    private func currentCachedFileURL(for reference: RemoteComicFileReference) -> URL? {
+        cachedFileCandidateURLs(for: reference).first { candidateURL in
+            fileManager.fileExists(atPath: candidateURL.path)
+                && isCachedComicCurrent(at: candidateURL, reference: reference)
+        }
+    }
+
+    private func anyCachedFileURL(for reference: RemoteComicFileReference) -> URL? {
+        cachedFileCandidateURLs(for: reference).first { candidateURL in
+            fileManager.fileExists(atPath: candidateURL.path)
+        }
     }
 
     private func cacheRootURL(for profile: RemoteServerProfile?) -> URL {
@@ -1763,7 +1858,8 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference
     ) -> Bool {
         if let referenceCacheScopeKey = reference.cacheScopeKey,
-           metadata.cacheScopeKey != referenceCacheScopeKey {
+           let metadataCacheScopeKey = metadata.cacheScopeKey,
+           metadataCacheScopeKey != referenceCacheScopeKey {
             return false
         }
 
@@ -1796,6 +1892,18 @@ final class RemoteServerBrowsingService {
         progressHandler: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws {
         do {
+            var lastReportedProgress: Double?
+            func reportProgress(_ value: Double, force: Bool = false) {
+                let clampedValue = min(max(value, 0), 1)
+                if force
+                    || lastReportedProgress == nil
+                    || clampedValue >= 1
+                    || clampedValue - (lastReportedProgress ?? 0) >= Self.downloadProgressReportingStep {
+                    lastReportedProgress = clampedValue
+                    progressHandler(clampedValue)
+                }
+            }
+
             try Task.checkCancellation()
             let remoteFileSize = try await reader.fileSize
 
@@ -1816,12 +1924,12 @@ final class RemoteServerBrowsingService {
             }
 
             guard remoteFileSize > 0 else {
-                progressHandler(1.0)
+                reportProgress(1.0, force: true)
                 try? await reader.close()
                 return
             }
 
-            progressHandler(Double(resumeOffset) / Double(remoteFileSize))
+            reportProgress(Double(resumeOffset) / Double(remoteFileSize), force: true)
 
             var offset = resumeOffset
             while offset < remoteFileSize {
@@ -1839,10 +1947,10 @@ final class RemoteServerBrowsingService {
                 fileHandle.seekToEndOfFile()
                 fileHandle.write(data)
                 offset += UInt64(data.count)
-                progressHandler(min(Double(offset) / Double(remoteFileSize), 1.0))
+                reportProgress(min(Double(offset) / Double(remoteFileSize), 1.0))
             }
 
-            progressHandler(1.0)
+            reportProgress(1.0, force: true)
             try? await reader.close()
         } catch {
             try? await reader.close()

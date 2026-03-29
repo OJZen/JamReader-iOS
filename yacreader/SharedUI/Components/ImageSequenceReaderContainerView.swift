@@ -274,7 +274,13 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        controller(forSpreadIndex: indexPath.item)?.prepareForPresentation()
+        guard let cell = cell as? ReaderPagedCollectionViewCell,
+              let controller = controller(forSpreadIndex: indexPath.item) else {
+            return
+        }
+
+        cell.setHostedView(controller.view)
+        controller.prepareForPresentation()
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -304,6 +310,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             return
         }
 
+        if spreadIndex != currentSpreadIndex {
+            onZoomStateChanged?(false)
+        }
         controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
         currentSpreadIndex = spreadIndex
         currentPageIndex = spreads[spreadIndex].primaryPageIndex
@@ -360,6 +369,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         currentSpreadIndex = spreadIndex
         currentPageIndex = spread.primaryPageIndex
         if spreadIndex != previousSpreadIndex {
+            onZoomStateChanged?(false)
             controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
         }
         ensureControllerHosted(forSpreadIndex: spreadIndex)
@@ -368,7 +378,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         prefetchAround(spreadIndex: spreadIndex)
     }
 
-    private func ensureControllerHosted(forSpreadIndex spreadIndex: Int) {
+    private func ensureControllerHosted(forSpreadIndex spreadIndex: Int, remainingAttempts: Int = 2) {
         guard spreads.indices.contains(spreadIndex) else {
             return
         }
@@ -379,6 +389,17 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         guard let cell = collectionView.cellForItem(at: indexPath) as? ReaderPagedCollectionViewCell,
               let controller = controller(forSpreadIndex: spreadIndex)
         else {
+            guard remainingAttempts > 0 else {
+                return
+            }
+
+            collectionView.reloadItems(at: [indexPath])
+            DispatchQueue.main.async { [weak self] in
+                self?.ensureControllerHosted(
+                    forSpreadIndex: spreadIndex,
+                    remainingAttempts: remainingAttempts - 1
+                )
+            }
             return
         }
 
@@ -945,6 +966,7 @@ private final class ComicImageSpreadViewController: UIViewController {
         view.setNeedsLayout()
 
         guard !loadedPages.isEmpty else {
+            onZoomStateChanged?(false)
             return
         }
 

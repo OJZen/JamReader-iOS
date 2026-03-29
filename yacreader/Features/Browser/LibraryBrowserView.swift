@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct LibraryBrowserView: View {
@@ -32,6 +33,7 @@ struct LibraryBrowserView: View {
     @State private var isShowingComicFileImporter = false
     @State private var presentedComic: LibraryComicPresentation?
     @State private var heroSourceFrame: CGRect = .zero
+    @State private var heroPreviewImage: UIImage?
 
     init(
         descriptor: LibraryDescriptor,
@@ -411,7 +413,15 @@ struct LibraryBrowserView: View {
             )
         }
         .background(
-            HeroReaderPresenter(item: $presentedComic, sourceFrame: heroSourceFrame) { presentation in
+            HeroReaderPresenter(
+                item: $presentedComic,
+                sourceFrame: heroSourceFrame,
+                previewImage: heroPreviewImage,
+                onDismiss: {
+                    heroSourceFrame = .zero
+                    heroPreviewImage = nil
+                }
+            ) { presentation in
                 ComicReaderView(
                     descriptor: viewModel.descriptor,
                     comic: presentation.comic,
@@ -1135,12 +1145,16 @@ struct LibraryBrowserView: View {
             ContinueReadingRow(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
+                coverSource: viewModel.coverSource(for: comic),
+                heroSourceID: viewModel.heroSourceID(for: comic),
                 trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
             )
         } else {
             LibraryComicRow(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
+                coverSource: viewModel.coverSource(for: comic),
+                heroSourceID: viewModel.heroSourceID(for: comic),
                 trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
             )
             .equatable()
@@ -1166,10 +1180,17 @@ struct LibraryBrowserView: View {
         if kind == .reading {
             ContinueReadingCard(
                 comic: comic,
-                coverURL: viewModel.coverURL(for: comic)
+                coverURL: viewModel.coverURL(for: comic),
+                coverSource: viewModel.coverSource(for: comic),
+                heroSourceID: viewModel.heroSourceID(for: comic)
             )
         } else {
-            LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+            LibraryComicCard(
+                comic: comic,
+                coverURL: viewModel.coverURL(for: comic),
+                coverSource: viewModel.coverSource(for: comic),
+                heroSourceID: viewModel.heroSourceID(for: comic)
+            )
                 .equatable()
         }
     }
@@ -1362,6 +1383,7 @@ struct LibraryBrowserView: View {
                                 LibraryComicRow(
                                     comic: comic,
                                     coverURL: viewModel.coverURL(for: comic),
+                                    coverSource: viewModel.coverSource(for: comic),
                                     showsSelectionState: true,
                                     isSelected: selectedComicIDs.contains(comic.id)
                                 )
@@ -1381,6 +1403,8 @@ struct LibraryBrowserView: View {
                                     LibraryComicRow(
                                         comic: comic,
                                         coverURL: viewModel.coverURL(for: comic),
+                                        coverSource: viewModel.coverSource(for: comic),
+                                        heroSourceID: viewModel.heroSourceID(for: comic),
                                         trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
                                     )
                                     .equatable()
@@ -1407,6 +1431,7 @@ struct LibraryBrowserView: View {
                                 LibraryComicCard(
                                     comic: comic,
                                     coverURL: viewModel.coverURL(for: comic),
+                                    coverSource: viewModel.coverSource(for: comic),
                                     showsSelectionState: true,
                                     isSelected: selectedComicIDs.contains(comic.id)
                                 )
@@ -1421,7 +1446,12 @@ struct LibraryBrowserView: View {
                                     comics: displayedComics
                                 ),
                                 label: {
-                                    LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+                                    LibraryComicCard(
+                                        comic: comic,
+                                        coverURL: viewModel.coverURL(for: comic),
+                                        coverSource: viewModel.coverSource(for: comic),
+                                        heroSourceID: viewModel.heroSourceID(for: comic)
+                                    )
                                         .equatable()
                                 }
                             )
@@ -1521,15 +1551,16 @@ struct LibraryBrowserView: View {
     ) -> some View {
         let rowLabel = label()
 
-        return HeroTapButton { frame in
-            heroSourceFrame = frame
-            presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
-        } label: {
-            InsetListRowCard {
-                rowLabel
+        return ZStack(alignment: .trailing) {
+            HeroTapButton { frame in
+                prepareHeroTransition(for: comic, fallbackFrame: frame)
+                presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
+            } label: {
+                InsetListRowCard {
+                    rowLabel
+                }
             }
-        }
-        .overlay(alignment: .trailing) {
+
             quickActionButton(for: comic)
                 .padding(.trailing, Spacing.xs)
         }
@@ -1551,17 +1582,18 @@ struct LibraryBrowserView: View {
         context: ReaderNavigationContext,
         @ViewBuilder label: @escaping () -> Label
     ) -> some View {
-        HeroTapButton { frame in
-            heroSourceFrame = frame
-            presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
-        } label: {
-            label()
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .topTrailing) {
+        ZStack(alignment: .topTrailing) {
+            HeroTapButton { frame in
+                prepareHeroTransition(for: comic, fallbackFrame: frame)
+                presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
+            } label: {
+                label()
+            }
+
             quickActionButton(for: comic, compact: true)
                 .padding(Spacing.sm)
         }
+        .buttonStyle(.plain)
         .contextMenu {
             comicContextActions(for: comic)
         }
@@ -1571,6 +1603,17 @@ struct LibraryBrowserView: View {
         [
             GridItem(.adaptive(minimum: 240, maximum: 320), spacing: Spacing.md, alignment: .top)
         ]
+    }
+
+    @MainActor
+    private func prepareHeroTransition(
+        for comic: LibraryComic,
+        fallbackFrame: CGRect
+    ) {
+        let heroSourceID = viewModel.heroSourceID(for: comic)
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
+        heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
+        heroPreviewImage = viewModel.cachedTransitionImage(for: comic)
     }
 
     @ViewBuilder
@@ -2004,6 +2047,8 @@ struct LibraryBrowserView: View {
                                         LibraryComicRow(
                                             comic: comic,
                                             coverURL: viewModel.coverURL(for: comic),
+                                            coverSource: viewModel.coverSource(for: comic),
+                                            heroSourceID: viewModel.heroSourceID(for: comic),
                                             trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
                                         )
                                         .equatable()

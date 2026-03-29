@@ -37,6 +37,7 @@ struct RemoteImportOptionsSheet: View {
 
     let title: String
     let message: String
+    let supplementaryNotice: String?
     let confirmLabel: String
     let availableScopes: [RemoteDirectoryImportScope]
     let defaultScope: RemoteDirectoryImportScope
@@ -50,6 +51,7 @@ struct RemoteImportOptionsSheet: View {
     init(
         title: String,
         message: String,
+        supplementaryNotice: String? = nil,
         confirmLabel: String = "Import",
         availableScopes: [RemoteDirectoryImportScope] = RemoteDirectoryImportScope.allCases,
         defaultScope: RemoteDirectoryImportScope = .includeSubfolders,
@@ -59,6 +61,7 @@ struct RemoteImportOptionsSheet: View {
     ) {
         self.title = title
         self.message = message
+        self.supplementaryNotice = supplementaryNotice
         self.confirmLabel = confirmLabel
         self.availableScopes = availableScopes
         self.defaultScope = availableScopes.contains(defaultScope)
@@ -125,7 +128,7 @@ struct RemoteImportOptionsSheet: View {
         Section {
             ImportSheetContextRow(title: title)
         } footer: {
-            Text(message)
+            Text(introductionFooterText)
         }
     }
 
@@ -188,6 +191,15 @@ struct RemoteImportOptionsSheet: View {
         destinationViewModel.options.contains {
             $0.selection == selectedDestination && $0.isSelectable
         }
+    }
+
+    private var introductionFooterText: String {
+        [message, supplementaryNotice]
+            .compactMap { value in
+                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            .joined(separator: "\n\n")
     }
 }
 

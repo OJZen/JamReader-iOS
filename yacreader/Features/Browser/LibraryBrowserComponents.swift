@@ -180,6 +180,8 @@ struct LibraryShortcutRow: View {
 struct ContinueReadingRow: View {
     let comic: LibraryComic
     let coverURL: URL?
+    var coverSource: LocalComicCoverSource? = nil
+    var heroSourceID: String? = nil
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
@@ -188,7 +190,10 @@ struct ContinueReadingRow: View {
         } thumbnail: {
             LocalCoverThumbnailView(
                 url: coverURL,
+                fallbackSource: coverSource,
                 placeholderSystemName: "book.closed.fill",
+                transitionKey: heroSourceID,
+                heroSourceID: heroSourceID,
                 width: 64,
                 height: 92
             )
@@ -215,13 +220,18 @@ struct ContinueReadingRow: View {
 struct ContinueReadingCard: View {
     let comic: LibraryComic
     let coverURL: URL?
+    var coverSource: LocalComicCoverSource? = nil
+    var heroSourceID: String? = nil
 
     var body: some View {
         LibraryBrowserContentCard(minHeight: 188, cornerRadius: 20, contentPadding: 20) {
             HStack(spacing: Spacing.md) {
                 LocalCoverThumbnailView(
                     url: coverURL,
+                    fallbackSource: coverSource,
                     placeholderSystemName: "book.closed.fill",
+                    transitionKey: heroSourceID,
+                    heroSourceID: heroSourceID,
                     width: 104,
                     height: 148
                 )
@@ -283,6 +293,8 @@ struct LibraryFolderCard: View {
 struct LibraryComicRow: View {
     let comic: LibraryComic
     let coverURL: URL?
+    var coverSource: LocalComicCoverSource? = nil
+    var heroSourceID: String? = nil
     var showsSelectionState = false
     var isSelected = false
     var trailingAccessoryReservedWidth: CGFloat = 0
@@ -299,7 +311,10 @@ struct LibraryComicRow: View {
         } thumbnail: {
             LocalCoverThumbnailView(
                 url: coverURL,
-                placeholderSystemName: "book.closed.fill"
+                fallbackSource: coverSource,
+                placeholderSystemName: "book.closed.fill",
+                transitionKey: heroSourceID,
+                heroSourceID: heroSourceID
             )
         } content: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -332,6 +347,8 @@ extension LibraryComicRow: Equatable {
     static func == (lhs: LibraryComicRow, rhs: LibraryComicRow) -> Bool {
         lhs.comic == rhs.comic
             && lhs.coverURL == rhs.coverURL
+            && lhs.coverSource == rhs.coverSource
+            && lhs.heroSourceID == rhs.heroSourceID
             && lhs.showsSelectionState == rhs.showsSelectionState
             && lhs.isSelected == rhs.isSelected
             && lhs.trailingAccessoryReservedWidth == rhs.trailingAccessoryReservedWidth
@@ -341,6 +358,8 @@ extension LibraryComicRow: Equatable {
 struct LibraryComicCard: View {
     let comic: LibraryComic
     let coverURL: URL?
+    var coverSource: LocalComicCoverSource? = nil
+    var heroSourceID: String? = nil
     var showsSelectionState = false
     var isSelected = false
 
@@ -348,7 +367,10 @@ struct LibraryComicCard: View {
         LibraryBrowserContentCard(minHeight: 330, isSelected: showsSelectionState && isSelected) {
             LocalCoverThumbnailView(
                 url: coverURL,
+                fallbackSource: coverSource,
                 placeholderSystemName: "book.closed.fill",
+                transitionKey: heroSourceID,
+                heroSourceID: heroSourceID,
                 width: 120,
                 height: 168
             )
@@ -381,6 +403,8 @@ extension LibraryComicCard: Equatable {
     static func == (lhs: LibraryComicCard, rhs: LibraryComicCard) -> Bool {
         lhs.comic == rhs.comic
             && lhs.coverURL == rhs.coverURL
+            && lhs.coverSource == rhs.coverSource
+            && lhs.heroSourceID == rhs.heroSourceID
             && lhs.showsSelectionState == rhs.showsSelectionState
             && lhs.isSelected == rhs.isSelected
     }

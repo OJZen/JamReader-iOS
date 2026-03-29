@@ -261,6 +261,14 @@ final class RemoteServerListViewModel: ObservableObject {
 
         do {
             let previousProfile = profiles.first(where: { $0.id == serverID })
+            let didChangeRemoteLocation = previousProfile.map {
+                $0.remoteScopeKey != profile.remoteScopeKey
+            } ?? false
+            let didChangeCredentialIdentity = previousProfile.map {
+                $0.authenticationMode != profile.authenticationMode
+                    || $0.username != profile.username
+            } ?? false
+            let didRotatePassword = previousProfile != nil && shouldPersistPassword
 
             if draft.authenticationMode.requiresPassword {
                 if shouldPersistPassword {
@@ -279,16 +287,22 @@ final class RemoteServerListViewModel: ObservableObject {
 
             try profileStore.save(updatedProfiles)
 
-            if let previousProfile,
-               previousProfile.remoteScopeKey != profile.remoteScopeKey {
-                RemoteServerBrowserViewModel.clearRememberedPath(for: previousProfile)
-                try? readingProgressStore.deleteSessions(for: previousProfile)
-                try? folderShortcutStore.removeShortcuts(
-                    for: previousProfile.id,
-                    providerKind: previousProfile.providerKind,
-                    providerRootIdentifier: previousProfile.normalizedProviderRootIdentifier
-                )
-                try? browsingService.clearCachedComics(for: previousProfile)
+            if let previousProfile {
+                if didChangeRemoteLocation || didChangeCredentialIdentity {
+                    RemoteServerBrowserViewModel.clearRememberedPath(for: previousProfile)
+                    try? readingProgressStore.deleteSessions(for: previousProfile)
+                    try? folderShortcutStore.removeShortcuts(
+                        for: previousProfile.id,
+                        providerKind: previousProfile.providerKind,
+                        providerRootIdentifier: previousProfile.normalizedProviderRootIdentifier
+                    )
+                    try? browsingService.clearCachedComicsForServer(id: previousProfile.id)
+                }
+
+                if didChangeRemoteLocation || didChangeCredentialIdentity || didRotatePassword {
+                    browsingService.evictActiveConnections(for: previousProfile)
+                    browsingService.evictActiveConnections(for: profile)
+                }
             }
 
             profiles = updatedProfiles.sorted {
@@ -319,6 +333,7 @@ final class RemoteServerListViewModel: ObservableObject {
             }
 
             try? browsingService.clearCachedComicsForServer(id: profile.id)
+            browsingService.evictActiveConnections(for: profile)
             try? readingProgressStore.deleteSessions(for: profile.id)
             try? folderShortcutStore.removeShortcuts(for: profile.id)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
@@ -347,6 +362,7 @@ final class RemoteServerListViewModel: ObservableObject {
     func clearCache(for profile: RemoteServerProfile) {
         do {
             try browsingService.clearCachedComics(for: profile)
+            browsingService.evictActiveConnections(for: profile)
             try readingProgressStore.deleteSessions(for: profile)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             refreshCacheSummaries()

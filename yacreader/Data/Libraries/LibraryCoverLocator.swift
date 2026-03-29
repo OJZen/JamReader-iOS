@@ -8,11 +8,15 @@ final class LibraryCoverLocator {
     }
 
     func coverURL(for comic: LibraryComic, metadataRootURL: URL) -> URL? {
-        let coverURL = metadataRootURL
-            .appendingPathComponent("covers", isDirectory: true)
-            .appendingPathComponent("\(comic.hash).jpg")
+        let coverURL = plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
 
         return fileManager.fileExists(atPath: coverURL.path) ? coverURL : nil
+    }
+
+    func plannedCoverURL(for comic: LibraryComic, metadataRootURL: URL) -> URL {
+        metadataRootURL
+            .appendingPathComponent("covers", isDirectory: true)
+            .appendingPathComponent("\(comic.hash).jpg")
     }
 
     func coverURL(for folder: LibraryFolder, metadataRootURL: URL) -> URL? {

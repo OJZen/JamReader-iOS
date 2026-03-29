@@ -154,7 +154,7 @@ struct LibraryComicQuickActionButton: View {
                 .padding(compact ? 4 : 6)
                 .background(.ultraThinMaterial, in: Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .accessibilityLabel("Comic Actions")
     }
 }

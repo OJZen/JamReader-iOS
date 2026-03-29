@@ -46,12 +46,14 @@ final class LibraryScanner {
     func scanLibrary(
         sourceRootURL: URL,
         databaseURL: URL,
+        cancellationCheck: (() throws -> Void)? = nil,
         progressHandler: ((LibraryScanProgress) -> Void)? = nil
     ) throws -> LibraryScanSummary {
         try performScan(
             sourceRootURL: sourceRootURL,
             databaseURL: databaseURL,
             mode: .initial,
+            cancellationCheck: cancellationCheck,
             progressHandler: progressHandler
         )
     }
@@ -59,12 +61,14 @@ final class LibraryScanner {
     func rescanLibrary(
         sourceRootURL: URL,
         databaseURL: URL,
+        cancellationCheck: (() throws -> Void)? = nil,
         progressHandler: ((LibraryScanProgress) -> Void)? = nil
     ) throws -> LibraryScanSummary {
         try performScan(
             sourceRootURL: sourceRootURL,
             databaseURL: databaseURL,
             mode: .rebuildPreservingComicRelationships,
+            cancellationCheck: cancellationCheck,
             progressHandler: progressHandler
         )
     }
@@ -73,14 +77,163 @@ final class LibraryScanner {
         sourceRootURL: URL,
         databaseURL: URL,
         folder: LibraryFolder,
+        cancellationCheck: (() throws -> Void)? = nil,
         progressHandler: ((LibraryScanProgress) -> Void)? = nil
     ) throws -> LibraryScanSummary {
         try performSubtreeRefresh(
             sourceRootURL: sourceRootURL,
             databaseURL: databaseURL,
             folder: folder,
+            cancellationCheck: cancellationCheck,
             progressHandler: progressHandler
         )
+    }
+
+    func appendImportedComics(
+        sourceRootURL: URL,
+        databaseURL: URL,
+        fileURLs: [URL],
+        cancellationCheck: (() throws -> Void)? = nil,
+        progressHandler: ((LibraryScanProgress) -> Void)? = nil
+    ) throws -> LibraryScanSummary {
+        #if canImport(SQLite3)
+        try cancellationCheck?()
+        guard fileManager.fileExists(atPath: databaseURL.path) else {
+            throw LibraryScannerError.databaseMissing
+        }
+
+        let summary = SQLiteDatabaseInspector().inspectDatabase(at: databaseURL)
+        guard summary.hasCompatibleSchemaVersion else {
+            let versionText = summary.version ?? "Unknown"
+            throw LibraryScannerError.incompatibleDatabaseVersion(
+                "This library uses DB \(versionText), which is not supported for scanning on this iOS build."
+            )
+        }
+
+        var database: OpaquePointer?
+        let openResult = sqlite3_open_v2(
+            databaseURL.path,
+            &database,
+            SQLITE_OPEN_READWRITE,
+            nil
+        )
+
+        guard openResult == SQLITE_OK, let database else {
+            let reason = database.map { lastDatabaseError(database: $0) } ?? "Unknown SQLite error."
+            if let database {
+                sqlite3_close(database)
+            }
+            throw LibraryScannerError.openDatabaseFailed(reason)
+        }
+
+        defer {
+            sqlite3_close(database)
+        }
+
+        try execute("PRAGMA foreign_keys = ON;", database: database)
+        try execute("BEGIN TRANSACTION;", database: database)
+
+        do {
+            try cancellationCheck?()
+            let normalizedRootURL = sourceRootURL.standardizedFileURL
+            let importedRelativePaths = Array(
+                Set(
+                    fileURLs
+                        .map(\.standardizedFileURL)
+                        .filter { $0.path.hasPrefix(normalizedRootURL.path) }
+                        .map { makeRelativePath(for: $0, sourceRootURL: normalizedRootURL) }
+                )
+            )
+            try pruneMissingComicRows(
+                sourceRootURL: normalizedRootURL,
+                database: database
+            )
+            try collapseDuplicateComicRows(
+                forRelativePaths: importedRelativePaths,
+                database: database
+            )
+            var indexedRelativePaths = try loadExistingComicPaths(database: database)
+            let previousFolderCount = try loadIndexedFolderCount(database: database)
+            let previousComicCount = try loadIndexedComicCount(database: database)
+
+            progressHandler?(
+                LibraryScanProgress(
+                    phase: .preparing,
+                    currentPath: "/",
+                    processedFolderCount: 0,
+                    processedComicCount: 0
+                )
+            )
+
+            var appendedComicCount = 0
+            var seenFilePaths = Set<String>()
+            let sortedFileURLs = fileURLs
+                .map(\.standardizedFileURL)
+                .filter { seenFilePaths.insert($0.path).inserted }
+                .sorted { lhs, rhs in
+                    lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+                }
+
+            for fileURL in sortedFileURLs {
+                try cancellationCheck?()
+                try autoreleasepool {
+                    guard fileManager.fileExists(atPath: fileURL.path),
+                          isSupportedComicFile(fileURL) else {
+                        return
+                    }
+
+                    let relativePath = makeRelativePath(for: fileURL, sourceRootURL: normalizedRootURL)
+                    guard !indexedRelativePaths.contains(relativePath) else {
+                        return
+                    }
+                    try appendImportedComic(
+                        fileURL: fileURL,
+                        relativePath: relativePath,
+                        parentFolderID: 1,
+                        database: database
+                    )
+                    indexedRelativePaths.insert(relativePath)
+                    appendedComicCount += 1
+
+                    if appendedComicCount == 1 || appendedComicCount.isMultiple(of: 5) {
+                        progressHandler?(
+                            LibraryScanProgress(
+                                phase: .scanningComics,
+                                currentPath: relativePath,
+                                processedFolderCount: 0,
+                                processedComicCount: appendedComicCount
+                            )
+                        )
+                    }
+                }
+            }
+
+            progressHandler?(
+                LibraryScanProgress(
+                    phase: .finalizing,
+                    currentPath: "/",
+                    processedFolderCount: 0,
+                    processedComicCount: appendedComicCount
+                )
+            )
+
+            _ = try refreshFolderMetadata(folderID: 1, database: database)
+            try execute("COMMIT;", database: database)
+
+            return LibraryScanSummary(
+                folderCount: previousFolderCount,
+                comicCount: previousComicCount + appendedComicCount,
+                previousFolderCount: previousFolderCount,
+                previousComicCount: previousComicCount,
+                reusedComicCount: previousComicCount
+            )
+        } catch {
+            _ = try? execute("ROLLBACK;", database: database)
+            throw error
+        }
+        #else
+        throw LibraryScannerError.sqliteUnavailable
+        #endif
     }
 
     #if canImport(SQLite3)
@@ -189,8 +342,10 @@ final class LibraryScanner {
         sourceRootURL: URL,
         databaseURL: URL,
         mode: ScanMode,
+        cancellationCheck: (() throws -> Void)?,
         progressHandler: ((LibraryScanProgress) -> Void)?
     ) throws -> LibraryScanSummary {
+        try cancellationCheck?()
         guard fileManager.fileExists(atPath: databaseURL.path) else {
             throw LibraryScannerError.databaseMissing
         }
@@ -227,6 +382,7 @@ final class LibraryScanner {
         try execute("BEGIN TRANSACTION;", database: database)
 
         do {
+            try cancellationCheck?()
             progressHandler?(
                 LibraryScanProgress(
                     phase: .preparing,
@@ -260,10 +416,12 @@ final class LibraryScanner {
                 at: sourceRootURL,
                 parentFolderID: 1,
                 database: database,
-                context: context
+                context: context,
+                cancellationCheck: cancellationCheck
             )
 
             if case .rebuildPreservingComicRelationships = mode {
+                try cancellationCheck?()
                 try restoreMemberships(
                     snapshot: snapshot,
                     survivingComicIDs: context.insertedComicIDs,
@@ -307,8 +465,10 @@ final class LibraryScanner {
         sourceRootURL: URL,
         databaseURL: URL,
         folder: LibraryFolder,
+        cancellationCheck: (() throws -> Void)?,
         progressHandler: ((LibraryScanProgress) -> Void)?
     ) throws -> LibraryScanSummary {
+        try cancellationCheck?()
         guard fileManager.fileExists(atPath: databaseURL.path) else {
             throw LibraryScannerError.databaseMissing
         }
@@ -350,6 +510,7 @@ final class LibraryScanner {
         try execute("BEGIN TRANSACTION;", database: database)
 
         do {
+            try cancellationCheck?()
             progressHandler?(
                 LibraryScanProgress(
                     phase: .preparing,
@@ -383,9 +544,11 @@ final class LibraryScanner {
                 at: targetDirectoryURL,
                 parentFolderID: folder.id,
                 database: database,
-                context: context
+                context: context,
+                cancellationCheck: cancellationCheck
             )
 
+            try cancellationCheck?()
             try restoreMemberships(
                 snapshot: snapshot,
                 survivingComicIDs: context.insertedComicIDs,
@@ -412,8 +575,10 @@ final class LibraryScanner {
         at directoryURL: URL,
         parentFolderID: Int64,
         database: OpaquePointer,
-        context: ScanContext
+        context: ScanContext,
+        cancellationCheck: (() throws -> Void)?
     ) throws {
+        try cancellationCheck?()
         let contents = try fileManager.contentsOfDirectory(
             at: directoryURL,
             includingPropertiesForKeys: [
@@ -442,6 +607,7 @@ final class LibraryScanner {
         }
 
         for subdirectoryURL in directories {
+            try cancellationCheck?()
             let relativePath = makeRelativePath(for: subdirectoryURL, sourceRootURL: context.sourceRootURL)
             let folderID = try insertFolder(
                 name: subdirectoryURL.lastPathComponent,
@@ -459,11 +625,13 @@ final class LibraryScanner {
                 at: subdirectoryURL,
                 parentFolderID: folderID,
                 database: database,
-                context: context
+                context: context,
+                cancellationCheck: cancellationCheck
             )
         }
 
         for fileURL in files {
+            try cancellationCheck?()
             let relativePath = makeRelativePath(for: fileURL, sourceRootURL: context.sourceRootURL)
             try insertComic(
                 fileURL: fileURL,
@@ -572,6 +740,47 @@ final class LibraryScanner {
 
         let insertedComicID = reusableComicRecord?.comicID ?? sqlite3_last_insert_rowid(database)
         context.insertedComicIDs.insert(insertedComicID)
+    }
+
+    private func appendImportedComic(
+        fileURL: URL,
+        relativePath: String,
+        parentFolderID: Int64,
+        database: OpaquePointer
+    ) throws {
+        let hash = try pseudoHash(for: fileURL)
+        let comicInfoID = try ensureComicInfo(
+            hash: hash,
+            database: database
+        ).id
+
+        if let pageCount = metadataExtractor.extractPageCountOnly(for: fileURL), pageCount > 0 {
+            try applyPageCount(
+                pageCount,
+                comicInfoID: comicInfoID,
+                database: database
+            )
+        }
+
+        let statement = try prepareStatement(
+            """
+            INSERT INTO comic (parentId, comicInfoId, fileName, path)
+            VALUES (?, ?, ?, ?)
+            """,
+            database: database
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, parentFolderID)
+        sqlite3_bind_int64(statement, 2, comicInfoID)
+        sqlite3_bind_text(statement, 3, fileURL.lastPathComponent, -1, transientDestructor)
+        sqlite3_bind_text(statement, 4, relativePath, -1, transientDestructor)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw LibraryScannerError.scanFailed(lastDatabaseError(database: database))
+        }
     }
 
     private func ensureComicInfo(hash: String, database: OpaquePointer) throws -> ComicInfoResolution {
@@ -1037,6 +1246,22 @@ final class LibraryScanner {
         return Int(sqlite3_column_int64(statement, 0))
     }
 
+    private func loadIndexedComicCount(database: OpaquePointer) throws -> Int {
+        let statement = try prepareStatement(
+            "SELECT COUNT(*) FROM comic",
+            database: database
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return 0
+        }
+
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
     private func clearIndexedLibraryStructure(database: OpaquePointer) throws {
         try execute("DELETE FROM comic;", database: database)
         try execute("DELETE FROM folder WHERE id <> 1;", database: database)
@@ -1132,6 +1357,134 @@ final class LibraryScanner {
         }
 
         return records
+    }
+
+    private func loadExistingComicPaths(database: OpaquePointer) throws -> Set<String> {
+        let statement = try prepareStatement(
+            "SELECT path FROM comic WHERE path IS NOT NULL",
+            database: database
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        var paths = Set<String>()
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if let path = stringValue(at: 0, statement: statement), !path.isEmpty {
+                paths.insert(path)
+            }
+        }
+
+        return paths
+    }
+
+    private func pruneMissingComicRows(
+        sourceRootURL: URL,
+        database: OpaquePointer
+    ) throws {
+        for relativePath in try loadExistingComicPaths(database: database) {
+            let fileURL = fileURL(forRelativePath: relativePath, sourceRootURL: sourceRootURL)
+            guard !fileManager.fileExists(atPath: fileURL.path) else {
+                continue
+            }
+
+            try deleteComicRows(forRelativePath: relativePath, database: database)
+        }
+    }
+
+    private func collapseDuplicateComicRows(
+        forRelativePaths relativePaths: [String],
+        database: OpaquePointer
+    ) throws {
+        for relativePath in Set(relativePaths) {
+            let comicIDs = try loadComicIDs(forRelativePath: relativePath, database: database)
+            guard comicIDs.count > 1 else {
+                continue
+            }
+
+            for duplicateID in comicIDs.dropFirst() {
+                try deleteComic(id: duplicateID, database: database)
+            }
+        }
+    }
+
+    private func loadComicIDs(
+        forRelativePath relativePath: String,
+        database: OpaquePointer
+    ) throws -> [Int64] {
+        let statement = try prepareStatement(
+            """
+            SELECT id
+            FROM comic
+            WHERE path = ?
+            ORDER BY id ASC
+            """,
+            database: database
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_text(statement, 1, relativePath, -1, transientDestructor)
+
+        var comicIDs: [Int64] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            comicIDs.append(sqlite3_column_int64(statement, 0))
+        }
+
+        return comicIDs
+    }
+
+    private func deleteComicRows(
+        forRelativePath relativePath: String,
+        database: OpaquePointer
+    ) throws {
+        let statement = try prepareStatement(
+            "DELETE FROM comic WHERE path = ?",
+            database: database
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_text(statement, 1, relativePath, -1, transientDestructor)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw LibraryScannerError.scanFailed(lastDatabaseError(database: database))
+        }
+    }
+
+    private func deleteComic(id: Int64, database: OpaquePointer) throws {
+        let statement = try prepareStatement(
+            "DELETE FROM comic WHERE id = ?",
+            database: database
+        )
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, id)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw LibraryScannerError.scanFailed(lastDatabaseError(database: database))
+        }
+    }
+
+    private func fileURL(
+        forRelativePath relativePath: String,
+        sourceRootURL: URL
+    ) -> URL {
+        let trimmedPath = relativePath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !trimmedPath.isEmpty else {
+            return sourceRootURL
+        }
+
+        let pathComponents = trimmedPath
+            .split(separator: "/")
+            .map(String.init)
+        return pathComponents.reduce(sourceRootURL) { partialURL, component in
+            partialURL.appendingPathComponent(component, isDirectory: false)
+        }
     }
 
     private func loadExistingComics(

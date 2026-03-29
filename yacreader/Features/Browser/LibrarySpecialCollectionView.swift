@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct LibrarySpecialCollectionView: View {
     private enum LayoutMetrics {
@@ -30,6 +31,7 @@ struct LibrarySpecialCollectionView: View {
     @State private var isShowingSelectionActionsSheet = false
     @State private var presentedComic: PresentedComic?
     @State private var heroSourceFrame: CGRect = .zero
+    @State private var heroPreviewImage: UIImage?
 
     init(
         descriptor: LibraryDescriptor,
@@ -318,8 +320,10 @@ struct LibrarySpecialCollectionView: View {
         HeroReaderPresenter(
             item: $presentedComic,
             sourceFrame: heroSourceFrame,
+            previewImage: heroPreviewImage,
             onDismiss: {
                 heroSourceFrame = .zero
+                heroPreviewImage = nil
             }
         ) { presentation in
             ComicReaderView(
@@ -485,6 +489,7 @@ struct LibrarySpecialCollectionView: View {
                     LibraryComicRow(
                         comic: comic,
                         coverURL: viewModel.coverURL(for: comic),
+                        coverSource: viewModel.coverSource(for: comic),
                         showsSelectionState: true,
                         isSelected: selectedComicIDs.contains(comic.id)
                     )
@@ -493,18 +498,21 @@ struct LibrarySpecialCollectionView: View {
             .buttonStyle(.plain)
             .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         } else {
-            HeroTapButton { frame in
-                presentComic(comic, sourceFrame: frame)
-            } label: {
-                InsetListRowCard {
-                    LibraryComicRow(
-                        comic: comic,
-                        coverURL: viewModel.coverURL(for: comic),
-                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
-                    )
+            ZStack(alignment: .trailing) {
+                HeroTapButton { frame in
+                    presentComic(comic, sourceFrame: frame)
+                } label: {
+                    InsetListRowCard {
+                        LibraryComicRow(
+                            comic: comic,
+                            coverURL: viewModel.coverURL(for: comic),
+                            coverSource: viewModel.coverSource(for: comic),
+                            heroSourceID: viewModel.heroSourceID(for: comic),
+                            trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                        )
+                    }
                 }
-            }
-            .overlay(alignment: .trailing) {
+
                 quickActionButton(for: comic)
                     .padding(.trailing, 8)
             }
@@ -531,22 +539,29 @@ struct LibrarySpecialCollectionView: View {
                 LibraryComicCard(
                     comic: comic,
                     coverURL: viewModel.coverURL(for: comic),
+                    coverSource: viewModel.coverSource(for: comic),
                     showsSelectionState: true,
                     isSelected: selectedComicIDs.contains(comic.id)
                 )
             }
             .buttonStyle(.plain)
         } else {
-            HeroTapButton { frame in
-                presentComic(comic, sourceFrame: frame)
-            } label: {
-                LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-            }
-            .buttonStyle(.plain)
-            .overlay(alignment: .topTrailing) {
+            ZStack(alignment: .topTrailing) {
+                HeroTapButton { frame in
+                    presentComic(comic, sourceFrame: frame)
+                } label: {
+                    LibraryComicCard(
+                        comic: comic,
+                        coverURL: viewModel.coverURL(for: comic),
+                        coverSource: viewModel.coverSource(for: comic),
+                        heroSourceID: viewModel.heroSourceID(for: comic)
+                    )
+                }
+
                 quickActionButton(for: comic, compact: true)
                     .padding(12)
             }
+            .buttonStyle(.plain)
             .contextMenu {
                 comicContextActions(for: comic)
             }
@@ -600,7 +615,7 @@ struct LibrarySpecialCollectionView: View {
     }
 
     private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
-        heroSourceFrame = sourceFrame
+        prepareHeroTransition(for: comic, fallbackFrame: sourceFrame)
         presentedComic = PresentedComic(
             comic: comic,
             navigationContext: ReaderNavigationContext(
@@ -608,6 +623,17 @@ struct LibrarySpecialCollectionView: View {
                 comics: displayedComics
             )
         )
+    }
+
+    @MainActor
+    private func prepareHeroTransition(
+        for comic: LibraryComic,
+        fallbackFrame: CGRect
+    ) {
+        let heroSourceID = viewModel.heroSourceID(for: comic)
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
+        heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
+        heroPreviewImage = viewModel.cachedTransitionImage(for: comic)
     }
 
     private var usesCondensedTopBarActions: Bool {

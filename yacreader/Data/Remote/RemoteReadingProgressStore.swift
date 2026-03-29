@@ -56,6 +56,7 @@ final class RemoteReadingProgressStore {
             providerKind: reference.providerKind,
             serverName: profile.name,
             shareName: reference.shareName,
+            cacheScopeKey: reference.cacheScopeKey ?? profile.remoteCacheScopeKey,
             path: reference.path,
             fileName: reference.fileName,
             pageCount: progress.pageCount,

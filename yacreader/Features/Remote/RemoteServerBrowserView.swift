@@ -42,7 +42,8 @@ struct RemoteServerBrowserView: View {
                 browsingService: dependencies.remoteServerBrowsingService,
                 readingProgressStore: dependencies.remoteReadingProgressStore,
                 importedComicsImportService: dependencies.importedComicsImportService,
-                folderShortcutStore: dependencies.remoteFolderShortcutStore
+                folderShortcutStore: dependencies.remoteFolderShortcutStore,
+                remoteBackgroundImportController: dependencies.remoteBackgroundImportController
             )
         )
     }
@@ -92,8 +93,11 @@ struct RemoteServerBrowserView: View {
         )
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: Spacing.sm) {
-                if let activeImportDescription = viewModel.activeImportDescription {
-                    RemoteBrowserImportProgressView(description: activeImportDescription)
+                if let activeProgress = viewModel.activeProgress {
+                    RemoteBrowserImportProgressView(
+                        progress: activeProgress,
+                        onCancel: nil
+                    )
                 }
 
                 if let feedback = viewModel.feedback {
@@ -283,34 +287,32 @@ struct RemoteServerBrowserView: View {
             LibraryImportDestinationSheet(
                 title: request.destinationPickerTitle,
                 message: request.destinationPickerMessage,
+                supplementaryNotice: ImportDestinationSheetCopy.remoteImportNotice,
                 dependencies: dependencies,
                 preferredSelection: nil
             ) { selection in
-                Task {
-                    await performImport(
-                        request,
-                        destinationSelection: selection,
-                        scope: .currentFolderOnly
-                    )
-                }
+                startImportTask(
+                    request,
+                    destinationSelection: selection,
+                    scope: .currentFolderOnly
+                )
             }
         case .currentFolder, .directory:
             RemoteImportOptionsSheet(
                 title: request.destinationPickerTitle,
                 message: request.destinationPickerMessage,
+                supplementaryNotice: ImportDestinationSheetCopy.remoteImportNotice,
                 confirmLabel: "Import",
                 availableScopes: availableImportScopes(for: request),
                 defaultScope: defaultImportScope(for: request),
                 dependencies: dependencies,
                 preferredSelection: nil
             ) { selection, scope in
-                Task {
-                    await performImport(
-                        request,
-                        destinationSelection: selection,
-                        scope: scope
-                    )
-                }
+                startImportTask(
+                    request,
+                    destinationSelection: selection,
+                    scope: scope
+                )
             }
         }
     }
@@ -1139,30 +1141,65 @@ struct RemoteServerBrowserView: View {
     private func performImport(
         _ request: RemoteBrowserImportRequest,
         destinationSelection: LibraryImportDestinationSelection,
-        scope: RemoteDirectoryImportScope
+        scope: RemoteDirectoryImportScope,
+        visibleComicSnapshot: [RemoteDirectoryItem],
+        cancellationController: RemoteImportCancellationController
     ) async {
         switch request {
         case .currentFolder:
             if scope == .visibleResults {
                 await viewModel.importVisibleComics(
-                    displayedComicFiles,
-                    destinationSelection: destinationSelection
+                    visibleComicSnapshot,
+                    destinationSelection: destinationSelection,
+                    cancellationController: cancellationController
                 )
             } else {
                 await viewModel.importCurrentFolder(
                     destinationSelection: destinationSelection,
-                    scope: scope
+                    scope: scope,
+                    cancellationController: cancellationController
                 )
             }
         case .directory(let item):
             await viewModel.importDirectory(
                 item,
                 destinationSelection: destinationSelection,
-                scope: scope
+                scope: scope,
+                cancellationController: cancellationController
             )
         case .comic(let item):
-            await viewModel.importComic(item, destinationSelection: destinationSelection)
+            await viewModel.importComic(
+                item,
+                destinationSelection: destinationSelection,
+                cancellationController: cancellationController
+            )
         }
+    }
+
+    private func startImportTask(
+        _ request: RemoteBrowserImportRequest,
+        destinationSelection: LibraryImportDestinationSelection,
+        scope: RemoteDirectoryImportScope
+    ) {
+        let visibleComicSnapshot = displayedComicFiles
+        let didStart = dependencies.remoteBackgroundImportController.start { _, cancellationController in
+            await performImport(
+                request,
+                destinationSelection: destinationSelection,
+                scope: scope,
+                visibleComicSnapshot: visibleComicSnapshot,
+                cancellationController: cancellationController
+            )
+        }
+
+        guard !didStart else {
+            return
+        }
+
+        viewModel.alert = RemoteAlertState(
+            title: "Import Already Running",
+            message: "Another remote import is already running in the app. Wait for it to finish or cancel it from the import banner."
+        )
     }
 
     private func openPrimaryAction(for item: RemoteDirectoryItem) {

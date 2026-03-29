@@ -1274,10 +1274,12 @@ struct RemoteComicReaderView: View {
     }
 
     private func handleVisiblePageChange(to pageIndex: Int) {
+        isContentZoomed = false
         readerSession.apply(.syncVisiblePage(pageIndex))
     }
 
     private func updateVisiblePage(to pageIndex: Int) {
+        isContentZoomed = false
         updateCurrentPage(to: pageIndex)
     }
 

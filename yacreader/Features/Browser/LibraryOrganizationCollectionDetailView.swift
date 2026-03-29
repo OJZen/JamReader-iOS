@@ -523,18 +523,19 @@ struct LibraryOrganizationCollectionDetailView: View {
             .buttonStyle(.plain)
             .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         } else {
-            HeroTapButton { frame in
-                presentComic(comic, sourceFrame: frame)
-            } label: {
-                InsetListRowCard {
-                    LibraryComicRow(
-                        comic: comic,
-                        coverURL: viewModel.coverURL(for: comic),
-                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
-                    )
+            ZStack(alignment: .trailing) {
+                HeroTapButton { frame in
+                    presentComic(comic, sourceFrame: frame)
+                } label: {
+                    InsetListRowCard {
+                        LibraryComicRow(
+                            comic: comic,
+                            coverURL: viewModel.coverURL(for: comic),
+                            trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                        )
+                    }
                 }
-            }
-            .overlay(alignment: .trailing) {
+
                 quickActionButton(for: comic)
                     .padding(.trailing, 8)
             }
@@ -578,16 +579,17 @@ struct LibraryOrganizationCollectionDetailView: View {
             }
             .buttonStyle(.plain)
         } else {
-            HeroTapButton { frame in
-                presentComic(comic, sourceFrame: frame)
-            } label: {
-                LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-            }
-            .buttonStyle(.plain)
-            .overlay(alignment: .topTrailing) {
+            ZStack(alignment: .topTrailing) {
+                HeroTapButton { frame in
+                    presentComic(comic, sourceFrame: frame)
+                } label: {
+                    LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+                }
+
                 quickActionButton(for: comic, compact: true)
                     .padding(12)
             }
+            .buttonStyle(.plain)
             .contextMenu {
                 comicContextActions(for: comic)
             }

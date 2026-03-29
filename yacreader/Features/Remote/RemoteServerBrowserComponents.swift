@@ -509,21 +509,203 @@ private struct RemoteDirectorySymbolTile: View {
 }
 
 struct RemoteBrowserImportProgressView: View {
-    let description: String
+    let progress: RemoteBrowserProgressState
+    var onCancel: (() -> Void)? = nil
 
     var body: some View {
         RemoteBrowserOverlaySurface {
-            HStack(spacing: Spacing.sm) {
-                ProgressView()
-                    .controlSize(.small)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                    Text(progress.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
 
-                Text(description)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
+                    Spacer(minLength: 0)
 
-                Spacer(minLength: 0)
+                    if let fraction = progress.clampedFraction {
+                        Text("\(Int((fraction * 100).rounded()))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let detail = progress.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                if let fraction = progress.clampedFraction {
+                    ProgressView(value: fraction)
+                        .tint(.accentColor)
+                } else {
+                    HStack(spacing: Spacing.sm) {
+                        ProgressView()
+                            .controlSize(.small)
+
+                        Text("Working…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let onCancel {
+                    Button("Cancel Import", role: .cancel, action: onCancel)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .padding(.top, Spacing.xxxs)
+                }
             }
         }
+    }
+}
+
+struct RemoteBrowserCollapsibleImportProgressView: View {
+    let progress: RemoteBrowserProgressState
+    @Binding var isExpanded: Bool
+    var onCancel: (() -> Void)? = nil
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if isExpanded {
+                expandedCard
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.82, anchor: .bottomTrailing)
+                                .combined(with: .opacity),
+                            removal: .scale(scale: 0.9, anchor: .bottomTrailing)
+                                .combined(with: .opacity)
+                        )
+                    )
+            } else {
+                compactButton
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.78, anchor: .bottomTrailing)
+                                .combined(with: .opacity),
+                            removal: .scale(scale: 0.92, anchor: .bottomTrailing)
+                                .combined(with: .opacity)
+                        )
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .animation(AppAnimation.overlayPop, value: isExpanded)
+    }
+
+    private var expandedCard: some View {
+        RemoteBrowserOverlaySurface {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(alignment: .top, spacing: Spacing.sm) {
+                    RemoteBrowserImportOrb(
+                        progress: progress,
+                        size: 44,
+                        lineWidth: 4,
+                        symbolSize: 14
+                    )
+                    .padding(.top, 1)
+
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                            Text(progress.title)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(2)
+
+                            Spacer(minLength: 0)
+
+                            if let fraction = progress.clampedFraction {
+                                Text("\(Int((fraction * 100).rounded()))%")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if let detail = progress.detail, !detail.isEmpty {
+                            Text(detail)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    Button {
+                        withAnimation(AppAnimation.overlayPop) {
+                            isExpanded = false
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle()
+                                    .fill(Color.white.opacity(0.12))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Collapse Import")
+                }
+
+                if let fraction = progress.clampedFraction {
+                    ProgressView(value: fraction)
+                        .tint(.accentColor)
+                } else {
+                    HStack(spacing: Spacing.sm) {
+                        ProgressView()
+                            .controlSize(.small)
+
+                        Text("Working…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let onCancel {
+                    Button("Cancel Import", role: .cancel, action: onCancel)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .padding(.top, Spacing.xxxs)
+                }
+            }
+        }
+        .frame(maxWidth: 360, alignment: .trailing)
+    }
+
+    private var compactButton: some View {
+        Button {
+            withAnimation(AppAnimation.overlayPop) {
+                isExpanded = true
+            }
+        } label: {
+            RemoteBrowserImportOrb(
+                progress: progress,
+                size: 60,
+                lineWidth: 5,
+                symbolSize: 18
+            )
+            .background(
+                Circle()
+                    .fill(Color.white.opacity(0.08))
+            )
+            .overlay(alignment: .bottomTrailing) {
+                if progress.isCancellable {
+                    Circle()
+                        .fill(Color.red.opacity(0.92))
+                        .frame(width: 10, height: 10)
+                        .overlay {
+                            Circle()
+                                .stroke(Color.white.opacity(0.82), lineWidth: 1)
+                        }
+                        .offset(x: -2, y: -2)
+                }
+            }
+            .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 8)
+            .padding(.horizontal, Spacing.md)
+            .padding(.bottom, Spacing.xxs)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Expand Import")
     }
 }
 
@@ -592,14 +774,78 @@ struct RemoteBrowserFeedbackCard: View {
     }
 }
 
+private struct RemoteBrowserImportOrb: View {
+    let progress: RemoteBrowserProgressState
+    let size: CGFloat
+    let lineWidth: CGFloat
+    let symbolSize: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+            Circle()
+                .fill(Color.white.opacity(0.18))
+            Circle()
+                .stroke(Color.white.opacity(0.26), lineWidth: 1)
+
+            Circle()
+                .stroke(Color.white.opacity(0.18), lineWidth: lineWidth)
+
+            if let fraction = progress.clampedFraction {
+                Circle()
+                    .trim(from: 0, to: max(fraction, 0.04))
+                    .stroke(
+                        AngularGradient(
+                            colors: [
+                                Color.white.opacity(0.88),
+                                .accentColor,
+                                Color.white.opacity(0.88)
+                            ],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+            } else {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.accentColor)
+                    .scaleEffect(max(0.65, size / 72))
+            }
+
+            Image(systemName: "square.and.arrow.down.fill")
+                .font(.system(size: symbolSize, weight: .semibold))
+                .foregroundStyle(Color.primary.opacity(0.92))
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+}
+
 private struct RemoteBrowserOverlaySurface<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        InsetCard(cornerRadius: 20, contentPadding: 14, strokeOpacity: 0.05) {
+        VStack(alignment: .leading, spacing: 12) {
             content()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.white.opacity(0.16))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 6)
         .padding(.horizontal, Spacing.md)
-        .padding(.bottom, Spacing.sm)
+        .padding(.bottom, Spacing.xxs)
     }
 }

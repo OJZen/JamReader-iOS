@@ -189,8 +189,28 @@ struct RemoteServerProfile: Identifiable, Codable, Hashable {
         }
     }
 
+    var remoteCacheScopeKey: String {
+        switch providerKind {
+        case .smb:
+            return [
+                providerKind.rawValue,
+                normalizedHost.lowercased(),
+                String(port),
+                normalizedShareName
+            ].joined(separator: "|")
+        case .webdav:
+            return [
+                providerKind.rawValue,
+                webDAVBaseURL?.absoluteString.lowercased() ?? normalizedHost.lowercased()
+            ].joined(separator: "|")
+        }
+    }
+
     var remoteScopeKey: String {
-        "\(providerKind.rawValue)|\(normalizedProviderRootIdentifier)"
+        [
+            remoteCacheScopeKey,
+            normalizedBaseDirectoryPath
+        ].joined(separator: "|")
     }
 
     func matchesRemoteScope(

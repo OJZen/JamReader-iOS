@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewModel {
@@ -244,5 +245,41 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
 
     func coverURL(for comic: LibraryComic) -> URL? {
         coverLocator.coverURL(for: comic, metadataRootURL: metadataRootURL)
+    }
+
+    func coverSource(for comic: LibraryComic) -> LocalComicCoverSource? {
+        let sourceRootURL = URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+        return LocalComicCoverSource(
+            fileURL: resolveComicFileURL(for: comic, sourceRootURL: sourceRootURL),
+            cacheURL: coverLocator.plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
+        )
+    }
+
+    func heroSourceID(for comic: LibraryComic) -> String {
+        "library-special-comic-\(descriptor.id.uuidString)-\(comic.id)"
+    }
+
+    func cachedTransitionImage(for comic: LibraryComic) -> UIImage? {
+        LocalCoverTransitionCache.shared.image(for: heroSourceID(for: comic))
+    }
+
+    private func resolveComicFileURL(
+        for comic: LibraryComic,
+        sourceRootURL: URL
+    ) -> URL {
+        let relativePath = {
+            let rawPath = comic.path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if rawPath.isEmpty {
+                return comic.fileName
+            }
+
+            return rawPath
+        }()
+
+        if relativePath.hasPrefix("/") {
+            return sourceRootURL.appendingPathComponent(String(relativePath.dropFirst()))
+        }
+
+        return sourceRootURL.appendingPathComponent(relativePath)
     }
 }

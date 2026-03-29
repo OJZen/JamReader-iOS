@@ -8,6 +8,7 @@ actor SMBConnectionPool {
         let host: String
         let port: Int
         let shareName: String
+        let username: String?
     }
 
     private struct PooledConnection {
@@ -37,7 +38,12 @@ actor SMBConnectionPool {
         password: String?,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
-        let key = PoolKey(host: host, port: port, shareName: shareName)
+        let key = PoolKey(
+            host: host,
+            port: port,
+            shareName: shareName,
+            username: normalizedUsername(username)
+        )
 
         let client = try await acquireConnection(
             key: key,
@@ -194,6 +200,15 @@ actor SMBConnectionPool {
 
     private func shouldEvictConnection(for error: Error) -> Bool {
         error is ConnectionError || error is NWError || error is POSIXError
+    }
+
+    private func normalizedUsername(_ username: String?) -> String? {
+        guard let username else {
+            return nil
+        }
+
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func disconnect(_ client: SMBClient) {
