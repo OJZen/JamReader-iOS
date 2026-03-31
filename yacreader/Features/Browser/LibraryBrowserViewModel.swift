@@ -45,7 +45,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private var scanCompletionDismissTask: Task<Void, Never>?
     private var hasLoaded = false
     private let previewCollectionLimit = 6
-    private static let searchResultLimit = 40
+    nonisolated private static let searchResultLimit = 40
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
     private let supportedImportedFileExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"

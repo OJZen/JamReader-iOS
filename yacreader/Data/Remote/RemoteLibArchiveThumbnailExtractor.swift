@@ -176,9 +176,9 @@ private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource
                     offset: blockOffset,
                     length: UInt32(requestedByteCount)
                 )
-                resultBox.result = .success(data)
+                resultBox.store(.success(data))
             } catch {
-                resultBox.result = .failure(error)
+                resultBox.store(.failure(error))
             }
         }
 
@@ -186,7 +186,7 @@ private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource
         guard waitResult == .success else {
             throw RemoteLibArchiveThumbnailExtractionError.invalidArchive
         }
-        let data = try resultBox.result?.get() ?? {
+        let data = try resultBox.load()?.get() ?? {
             throw RemoteLibArchiveThumbnailExtractionError.invalidArchive
         }()
         blockCache.store(data, at: blockOffset)
@@ -242,11 +242,14 @@ private final class RemoteLibArchiveFileReaderProxy: @unchecked Sendable {
 }
 
 private final class RemoteLibArchiveReadResultBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _result: Result<Data, Error>?
+    nonisolated private let lock = NSLock()
+    nonisolated(unsafe) private var _result: Result<Data, Error>?
 
-    var result: Result<Data, Error>? {
-        get { lock.withLock { _result } }
-        set { lock.withLock { _result = newValue } }
+    nonisolated func store(_ result: Result<Data, Error>) {
+        lock.withLock { _result = result }
+    }
+
+    nonisolated func load() -> Result<Data, Error>? {
+        lock.withLock { _result }
     }
 }

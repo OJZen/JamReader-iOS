@@ -194,7 +194,7 @@ private struct RemoteZIPEndOfCentralDirectory {
 }
 
 private actor RemoteZIPArchivePageSource: ComicPageDataSource {
-    private let fileReader: any RemoteRandomAccessFileReader
+    private let fileReaderBox: RemoteRandomAccessFileReaderBox
     private let entries: [ZIPArchiveEntry]
     private let sharedCache = ReaderPageCache.shared
     private let cacheNamespace: String
@@ -211,7 +211,7 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
         fileReader: any RemoteRandomAccessFileReader,
         entries: [ZIPArchiveEntry]
     ) {
-        self.fileReader = fileReader
+        self.fileReaderBox = RemoteRandomAccessFileReaderBox(fileReader)
         self.entries = entries
         self.cacheNamespace = ReaderPageCache.namespace(for: documentURL)
     }
@@ -257,7 +257,7 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
         }
 
         hasClosed = true
-        try? await fileReader.close()
+        try? await fileReaderBox.fileReader.close()
     }
 
     private func data(for entry: ZIPArchiveEntry) async throws -> Data {
@@ -312,7 +312,7 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
         }
 
         try Task.checkCancellation()
-        let data = try await fileReader.read(offset: offset, length: UInt32(length))
+        let data = try await fileReaderBox.fileReader.read(offset: offset, length: UInt32(length))
         guard data.count == length else {
             throw truncatedError
         }
@@ -389,6 +389,14 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
 
             return output
         }
+    }
+}
+
+private struct RemoteRandomAccessFileReaderBox: @unchecked Sendable {
+    let fileReader: any RemoteRandomAccessFileReader
+
+    init(_ fileReader: any RemoteRandomAccessFileReader) {
+        self.fileReader = fileReader
     }
 }
 

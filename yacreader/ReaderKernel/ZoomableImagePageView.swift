@@ -152,6 +152,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
 
+        edgeTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
         singleTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
         singleTapGestureRecognizer.require(toFail: edgeTapGestureRecognizer)
         scrollView.addGestureRecognizer(edgeTapGestureRecognizer)

@@ -224,7 +224,7 @@ private actor LocalCoverImagePipeline {
 
         let task = Task.detached(priority: .utility) {
             await Self.semaphore.run {
-                Self.loadImage(
+                await Self.loadImage(
                     from: url,
                     fallbackSource: fallbackSource,
                     maxPixelSize: maxPixelSize
@@ -283,7 +283,7 @@ private actor LocalCoverImagePipeline {
         from url: URL?,
         fallbackSource: LocalComicCoverSource?,
         maxPixelSize: Int
-    ) -> UIImage? {
+    ) async -> UIImage? {
         if let url {
             return loadDownsampledImage(from: url, maxPixelSize: maxPixelSize)
         }
@@ -297,7 +297,7 @@ private actor LocalCoverImagePipeline {
             return loadDownsampledImage(from: cacheURL, maxPixelSize: maxPixelSize)
         }
 
-        return loadGeneratedCoverImage(
+        return await loadGeneratedCoverImage(
             from: fallbackSource,
             maxPixelSize: maxPixelSize
         )
@@ -306,21 +306,33 @@ private actor LocalCoverImagePipeline {
     private static func loadGeneratedCoverImage(
         from fallbackSource: LocalComicCoverSource,
         maxPixelSize: Int
-    ) -> UIImage? {
-        let extractor = LibraryComicMetadataExtractor()
-        guard let metadata = try? extractor.extractMetadata(for: fallbackSource.fileURL),
-              let coverImage = metadata.coverImage else {
+    ) async -> UIImage? {
+        let extractedCover = await MainActor.run { () -> (coverImage: UIImage, cacheURL: URL?)? in
+            let extractor = LibraryComicMetadataExtractor()
+            guard let metadata = try? extractor.extractMetadata(for: fallbackSource.fileURL),
+                  let coverImage = metadata.coverImage else {
+                return nil
+            }
+
+            if let cacheURL = fallbackSource.cacheURL {
+                try? extractor.saveCover(coverImage, to: cacheURL)
+                return (coverImage, cacheURL)
+            }
+
+            return (coverImage, nil)
+        }
+
+        guard let extractedCover else {
             return nil
         }
 
-        if let cacheURL = fallbackSource.cacheURL {
-            try? extractor.saveCover(coverImage, to: cacheURL)
+        if let cacheURL = extractedCover.cacheURL {
             if let cachedImage = loadDownsampledImage(from: cacheURL, maxPixelSize: maxPixelSize) {
                 return cachedImage
             }
         }
 
-        return downsampledImage(from: coverImage, maxPixelSize: maxPixelSize)
+        return downsampledImage(from: extractedCover.coverImage, maxPixelSize: maxPixelSize)
     }
 
     private static func loadDownsampledImage(from url: URL, maxPixelSize: Int) -> UIImage? {

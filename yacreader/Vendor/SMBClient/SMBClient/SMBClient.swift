@@ -7,20 +7,20 @@ public class SMBClient {
 
   public let session: Session
 
-  public var onDisconnected: (Error) -> Void {
+  nonisolated(unsafe) public var onDisconnected: @Sendable (Error) -> Void {
     didSet {
       session.onDisconnected = onDisconnected
     }
   }
 
-  public init(host: String, connectTimeout: TimeInterval = 30) {
+  nonisolated public init(host: String, connectTimeout: TimeInterval = 30) {
     self.host = host
     port = 445
     session = Session(host: host, connectTimeout: connectTimeout)
     onDisconnected = { _ in }
   }
 
-  public init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
+  nonisolated public init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
     self.host = host
     self.port = port
     session = Session(host: host, port: port, connectTimeout: connectTimeout)

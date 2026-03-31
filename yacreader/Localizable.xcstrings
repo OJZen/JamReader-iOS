@@ -1,15 +1,134 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Library" : {
+    "" : {
+
+    },
+    "·" : {
+
+    },
+    "\"%@\" will be removed from Browse shortcuts. The remote folder itself will stay untouched." : {
+
+    },
+    "\"%@\" will be removed from this library and deleted from local storage." : {
+
+    },
+    "(%lld)" : {
+
+    },
+    "/Manga/Weekly" : {
+
+    },
+    "/remote.php/dav/files/you/Comics" : {
+
+    },
+    "/Weekly" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld / %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "%lld Stars" : {
+
+    },
+    "%lld%%" : {
+
+    },
+    "`. %@` files are already indexed by the library, but archive page extraction is still being ported.\n\n%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "`. %1$@` files are already indexed by the library, but archive page extraction is still being ported.\n\n%2$@"
+          }
+        }
+      }
+    },
+    "1 Star" : {
+
+    },
+    "About" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "书库"
+            "value" : "关于"
           }
         }
       }
+    },
+    "Access" : {
+
+    },
+    "Actions" : {
+
+    },
+    "Add" : {
+
+    },
+    "Add a Library" : {
+
+    },
+    "Add a remote server to manage browsing access for comics stored on your network." : {
+
+    },
+    "Add a remote server to start browsing comics over your network." : {
+
+    },
+    "Add a Server" : {
+
+    },
+    "Add Favorite" : {
+
+    },
+    "Add Library" : {
+
+    },
+    "Add Library Folder" : {
+
+    },
+    "Add or remove this comic from tags and reading lists." : {
+
+    },
+    "Add Remote Server" : {
+
+    },
+    "Add Server" : {
+
+    },
+    "Add to Favorites" : {
+
+    },
+    "All files currently stored in the local Imported Comics library will be removed. The library itself stays in the app as an empty library." : {
+
+    },
+    "Apply" : {
+
+    },
+    "Authentication" : {
+
+    },
+    "Base Directory" : {
+
+    },
+    "Batch Metadata" : {
+
+    },
+    "Bookmark Current Page" : {
+
+    },
+    "Bookmarks" : {
+
     },
     "Browse" : {
       "localizations" : {
@@ -21,15 +140,567 @@
         }
       }
     },
-    "Settings" : {
+    "Browse By" : {
+
+    },
+    "Browse Options" : {
+
+    },
+    "Browse Pages" : {
+
+    },
+    "Browse Source Folder" : {
+
+    },
+    "Browse Thumbnails" : {
+
+    },
+    "Cache Policy" : {
+
+    },
+    "Cache Preset" : {
+
+    },
+    "Cancel" : {
+
+    },
+    "Cancel Import" : {
+
+    },
+    "Cast & Tags" : {
+
+    },
+    "Characters" : {
+
+    },
+    "Choose a remote server or quick access shortcut from the sidebar." : {
+
+    },
+    "Choose Destination" : {
+
+    },
+    "Classification" : {
+
+    },
+    "Clear" : {
+
+    },
+    "Clear Browsing History" : {
+
+    },
+    "Clear cached remote thumbnails?" : {
+
+    },
+    "Clear Cover Thumbnails" : {
+
+    },
+    "Clear Download Cache" : {
+
+    },
+    "Clear Downloaded Copies" : {
+
+    },
+    "Clear Downloaded Copy" : {
+
+    },
+    "Clear downloaded remote comics?" : {
+
+    },
+    "Clear Downloads" : {
+
+    },
+    "Clear Imported Comics" : {
+
+    },
+    "Clear imported comics?" : {
+
+    },
+    "Clear Remote Downloads" : {
+
+    },
+    "Clear Search" : {
+
+    },
+    "Clear Thumbnail Cache" : {
+
+    },
+    "Clear Thumbnails" : {
+
+    },
+    "Clearing downloaded copies also removes remote browsing history and remembered server folder positions." : {
+
+    },
+    "Clearing downloads also removes browsing history and remembered server positions. Clearing imported comics empties the Imported Comics library but keeps the library entry." : {
+
+    },
+    "Collapse Import" : {
+
+    },
+    "Collection Actions" : {
+
+    },
+    "Color" : {
+
+    },
+    "Colorist" : {
+
+    },
+    "Comic Actions" : {
+
+    },
+    "Comic Filters" : {
+
+    },
+    "Comic Unavailable" : {
+
+    },
+    "ComicInfo" : {
+
+    },
+    "Comics" : {
+
+    },
+    "Comics imported from remote servers will appear here after they are copied into the local Imported Comics library." : {
+
+    },
+    "Compatibility" : {
+
+    },
+    "Configured Servers" : {
+
+    },
+    "Connection" : {
+
+    },
+    "Core" : {
+
+    },
+    "Cover Artist" : {
+
+    },
+    "Cover as Single Page" : {
+
+    },
+    "Cover Thumbnails" : {
+
+    },
+    "Create" : {
+
+    },
+    "Create reading lists from the library root." : {
+
+    },
+    "Create tags from the library root." : {
+
+    },
+    "Credits" : {
+
+    },
+    "Current" : {
+
+    },
+    "Current Limit" : {
+
+    },
+    "Current Page" : {
+
+    },
+    "Current Rotation" : {
+
+    },
+    "Database" : {
+
+    },
+    "Default reader layout applied when opening each content type." : {
+
+    },
+    "Delete" : {
+
+    },
+    "Delete %@" : {
+
+    },
+    "Delete all downloaded copies for this server?" : {
+
+    },
+    "Delete Comic" : {
+
+    },
+    "Delete Downloaded Copy" : {
+
+    },
+    "Delete downloaded copy?" : {
+
+    },
+    "Delete History Entry" : {
+
+    },
+    "Delete Server" : {
+
+    },
+    "Delete Server Copies" : {
+
+    },
+    "Delete Server?" : {
+
+    },
+    "Direct Imports" : {
+
+    },
+    "Direction" : {
+
+    },
+    "Display" : {
+
+    },
+    "Display Mode" : {
+
+    },
+    "Display Name" : {
+
+    },
+    "Done" : {
+
+    },
+    "Downloaded Copies" : {
+
+    },
+    "Downloaded copies, browsing history, and remembered folder positions will be removed. Saved remote servers stay intact." : {
+
+    },
+    "Downloaded remote comics will appear here after you save them for offline reading." : {
+
+    },
+    "Edit" : {
+
+    },
+    "Edit connection settings, review authentication, and clear server-specific history or downloaded cache when paths change." : {
+
+    },
+    "Edit Metadata" : {
+
+    },
+    "Edit Reading List" : {
+
+    },
+    "Edit Server" : {
+
+    },
+    "Edit Tag" : {
+
+    },
+    "Editor" : {
+
+    },
+    "Expand Import" : {
+
+    },
+    "Failed to Load Metadata" : {
+
+    },
+    "Favorite" : {
+
+    },
+    "Filter" : {
+
+    },
+    "Filter comics" : {
+
+    },
+    "Filter this folder" : {
+
+    },
+    "Fit Mode" : {
+
+    },
+    "Folder" : {
+
+    },
+    "Folder shortcut" : {
+
+    },
+    "Format" : {
+
+    },
+    "Go" : {
+
+    },
+    "Go to page…" : {
+
+    },
+    "Go to Root" : {
+
+    },
+    "Host" : {
+
+    },
+    "Import" : {
+
+    },
+    "Import Comic Files" : {
+
+    },
+    "Import Comic Folder" : {
+
+    },
+    "Import ComicInfo" : {
+
+    },
+    "Import Current Folder ComicInfo" : {
+
+    },
+    "Import Destination" : {
+
+    },
+    "Import Folder to Library" : {
+
+    },
+    "Import Library ComicInfo" : {
+
+    },
+    "Import Options" : {
+
+    },
+    "Import Scope" : {
+
+    },
+    "Import Strategy" : {
+
+    },
+    "Import to Library" : {
+
+    },
+    "Imported comics are part of your local library. Clearing remote downloads or thumbnails will not remove them." : {
+
+    },
+    "Imported Comics Library" : {
+
+    },
+    "Imprint" : {
+
+    },
+    "Included Fields" : {
+
+    },
+    "Info" : {
+
+    },
+    "Initialize Library" : {
+
+    },
+    "Inker" : {
+
+    },
+    "iPhone uses single-page reading. Double-page mode is available on iPad." : {
+
+    },
+    "Issue Number" : {
+
+    },
+    "Jump quickly, compare nearby pages, or return to where you left off." : {
+
+    },
+    "Language ISO" : {
+
+    },
+    "Last Action" : {
+
+    },
+    "Layout" : {
+
+    },
+    "Layout preferences are remembered separately for comics and manga, matching mobile reading habits." : {
+
+    },
+    "Leave Base Directory empty to browse from the share root." : {
+
+    },
+    "Left" : {
+
+    },
+    "Letterer" : {
+
+    },
+    "Libraries" : {
+
+    },
+    "Library" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "设置"
+            "value" : "书库"
           }
         }
       }
+    },
+    "Library Actions" : {
+
+    },
+    "Library Info" : {
+
+    },
+    "Library name" : {
+
+    },
+    "Loading %@" : {
+
+    },
+    "Loading Metadata" : {
+
+    },
+    "Loading Organization" : {
+
+    },
+    "Local Libraries" : {
+
+    },
+    "Local Remote Storage" : {
+
+    },
+    "Location" : {
+
+    },
+    "Locations" : {
+
+    },
+    "Maintenance" : {
+
+    },
+    "Manage" : {
+
+    },
+    "Manage %@" : {
+
+    },
+    "Manage Cache" : {
+
+    },
+    "Manage downloaded remote comics and generated covers kept on this device." : {
+
+    },
+    "Manage Servers" : {
+
+    },
+    "Mark Read" : {
+
+    },
+    "Mark Unread" : {
+
+    },
+    "Metadata" : {
+
+    },
+    "Mode" : {
+
+    },
+    "More Actions for %@" : {
+
+    },
+    "More Collection Actions" : {
+
+    },
+    "More Library Actions" : {
+
+    },
+    "Name" : {
+
+    },
+    "nas.local" : {
+
+    },
+    "Navigate" : {
+
+    },
+    "New remote connection" : {
+
+    },
+    "No Browsing History" : {
+
+    },
+    "No reading lists available." : {
+
+    },
+    "No reading lists yet. Create one from the library root." : {
+
+    },
+    "No Remote Servers" : {
+
+    },
+    "No Saved Folders" : {
+
+    },
+    "No tags available." : {
+
+    },
+    "No tags yet. Create one from the library root." : {
+
+    },
+    "Not Now" : {
+
+    },
+    "Notes" : {
+
+    },
+    "Offline" : {
+
+    },
+    "Offline Shelf" : {
+
+    },
+    "OK" : {
+
+    },
+    "On This Device" : {
+
+    },
+    "Only generated remote cover thumbnails are removed. Downloads and reading progress stay intact." : {
+
+    },
+    "Only the downloaded copy of \"%@\" will be removed from this device. Reading progress will stay intact." : {
+
+    },
+    "Open" : {
+
+    },
+    "Open a comic from this remote server and it will appear here." : {
+
+    },
+    "Open Downloaded Copy" : {
+
+    },
+    "Open Last Comic" : {
+
+    },
+    "Open Offline Copy" : {
+
+    },
+    "Open Offline Shelf" : {
+
+    },
+    "Open Older Downloaded Copy" : {
+
+    },
+    "Open page" : {
+
+    },
+    "Open Saved Folder" : {
+
+    },
+    "Open Saved Folders" : {
+
+    },
+    "Open Selected Page" : {
+
+    },
+    "Opening Comic" : {
+
+    },
+    "Opening Remote Comic" : {
+
+    },
+    "Organize" : {
+
     },
     "Overview" : {
       "localizations" : {
@@ -41,6 +712,101 @@
         }
       }
     },
+    "Page" : {
+
+    },
+    "Page %lld" : {
+
+    },
+    "Page %lld / %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld / %2$lld"
+          }
+        }
+      }
+    },
+    "Page %lld of %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Page %1$lld of %2$lld"
+          }
+        }
+      }
+    },
+    "Page Layout" : {
+
+    },
+    "Page Mode" : {
+
+    },
+    "Pages" : {
+
+    },
+    "Password" : {
+
+    },
+    "Passwords are stored securely in Keychain after you save." : {
+
+    },
+    "Path" : {
+
+    },
+    "Paths" : {
+
+    },
+    "Paths are shown for inspection only. Removing a library does not delete them." : {
+
+    },
+    "Penciller" : {
+
+    },
+    "Port" : {
+
+    },
+    "Port %lld matches the expected WebDAV port for this endpoint." : {
+
+    },
+    "Port 445 is the standard SMB port." : {
+
+    },
+    "Provider" : {
+
+    },
+    "Publication Date" : {
+
+    },
+    "Publisher" : {
+
+    },
+    "Publishing" : {
+
+    },
+    "Quick Access" : {
+
+    },
+    "Quick Edit Metadata" : {
+
+    },
+    "Quick Metadata" : {
+
+    },
+    "Quick Scrub" : {
+
+    },
+    "Rating" : {
+
+    },
+    "Read" : {
+
+    },
+    "Reader Not Ready" : {
+
+    },
     "Reading" : {
       "localizations" : {
         "zh-Hans" : {
@@ -50,6 +816,42 @@
           }
         }
       }
+    },
+    "Reading Direction" : {
+
+    },
+    "Reading Lists" : {
+
+    },
+    "Reading Mode" : {
+
+    },
+    "Reading Status" : {
+
+    },
+    "Recent Comics" : {
+
+    },
+    "Recent Window" : {
+
+    },
+    "Refresh" : {
+
+    },
+    "Refresh & Scan" : {
+
+    },
+    "Refresh Current Folder" : {
+
+    },
+    "Refresh Downloaded Copy" : {
+
+    },
+    "Refresh Library" : {
+
+    },
+    "Refreshing Remote Copy" : {
+
     },
     "Remote" : {
       "localizations" : {
@@ -61,6 +863,193 @@
         }
       }
     },
+    "Remote Cache" : {
+
+    },
+    "Remote Comic Unavailable" : {
+
+    },
+    "Remote covers are generated on demand and only saved locally after you browse them." : {
+
+    },
+    "Remote Downloads" : {
+
+    },
+    "Remote Servers" : {
+
+    },
+    "Remove" : {
+
+    },
+    "Remove Current Bookmark" : {
+
+    },
+    "Remove Downloaded Copy" : {
+
+    },
+    "Remove Favorite" : {
+
+    },
+    "Remove from App" : {
+
+    },
+    "Remove from Favorites" : {
+
+    },
+    "Remove saved folder?" : {
+
+    },
+    "Remove Shortcut" : {
+
+    },
+    "Removing a library only removes it from the app. Files and metadata stay on disk." : {
+
+    },
+    "Rename" : {
+
+    },
+    "Rename Library" : {
+
+    },
+    "Rename Shortcut" : {
+
+    },
+    "Reset" : {
+
+    },
+    "Reset Filters" : {
+
+    },
+    "Reset Rotation" : {
+
+    },
+    "Results" : {
+
+    },
+    "Resume" : {
+
+    },
+    "Retention" : {
+
+    },
+    "Retry" : {
+
+    },
+    "Right" : {
+
+    },
+    "Rotate Left" : {
+
+    },
+    "Rotate Right" : {
+
+    },
+    "Rotation" : {
+
+    },
+    "Save" : {
+
+    },
+    "Save folders from Browse to keep them close." : {
+
+    },
+    "Save folders from this server in Browse." : {
+
+    },
+    "Saved Folders" : {
+
+    },
+    "Saved Password" : {
+
+    },
+    "Saved remote servers stay intact. Downloaded remote copies, browsing history, and remembered remote folder positions are removed." : {
+
+    },
+    "Search %@" : {
+
+    },
+    "Search downloaded remote comics" : {
+
+    },
+    "Search entire library" : {
+
+    },
+    "Search saved remote folders" : {
+
+    },
+    "Searching Library" : {
+
+    },
+    "Searching library database..." : {
+
+    },
+    "Select" : {
+
+    },
+    "Select a Library" : {
+
+    },
+    "Select a Server" : {
+
+    },
+    "Select All" : {
+
+    },
+    "Selection Actions" : {
+
+    },
+    "Series" : {
+
+    },
+    "Server Actions" : {
+
+    },
+    "Server Path" : {
+
+    },
+    "Server Unavailable" : {
+
+    },
+    "Servers" : {
+
+    },
+    "Settings" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置"
+          }
+        }
+      }
+    },
+    "Share" : {
+
+    },
+    "Show Covers as Single Page" : {
+
+    },
+    "Something Went Wrong" : {
+
+    },
+    "Sort" : {
+
+    },
+    "Sort Collections" : {
+
+    },
+    "Sort Comics" : {
+
+    },
+    "Source" : {
+
+    },
+    "Spread" : {
+
+    },
+    "Status" : {
+
+    },
     "Storage" : {
       "localizations" : {
         "zh-Hans" : {
@@ -71,15 +1060,129 @@
         }
       }
     },
-    "About" : {
+    "Story Arc" : {
+
+    },
+    "Strategy" : {
+
+    },
+    "Summary" : {
+
+    },
+    "Tags" : {
+
+    },
+    "Tags and Reading Lists" : {
+
+    },
+    "Teams" : {
+
+    },
+    "The downloaded remote comic could not be opened." : {
+
+    },
+    "The metadata for this comic could not be loaded. Close and try again." : {
+
+    },
+    "The saved password stays in Keychain until you replace it." : {
+
+    },
+    "The selected comic could not be opened." : {
+
+    },
+    "The selected server is no longer available on this device." : {
+
+    },
+    "This creates a compatible `library.ydb`, inserts the root folder, and performs an initial scan of supported comic files." : {
+
+    },
+    "This only changes the display name used in the app." : {
+
+    },
+    "This only removes generated remote cover thumbnails. Remote downloads and reading progress stay intact." : {
+
+    },
+    "This removes %@ and clears its local offline data on this device." : {
+
+    },
+    "This removes %lld downloaded copies for %@ from this device. Remote files and reading progress stay intact." : {
       "localizations" : {
-        "zh-Hans" : {
+        "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于"
+            "state" : "new",
+            "value" : "This removes %1$lld downloaded copies for %2$@ from this device. Remote files and reading progress stay intact."
           }
         }
       }
+    },
+    "This removes the comic file from the library on this device." : {
+
+    },
+    "Thumbnail cache only affects generated remote covers. Downloaded copies and reading progress stay intact." : {
+
+    },
+    "Title" : {
+
+    },
+    "Try Again" : {
+
+    },
+    "Type" : {
+
+    },
+    "Unfavorite" : {
+
+    },
+    "Unrated" : {
+
+    },
+    "Unread" : {
+
+    },
+    "Unsupported Comic" : {
+
+    },
+    "Up One Level" : {
+
+    },
+    "Update remote connection" : {
+
+    },
+    "Use a custom port only if this SMB server is configured for one." : {
+
+    },
+    "Use a custom port only if this WebDAV server is configured for one." : {
+
+    },
+    "Use Server Path for the WebDAV collection path. Leave Base Directory empty to browse from that location." : {
+
+    },
+    "Username" : {
+
+    },
+    "Version" : {
+
+    },
+    "Vertical mode is optimized for mobile scrolling. Page spread and rotation controls are hidden for consistency." : {
+
+    },
+    "View" : {
+
+    },
+    "Volume" : {
+
+    },
+    "When" : {
+
+    },
+    "Working…" : {
+
+    },
+    "Write Access" : {
+
+    },
+    "Writer" : {
+
     }
   },
   "version" : "1.0"

@@ -51,10 +51,8 @@ struct BrowseHomeView: View {
         .onChange(of: quickAccessItems.map(\.id)) { _, _ in
             debounceSplitSync()
         }
-        .sheet(isPresented: serverEditorPresented) {
-            if let draft = editorDraft {
-                remoteServerEditor(for: draft)
-            }
+        .sheet(item: $editorDraft) { draft in
+            remoteServerEditor(for: draft)
         }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
@@ -141,6 +139,7 @@ struct BrowseHomeView: View {
                 }
             }
             .navigationTitle("Browse")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 addServerToolbarItem
             }
@@ -332,13 +331,6 @@ struct BrowseHomeView: View {
             }
             .accessibilityLabel("Add Remote Server")
         }
-    }
-
-    private var serverEditorPresented: Binding<Bool> {
-        Binding(
-            get: { editorDraft != nil },
-            set: { if !$0 { editorDraft = nil } }
-        )
     }
 
     private func remoteServerEditor(

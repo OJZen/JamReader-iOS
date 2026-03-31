@@ -177,9 +177,9 @@ private final class RemotePDFRandomAccessDataSource {
                     offset: blockOffset,
                     length: UInt32(requestedByteCount)
                 )
-                resultBox.result = .success(data)
+                resultBox.store(.success(data))
             } catch {
-                resultBox.result = .failure(error)
+                resultBox.store(.failure(error))
             }
         }
 
@@ -187,7 +187,7 @@ private final class RemotePDFRandomAccessDataSource {
         guard waitResult == .success else {
             throw RemotePDFThumbnailExtractionError.truncatedRead
         }
-        let blockData = try resultBox.result?.get() ?? {
+        let blockData = try resultBox.load()?.get() ?? {
             throw RemotePDFThumbnailExtractionError.truncatedRead
         }()
         blockCache.store(blockData, at: blockOffset)
@@ -274,11 +274,14 @@ private final class RemotePDFFileReaderProxy: @unchecked Sendable {
 }
 
 private final class RemotePDFReadResultBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var _result: Result<Data, Error>?
+    nonisolated private let lock = NSLock()
+    nonisolated(unsafe) private var _result: Result<Data, Error>?
 
-    var result: Result<Data, Error>? {
-        get { lock.withLock { _result } }
-        set { lock.withLock { _result = newValue } }
+    nonisolated func store(_ result: Result<Data, Error>) {
+        lock.withLock { _result = result }
+    }
+
+    nonisolated func load() -> Result<Data, Error>? {
+        lock.withLock { _result }
     }
 }

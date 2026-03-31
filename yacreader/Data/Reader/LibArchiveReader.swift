@@ -100,7 +100,7 @@ final class LibArchiveReader {
 }
 
 private actor LibArchivePageSource: ComicPageDataSource {
-    private let archiveReader: YRLibArchiveReader
+    private let archiveReaderBox: LibArchiveReaderBox
     private let entries: [LibArchiveEntry]
     private let sharedCache = ReaderPageCache.shared
     private let cacheNamespace: String
@@ -112,7 +112,7 @@ private actor LibArchivePageSource: ComicPageDataSource {
     }()
 
     init(archiveURL: URL, archiveReader: YRLibArchiveReader, entries: [LibArchiveEntry]) {
-        self.archiveReader = archiveReader
+        self.archiveReaderBox = LibArchiveReaderBox(archiveReader)
         self.entries = entries
         self.cacheNamespace = ReaderPageCache.namespace(for: archiveURL)
     }
@@ -135,7 +135,7 @@ private actor LibArchivePageSource: ComicPageDataSource {
             return cachedPage
         }
 
-        let pageData = try archiveReader.dataForEntry(at: entries[index].archiveIndex)
+        let pageData = try archiveReaderBox.archiveReader.dataForEntry(at: entries[index].archiveIndex)
         cache.setObject(pageData as NSData, forKey: NSNumber(value: index), cost: pageData.count)
         await sharedCache.store(pageData, for: cacheKey)
         return pageData
@@ -149,5 +149,13 @@ private actor LibArchivePageSource: ComicPageDataSource {
 
             _ = try? await dataForPage(at: index)
         }
+    }
+}
+
+private final class LibArchiveReaderBox: @unchecked Sendable {
+    nonisolated let archiveReader: YRLibArchiveReader
+
+    init(_ archiveReader: YRLibArchiveReader) {
+        self.archiveReader = archiveReader
     }
 }

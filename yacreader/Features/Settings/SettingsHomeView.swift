@@ -115,6 +115,7 @@ struct SettingsHomeView: View {
             }
             .listStyle(.sidebar)
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
         } detail: {
             NavigationStack {
                 splitDetailContent(for: selectedPane.wrappedValue ?? .overview)

@@ -324,7 +324,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 let recentSessions = sessions.filter { $0.matches(profile: profile) }
                 let sessionsByPath = sessions.reduce(into: [String: RemoteComicReadingSession]()) { result, session in
                     guard session.matches(profile: profile),
-                          result[session.path] == nil else {
+                          result.index(forKey: session.path) == nil else {
                         return
                     }
 
@@ -450,10 +450,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 reference: reference,
                 trimCacheAfterDownload: false,
                 progressHandler: { [weak self] fraction in
-                    Task { @MainActor in
-                        self?.setBackgroundImportProgress(
+                    guard let self else {
+                        return
+                    }
+
+                    Task { @MainActor [self, itemName = item.name] in
+                        self.setBackgroundImportProgress(
                             title: "Downloading Comic",
-                            detail: item.name,
+                            detail: itemName,
                             fraction: fraction,
                             isCancellable: true
                         )
@@ -479,10 +483,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 destinationSelection: destinationSelection,
                 consumeSourceURLs: downloadableImportSourceURLs(from: [downloadResult]),
                 progressHandler: { [weak self] progress in
-                    Task { @MainActor in
-                        self?.applyImportProgress(
+                    guard let self else {
+                        return
+                    }
+
+                    Task { @MainActor [self, itemName = item.name] in
+                        self.applyImportProgress(
                             progress,
-                            contextTitle: item.name
+                            contextTitle: itemName
                         )
                     }
                 },
@@ -690,10 +698,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 reference: reference,
                 forceRefresh: forceRefresh,
                 progressHandler: { [weak self] fraction in
-                    Task { @MainActor in
-                        self?.setActiveProgress(
+                    guard let self else {
+                        return
+                    }
+
+                    Task { @MainActor [self, itemName = item.name] in
+                        self.setActiveProgress(
                             title: forceRefresh ? "Refreshing Downloaded Copy" : "Saving Offline Copy",
-                            detail: item.name,
+                            detail: itemName,
                             fraction: fraction
                         )
                     }
@@ -754,13 +766,17 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 references: preparedDownloads.map { $0.1 },
                 trimCacheAfterDownload: false,
                 progressHandler: { [weak self] reference, fraction in
-                    Task {
+                    guard let self else {
+                        return
+                    }
+
+                    Task { [self] in
                         let snapshot = await downloadProgressTracker.update(
                             referenceID: reference.id,
                             fraction: fraction
                         )
-                        await MainActor.run {
-                            self?.setActiveProgress(
+                        await MainActor.run { [self] in
+                            self.setActiveProgress(
                                 title: "Saving Visible Comics",
                                 detail: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)",
                                 fraction: snapshot.fraction
@@ -1134,13 +1150,17 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 references: preparedDownloads.map { $0.1 },
                 trimCacheAfterDownload: false,
                 progressHandler: { [weak self] reference, fraction in
-                    Task {
+                    guard let self else {
+                        return
+                    }
+
+                    Task { [self] in
                         let snapshot = await downloadProgressTracker.update(
                             referenceID: reference.id,
                             fraction: fraction
                         )
-                        await MainActor.run {
-                            self?.setBackgroundImportProgress(
+                        await MainActor.run { [self] in
+                            self.setBackgroundImportProgress(
                                 title: progressPrefix,
                                 detail: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)",
                                 fraction: snapshot.fraction,
@@ -1197,8 +1217,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     from: stagedResultsForImport.map(\.1)
                 ),
                 progressHandler: { [weak self] progress in
-                    Task { @MainActor in
-                        self?.applyImportProgress(
+                    guard let self else {
+                        return
+                    }
+
+                    Task { @MainActor [self, successTitle] in
+                        self.applyImportProgress(
                             progress,
                             contextTitle: successTitle
                         )
@@ -1246,10 +1270,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 path: path,
                 progressHandler: { [weak self] discoveredCount, currentPath in
-                    Task { @MainActor in
-                        let currentPathSuffix = currentPath.map { " · \($0)" } ?? ""
-                        let detail = "Found \(discoveredCount) comics\(currentPathSuffix)"
-                        self?.setBackgroundImportProgress(
+                    guard let self else {
+                        return
+                    }
+
+                    let currentPathSuffix = currentPath.map { " · \($0)" } ?? ""
+                    let detail = "Found \(discoveredCount) comics\(currentPathSuffix)"
+                    Task { @MainActor [self, detail, progressName] in
+                        self.setBackgroundImportProgress(
                             title: "Scanning \(progressName)",
                             detail: detail,
                             isCancellable: true

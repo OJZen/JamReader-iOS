@@ -177,6 +177,7 @@ struct LibraryHomeView: View {
                 splitLibrariesSection
             }
             .navigationTitle("Library")
+            .navigationBarTitleDisplayMode(.inline)
             .listStyle(.sidebar)
             .toolbar {
                 addLibraryToolbarItem

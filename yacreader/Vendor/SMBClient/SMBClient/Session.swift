@@ -16,7 +16,7 @@ public class Session {
   public var server: String { connection.host }
   public private(set) var connectedTree: String?
 
-  public var onDisconnected: (Error) -> Void {
+  nonisolated(unsafe) public var onDisconnected: @Sendable (Error) -> Void {
     didSet {
       connection.onDisconnected = onDisconnected
     }
@@ -24,15 +24,15 @@ public class Session {
 
   private let connection: Connection
 
-  public convenience init(host: String, connectTimeout: TimeInterval = 30) {
+  nonisolated public convenience init(host: String, connectTimeout: TimeInterval = 30) {
     self.init(Connection(host: host, connectTimeout: connectTimeout))
   }
 
-  public convenience init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
+  nonisolated public convenience init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
     self.init(Connection(host: host, port: port, connectTimeout: connectTimeout))
   }
 
-  private init(_ connection: Connection) {
+  nonisolated private init(_ connection: Connection) {
     self.connection = connection
     onDisconnected = { _ in }
   }

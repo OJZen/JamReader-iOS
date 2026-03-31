@@ -115,8 +115,8 @@ public enum Negotiate {
       self.rawValue = rawValue
     }
 
-    public static let signingEnabled = SecurityMode(rawValue: 0x0001)
-    public static let signingRequired = SecurityMode(rawValue: 0x0002)
+    nonisolated public static let signingEnabled = SecurityMode(rawValue: 0x0001)
+    nonisolated public static let signingRequired = SecurityMode(rawValue: 0x0002)
   }
 
   public struct Capabilities: OptionSet, Sendable {

@@ -431,7 +431,7 @@ private enum ZIPArchiveEntryReader {
     }
 
     /// Hard cap on decompressed output to guard against ZIP bombs and corrupted headers.
-    private static let maximumDecompressedSize = 256 * 1_024 * 1_024
+    nonisolated private static let maximumDecompressedSize = 256 * 1_024 * 1_024
 
     nonisolated private static func decompressDeflatedData(rawDeflateData: Data, expectedSize: Int, entryPath: String) throws -> Data {
         guard !rawDeflateData.isEmpty else {
@@ -561,15 +561,15 @@ private actor ZIPArchivePageSource: ComicPageDataSource {
 }
 
 private extension Data {
-    func uint16LE(at offset: Int) -> UInt16? {
+    nonisolated func uint16LE(at offset: Int) -> UInt16? {
         integer(at: offset, as: UInt16.self)
     }
 
-    func uint32LE(at offset: Int) -> UInt32? {
+    nonisolated func uint32LE(at offset: Int) -> UInt32? {
         integer(at: offset, as: UInt32.self)
     }
 
-    func lastIndex(of value: UInt32) -> Int? {
+    nonisolated func lastIndex(of value: UInt32) -> Int? {
         guard count >= MemoryLayout<UInt32>.size else {
             return nil
         }
@@ -587,7 +587,7 @@ private extension Data {
         }
     }
 
-    private func integer<T: FixedWidthInteger>(at offset: Int, as type: T.Type) -> T? {
+    nonisolated private func integer<T: FixedWidthInteger>(at offset: Int, as type: T.Type) -> T? {
         guard offset >= 0, offset + MemoryLayout<T>.size <= count else {
             return nil
         }

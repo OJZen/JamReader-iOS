@@ -3,20 +3,20 @@ import Network
 import os
 
 public class Connection {
-  let host: String
-  var onDisconnected: (Error) -> Void
+  nonisolated let host: String
+  nonisolated(unsafe) var onDisconnected: @Sendable (Error) -> Void
 
-  private let connection: NWConnection
-  private var buffer = Data()
-  private let connectTimeout: TimeInterval
+  nonisolated private let connection: NWConnection
+  nonisolated(unsafe) private var buffer = Data()
+  nonisolated private let connectTimeout: TimeInterval
 
-  private let semaphore = Semaphore(value: 1)
+  nonisolated private let semaphore = Semaphore(value: 1)
 
-  public var state: NWConnection.State {
+  nonisolated public var state: NWConnection.State {
     connection.state
   }
 
-  public init(host: String, connectTimeout: TimeInterval = 30) {
+  nonisolated public init(host: String, connectTimeout: TimeInterval = 30) {
     self.host = host
     self.connectTimeout = connectTimeout
     let endpoint = NWEndpoint.hostPort(
@@ -27,7 +27,7 @@ public class Connection {
     onDisconnected = { _ in }
   }
 
-  public init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
+  nonisolated public init(host: String, port: Int, connectTimeout: TimeInterval = 30) {
     self.host = host
     self.connectTimeout = connectTimeout
     let endpoint = NWEndpoint.hostPort(
@@ -38,7 +38,7 @@ public class Connection {
     onDisconnected = { _ in }
   }
 
-  private static func smbTCPParameters() -> NWParameters {
+  nonisolated private static func smbTCPParameters() -> NWParameters {
     let tcp = NWProtocolTCP.Options()
     tcp.enableKeepalive = true
     tcp.keepaliveInterval = 15
@@ -48,19 +48,17 @@ public class Connection {
     return NWParameters(tls: nil, tcp: tcp)
   }
 
-  public func connect() async throws {
+  nonisolated public func connect() async throws {
     let resumed = OSAllocatedUnfairLock(initialState: false)
+    let timeoutNanoseconds = UInt64(connectTimeout * 1_000_000_000)
 
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      let timeoutWork = DispatchWorkItem { [weak self] in
+      let timeoutTask = Task { [weak self] in
+        try? await Task.sleep(nanoseconds: timeoutNanoseconds)
         guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
         self?.connection.stateUpdateHandler = nil
         continuation.resume(throwing: ConnectionError.connectionTimeout)
       }
-      DispatchQueue.global().asyncAfter(
-        deadline: .now() + connectTimeout,
-        execute: timeoutWork
-      )
 
       connection.stateUpdateHandler = { [weak self] (state) in
         switch state {
@@ -72,17 +70,17 @@ public class Connection {
           break
         case .ready:
           guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
-          timeoutWork.cancel()
+          timeoutTask.cancel()
           self?.connection.stateUpdateHandler = stateUpdateHandler
           continuation.resume()
         case .failed(let error):
           guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
-          timeoutWork.cancel()
+          timeoutTask.cancel()
           self?.connection.stateUpdateHandler = nil
           continuation.resume(throwing: error)
         case .cancelled:
           guard resumed.withLock({ guard !$0 else { return false }; $0 = true; return true }) else { return }
-          timeoutWork.cancel()
+          timeoutTask.cancel()
           self?.connection.stateUpdateHandler = nil
           continuation.resume(throwing: ConnectionError.cancelled)
         @unknown default:
@@ -106,7 +104,7 @@ public class Connection {
     }
   }
 
-  public func disconnect() {
+  nonisolated public func disconnect() {
     connection.cancel()
   }
 

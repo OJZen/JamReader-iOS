@@ -63,10 +63,8 @@ struct RemoteServerDetailView: View {
         .refreshable {
             refreshDetailState(forceReload: true)
         }
-        .sheet(isPresented: serverEditorPresented) {
-            if let draft = editorDraft {
-                remoteServerEditor(for: draft)
-            }
+        .sheet(item: $editorDraft) { draft in
+            remoteServerEditor(for: draft)
         }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
@@ -128,13 +126,6 @@ struct RemoteServerDetailView: View {
                     bottom: 10
                 )
         }
-    }
-
-    private var serverEditorPresented: Binding<Bool> {
-        Binding(
-            get: { editorDraft != nil },
-            set: { if !$0 { editorDraft = nil } }
-        )
     }
 
     private func remoteServerEditor(

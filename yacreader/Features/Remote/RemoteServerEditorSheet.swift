@@ -3,7 +3,6 @@ import SwiftUI
 
 struct RemoteServerEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let onSave: (RemoteServerEditorDraft) -> AppAlertState?
 
@@ -159,8 +158,6 @@ struct RemoteServerEditorSheet: View {
                 }
             }
         }
-        .frame(height: regularEditorHeight)
-        .adaptiveSheetWidth(720)
         .modifier(RemoteServerEditorPresentationModifier())
         .presentationDragIndicator(.visible)
         .alert(item: $alert) { alert in
@@ -189,9 +186,6 @@ struct RemoteServerEditorSheet: View {
         }
     }
 
-    private var regularEditorHeight: CGFloat? {
-        horizontalSizeClass == .regular ? 780 : nil
-    }
 }
 
 private struct RemoteServerEditorPresentationModifier: ViewModifier {

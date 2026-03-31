@@ -95,7 +95,7 @@ struct ComicReaderView: View {
                 isDismissGestureActive = active
             },
             onDismiss: {
-                var t = Transaction(animation: .none)
+                let t = Transaction(animation: .none)
                 withTransaction(t) { dismiss() }
             }
         )

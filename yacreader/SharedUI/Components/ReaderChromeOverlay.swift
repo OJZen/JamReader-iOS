@@ -455,6 +455,7 @@ private struct ReaderThumbnailScrubber: View {
                         .padding(.top, ReaderChromeMetrics.scrubberTopInset)
                         .padding(.bottom, ReaderChromeMetrics.scrubberBottomInset)
                     }
+                    .contentShape(Rectangle())
                     .coordinateSpace(name: coordinateSpaceName)
                     .mask {
                         LinearGradient(
@@ -468,7 +469,7 @@ private struct ReaderThumbnailScrubber: View {
                             endPoint: .trailing
                         )
                     }
-                    .overlay {
+                    .background {
                         TouchInteractionTracker(
                             onBegan: { coordinator.beginInteraction() },
                             onEnded: { coordinator.endInteraction() }
@@ -1013,7 +1014,8 @@ struct ReaderBottomDock<Content: View>: View {
 // MARK: - UIKit Touch Tracker (replaces SwiftUI DragGesture for CI compliance)
 
 /// Detects touch-down and touch-up using a UIKit long press recognizer with zero delay.
-/// Used to track interaction state on the thumbnail scrubber strip.
+/// The recognizer is installed on the enclosing scroll view so the scrubber can still
+/// receive horizontal pan gestures while we mirror interaction state into SwiftUI.
 private struct TouchInteractionTracker: UIViewRepresentable {
     let onBegan: () -> Void
     let onEnded: () -> Void
@@ -1022,28 +1024,113 @@ private struct TouchInteractionTracker: UIViewRepresentable {
         Coordinator(onBegan: onBegan, onEnded: onEnded)
     }
 
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        view.backgroundColor = .clear
-
-        let recognizer = UILongPressGestureRecognizer(
-            target: context.coordinator,
-            action: #selector(Coordinator.handlePress(_:))
-        )
-        recognizer.minimumPressDuration = 0
-        recognizer.cancelsTouchesInView = false
-        view.addGestureRecognizer(recognizer)
-        return view
+    func makeUIView(context: Context) -> GestureInstallerView {
+        GestureInstallerView(coordinator: context.coordinator)
     }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
+    func updateUIView(_ uiView: GestureInstallerView, context: Context) {
         context.coordinator.onBegan = onBegan
         context.coordinator.onEnded = onEnded
     }
 
-    final class Coordinator {
+    final class GestureInstallerView: UIView {
+        let coordinator: Coordinator
+        private weak var gestureHost: UIView?
+
+        init(coordinator: Coordinator) {
+            self.coordinator = coordinator
+            super.init(frame: .zero)
+            isUserInteractionEnabled = false
+            isHidden = true
+        }
+
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil {
+                installGesturesIfNeeded()
+                DispatchQueue.main.async { [weak self] in
+                    self?.installGesturesIfNeeded()
+                }
+            } else {
+                removeInstalledGestures()
+            }
+        }
+
+        private func installGesturesIfNeeded() {
+            guard let host = findGestureHost() else {
+                return
+            }
+
+            gestureHost = host
+
+            if coordinator.pressRecognizer == nil {
+                let pressRecognizer = UILongPressGestureRecognizer(
+                    target: coordinator,
+                    action: #selector(Coordinator.handlePress(_:))
+                )
+                pressRecognizer.minimumPressDuration = 0
+                pressRecognizer.cancelsTouchesInView = false
+                pressRecognizer.delegate = coordinator
+                host.addGestureRecognizer(pressRecognizer)
+                coordinator.pressRecognizer = pressRecognizer
+            }
+
+            if coordinator.panRecognizer == nil {
+                let panRecognizer = UIPanGestureRecognizer(
+                    target: coordinator,
+                    action: #selector(Coordinator.handlePan(_:))
+                )
+                panRecognizer.cancelsTouchesInView = false
+                panRecognizer.delaysTouchesBegan = false
+                panRecognizer.delaysTouchesEnded = false
+                panRecognizer.delegate = coordinator
+                host.addGestureRecognizer(panRecognizer)
+                coordinator.panRecognizer = panRecognizer
+            }
+        }
+
+        private func removeInstalledGestures() {
+            if let pressRecognizer = coordinator.pressRecognizer {
+                gestureHost?.removeGestureRecognizer(pressRecognizer)
+            }
+
+            if let panRecognizer = coordinator.panRecognizer {
+                gestureHost?.removeGestureRecognizer(panRecognizer)
+            }
+
+            coordinator.pressRecognizer = nil
+            coordinator.panRecognizer = nil
+            gestureHost = nil
+        }
+
+        private func findGestureHost() -> UIView? {
+            var view: UIView? = self
+
+            while let current = view?.superview {
+                if current is UIScrollView {
+                    return current
+                }
+
+                view = current
+            }
+
+            return superview
+        }
+
+        deinit {
+            removeInstalledGestures()
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var onBegan: () -> Void
         var onEnded: () -> Void
+        weak var pressRecognizer: UILongPressGestureRecognizer?
+        weak var panRecognizer: UIPanGestureRecognizer?
+        private var isInteractionActive = false
+        private var isPanActive = false
 
         init(onBegan: @escaping () -> Void, onEnded: @escaping () -> Void) {
             self.onBegan = onBegan
@@ -1053,12 +1140,65 @@ private struct TouchInteractionTracker: UIViewRepresentable {
         @objc func handlePress(_ recognizer: UILongPressGestureRecognizer) {
             switch recognizer.state {
             case .began:
-                onBegan()
+                beginInteractionIfNeeded()
             case .ended, .cancelled, .failed:
-                onEnded()
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, !self.isPanActive else {
+                        return
+                    }
+
+                    self.endInteractionIfNeeded()
+                }
             default:
                 break
             }
+        }
+
+        @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
+            switch recognizer.state {
+            case .began:
+                isPanActive = true
+                beginInteractionIfNeeded()
+            case .changed:
+                if !isPanActive {
+                    isPanActive = true
+                    beginInteractionIfNeeded()
+                }
+            case .ended, .cancelled, .failed:
+                guard isPanActive else {
+                    return
+                }
+
+                isPanActive = false
+                endInteractionIfNeeded()
+            default:
+                break
+            }
+        }
+
+        private func beginInteractionIfNeeded() {
+            guard !isInteractionActive else {
+                return
+            }
+
+            isInteractionActive = true
+            onBegan()
+        }
+
+        private func endInteractionIfNeeded() {
+            guard isInteractionActive else {
+                return
+            }
+
+            isInteractionActive = false
+            onEnded()
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
         }
     }
 }

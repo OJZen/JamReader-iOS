@@ -110,13 +110,15 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
     deinit {
         prefetchTask?.cancel()
-        // Remove cached child controllers directly (can't call @MainActor methods from deinit).
-        for controller in controllerCache.values {
-            controller.willMove(toParent: nil)
-            controller.view.removeFromSuperview()
-            controller.removeFromParent()
-        }
+        let cachedControllers = Array(controllerCache.values)
         controllerCache.removeAll()
+        Task { @MainActor in
+            for controller in cachedControllers {
+                controller.willMove(toParent: nil)
+                controller.view.removeFromSuperview()
+                controller.removeFromParent()
+            }
+        }
         if let memoryWarningObserver {
             NotificationCenter.default.removeObserver(memoryWarningObserver)
         }
