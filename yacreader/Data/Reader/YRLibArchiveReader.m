@@ -1,6 +1,7 @@
 #import "YRLibArchiveReader.h"
 
 #import "LibArchiveShim.h"
+#import <os/log.h>
 
 static NSString * const YRLibArchiveReaderErrorDomain = @"YRLibArchiveReaderErrorDomain";
 
@@ -266,6 +267,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
         }
 
         if (bytesRead < (NSUInteger)size) {
+            os_log_error(OS_LOG_DEFAULT,
+                         "YRLibArchiveReader: incomplete read — expected %lu bytes, got %lu (entry index %ld)",
+                         (unsigned long)size, (unsigned long)bytesRead, (long)(self.nextReadableEntryIndex));
             [data setLength:bytesRead];
         }
 

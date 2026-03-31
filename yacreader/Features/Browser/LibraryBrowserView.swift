@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 struct LibraryBrowserView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = Spacing.sm
-        static let rowAccessoryReservedWidth: CGFloat = 34
+        static let rowAccessoryReservedWidth: CGFloat = 36
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -24,6 +24,7 @@ struct LibraryBrowserView: View {
     @State private var organizingComic: LibraryComic?
     @State private var quickActionsComic: LibraryComic?
     @State private var pendingQuickAction: PendingComicQuickAction?
+    @State private var removingComic: LibraryComic?
     @State private var isSelectionMode = false
     @State private var selectedComicIDs = Set<Int64>()
     @State private var isShowingBatchMetadataSheet = false
@@ -57,12 +58,26 @@ struct LibraryBrowserView: View {
                 maintenanceStatusStore: dependencies.libraryMaintenanceStatusStore,
                 coverLocator: dependencies.libraryCoverLocator,
                 comicInfoImportService: dependencies.comicInfoImportService,
-                importedComicsImportService: dependencies.importedComicsImportService
+                importedComicsImportService: dependencies.importedComicsImportService,
+                comicRemovalService: dependencies.libraryComicRemovalService
             )
         )
     }
 
     var body: some View {
+        composedBody
+    }
+
+    private var showsPersistentComicActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var comicAccessoryReservedWidth: CGFloat {
+        showsPersistentComicActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
+    }
+
+    @ViewBuilder
+    private var rootContent: some View {
         Group {
             if viewModel.hasActiveSearch {
                 searchResultsView
@@ -108,6 +123,10 @@ struct LibraryBrowserView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    private var composedBody: some View {
+        rootContent
         .safeAreaInset(edge: .top) {
             if let scanCompletion = viewModel.scanCompletion, viewModel.scanProgress == nil {
                 ScanCompletionBanner(
@@ -157,6 +176,7 @@ struct LibraryBrowserView: View {
                             } label: {
                                 Image(systemName: "square.and.arrow.down")
                             }
+                            .accessibilityLabel("Import ComicInfo")
                         }
                     }
 
@@ -178,6 +198,7 @@ struct LibraryBrowserView: View {
                             } label: {
                                 Image(systemName: "calendar.badge.clock")
                             }
+                            .accessibilityLabel("Recent Window")
                         }
                     }
 
@@ -188,6 +209,7 @@ struct LibraryBrowserView: View {
                             } label: {
                                 Image(systemName: "arrow.clockwise.circle")
                             }
+                            .accessibilityLabel("Maintenance")
                         }
                     }
 
@@ -198,6 +220,7 @@ struct LibraryBrowserView: View {
                             } label: {
                                 Image(systemName: displayMode.systemImageName)
                             }
+                            .accessibilityLabel("Display Mode")
                         }
                     }
 
@@ -208,6 +231,7 @@ struct LibraryBrowserView: View {
                             } label: {
                                 Image(systemName: "arrow.up.arrow.down.circle")
                             }
+                            .accessibilityLabel("Sort")
                         }
                     }
                 }
@@ -324,7 +348,10 @@ struct LibraryBrowserView: View {
                 },
                 onOpenOrganization: {
                     queueQuickAction(.organize(comic))
-                }
+                },
+                onRemoveFromLibrary: viewModel.canRemoveComics ? {
+                    queueQuickAction(.remove(comic))
+                } : nil
             )
         }
         .sheet(isPresented: $isShowingBatchMetadataSheet) {
@@ -442,12 +469,39 @@ struct LibraryBrowserView: View {
                 editingComic = comic
             case .organize(let comic):
                 organizingComic = comic
+            case .remove(let comic):
+                removingComic = comic
             }
+        }
+        .confirmationDialog(
+            "Delete Comic",
+            isPresented: removingComicConfirmationBinding,
+            titleVisibility: .visible,
+            presenting: removingComic
+        ) { comic in
+            Button("Delete Comic", role: .destructive) {
+                if viewModel.removeComic(comic) {
+                    removingComic = nil
+                }
+            }
+        } message: { comic in
+            Text("\"\(comic.displayTitle)\" will be removed from this library and deleted from local storage.")
         }
     }
 
     private var supportsGridDisplay: Bool {
         horizontalSizeClass == .regular
+    }
+
+    private var removingComicConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { removingComic != nil },
+            set: { isPresented in
+                if !isPresented {
+                    removingComic = nil
+                }
+            }
+        )
     }
 
     private var usesCondensedTopBarActions: Bool {
@@ -924,6 +978,7 @@ struct LibraryBrowserView: View {
             }
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.lg)
+            .adaptiveContentWidth(1200)
         }
     }
 
@@ -1132,30 +1187,38 @@ struct LibraryBrowserView: View {
         interactiveComicListNavigationLink(
             comic: comic,
             context: previewNavigationContext(for: kind),
-            label: { previewListRow(for: kind, comic: comic) }
+            heroSourceID: previewHeroSourceID(for: kind, comic: comic),
+            showsPersistentActions: kind != .reading,
+            label: {
+                previewListRow(
+                    for: kind,
+                    comic: comic,
+                    trailingAccessoryReservedWidth: kind == .reading ? 0 : comicAccessoryReservedWidth
+                )
+            }
         )
     }
 
     @ViewBuilder
     private func previewListRow(
         for kind: LibrarySpecialCollectionKind,
-        comic: LibraryComic
+        comic: LibraryComic,
+        trailingAccessoryReservedWidth: CGFloat = 0
     ) -> some View {
         if kind == .reading {
             ContinueReadingRow(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
                 coverSource: viewModel.coverSource(for: comic),
-                heroSourceID: viewModel.heroSourceID(for: comic),
-                trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                heroSourceID: previewHeroSourceID(for: kind, comic: comic)
             )
         } else {
             LibraryComicRow(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
                 coverSource: viewModel.coverSource(for: comic),
-                heroSourceID: viewModel.heroSourceID(for: comic),
-                trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                heroSourceID: previewHeroSourceID(for: kind, comic: comic),
+                trailingAccessoryReservedWidth: trailingAccessoryReservedWidth
             )
             .equatable()
         }
@@ -1168,6 +1231,7 @@ struct LibraryBrowserView: View {
         interactiveComicGridNavigationLink(
             comic: comic,
             context: previewNavigationContext(for: kind),
+            heroSourceID: previewHeroSourceID(for: kind, comic: comic),
             label: { previewGridCard(for: kind, comic: comic) }
         )
     }
@@ -1182,17 +1246,24 @@ struct LibraryBrowserView: View {
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
                 coverSource: viewModel.coverSource(for: comic),
-                heroSourceID: viewModel.heroSourceID(for: comic)
+                heroSourceID: previewHeroSourceID(for: kind, comic: comic)
             )
         } else {
             LibraryComicCard(
                 comic: comic,
                 coverURL: viewModel.coverURL(for: comic),
                 coverSource: viewModel.coverSource(for: comic),
-                heroSourceID: viewModel.heroSourceID(for: comic)
+                heroSourceID: previewHeroSourceID(for: kind, comic: comic)
             )
                 .equatable()
         }
+    }
+
+    private func previewHeroSourceID(
+        for kind: LibrarySpecialCollectionKind,
+        comic: LibraryComic
+    ) -> String {
+        "library-preview-\(viewModel.descriptor.id.uuidString)-\(kind.id)-\(comic.id)"
     }
 
     private func showsLocalFolderControls(for content: LibraryFolderContent) -> Bool {
@@ -1405,7 +1476,7 @@ struct LibraryBrowserView: View {
                                         coverURL: viewModel.coverURL(for: comic),
                                         coverSource: viewModel.coverSource(for: comic),
                                         heroSourceID: viewModel.heroSourceID(for: comic),
-                                        trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                                        trailingAccessoryReservedWidth: comicAccessoryReservedWidth
                                     )
                                     .equatable()
                                 }
@@ -1547,25 +1618,32 @@ struct LibraryBrowserView: View {
     private func interactiveComicListNavigationLink<Label: View>(
         comic: LibraryComic,
         context: ReaderNavigationContext,
+        heroSourceID: String? = nil,
+        showsPersistentActions: Bool = true,
         @ViewBuilder label: () -> Label
     ) -> some View {
         let rowLabel = label()
 
-        return ZStack(alignment: .trailing) {
-            HeroTapButton { frame in
-                prepareHeroTransition(for: comic, fallbackFrame: frame)
-                presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
-            } label: {
-                InsetListRowCard {
-                    rowLabel
-                }
+        return HeroTapButton { frame in
+            presentComic(
+                comic,
+                context: context,
+                sourceFrame: frame,
+                preferredHeroSourceID: heroSourceID
+            )
+        } label: {
+            InsetListRowCard {
+                rowLabel
             }
-
-            quickActionButton(for: comic)
-                .padding(.trailing, Spacing.xs)
         }
         .buttonStyle(.plain)
         .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+        .overlay(alignment: .trailing) {
+            if showsPersistentComicActions && showsPersistentActions {
+                persistentComicQuickActionsButton(for: comic)
+                    .padding(.trailing, 8)
+            }
+        }
         .contextMenu {
             comicContextActions(for: comic)
         }
@@ -1580,20 +1658,26 @@ struct LibraryBrowserView: View {
     private func interactiveComicGridNavigationLink<Label: View>(
         comic: LibraryComic,
         context: ReaderNavigationContext,
+        heroSourceID: String? = nil,
         @ViewBuilder label: @escaping () -> Label
     ) -> some View {
-        ZStack(alignment: .topTrailing) {
-            HeroTapButton { frame in
-                prepareHeroTransition(for: comic, fallbackFrame: frame)
-                presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
-            } label: {
-                label()
-            }
-
-            quickActionButton(for: comic, compact: true)
-                .padding(Spacing.sm)
+        HeroTapButton { frame in
+            presentComic(
+                comic,
+                context: context,
+                sourceFrame: frame,
+                preferredHeroSourceID: heroSourceID
+            )
+        } label: {
+            label()
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) {
+            if showsPersistentComicActions {
+                persistentComicQuickActionsButton(for: comic)
+                    .padding(12)
+            }
+        }
         .contextMenu {
             comicContextActions(for: comic)
         }
@@ -1608,12 +1692,28 @@ struct LibraryBrowserView: View {
     @MainActor
     private func prepareHeroTransition(
         for comic: LibraryComic,
-        fallbackFrame: CGRect
+        fallbackFrame: CGRect,
+        preferredHeroSourceID: String? = nil
     ) {
-        let heroSourceID = viewModel.heroSourceID(for: comic)
-        let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
+        let resolvedHeroSourceID = preferredHeroSourceID ?? viewModel.heroSourceID(for: comic)
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: resolvedHeroSourceID)
         heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
-        heroPreviewImage = viewModel.cachedTransitionImage(for: comic)
+        heroPreviewImage = LocalCoverTransitionCache.shared.image(for: resolvedHeroSourceID)
+            ?? viewModel.cachedTransitionImage(for: comic)
+    }
+
+    private func presentComic(
+        _ comic: LibraryComic,
+        context: ReaderNavigationContext,
+        sourceFrame: CGRect,
+        preferredHeroSourceID: String? = nil
+    ) {
+        prepareHeroTransition(
+            for: comic,
+            fallbackFrame: sourceFrame,
+            preferredHeroSourceID: preferredHeroSourceID
+        )
+        presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
     }
 
     @ViewBuilder
@@ -1641,6 +1741,24 @@ struct LibraryBrowserView: View {
                 systemImage: comic.read ? "arrow.uturn.backward.circle" : "checkmark.circle"
             )
         }
+
+        if viewModel.canRemoveComics {
+            Button(role: .destructive) {
+                removingComic = comic
+            } label: {
+                Label("Delete Comic", systemImage: "trash")
+            }
+        }
+    }
+
+    private func persistentComicQuickActionsButton(for comic: LibraryComic) -> some View {
+        Button {
+            quickActionsComic = comic
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More Actions for \(comic.displayTitle)")
     }
 
     private func comicReadSwipeAction(for comic: LibraryComic) -> some View {
@@ -1658,6 +1776,13 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func comicTrailingSwipeActions(for comic: LibraryComic) -> some View {
         Button {
+            quickActionsComic = comic
+        } label: {
+            Label("Info", systemImage: "info.circle")
+        }
+        .tint(.indigo)
+
+        Button {
             editingComic = comic
         } label: {
             Label("Edit", systemImage: "square.and.pencil")
@@ -1673,11 +1798,13 @@ struct LibraryBrowserView: View {
             )
         }
         .tint(.yellow)
-    }
 
-    private func quickActionButton(for comic: LibraryComic, compact: Bool = false) -> some View {
-        LibraryComicQuickActionButton(compact: compact) {
-            quickActionsComic = comic
+        if viewModel.canRemoveComics {
+            Button(role: .destructive) {
+                removingComic = comic
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
         }
     }
 
@@ -2049,7 +2176,7 @@ struct LibraryBrowserView: View {
                                             coverURL: viewModel.coverURL(for: comic),
                                             coverSource: viewModel.coverSource(for: comic),
                                             heroSourceID: viewModel.heroSourceID(for: comic),
-                                            trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
+                                            trailingAccessoryReservedWidth: comicAccessoryReservedWidth
                                         )
                                         .equatable()
                                     }
@@ -2173,6 +2300,7 @@ struct LibraryBrowserView: View {
 private enum PendingComicQuickAction {
     case edit(LibraryComic)
     case organize(LibraryComic)
+    case remove(LibraryComic)
 }
 
 private struct LibraryComicPresentation: Identifiable {

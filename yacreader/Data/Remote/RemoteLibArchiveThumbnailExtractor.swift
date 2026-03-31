@@ -226,7 +226,9 @@ private final class RemoteLibArchiveBlockCache {
     }
 
     private func touch(_ offset: UInt64) {
-        lruOffsets.removeAll { $0 == offset }
+        if let index = lruOffsets.firstIndex(of: offset) {
+            lruOffsets.remove(at: index)
+        }
         lruOffsets.append(offset)
     }
 }

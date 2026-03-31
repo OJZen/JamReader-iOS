@@ -68,10 +68,7 @@ final class LibraryListViewModel: ObservableObject {
         storageManager: LibraryStorageManager,
         inspector: SQLiteDatabaseInspector,
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
-        databaseBootstrapper _: LibraryDatabaseBootstrapper,
-        libraryScanner _: LibraryScanner,
-        importedComicsImportService: ImportedComicsImportService,
-        fileManager _: FileManager = .default
+        importedComicsImportService: ImportedComicsImportService
     ) {
         self.store = store
         self.storageManager = storageManager
@@ -83,7 +80,12 @@ final class LibraryListViewModel: ObservableObject {
 
     func reload() {
         do {
-            descriptors = try store.load()
+            let loadedDescriptors = try store.load()
+            let normalizedDescriptors = storageManager.normalizeDescriptors(loadedDescriptors)
+            if normalizedDescriptors != loadedDescriptors {
+                try store.save(normalizedDescriptors)
+            }
+            descriptors = normalizedDescriptors
             rebuildItems()
         } catch {
             alert = LibraryAlertState(title: "Failed to Load Libraries", message: error.localizedDescription)

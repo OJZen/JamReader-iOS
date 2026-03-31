@@ -34,6 +34,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private let coverLocator: LibraryCoverLocator
     private let comicInfoImportService: ComicInfoImportService
     private let importedComicsImportService: ImportedComicsImportService
+    private let comicRemovalService: LibraryComicRemovalService
     private let databaseInspector = SQLiteDatabaseInspector()
 
     private let metadataRootURL: URL
@@ -44,6 +45,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private var scanCompletionDismissTask: Task<Void, Never>?
     private var hasLoaded = false
     private let previewCollectionLimit = 6
+    private static let searchResultLimit = 40
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
     private let supportedImportedFileExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"
@@ -60,7 +62,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
         coverLocator: LibraryCoverLocator,
         comicInfoImportService: ComicInfoImportService,
-        importedComicsImportService: ImportedComicsImportService
+        importedComicsImportService: ImportedComicsImportService,
+        comicRemovalService: LibraryComicRemovalService
     ) {
         self.descriptor = descriptor
         self.folderID = folderID
@@ -73,6 +76,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         self.coverLocator = coverLocator
         self.comicInfoImportService = comicInfoImportService
         self.importedComicsImportService = importedComicsImportService
+        self.comicRemovalService = comicRemovalService
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         let initialMaintenanceRecord = maintenanceStatusStore.loadRecord(for: descriptor.id)
@@ -172,6 +176,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
     var supportsDirectLibraryImports: Bool {
         importedComicsImportService.importAvailability(for: descriptor).isSelectable
+    }
+
+    var canRemoveComics: Bool {
+        comicRemovalService.canRemoveComics(from: descriptor)
     }
 
     var hasActiveSearch: Bool {
@@ -391,6 +399,21 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         } catch {
             alert = LibraryAlertState(
                 title: "Failed to Update Read Status",
+                message: error.localizedDescription
+            )
+            return false
+        }
+    }
+
+    func removeComic(_ comic: LibraryComic) -> Bool {
+        do {
+            try comicRemovalService.removeComic(comic, from: descriptor)
+            AppHaptics.warning()
+            loadContent(respectingTransientState: false)
+            return true
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Remove Comic",
                 message: error.localizedDescription
             )
             return false
@@ -1137,7 +1160,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 try databaseReader.searchLibrary(
                     databaseURL: databaseURL,
                     query: trimmedQuery,
-                    limit: 40
+                    limit: Self.searchResultLimit
                 )
             }
 

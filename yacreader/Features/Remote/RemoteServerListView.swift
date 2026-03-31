@@ -4,7 +4,10 @@ import SwiftUI
 struct RemoteServerListView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
+        static let rowAccessoryReservedWidth: CGFloat = 36
     }
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
 
@@ -48,11 +51,18 @@ struct RemoteServerListView: View {
                                 profile: profile,
                                 recentHistoryCount: viewModel.recentSessions(for: profile).count,
                                 savedFolderCount: viewModel.shortcutCount(for: profile),
-                                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount
+                                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
+                                trailingAccessoryReservedWidth: persistentRowActionReservedWidth
                             )
                         }
                         .buttonStyle(.plain)
                         .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                        .overlay(alignment: .trailing) {
+                            if showsPersistentRowActions {
+                                persistentActionMenu(for: profile)
+                                    .padding(.trailing, 8)
+                            }
+                        }
                         .contextMenu {
                             remoteServerActionMenuContent(for: profile)
                         }
@@ -72,6 +82,7 @@ struct RemoteServerListView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add Server")
             }
         }
         .task {
@@ -83,13 +94,9 @@ struct RemoteServerListView: View {
         .refreshable {
             viewModel.load()
         }
-        .sheet(item: $editorDraft) { draft in
-            RemoteServerEditorSheet(draft: draft) { updatedDraft in
-                let result = viewModel.save(draft: updatedDraft)
-                if case .success = result {
-                    editorDraft = nil
-                }
-                return result
+        .sheet(isPresented: serverEditorPresented) {
+            if let draft = editorDraft {
+                remoteServerEditor(for: draft)
             }
         }
         .alert(item: $viewModel.alert) { alert in
@@ -114,6 +121,14 @@ struct RemoteServerListView: View {
                 )
             }
         }
+    }
+
+    private var showsPersistentRowActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var persistentRowActionReservedWidth: CGFloat {
+        showsPersistentRowActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
     private var summarySection: some View {
@@ -145,6 +160,26 @@ struct RemoteServerListView: View {
                 bottom: 10
             )
         }
+    }
+
+    private var serverEditorPresented: Binding<Bool> {
+        Binding(
+            get: { editorDraft != nil },
+            set: { if !$0 { editorDraft = nil } }
+        )
+    }
+
+    private func remoteServerEditor(
+        for draft: RemoteServerEditorDraft
+    ) -> some View {
+        RemoteServerEditorSheet(draft: draft) { updatedDraft in
+            let result = viewModel.save(draft: updatedDraft)
+            if case .success = result {
+                editorDraft = nil
+            }
+            return result
+        }
+        .id(draft.id)
     }
 
     private var totalOfflineCopyCount: Int {
@@ -250,6 +285,16 @@ struct RemoteServerListView: View {
             Label("Delete", systemImage: "trash")
         }
     }
+
+    private func persistentActionMenu(for profile: RemoteServerProfile) -> some View {
+        Menu {
+            remoteServerActionMenuContent(for: profile)
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Manage \(profile.displayTitle)")
+    }
 }
 
 struct RemoteServerRow: View {
@@ -257,40 +302,44 @@ struct RemoteServerRow: View {
     let recentHistoryCount: Int
     let savedFolderCount: Int
     let offlineCopyCount: Int
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
         InsetListRowCard {
-            HStack(alignment: .top, spacing: 12) {
-                RemoteServerGlyph(profile: profile)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 12) {
+                    RemoteServerGlyph(profile: profile, size: 42, cornerRadius: 12, iconFont: .title3)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(profile.name)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(profile.displayTitle)
                             .font(.headline)
                             .foregroundStyle(.primary)
                             .lineLimit(2)
 
-                        Text(profile.endpointDisplaySummary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Text(profile.providerDisplayTitle)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(profile.providerKind.tintColor)
                             .lineLimit(1)
                     }
+                }
 
+                RemoteInlineMetadataLine(
+                    items: connectionMetadataItems,
+                    horizontalSpacing: 8,
+                    verticalSpacing: 4
+                )
+
+                if !managementMetadataItems.isEmpty {
                     RemoteInlineMetadataLine(
-                        items: connectionMetadataItems,
+                        items: managementMetadataItems,
                         horizontalSpacing: 8,
                         verticalSpacing: 4
                     )
-
-                    if !managementMetadataItems.isEmpty {
-                        RemoteInlineMetadataLine(
-                            items: managementMetadataItems,
-                            horizontalSpacing: 8,
-                            verticalSpacing: 4
-                        )
-                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .padding(.trailing, trailingAccessoryReservedWidth)
         }
     }
 
@@ -298,13 +347,13 @@ struct RemoteServerRow: View {
         var items = [
             RemoteInlineMetadataItem(
                 systemImage: "folder.fill",
-                text: profile.shareDisplaySummary,
+                text: profile.endpointDisplaySummary,
                 tint: .blue
             ),
             RemoteInlineMetadataItem(
-                systemImage: profile.authenticationMode == .guest ? "person.fill" : "lock.fill",
-                text: profile.authenticationMode.title,
-                tint: profile.authenticationMode == .guest ? .orange : .green
+                systemImage: "point.3.connected.trianglepath.dotted",
+                text: profile.shareDisplaySummary,
+                tint: .teal
             )
         ]
 
@@ -314,16 +363,6 @@ struct RemoteServerRow: View {
                     systemImage: "person.text.rectangle",
                     text: profile.username,
                     tint: .secondary
-                )
-            )
-        }
-
-        if !profile.usesDefaultPort {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "point.3.connected.trianglepath.dotted",
-                    text: "Port \(profile.port)",
-                    tint: .teal
                 )
             )
         }
@@ -370,6 +409,9 @@ struct RemoteServerRow: View {
 
 struct RemoteServerGlyph: View {
     let profile: RemoteServerProfile
+    var size: CGFloat = 56
+    var cornerRadius: CGFloat = 16
+    var iconFont: Font = .title2
 
     private var authenticationTint: Color {
         profile.authenticationMode == .guest ? .orange : .green
@@ -380,7 +422,7 @@ struct RemoteServerGlyph: View {
     }
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(
                 LinearGradient(
                     colors: [
@@ -391,10 +433,10 @@ struct RemoteServerGlyph: View {
                     endPoint: .bottomTrailing
                 )
             )
-            .frame(width: 56, height: 56)
+            .frame(width: size, height: size)
             .overlay {
                 Image(systemName: profile.providerKind.systemImage)
-                    .font(.title2.weight(.semibold))
+                    .font(iconFont.weight(.semibold))
                     .foregroundStyle(profile.providerKind.tintColor)
             }
             .overlay(alignment: .bottomTrailing) {
@@ -407,7 +449,7 @@ struct RemoteServerGlyph: View {
                         Circle()
                             .stroke(Color(.secondarySystemBackground), lineWidth: 2)
                     }
-                    .offset(x: 6, y: 6)
+                    .offset(x: size >= 50 ? 6 : 4, y: size >= 50 ? 6 : 4)
             }
     }
 }

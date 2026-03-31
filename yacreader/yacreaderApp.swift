@@ -21,8 +21,6 @@ struct yacreaderApp: App {
                 storageManager: dependencies.libraryStorageManager,
                 inspector: dependencies.databaseInspector,
                 maintenanceStatusStore: dependencies.libraryMaintenanceStatusStore,
-                databaseBootstrapper: dependencies.libraryDatabaseBootstrapper,
-                libraryScanner: dependencies.libraryScanner,
                 importedComicsImportService: dependencies.importedComicsImportService
             )
         )

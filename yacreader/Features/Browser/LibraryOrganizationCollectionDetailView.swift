@@ -3,7 +3,7 @@ import SwiftUI
 struct LibraryOrganizationCollectionDetailView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
-        static let rowAccessoryReservedWidth: CGFloat = 34
+        static let rowAccessoryReservedWidth: CGFloat = 36
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -24,6 +24,7 @@ struct LibraryOrganizationCollectionDetailView: View {
     @State private var organizingComic: LibraryComic?
     @State private var quickActionsComic: LibraryComic?
     @State private var pendingQuickAction: PendingComicQuickAction?
+    @State private var removingComic: LibraryComic?
     @State private var isSelectionMode = false
     @State private var selectedComicIDs = Set<Int64>()
     @State private var isShowingBatchMetadataSheet = false
@@ -32,6 +33,14 @@ struct LibraryOrganizationCollectionDetailView: View {
     @State private var isShowingSelectionActionsSheet = false
     @State private var presentedComic: PresentedComic?
     @State private var heroSourceFrame: CGRect = .zero
+
+    private var showsPersistentComicActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var comicAccessoryReservedWidth: CGFloat {
+        showsPersistentComicActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
+    }
 
     init(
         descriptor: LibraryDescriptor,
@@ -50,7 +59,8 @@ struct LibraryOrganizationCollectionDetailView: View {
                 databaseReader: dependencies.libraryDatabaseReader,
                 databaseWriter: dependencies.libraryDatabaseWriter,
                 storageManager: dependencies.libraryStorageManager,
-                coverLocator: dependencies.libraryCoverLocator
+                coverLocator: dependencies.libraryCoverLocator,
+                comicRemovalService: dependencies.libraryComicRemovalService
             )
         )
     }
@@ -99,6 +109,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                             } label: {
                                 Image(systemName: "square.and.arrow.down")
                             }
+                            .accessibilityLabel("Import ComicInfo")
                         }
                     }
 
@@ -108,6 +119,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
+                        .accessibilityLabel("Collection Actions")
                     }
 
                     if canAdjustDisplayMode {
@@ -117,6 +129,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                             } label: {
                                 Image(systemName: displayMode.systemImageName)
                             }
+                            .accessibilityLabel("Display Mode")
                         }
                     }
 
@@ -127,6 +140,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                             } label: {
                                 Image(systemName: "arrow.up.arrow.down.circle")
                             }
+                            .accessibilityLabel("Sort")
                         }
                     }
                 }
@@ -212,7 +226,10 @@ struct LibraryOrganizationCollectionDetailView: View {
                 onRemoveFromCurrentContext: {
                     viewModel.remove(comic)
                     quickActionsComic = nil
-                }
+                },
+                onRemoveFromLibrary: viewModel.canRemoveComics ? {
+                    queueQuickAction(.remove(comic))
+                } : nil
             )
         }
         .sheet(item: $editingCollection) { collection in
@@ -329,7 +346,23 @@ struct LibraryOrganizationCollectionDetailView: View {
                 editingComic = comic
             case .organize(let comic):
                 organizingComic = comic
+            case .remove(let comic):
+                removingComic = comic
             }
+        }
+        .confirmationDialog(
+            "Delete Comic",
+            isPresented: removingComicConfirmationBinding,
+            titleVisibility: .visible,
+            presenting: removingComic
+        ) { comic in
+            Button("Delete Comic", role: .destructive) {
+                if viewModel.removeComicFromLibrary(comic) {
+                    removingComic = nil
+                }
+            }
+        } message: { comic in
+            Text("\"\(comic.displayTitle)\" will be removed from this library and deleted from local storage.")
         }
         .onChange(of: searchQuery) { _, _ in
             if isSelectionMode {
@@ -369,6 +402,17 @@ struct LibraryOrganizationCollectionDetailView: View {
         } else {
             listContent
         }
+    }
+
+    private var removingComicConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { removingComic != nil },
+            set: { isPresented in
+                if !isPresented {
+                    removingComic = nil
+                }
+            }
+        )
     }
 
     private var listContent: some View {
@@ -421,6 +465,7 @@ struct LibraryOrganizationCollectionDetailView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
+            .adaptiveContentWidth(1200)
         }
     }
 
@@ -523,24 +568,25 @@ struct LibraryOrganizationCollectionDetailView: View {
             .buttonStyle(.plain)
             .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         } else {
-            ZStack(alignment: .trailing) {
-                HeroTapButton { frame in
-                    presentComic(comic, sourceFrame: frame)
-                } label: {
-                    InsetListRowCard {
-                        LibraryComicRow(
-                            comic: comic,
-                            coverURL: viewModel.coverURL(for: comic),
-                            trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
-                        )
-                    }
+            HeroTapButton { frame in
+                presentComic(comic, sourceFrame: frame)
+            } label: {
+                InsetListRowCard {
+                    LibraryComicRow(
+                        comic: comic,
+                        coverURL: viewModel.coverURL(for: comic),
+                        trailingAccessoryReservedWidth: comicAccessoryReservedWidth
+                    )
                 }
-
-                quickActionButton(for: comic)
-                    .padding(.trailing, 8)
             }
             .buttonStyle(.plain)
             .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+            .overlay(alignment: .trailing) {
+                if showsPersistentComicActions {
+                    persistentComicQuickActionsButton(for: comic)
+                        .padding(.trailing, 8)
+                }
+            }
             .contextMenu {
                 comicContextActions(for: comic)
             }
@@ -548,6 +594,13 @@ struct LibraryOrganizationCollectionDetailView: View {
                 comicReadSwipeAction(for: comic)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                Button {
+                    quickActionsComic = comic
+                } label: {
+                    Label("Info", systemImage: "info.circle")
+                }
+                .tint(.indigo)
+
                 Button {
                     editingComic = comic
                 } label: {
@@ -579,17 +632,18 @@ struct LibraryOrganizationCollectionDetailView: View {
             }
             .buttonStyle(.plain)
         } else {
-            ZStack(alignment: .topTrailing) {
-                HeroTapButton { frame in
-                    presentComic(comic, sourceFrame: frame)
-                } label: {
-                    LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
-                }
-
-                quickActionButton(for: comic, compact: true)
-                    .padding(12)
+            HeroTapButton { frame in
+                presentComic(comic, sourceFrame: frame)
+            } label: {
+                LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
             }
             .buttonStyle(.plain)
+            .overlay(alignment: .topTrailing) {
+                if showsPersistentComicActions {
+                    persistentComicQuickActionsButton(for: comic)
+                        .padding(12)
+                }
+            }
             .contextMenu {
                 comicContextActions(for: comic)
             }
@@ -1043,6 +1097,24 @@ struct LibraryOrganizationCollectionDetailView: View {
                 systemImage: comic.read ? "arrow.uturn.backward.circle" : "checkmark.circle"
             )
         }
+
+        if viewModel.canRemoveComics {
+            Button(role: .destructive) {
+                removingComic = comic
+            } label: {
+                Label("Delete Comic", systemImage: "trash")
+            }
+        }
+    }
+
+    private func persistentComicQuickActionsButton(for comic: LibraryComic) -> some View {
+        Button {
+            quickActionsComic = comic
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("More Actions for \(comic.displayTitle)")
     }
 
     private func comicReadSwipeAction(for comic: LibraryComic) -> some View {
@@ -1055,12 +1127,6 @@ struct LibraryOrganizationCollectionDetailView: View {
             )
         }
         .tint(comic.read ? .orange : .green)
-    }
-
-    private func quickActionButton(for comic: LibraryComic, compact: Bool = false) -> some View {
-        LibraryComicQuickActionButton(compact: compact) {
-            quickActionsComic = comic
-        }
     }
 
     private func queueQuickAction(_ action: PendingComicQuickAction) {
@@ -1157,4 +1223,5 @@ private struct PresentedComic: Identifiable {
 private enum PendingComicQuickAction {
     case edit(LibraryComic)
     case organize(LibraryComic)
+    case remove(LibraryComic)
 }
