@@ -10,6 +10,7 @@ struct LibraryComicQuickActionsSheet: View {
     let onSetRating: (Int) -> Void
     let onOpenOrganization: () -> Void
     var onRemoveFromCurrentContext: (() -> Void)?
+    var onRemoveFromLibrary: (() -> Void)?
 
     @State private var selectedRating: Int
 
@@ -22,7 +23,8 @@ struct LibraryComicQuickActionsSheet: View {
         onToggleReadStatus: @escaping () -> Void,
         onSetRating: @escaping (Int) -> Void,
         onOpenOrganization: @escaping () -> Void,
-        onRemoveFromCurrentContext: (() -> Void)? = nil
+        onRemoveFromCurrentContext: (() -> Void)? = nil,
+        onRemoveFromLibrary: (() -> Void)? = nil
     ) {
         self.comic = comic
         self.removeFromContextTitle = removeFromContextTitle
@@ -33,6 +35,7 @@ struct LibraryComicQuickActionsSheet: View {
         self.onSetRating = onSetRating
         self.onOpenOrganization = onOpenOrganization
         self.onRemoveFromCurrentContext = onRemoveFromCurrentContext
+        self.onRemoveFromLibrary = onRemoveFromLibrary
         _selectedRating = State(initialValue: Self.normalizedRatingValue(from: comic.rating))
     }
 
@@ -117,6 +120,19 @@ struct LibraryComicQuickActionsSheet: View {
                         }
                     }
                 }
+
+                if let onRemoveFromLibrary {
+                    Section {
+                        Button(role: .destructive) {
+                            AppHaptics.warning()
+                            onRemoveFromLibrary()
+                        } label: {
+                            Label("Delete Comic", systemImage: "trash")
+                        }
+                    } footer: {
+                        Text("This removes the comic file from the library on this device.")
+                    }
+                }
             }
             .navigationTitle("Comic Actions")
             .navigationBarTitleDisplayMode(.inline)
@@ -126,6 +142,7 @@ struct LibraryComicQuickActionsSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(640)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .onChange(of: selectedRating) { _, newValue in
@@ -139,23 +156,6 @@ struct LibraryComicQuickActionsSheet: View {
         }
 
         return min(max(Int(rating.rounded()), 0), 5)
-    }
-}
-
-struct LibraryComicQuickActionButton: View {
-    var compact = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "ellipsis.circle")
-                .font(compact ? .title3 : .title2)
-                .foregroundStyle(.secondary)
-                .padding(compact ? 4 : 6)
-                .background(.ultraThinMaterial, in: Circle())
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel("Comic Actions")
     }
 }
 
@@ -258,6 +258,7 @@ struct LibrarySelectionActionsSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(640)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }

@@ -4,6 +4,7 @@ import UIKit
 
 private enum RemoteOfflineShelfLayoutMetrics {
     static let horizontalInset: CGFloat = 12
+    static let rowAccessoryReservedWidth: CGFloat = 36
 }
 
 private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
@@ -278,6 +279,8 @@ struct RemoteOfflineShelfView: View {
     let dependencies: AppDependencies
     let focusedProfile: RemoteServerProfile?
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     @StateObject private var viewModel: RemoteOfflineShelfViewModel
     @State private var searchText = ""
     @State private var sortMode: RemoteOfflineShelfSortMode = .recent
@@ -342,12 +345,19 @@ struct RemoteOfflineShelfView: View {
                                         browsingService: dependencies.remoteServerBrowsingService,
                                         heroSourceID: entry.session.directoryItem.id,
                                         showsNavigationIndicator: false,
-                                        showsServerName: false
+                                        showsServerName: false,
+                                        trailingAccessoryReservedWidth: itemAccessoryReservedWidth
                                     )
                                 }
                             }
                             .buttonStyle(.plain)
                             .insetCardListRow(horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset)
+                            .overlay(alignment: .trailing) {
+                                if showsPersistentItemActions {
+                                    offlineShelfItemActionMenu(for: entry)
+                                        .padding(.trailing, 8)
+                                }
+                            }
                             .contextMenu {
                                 offlineShelfItemActionMenuContent(for: entry)
                             }
@@ -867,6 +877,14 @@ struct RemoteOfflineShelfView: View {
         Set(scopedEntries.map(\.profile.id)).count
     }
 
+    private var showsPersistentItemActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var itemAccessoryReservedWidth: CGFloat {
+        showsPersistentItemActions ? RemoteOfflineShelfLayoutMetrics.rowAccessoryReservedWidth : 0
+    }
+
     private var background: some View {
         Color(.systemGroupedBackground)
             .ignoresSafeArea()
@@ -924,6 +942,18 @@ struct RemoteOfflineShelfView: View {
         } label: {
             Label("Delete Downloaded Copy", systemImage: "trash")
         }
+    }
+
+    private func offlineShelfItemActionMenu(
+        for entry: RemoteOfflineComicEntry
+    ) -> some View {
+        Menu {
+            offlineShelfItemActionMenuContent(for: entry)
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Manage \(entry.session.displayName)")
     }
 
     @ViewBuilder

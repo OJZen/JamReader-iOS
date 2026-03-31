@@ -80,8 +80,10 @@ struct RemoteDirectoryItemListRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xs)
         .padding(.trailing, trailingAccessoryReservedWidth)
+        .contentShape(Rectangle())
     }
 
     private var supportingMetadataItems: [RemoteInlineMetadataItem] {
@@ -598,14 +600,6 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
         RemoteBrowserOverlaySurface {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack(alignment: .top, spacing: Spacing.sm) {
-                    RemoteBrowserImportOrb(
-                        progress: progress,
-                        size: 44,
-                        lineWidth: 4,
-                        symbolSize: 14
-                    )
-                    .padding(.top, 1)
-
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                             Text(progress.title)
@@ -682,24 +676,12 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
                 progress: progress,
                 size: 60,
                 lineWidth: 5,
-                symbolSize: 18
+                contentMode: .percentage
             )
             .background(
                 Circle()
                     .fill(Color.white.opacity(0.08))
             )
-            .overlay(alignment: .bottomTrailing) {
-                if progress.isCancellable {
-                    Circle()
-                        .fill(Color.red.opacity(0.92))
-                        .frame(width: 10, height: 10)
-                        .overlay {
-                            Circle()
-                                .stroke(Color.white.opacity(0.82), lineWidth: 1)
-                        }
-                        .offset(x: -2, y: -2)
-                }
-            }
             .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 8)
             .padding(.horizontal, Spacing.md)
             .padding(.bottom, Spacing.xxs)
@@ -775,10 +757,15 @@ struct RemoteBrowserFeedbackCard: View {
 }
 
 private struct RemoteBrowserImportOrb: View {
+    enum ContentMode {
+        case symbol
+        case percentage
+    }
+
     let progress: RemoteBrowserProgressState
     let size: CGFloat
     let lineWidth: CGFloat
-    let symbolSize: CGFloat
+    var contentMode: ContentMode = .symbol
 
     var body: some View {
         ZStack {
@@ -814,12 +801,30 @@ private struct RemoteBrowserImportOrb: View {
                     .scaleEffect(max(0.65, size / 72))
             }
 
-            Image(systemName: "square.and.arrow.down.fill")
-                .font(.system(size: symbolSize, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.92))
+            switch contentMode {
+            case .symbol:
+                Image(systemName: "square.and.arrow.down.fill")
+                    .font(.system(size: max(12, size * 0.3), weight: .semibold))
+                    .foregroundStyle(Color.primary.opacity(0.92))
+            case .percentage:
+                Text(compactPercentageLabel)
+                    .font(.system(size: max(12, size * 0.22), weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.primary.opacity(0.94))
+                    .minimumScaleFactor(0.65)
+                    .lineLimit(1)
+            }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
+    }
+
+    private var compactPercentageLabel: String {
+        guard let fraction = progress.clampedFraction else {
+            return "..."
+        }
+
+        return "\(Int((fraction * 100).rounded()))%"
     }
 }
 

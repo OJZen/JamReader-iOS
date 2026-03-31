@@ -131,8 +131,17 @@ struct ReaderPageJumpOverlay: View {
             return
         }
 
-        let screenHeight = UIScreen.main.bounds.height
-        let overlap = max(0, screenHeight - endFrame.minY)
+        // Use window height for iPad multitasking (UIScreen.main.bounds is full screen)
+        let windowHeight: CGFloat = {
+            if let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+               let window = windowScene.windows.first(where: \.isKeyWindow) {
+                return window.bounds.height
+            }
+            return UIScreen.main.bounds.height
+        }()
+        let overlap = max(0, windowHeight - endFrame.minY)
         // Re-center the dialog in the available space above the keyboard.
         let targetLift = overlap > 0 ? overlap * 0.5 : 0
         let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25

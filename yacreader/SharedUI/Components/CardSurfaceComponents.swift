@@ -21,6 +21,8 @@ struct InsetCard<Content: View>: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(Color.black.opacity(strokeOpacity), lineWidth: 1)
         }
+        .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .hoverEffect(.lift)
     }
 }
 

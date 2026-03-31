@@ -22,6 +22,7 @@ struct ReaderControlsContainer<Content: View>: View {
                 }
             }
         }
+        .adaptiveSheetWidth(680)
         .presentationBackground(Color.surfaceGrouped)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

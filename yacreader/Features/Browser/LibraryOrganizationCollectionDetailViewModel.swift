@@ -14,6 +14,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     private let databaseWriter: LibraryDatabaseWriter
     private let storageManager: LibraryStorageManager
     private let coverLocator: LibraryCoverLocator
+    private let comicRemovalService: LibraryComicRemovalService
     private let databaseURL: URL
     private let metadataRootURL: URL
     private var hasLoaded = false
@@ -24,7 +25,8 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         databaseReader: LibraryDatabaseReader,
         databaseWriter: LibraryDatabaseWriter,
         storageManager: LibraryStorageManager,
-        coverLocator: LibraryCoverLocator
+        coverLocator: LibraryCoverLocator,
+        comicRemovalService: LibraryComicRemovalService
     ) {
         self.descriptor = descriptor
         self.collection = collection
@@ -32,6 +34,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         self.databaseWriter = databaseWriter
         self.storageManager = storageManager
         self.coverLocator = coverLocator
+        self.comicRemovalService = comicRemovalService
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
     }
@@ -42,6 +45,10 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
 
     var summaryText: String {
         collection.countText
+    }
+
+    var canRemoveComics: Bool {
+        comicRemovalService.canRemoveComics(from: descriptor)
     }
 
     func updateCollection(
@@ -357,6 +364,21 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         } catch {
             alert = LibraryAlertState(
                 title: "Failed to Update Collection",
+                message: error.localizedDescription
+            )
+            return false
+        }
+    }
+
+    func removeComicFromLibrary(_ comic: LibraryComic) -> Bool {
+        do {
+            try comicRemovalService.removeComic(comic, from: descriptor)
+            AppHaptics.warning()
+            load()
+            return true
+        } catch {
+            alert = LibraryAlertState(
+                title: "Failed to Remove Comic",
                 message: error.localizedDescription
             )
             return false

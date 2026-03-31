@@ -147,7 +147,7 @@ struct RemoteComicLoadingView: View {
                                 ProgressView(value: downloadProgress)
                                     .progressViewStyle(.linear)
                                     .tint(.white)
-                                    .frame(width: 220)
+                                    .frame(maxWidth: 280)
                                 Text("\(Int(downloadProgress * 100))%")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(Color.white.opacity(0.82))
@@ -689,6 +689,10 @@ struct RemoteComicReaderView: View {
         horizontalSizeClass == .regular
     }
 
+    private var showsThumbnailShortcut: Bool {
+        supportsDoublePageSpread && (document?.pageCount ?? 0) > 1
+    }
+
     private var currentPageIndex: Int {
         readerSession.state.currentPageIndex
     }
@@ -737,6 +741,12 @@ struct RemoteComicReaderView: View {
         ReaderTopBar(
             title: displayName,
             onBack: dismiss.callAsFunction,
+            secondarySystemImage: showsThumbnailShortcut ? "square.grid.3x2" : nil,
+            secondaryAccessibilityLabel: "Browse Pages",
+            onSecondaryAction: showsThumbnailShortcut ? {
+                readerSession.apply(.setChromeVisible(true))
+                isShowingThumbnailBrowser = true
+            } : nil,
             onMenu: {
                 readerSession.apply(.setChromeVisible(true))
                 isShowingReaderControls = true

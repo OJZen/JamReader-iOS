@@ -52,6 +52,7 @@ struct LibraryHomeLibraryActionsSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(620)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
     }
@@ -103,6 +104,7 @@ struct LibraryRenameSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(520)
         .presentationDetents([.medium])
         .onAppear {
             isFocused = true
@@ -182,6 +184,7 @@ struct LibraryInfoSheet: View {
             .navigationTitle("Library Info")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .adaptiveSheetWidth(720)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }

@@ -91,6 +91,7 @@ struct ComicOrganizationSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(720)
         .presentationDetents([.medium, .large])
         .task {
             viewModel.loadIfNeeded()

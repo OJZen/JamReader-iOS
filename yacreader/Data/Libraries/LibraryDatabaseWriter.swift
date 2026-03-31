@@ -450,6 +450,71 @@ final class LibraryDatabaseWriter {
         #endif
     }
 
+    func deleteComics(
+        _ comicIDs: [Int64],
+        in databaseURL: URL
+    ) throws {
+        #if canImport(SQLite3)
+        let uniqueComicIDs = uniquePreservingOrder(comicIDs)
+        guard !uniqueComicIDs.isEmpty else {
+            return
+        }
+
+        let database = try openDatabase(at: databaseURL)
+        defer {
+            sqlite3_close(database)
+        }
+
+        try performTransaction(database: database) {
+            let deletionRecords = try loadComicDeletionRecords(
+                comicIDs: uniqueComicIDs,
+                database: database
+            )
+            guard !deletionRecords.isEmpty else {
+                return
+            }
+
+            let resolvedComicIDs = deletionRecords.map(\.comicID)
+            let comicInfoIDs = uniquePreservingOrder(deletionRecords.map(\.comicInfoID))
+
+            try deleteRows(
+                from: "comic_default_reading_list",
+                whereColumn: "comic_id",
+                matching: resolvedComicIDs,
+                database: database
+            )
+            try deleteRows(
+                from: "comic_reading_list",
+                whereColumn: "comic_id",
+                matching: resolvedComicIDs,
+                database: database
+            )
+            try deleteRows(
+                from: "comic_label",
+                whereColumn: "comic_id",
+                matching: resolvedComicIDs,
+                database: database
+            )
+            try deleteRows(
+                from: "comic",
+                whereColumn: "id",
+                matching: resolvedComicIDs,
+                database: database
+            )
+            try deleteRows(
+                from: "comic_info",
+                whereColumn: "id",
+                matching: comicInfoIDs,
+                database: database
+            )
+
+            _ = try refreshFolderMetadata(folderID: 1, database: database)
+        }
+        #else
+        throw LibraryDatabaseWriteError.sqliteUnavailable
+        #endif
+    }
+
     func createLabel(
         named name: String,
         color: LibraryLabelColor,
@@ -1465,6 +1530,229 @@ final class LibraryDatabaseWriter {
         }
 
         return database
+    }
+
+    private func loadComicDeletionRecords(
+        comicIDs: [Int64],
+        database: OpaquePointer
+    ) throws -> [(comicID: Int64, comicInfoID: Int64)] {
+        let sql = """
+        SELECT id, comicInfoId
+        FROM comic
+        WHERE id = ?
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        var results: [(comicID: Int64, comicInfoID: Int64)] = []
+        results.reserveCapacity(comicIDs.count)
+
+        for comicID in comicIDs {
+            sqlite3_reset(statement)
+            sqlite3_clear_bindings(statement)
+            sqlite3_bind_int64(statement, 1, comicID)
+
+            guard sqlite3_step(statement) == SQLITE_ROW else {
+                continue
+            }
+
+            results.append((
+                comicID: sqlite3_column_int64(statement, 0),
+                comicInfoID: sqlite3_column_int64(statement, 1)
+            ))
+        }
+
+        return results
+    }
+
+    private func deleteRows(
+        from table: String,
+        whereColumn: String,
+        matching ids: [Int64],
+        database: OpaquePointer
+    ) throws {
+        guard !ids.isEmpty else {
+            return
+        }
+
+        let sql = "DELETE FROM \(table) WHERE \(whereColumn) = ?"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        for id in ids {
+            sqlite3_reset(statement)
+            sqlite3_clear_bindings(statement)
+            sqlite3_bind_int64(statement, 1, id)
+
+            guard sqlite3_step(statement) == SQLITE_DONE else {
+                throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+            }
+        }
+    }
+
+    private func refreshFolderMetadata(
+        folderID: Int64,
+        database: OpaquePointer
+    ) throws -> String? {
+        let childFolderIDs = try loadChildFolderIDs(
+            parentFolderID: folderID,
+            database: database
+        )
+
+        var firstChildHashFromSubfolder: String?
+        for childFolderID in childFolderIDs {
+            let childHash = try refreshFolderMetadata(
+                folderID: childFolderID,
+                database: database
+            )
+            if firstChildHashFromSubfolder == nil,
+               let childHash,
+               !childHash.isEmpty {
+                firstChildHashFromSubfolder = childHash
+            }
+        }
+
+        let comicCount = try loadComicCount(
+            parentFolderID: folderID,
+            database: database
+        )
+        let firstComicHash = try loadFirstComicHash(
+            parentFolderID: folderID,
+            database: database
+        )
+        let firstChildHash = firstComicHash ?? firstChildHashFromSubfolder
+        let childCount = childFolderIDs.count + comicCount
+
+        let sql = "UPDATE folder SET numChildren = ?, firstChildHash = ? WHERE id = ?"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, Int64(childCount))
+        bindOptionalText(firstChildHash, at: 2, statement: statement)
+        sqlite3_bind_int64(statement, 3, folderID)
+
+        guard sqlite3_step(statement) == SQLITE_DONE else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        return firstChildHash
+    }
+
+    private func loadChildFolderIDs(
+        parentFolderID: Int64,
+        database: OpaquePointer
+    ) throws -> [Int64] {
+        let sql = """
+        SELECT id
+        FROM folder
+        WHERE parentId = ? AND id <> 1
+        ORDER BY name COLLATE NOCASE
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, parentFolderID)
+
+        var results: [Int64] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            results.append(sqlite3_column_int64(statement, 0))
+        }
+
+        return results
+    }
+
+    private func loadComicCount(
+        parentFolderID: Int64,
+        database: OpaquePointer
+    ) throws -> Int {
+        let sql = "SELECT COUNT(*) FROM comic WHERE parentId = ?"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, parentFolderID)
+
+        guard sqlite3_step(statement) == SQLITE_ROW else {
+            return 0
+        }
+
+        return Int(sqlite3_column_int64(statement, 0))
+    }
+
+    private func loadFirstComicHash(
+        parentFolderID: Int64,
+        database: OpaquePointer
+    ) throws -> String? {
+        let sql = """
+        SELECT ci.hash
+        FROM comic c
+        INNER JOIN comic_info ci ON c.comicInfoId = ci.id
+        WHERE c.parentId = ?
+        ORDER BY c.fileName COLLATE NOCASE
+        LIMIT 1
+        """
+
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
+              let statement
+        else {
+            throw LibraryDatabaseWriteError.updateFailed(lastDatabaseError(database: database))
+        }
+
+        defer {
+            sqlite3_finalize(statement)
+        }
+
+        sqlite3_bind_int64(statement, 1, parentFolderID)
+
+        guard sqlite3_step(statement) == SQLITE_ROW,
+              let value = sqlite3_column_text(statement, 0)
+        else {
+            return nil
+        }
+
+        return String(cString: value)
     }
 
     private func performTransaction(

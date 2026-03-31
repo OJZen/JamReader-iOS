@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RemoteServerEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let onSave: (RemoteServerEditorDraft) -> Result<Void, RemoteAlertState>
 
@@ -161,7 +162,9 @@ struct RemoteServerEditorSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .frame(height: regularEditorHeight)
+        .adaptiveSheetWidth(720)
+        .modifier(RemoteServerEditorPresentationModifier())
         .presentationDragIndicator(.visible)
         .alert(item: $alert) { alert in
             makeRemoteAlert(for: alert)
@@ -186,6 +189,26 @@ struct RemoteServerEditorSheet: View {
             if draft.trimmedPortText.isEmpty || draft.resolvedPort == oldValue.defaultPort {
                 draft.portText = String(newValue.defaultPort)
             }
+        }
+    }
+
+    private var regularEditorHeight: CGFloat? {
+        horizontalSizeClass == .regular ? 780 : nil
+    }
+}
+
+private struct RemoteServerEditorPresentationModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    func body(content: Content) -> some View {
+        if horizontalSizeClass == .regular {
+            if #available(iOS 18.0, *) {
+                content.presentationSizing(.page)
+            } else {
+                content
+            }
+        } else {
+            content.presentationDetents([.medium, .large])
         }
     }
 }

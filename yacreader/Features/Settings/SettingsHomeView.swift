@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct SettingsHomeView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    @AppStorage("settingsHome.selectedPane") private var selectedPaneRawValue = SettingsHomePane.overview.rawValue
+
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
@@ -10,53 +14,109 @@ struct SettingsHomeView: View {
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .balanced
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
+    @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
     @State private var isShowingClearDownloadsConfirmation = false
     @State private var isShowingClearThumbnailsConfirmation = false
+    @State private var isShowingClearImportedComicsConfirmation = false
     @State private var alert: SettingsAlertState?
 
     var body: some View {
+        Group {
+            if usesSplitViewLayout {
+                splitViewLayout
+            } else {
+                compactLayout
+            }
+        }
+        .task { refresh() }
+        .confirmationDialog(
+            "Clear downloaded remote comics?",
+            isPresented: $isShowingClearDownloadsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Downloads", role: .destructive) {
+                clearRemoteDownloads()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Downloaded copies, browsing history, and remembered folder positions will be removed. Saved remote servers stay intact.")
+        }
+        .confirmationDialog(
+            "Clear cached remote thumbnails?",
+            isPresented: $isShowingClearThumbnailsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Thumbnails", role: .destructive) {
+                clearRemoteThumbnails()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Only generated remote cover thumbnails are removed. Downloads and reading progress stay intact.")
+        }
+        .confirmationDialog(
+            "Clear imported comics?",
+            isPresented: $isShowingClearImportedComicsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Imported Comics", role: .destructive) {
+                clearImportedComicsLibrary()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All files currently stored in the local Imported Comics library will be removed. The library itself stays in the app as an empty library.")
+        }
+        .alert(item: $alert) { alertState in
+            Alert(
+                title: Text(alertState.title),
+                message: Text(alertState.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+
+    private var usesSplitViewLayout: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var selectedPane: Binding<SettingsHomePane?> {
+        Binding(
+            get: { SettingsHomePane(rawValue: selectedPaneRawValue) ?? .overview },
+            set: { selectedPaneRawValue = ($0 ?? .overview).rawValue }
+        )
+    }
+
+    private var compactLayout: some View {
         NavigationStack {
-            List {
+            settingsList(title: "设置", displayMode: .large) {
                 readingSection
                 remoteSection
                 storageSection
                 aboutSection
             }
-            .listStyle(.insetGrouped)
+        }
+    }
+
+    private var splitViewLayout: some View {
+        NavigationSplitView {
+            List(selection: selectedPane) {
+                ForEach(SettingsHomePane.allCases) { pane in
+                    Button {
+                        selectedPane.wrappedValue = pane
+                    } label: {
+                        SettingsPaneRow(
+                            pane: pane,
+                            detail: detailText(for: pane)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .tag(pane as SettingsHomePane?)
+                }
+            }
+            .listStyle(.sidebar)
             .navigationTitle("设置")
-            .navigationBarTitleDisplayMode(.large)
-            .task { refresh() }
-            .refreshable { refresh() }
-            .confirmationDialog(
-                "Clear downloaded remote comics?",
-                isPresented: $isShowingClearDownloadsConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Clear Downloads", role: .destructive) {
-                    clearRemoteDownloads()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Downloaded copies, browsing history, and remembered folder positions will be removed. Saved remote servers stay intact.")
-            }
-            .confirmationDialog(
-                "Clear cached remote thumbnails?",
-                isPresented: $isShowingClearThumbnailsConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Clear Thumbnails", role: .destructive) {
-                    clearRemoteThumbnails()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Only generated remote cover thumbnails are removed. Downloads and reading progress stay intact.")
-            }
-            .alert(item: $alert) { alertState in
-                Alert(
-                    title: Text(alertState.title),
-                    message: Text(alertState.message),
-                    dismissButton: .default(Text("OK"))
-                )
+        } detail: {
+            NavigationStack {
+                splitDetailContent(for: selectedPane.wrappedValue ?? .overview)
             }
         }
     }
@@ -207,6 +267,25 @@ struct SettingsHomeView: View {
                         )
                     }
                 }
+
+                LabeledContent {
+                    Text(importedComicsLibrarySummary.isEmpty
+                         ? "None"
+                         : importedComicsLibrarySummary.summaryText)
+                        .font(AppFont.body())
+                        .foregroundStyle(Color.textSecondary)
+                } label: {
+                    Label {
+                        Text("Imported Comics Library")
+                            .font(AppFont.body())
+                            .foregroundStyle(Color.textPrimary)
+                    } icon: {
+                        SettingsIcon(
+                            systemName: "books.vertical.fill",
+                            color: .purple
+                        )
+                    }
+                }
             } header: {
                 Text("Storage")
             } footer: {
@@ -214,7 +293,8 @@ struct SettingsHomeView: View {
             }
 
             if !remoteCacheSummary.isEmpty
-                || !remoteThumbnailCacheSummary.isEmpty {
+                || !remoteThumbnailCacheSummary.isEmpty
+                || !importedComicsLibrarySummary.isEmpty {
                 Section {
                     if !remoteCacheSummary.isEmpty {
                         Button {
@@ -237,8 +317,19 @@ struct SettingsHomeView: View {
                                 .foregroundStyle(Color.appDanger)
                         }
                     }
+
+                    if !importedComicsLibrarySummary.isEmpty {
+                        Button {
+                            isShowingClearImportedComicsConfirmation = true
+                        } label: {
+                            Label("Clear Imported Comics",
+                                  systemImage: "trash")
+                                .font(AppFont.body())
+                                .foregroundStyle(Color.appDanger)
+                        }
+                    }
                 } footer: {
-                    Text("Clearing downloads also removes browsing history and remembered server positions.")
+                    Text("Clearing downloads also removes browsing history and remembered server positions. Clearing imported comics empties the Imported Comics library but keeps the library entry.")
                 }
             }
         }
@@ -247,7 +338,8 @@ struct SettingsHomeView: View {
     private var storageFooter: String {
         let total = remoteCacheSummary.totalBytes
             + remoteThumbnailCacheSummary.totalBytes
-        guard total > 0 else { return "No cached data on this device." }
+            + importedComicsLibrarySummary.totalBytes
+        guard total > 0 else { return "No local remote data on this device." }
         let size = ByteCountFormatter.string(
             fromByteCount: total, countStyle: .file
         )
@@ -296,6 +388,51 @@ struct SettingsHomeView: View {
         }
     }
 
+    @ViewBuilder
+    private func splitDetailContent(for pane: SettingsHomePane) -> some View {
+        switch pane {
+        case .overview:
+            settingsList(title: "设置", displayMode: .inline) {
+                readingSection
+                remoteSection
+                storageSection
+                aboutSection
+            }
+        case .reading:
+            settingsList(title: pane.title, displayMode: .inline) {
+                readingSection
+            }
+        case .remote:
+            settingsList(title: pane.title, displayMode: .inline) {
+                remoteSection
+            }
+        case .storage:
+            settingsList(title: pane.title, displayMode: .inline) {
+                storageSection
+            }
+        case .about:
+            settingsList(title: pane.title, displayMode: .inline) {
+                aboutSection
+            }
+        }
+    }
+
+    private func settingsList<Content: View>(
+        title: String,
+        displayMode: NavigationBarItem.TitleDisplayMode,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        List {
+            content()
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(displayMode)
+        .refreshable {
+            refresh()
+        }
+    }
+
     // MARK: - Helpers
 
     private var appVersion: String {
@@ -321,6 +458,8 @@ struct SettingsHomeView: View {
             .cachePolicyPreset()
         remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared
             .cacheSummary()
+        importedComicsLibrarySummary = dependencies.libraryStorageManager
+            .importedComicsLibraryStorageSummary()
     }
 
     private func clearRemoteDownloads() {
@@ -352,9 +491,117 @@ struct SettingsHomeView: View {
             )
         }
     }
+
+    private func clearImportedComicsLibrary() {
+        do {
+            try dependencies.importedComicsImportService.clearImportedComicsLibrary()
+            refresh()
+        } catch {
+            alert = SettingsAlertState(
+                title: "Failed to Clear Imported Comics",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func detailText(for pane: SettingsHomePane) -> String {
+        switch pane {
+        case .overview:
+            return "Reader defaults, remote access, storage, and app info"
+        case .reading:
+            return "Comic, manga, and webcomic reader presets"
+        case .remote:
+            return remoteCachePolicyPreset.title
+        case .storage:
+            return storageFooter
+        case .about:
+            return appVersion
+        }
+    }
 }
 
 // MARK: - Settings Icon
+
+private enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
+    case overview
+    case reading
+    case remote
+    case storage
+    case about
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview:
+            return "Overview"
+        case .reading:
+            return "Reading"
+        case .remote:
+            return "Remote"
+        case .storage:
+            return "Storage"
+        case .about:
+            return "About"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .overview:
+            return "slider.horizontal.3"
+        case .reading:
+            return "book.closed.fill"
+        case .remote:
+            return "externaldrive.fill"
+        case .storage:
+            return "internaldrive.fill"
+        case .about:
+            return "info.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .overview:
+            return .appAccent
+        case .reading:
+            return .blue
+        case .remote:
+            return .teal
+        case .storage:
+            return .orange
+        case .about:
+            return .gray
+        }
+    }
+}
+
+private struct SettingsPaneRow: View {
+    let pane: SettingsHomePane
+    let detail: String
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            SettingsIcon(systemName: pane.systemImage, color: pane.tint)
+
+            VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                Text(pane.title)
+                    .font(AppFont.body(.semibold))
+                    .foregroundStyle(Color.textPrimary)
+
+                Text(detail)
+                    .font(AppFont.caption())
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, Spacing.xxs)
+        .contentShape(Rectangle())
+    }
+}
 
 private struct SettingsIcon: View {
     let systemName: String

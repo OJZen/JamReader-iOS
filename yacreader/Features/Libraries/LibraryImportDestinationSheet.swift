@@ -6,13 +6,37 @@ enum ImportDestinationSheetCopy {
     static let remoteImportNotice = "Remote imports download the selected comics to this device first, then copy them into the chosen local library."
 }
 
-struct ImportSheetContextRow: View {
+struct ImportSheetContextCard: View {
     let title: String
+    let message: String
+    let supplementaryNotice: String?
 
     var body: some View {
-        Text(title)
-            .font(.headline)
-            .padding(.vertical, 4)
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+
+            if let bodyText = trimmed(message) {
+                Text(bodyText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let notice = trimmed(supplementaryNotice) {
+                Text(notice)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+    }
+
+    private func trimmed(_ text: String?) -> String? {
+        let value = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return value.isEmpty ? nil : value
     }
 }
 
@@ -30,12 +54,11 @@ struct LibraryImportDestinationOptionRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                if !badges.isEmpty {
-                    AdaptiveStatusBadgeGroup(
-                        badges: badges,
-                        horizontalSpacing: 6,
-                        verticalSpacing: 6
-                    )
+                if let metadataText {
+                    Text(metadataText)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(metadataTint)
+                        .lineLimit(2)
                 }
 
                 if let detail = option.detail, !detail.isEmpty {
@@ -47,9 +70,9 @@ struct LibraryImportDestinationOptionRow: View {
 
                 if case .unavailable(let reason) = option.availability {
                     Text(reason)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -61,21 +84,32 @@ struct LibraryImportDestinationOptionRow: View {
                     .foregroundStyle(option.isSelectable ? .blue : .secondary)
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .opacity(option.isSelectable ? 1 : 0.78)
     }
 
-    private var badges: [StatusBadgeItem] {
-        var items: [StatusBadgeItem] = []
+    private var metadataText: String? {
+        var parts: [String] = []
 
         if let status = option.status {
-            items.append(StatusBadgeItem(title: status.title, tint: status.tintColor))
+            parts.append(status.title)
         }
 
         if isSuggested {
-            items.append(StatusBadgeItem(title: "Suggested", tint: .blue))
+            parts.append("Suggested")
         }
 
-        return items
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var metadataTint: Color {
+        if isSuggested {
+            return .blue
+        }
+
+        return option.status?.tintColor ?? .secondary
     }
 }
 
@@ -226,9 +260,11 @@ struct LibraryImportDestinationSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ImportSheetContextRow(title: title)
-                } footer: {
-                    Text(introductionFooterText)
+                    ImportSheetContextCard(
+                        title: title,
+                        message: message,
+                        supplementaryNotice: supplementaryNotice
+                    )
                 }
 
                 Section {
@@ -247,6 +283,8 @@ struct LibraryImportDestinationSheet: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                         .disabled(!option.isSelectable)
                         .accessibilityHint(confirmLabel)
                     }
@@ -256,6 +294,7 @@ struct LibraryImportDestinationSheet: View {
                     Text(ImportDestinationSheetCopy.destinationFooter)
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Import Destination")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -276,14 +315,8 @@ struct LibraryImportDestinationSheet: View {
                 )
             }
         }
-    }
-
-    private var introductionFooterText: String {
-        [message, supplementaryNotice]
-            .compactMap { value in
-                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? nil : trimmed
-            }
-            .joined(separator: "\n\n")
+        .adaptiveSheetWidth(720)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }

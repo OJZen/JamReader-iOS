@@ -8,8 +8,10 @@ struct RemoteCacheSettingsView: View {
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .balanced
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
+    @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
     @State private var isShowingClearRemoteDownloadsConfirmation = false
     @State private var isShowingClearRemoteThumbnailsConfirmation = false
+    @State private var isShowingClearImportedComicsConfirmation = false
     @State private var alert: SettingsAlertState?
 
     var body: some View {
@@ -106,6 +108,33 @@ struct RemoteCacheSettingsView: View {
             } footer: {
                 Text("Thumbnail cache only affects generated remote covers. Downloaded copies and reading progress stay intact.")
             }
+
+            Section {
+                LabeledContent("On This Device") {
+                    Text(importedComicsLibrarySummary.isEmpty ? "None" : importedComicsLibrarySummary.summaryText)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                if importedComicsLibrarySummary.isEmpty {
+                    Label(
+                        "Comics imported from remote servers will appear here after they are copied into the local Imported Comics library.",
+                        systemImage: "books.vertical"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                } else {
+                    Button(role: .destructive) {
+                        isShowingClearImportedComicsConfirmation = true
+                    } label: {
+                        Label("Clear Imported Comics", systemImage: "books.vertical")
+                    }
+                }
+            } header: {
+                Text("Imported Comics Library")
+            } footer: {
+                Text("Imported comics are part of your local library. Clearing remote downloads or thumbnails will not remove them.")
+            }
         }
         .navigationTitle("Remote Cache")
         .navigationBarTitleDisplayMode(.inline)
@@ -142,6 +171,18 @@ struct RemoteCacheSettingsView: View {
         } message: {
             Text("This only removes generated remote cover thumbnails. Remote downloads and reading progress stay intact.")
         }
+        .confirmationDialog(
+            "Clear imported comics?",
+            isPresented: $isShowingClearImportedComicsConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Imported Comics", role: .destructive) {
+                clearImportedComicsLibrary()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All files currently stored in the local Imported Comics library will be removed. The library itself stays in the app as an empty library.")
+        }
         .alert(item: $alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -167,6 +208,11 @@ struct RemoteCacheSettingsView: View {
                 title: "Covers",
                 value: "\(remoteThumbnailCacheSummary.fileCount)",
                 tint: .orange
+            ),
+            SummaryMetricItem(
+                title: "Imported Size",
+                value: importedComicsLibrarySummary.isEmpty ? "0" : importedComicsLibrarySummary.summaryText,
+                tint: .purple
             )
         ]
     }
@@ -192,24 +238,32 @@ struct RemoteCacheSettingsView: View {
     }
 
     private var localStorageFootprintText: String {
-        let totalBytes = remoteCacheSummary.totalBytes + remoteThumbnailCacheSummary.totalBytes
+        let totalBytes = remoteCacheSummary.totalBytes
+            + remoteThumbnailCacheSummary.totalBytes
+            + importedComicsLibrarySummary.totalBytes
         guard totalBytes > 0 else {
-            return "No local cache yet"
+            return "No local data yet"
         }
 
         return ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file) + " on device"
     }
 
     private var summaryDescription: String {
-        if remoteCacheSummary.isEmpty, remoteThumbnailCacheSummary.isEmpty {
-            return "Remote content is fetched on demand until you save comics or generate covers again."
+        if remoteCacheSummary.isEmpty,
+           remoteThumbnailCacheSummary.isEmpty,
+           importedComicsLibrarySummary.isEmpty {
+            return "Remote content is fetched on demand until you save comics, import them, or generate covers again."
         }
 
-        if remoteCacheSummary.isEmpty {
+        if remoteCacheSummary.isEmpty, importedComicsLibrarySummary.isEmpty {
             return "Generated covers are cached locally, while full remote comics are not currently stored on this device."
         }
 
-        return "Downloaded comics and generated covers are kept locally so remote browsing and reading stay responsive."
+        if remoteCacheSummary.isEmpty, remoteThumbnailCacheSummary.isEmpty {
+            return "Imported comics are stored as part of your local library, even when no temporary remote cache is currently in use."
+        }
+
+        return "Downloaded comics, imported library copies, and generated covers are kept locally so remote browsing and reading stay responsive."
     }
 
     private func refresh() {
@@ -218,6 +272,7 @@ struct RemoteCacheSettingsView: View {
         remoteCacheSummary = dependencies.remoteServerBrowsingService.cacheSummary()
         remoteCachePolicyPreset = dependencies.remoteServerBrowsingService.cachePolicyPreset()
         remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
+        importedComicsLibrarySummary = dependencies.libraryStorageManager.importedComicsLibraryStorageSummary()
     }
 
     private func clearRemoteDownloads() {
@@ -244,6 +299,18 @@ struct RemoteCacheSettingsView: View {
         } catch {
             alert = SettingsAlertState(
                 title: "Failed to Clear Thumbnails",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func clearImportedComicsLibrary() {
+        do {
+            try dependencies.importedComicsImportService.clearImportedComicsLibrary()
+            refresh()
+        } catch {
+            alert = SettingsAlertState(
+                title: "Failed to Clear Imported Comics",
                 message: error.localizedDescription
             )
         }

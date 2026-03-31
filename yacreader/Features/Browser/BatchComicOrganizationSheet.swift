@@ -288,6 +288,7 @@ struct BatchComicOrganizationSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(720)
         .presentationDetents([.medium, .large])
         .task {
             viewModel.loadIfNeeded()
@@ -485,6 +486,7 @@ struct BatchComicMetadataSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(720)
         .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(viewModel.isSaving)
         .alert(item: $viewModel.alert) { alert in
@@ -639,6 +641,7 @@ struct BatchComicInfoImportSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(680)
         .presentationDetents([.medium])
         .interactiveDismissDisabled(viewModel.isImporting)
         .alert(item: $viewModel.alert) { alert in

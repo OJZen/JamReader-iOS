@@ -175,7 +175,9 @@ struct LibraryShortcutRow: View {
                 StatusBadge(title: badgeTitle, tint: item.tint)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
+        .contentShape(Rectangle())
     }
 }
 
@@ -190,14 +192,13 @@ struct ContinueReadingRow: View {
         LibraryBrowserListRowShell(spacing: Spacing.sm, trailingAccessoryReservedWidth: trailingAccessoryReservedWidth) {
             EmptyView()
         } thumbnail: {
-            LocalCoverThumbnailView(
+            ContinueReadingCoverThumbnail(
                 url: coverURL,
-                fallbackSource: coverSource,
-                placeholderSystemName: "book.closed.fill",
-                transitionKey: heroSourceID,
                 heroSourceID: heroSourceID,
+                coverSource: coverSource,
                 width: 64,
-                height: 92
+                height: 92,
+                badgeSize: 28
             )
         } content: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -213,8 +214,7 @@ struct ContinueReadingRow: View {
                 AdaptiveStatusBadgeGroup(badges: comic.continueReadingRowBadges)
             }
         } trailingAccessory: {
-            Image(systemName: "play.fill")
-                .foregroundStyle(.blue)
+            EmptyView()
         }
     }
 }
@@ -228,14 +228,13 @@ struct ContinueReadingCard: View {
     var body: some View {
         LibraryBrowserContentCard(minHeight: 188, cornerRadius: 20, contentPadding: 20) {
             HStack(spacing: Spacing.md) {
-                LocalCoverThumbnailView(
+                ContinueReadingCoverThumbnail(
                     url: coverURL,
-                    fallbackSource: coverSource,
-                    placeholderSystemName: "book.closed.fill",
-                    transitionKey: heroSourceID,
                     heroSourceID: heroSourceID,
+                    coverSource: coverSource,
                     width: 104,
-                    height: 148
+                    height: 148,
+                    badgeSize: 34
                 )
 
                 VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -252,7 +251,7 @@ struct ContinueReadingCard: View {
 
                     Spacer(minLength: 0)
 
-                    Label("Resume", systemImage: "play.fill")
+                    Text("Resume")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.blue)
                 }
@@ -260,6 +259,53 @@ struct ContinueReadingCard: View {
                 Spacer(minLength: 0)
             }
         }
+    }
+}
+
+private struct ContinueReadingCoverThumbnail: View {
+    let url: URL?
+    let heroSourceID: String?
+    let coverSource: LocalComicCoverSource?
+    let width: CGFloat
+    let height: CGFloat
+    let badgeSize: CGFloat
+
+    var body: some View {
+        LocalCoverThumbnailView(
+            url: url,
+            fallbackSource: coverSource,
+            placeholderSystemName: "book.closed.fill",
+            transitionKey: heroSourceID,
+            heroSourceID: heroSourceID,
+            width: width,
+            height: height
+        )
+        .overlay(alignment: .bottomTrailing) {
+            ContinueReadingPlayBadge(size: badgeSize)
+                .padding(8)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct ContinueReadingPlayBadge: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.black.opacity(0.58))
+
+            Circle()
+                .stroke(Color.white.opacity(0.14), lineWidth: 0.75)
+
+            Image(systemName: "play.fill")
+                .font(.system(size: size * 0.36, weight: .semibold))
+                .foregroundStyle(.white)
+                .offset(x: size * 0.03)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
     }
 }
 
@@ -468,8 +514,10 @@ struct LibraryBrowserListRowShell<
                 .frame(maxWidth: .infinity, alignment: .leading)
             trailingAccessory()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xs)
         .padding(.trailing, trailingAccessoryReservedWidth)
+        .contentShape(Rectangle())
     }
 }
 

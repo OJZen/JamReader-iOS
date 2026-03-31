@@ -3,10 +3,12 @@ import UIKit
 
 private enum RemoteServerDetailLayoutMetrics {
     static let horizontalInset: CGFloat = 12
+    static let rowAccessoryReservedWidth: CGFloat = 36
 }
 
 struct RemoteServerDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
 
@@ -39,7 +41,7 @@ struct RemoteServerDetailView: View {
             quickAccessSection
             recentComicsSection
         }
-        .navigationTitle(profile.name)
+        .navigationTitle(profile.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -61,14 +63,9 @@ struct RemoteServerDetailView: View {
         .refreshable {
             refreshDetailState(forceReload: true)
         }
-        .sheet(item: $editorDraft) { draft in
-            RemoteServerEditorSheet(draft: draft) { updatedDraft in
-                let result = viewModel.save(draft: updatedDraft)
-                if case .success = result {
-                    editorDraft = nil
-                    refreshDetailState(forceReload: true)
-                }
-                return result
+        .sheet(isPresented: serverEditorPresented) {
+            if let draft = editorDraft {
+                remoteServerEditor(for: draft)
             }
         }
         .alert(item: $viewModel.alert) { alert in
@@ -133,6 +130,27 @@ struct RemoteServerDetailView: View {
         }
     }
 
+    private var serverEditorPresented: Binding<Bool> {
+        Binding(
+            get: { editorDraft != nil },
+            set: { if !$0 { editorDraft = nil } }
+        )
+    }
+
+    private func remoteServerEditor(
+        for draft: RemoteServerEditorDraft
+    ) -> some View {
+        RemoteServerEditorSheet(draft: draft) { updatedDraft in
+            let result = viewModel.save(draft: updatedDraft)
+            if case .success = result {
+                editorDraft = nil
+                refreshDetailState(forceReload: true)
+            }
+            return result
+        }
+        .id(draft.id)
+    }
+
     private var serverSummaryCard: some View {
         InsetCard(
             cornerRadius: 18,
@@ -140,6 +158,22 @@ struct RemoteServerDetailView: View {
             backgroundColor: Color(.systemBackground),
             strokeOpacity: 0.04
         ) {
+            HStack(alignment: .top, spacing: 12) {
+                RemoteServerGlyph(profile: profile, size: 42, cornerRadius: 12, iconFont: .title3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(profile.displayTitle)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    Text(profile.providerDisplayTitle)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(profile.providerKind.tintColor)
+                        .lineLimit(1)
+                }
+            }
+
             SummaryMetricGroup(
                 metrics: summaryMetrics,
                 style: .compactValue,
@@ -152,14 +186,6 @@ struct RemoteServerDetailView: View {
                 horizontalSpacing: 8,
                 verticalSpacing: 4
             )
-
-            Label(
-                summaryDescription,
-                systemImage: "folder"
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(2)
         }
     }
 
@@ -204,16 +230,22 @@ struct RemoteServerDetailView: View {
                                 browsingService: dependencies.remoteServerBrowsingService,
                                 heroSourceID: session.directoryItem.id,
                                 showsNavigationIndicator: false,
-                                showsServerName: false
+                                showsServerName: false,
+                                trailingAccessoryReservedWidth: recentSessionAccessoryReservedWidth
                             )
                         }
                     }
                     .buttonStyle(.plain)
                     .insetCardListRow(horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset)
+                    .overlay(alignment: .trailing) {
+                        if showsPersistentRecentSessionActions {
+                            recentSessionActionMenu(for: session)
+                                .padding(.trailing, 8)
+                        }
+                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
-                            viewModel.deleteRecentSession(session)
-                            refreshDetailState(forceReload: true)
+                            deleteRecentSession(session)
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
@@ -236,6 +268,14 @@ struct RemoteServerDetailView: View {
 
     private var recentHistoryCount: Int {
         recentSessions.count
+    }
+
+    private var showsPersistentRecentSessionActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var recentSessionAccessoryReservedWidth: CGFloat {
+        showsPersistentRecentSessionActions ? RemoteServerDetailLayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
     private var savedFolderCount: Int {
@@ -290,14 +330,9 @@ struct RemoteServerDetailView: View {
                 tint: .blue
             ),
             RemoteInlineMetadataItem(
-                systemImage: "folder.fill",
+                systemImage: "point.3.connected.trianglepath.dotted",
                 text: profile.shareDisplaySummary,
                 tint: .teal
-            ),
-            RemoteInlineMetadataItem(
-                systemImage: profile.authenticationMode == .guest ? "person.fill" : "lock.fill",
-                text: profile.authenticationMode.title,
-                tint: profile.authenticationMode == .guest ? .orange : .green
             )
         ]
 
@@ -311,25 +346,7 @@ struct RemoteServerDetailView: View {
             )
         }
 
-        if !profile.usesDefaultPort {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "point.3.connected.trianglepath.dotted",
-                    text: "Port \(profile.port)",
-                    tint: .teal
-                )
-            )
-        }
-
         return items
-    }
-
-    private var summaryDescription: String {
-        if profile.normalizedBaseDirectoryPath.isEmpty {
-            return "Browsing starts at the configured remote root for this connection."
-        }
-
-        return "Browsing starts at \(profile.normalizedBaseDirectoryPath)."
     }
 
     private var quickAccessItems: [RemoteServerDetailShortcutItem] {
@@ -431,6 +448,27 @@ struct RemoteServerDetailView: View {
         }
     }
 
+    private func recentSessionActionMenu(
+        for session: RemoteComicReadingSession
+    ) -> some View {
+        Menu {
+            Button(role: .destructive) {
+                deleteRecentSession(session)
+            } label: {
+                Label("Delete History Entry", systemImage: "trash")
+            }
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Manage \(session.displayName)")
+    }
+
+    private func deleteRecentSession(_ session: RemoteComicReadingSession) {
+        viewModel.deleteRecentSession(session)
+        refreshDetailState(forceReload: true)
+    }
+
     private func refreshDetailState(forceReload: Bool = false) {
         if forceReload {
             viewModel.load()
@@ -506,6 +544,8 @@ private struct RemoteServerDetailShortcutRow: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }

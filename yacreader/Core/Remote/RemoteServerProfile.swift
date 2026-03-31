@@ -174,6 +174,15 @@ struct RemoteServerProfile: Identifiable, Codable, Hashable {
         }
     }
 
+    var displayTitle: String {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? endpointDisplayHost : trimmedName
+    }
+
+    var providerDisplayTitle: String {
+        "\(providerKind.title) Server"
+    }
+
     var providerRootDisplayPath: String {
         switch providerKind {
         case .smb:

@@ -66,6 +66,7 @@ struct LibraryOrganizationCollectionEditorSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(520)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .onAppear {

@@ -217,6 +217,10 @@ struct ComicReaderView: View {
         horizontalSizeClass == .regular
     }
 
+    private var showsThumbnailShortcut: Bool {
+        supportsDoublePageSpread && (viewModel.pageCount ?? 0) > 1
+    }
+
     @ViewBuilder
     private func readerContent(for document: ComicDocument) -> some View {
         ReaderDocumentContentView(
@@ -329,6 +333,12 @@ struct ComicReaderView: View {
         ReaderTopBar(
             title: viewModel.navigationTitle,
             onBack: dismiss.callAsFunction,
+            secondarySystemImage: showsThumbnailShortcut ? "square.grid.3x2" : nil,
+            secondaryAccessibilityLabel: "Browse Pages",
+            onSecondaryAction: showsThumbnailShortcut ? {
+                readerSession.setChromeVisible(true)
+                isShowingThumbnailBrowser = true
+            } : nil,
             onMenu: {
                 readerSession.setChromeVisible(true)
                 isShowingReaderControls = true

@@ -128,7 +128,7 @@ final class ImportedComicsImportService {
         cancellationCheck: (() throws -> Void)? = nil
     ) throws -> ImportedComicsImportResult {
         try cancellationCheck?()
-        var descriptors = try store.load()
+        var descriptors = try loadNormalizedDescriptors()
         let destinationResolution = try resolveDestinationLibrary(
             in: &descriptors,
             selection: destinationSelection
@@ -241,7 +241,7 @@ final class ImportedComicsImportService {
     }
 
     func availableDestinationOptions() throws -> [LibraryImportDestinationOption] {
-        let descriptors = try store.load()
+        let descriptors = try loadNormalizedDescriptors()
         let importedComicsRootPath = try storageManager
             .ensureImportedComicsLibraryRootURL()
             .standardizedFileURL
@@ -281,6 +281,32 @@ final class ImportedComicsImportService {
         )
 
         return options
+    }
+
+    func clearImportedComicsLibrary() throws {
+        var descriptors = try loadNormalizedDescriptors()
+        let destinationResolution = try ensureImportedComicsLibrary(in: &descriptors)
+        let descriptor = destinationResolution.descriptor
+        let rootURL = try storageManager.restoreSourceURL(for: descriptor).standardizedFileURL
+
+        if fileManager.fileExists(atPath: rootURL.path) {
+            let contents = try fileManager.contentsOfDirectory(
+                at: rootURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsSubdirectoryDescendants]
+            )
+            for itemURL in contents {
+                try fileManager.removeItem(at: itemURL)
+            }
+        } else {
+            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        }
+
+        try storageManager.ensureLibraryMetadataStructure(for: descriptor)
+        try databaseBootstrapper.ensureDatabaseExists(
+            at: storageManager.databaseURL(for: descriptor)
+        )
+        maintenanceStatusStore.clearRecord(for: descriptor.id)
     }
 
     func importAvailability(for descriptor: LibraryDescriptor) -> LibraryImportDestinationOption.Availability {
@@ -465,6 +491,15 @@ final class ImportedComicsImportService {
             for: descriptor,
             inspector: SQLiteDatabaseInspector()
         )
+    }
+
+    private func loadNormalizedDescriptors() throws -> [LibraryDescriptor] {
+        let descriptors = try store.load()
+        let normalizedDescriptors = storageManager.normalizeDescriptors(descriptors)
+        if normalizedDescriptors != descriptors {
+            try store.save(normalizedDescriptors)
+        }
+        return normalizedDescriptors
     }
 
     private func importResource(

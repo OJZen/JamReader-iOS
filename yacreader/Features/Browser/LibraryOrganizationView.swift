@@ -238,6 +238,7 @@ struct LibraryOrganizationView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
+            .adaptiveContentWidth(1120)
         }
     }
 
@@ -666,6 +667,7 @@ private struct LibraryOrganizationCreateSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(520)
         .presentationDetents([.medium])
         .onAppear {
             isNameFieldFocused = true

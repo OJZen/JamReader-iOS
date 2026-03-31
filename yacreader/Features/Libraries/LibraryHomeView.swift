@@ -416,6 +416,7 @@ struct LibraryHomeView: View {
                     LibraryRowView(item: item)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .contextMenu {
                     libraryContextMenuActions(for: item)
                 }
@@ -572,7 +573,9 @@ private struct LibraryRowView: View {
                 .font(AppFont.caption(.semibold))
                 .foregroundStyle(Color.textTertiary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
+        .contentShape(Rectangle())
     }
 }
 
@@ -597,7 +600,9 @@ private struct LibrarySidebarRowView: View {
                     .lineLimit(1)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
+        .contentShape(Rectangle())
     }
 }
 

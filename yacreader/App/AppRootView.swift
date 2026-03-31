@@ -26,24 +26,33 @@ struct AppRootView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            TabView(selection: selectedTab) {
-                LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
-                    .tabItem {
-                        Label("Library", systemImage: AppRootTab.library.systemImage)
-                    }
-                    .tag(AppRootTab.library)
+            ZStack {
+                Color.surfaceGrouped
+                    .ignoresSafeArea()
 
-                BrowseHomeView(dependencies: dependencies)
-                    .tabItem {
-                        Label("Browse", systemImage: AppRootTab.browse.systemImage)
-                    }
-                    .tag(AppRootTab.browse)
+                TabView(selection: selectedTab) {
+                    LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
+                        .background(Color.surfaceGrouped.ignoresSafeArea())
+                        .tabItem {
+                            Label("Library", systemImage: AppRootTab.library.systemImage)
+                        }
+                        .tag(AppRootTab.library)
 
-                SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
-                    .tabItem {
-                        Label("Settings", systemImage: AppRootTab.settings.systemImage)
-                    }
-                    .tag(AppRootTab.settings)
+                    BrowseHomeView(dependencies: dependencies)
+                        .background(Color.surfaceGrouped.ignoresSafeArea())
+                        .tabItem {
+                            Label("Browse", systemImage: AppRootTab.browse.systemImage)
+                        }
+                        .tag(AppRootTab.browse)
+
+                    SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
+                        .background(Color.surfaceGrouped.ignoresSafeArea())
+                        .tabItem {
+                            Label("Settings", systemImage: AppRootTab.settings.systemImage)
+                        }
+                        .tag(AppRootTab.settings)
+                }
+                .background(Color.surfaceGrouped.ignoresSafeArea())
             }
             .overlay(alignment: .bottom) {
                 rootImportOverlay
@@ -69,6 +78,19 @@ struct AppRootView: View {
         .onDisappear {
             importFeedbackDismissTask?.cancel()
             importFeedbackDismissTask = nil
+        }
+        // iPad keyboard shortcuts: Cmd+1/2/3 for tab switching
+        .background {
+            VStack {
+                Button("") { selectedTab.wrappedValue = .library }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("") { selectedTab.wrappedValue = .browse }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("") { selectedTab.wrappedValue = .settings }
+                    .keyboardShortcut("3", modifiers: .command)
+            }
+            .allowsHitTesting(false)
+            .opacity(0)
         }
     }
 

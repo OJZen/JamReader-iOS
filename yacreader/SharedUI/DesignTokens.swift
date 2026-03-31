@@ -160,4 +160,63 @@ extension View {
     func appShadow(_ style: ShadowStyle) -> some View {
         shadow(color: style.color, radius: style.radius, x: style.x, y: style.y)
     }
+
+    /// Adds a pointer hover effect for iPad trackpad/mouse users.
+    func pointerHoverEffect(_ effect: HoverEffect = .highlight) -> some View {
+        self.hoverEffect(effect)
+    }
+
+    func adaptiveSheetWidth(_ maxWidth: CGFloat = 640) -> some View {
+        modifier(AdaptiveSheetWidthModifier(maxWidth: maxWidth))
+    }
+
+    func adaptiveContentWidth(
+        _ maxWidth: CGFloat = 1180,
+        alignment: Alignment = .leading
+    ) -> some View {
+        modifier(AdaptiveContentWidthModifier(maxWidth: maxWidth, alignment: alignment))
+    }
+}
+
+private struct AdaptiveSheetWidthModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    let maxWidth: CGFloat
+
+    func body(content: Content) -> some View {
+        content.frame(
+            maxWidth: horizontalSizeClass == .regular ? maxWidth : .infinity
+        )
+    }
+}
+
+private struct AdaptiveContentWidthModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    let maxWidth: CGFloat
+    let alignment: Alignment
+
+    func body(content: Content) -> some View {
+        content
+            .frame(
+                maxWidth: horizontalSizeClass == .regular ? maxWidth : .infinity,
+                alignment: alignment
+            )
+            .frame(
+                maxWidth: .infinity,
+                alignment: horizontalSizeClass == .regular ? .center : alignment
+            )
+    }
+}
+
+struct PersistentRowActionButtonLabel: View {
+    var systemImage = "ellipsis.circle"
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle())
+    }
 }

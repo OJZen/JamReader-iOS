@@ -5,6 +5,7 @@ import UIKit
 struct RemoteServerBrowserView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
+        static let rowAccessoryReservedWidth: CGFloat = 36
     }
 
     @Environment(\.displayScale) private var displayScale
@@ -348,6 +349,7 @@ struct RemoteServerBrowserView: View {
             }
             .padding(.horizontal, LayoutMetrics.horizontalInset)
             .padding(.vertical, Spacing.lg)
+            .adaptiveContentWidth(1120)
         }
         .background(Color.surfaceGrouped)
     }
@@ -447,13 +449,20 @@ struct RemoteServerBrowserView: View {
                                     readingSession: nil,
                                     cacheAvailability: .unavailable,
                                     profile: viewModel.profile,
-                                    browsingService: dependencies.remoteServerBrowsingService
+                                    browsingService: dependencies.remoteServerBrowsingService,
+                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
                                 )
                                 .equatable()
                             }
                         }
                         .buttonStyle(.plain)
                         .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                        .overlay(alignment: .trailing) {
+                            if showsPersistentItemActions {
+                                browserItemActionMenu(for: item)
+                                    .padding(.trailing, 8)
+                            }
+                        }
                         .contextMenu {
                             browserItemActionMenuContent(for: item)
                         }
@@ -485,7 +494,8 @@ struct RemoteServerBrowserView: View {
                                     cacheAvailability: availability,
                                     profile: viewModel.profile,
                                     browsingService: dependencies.remoteServerBrowsingService,
-                                    heroSourceID: item.id
+                                    heroSourceID: item.id,
+                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
                                 )
                                 .equatable()
                             }
@@ -498,6 +508,12 @@ struct RemoteServerBrowserView: View {
                         }
                         .buttonStyle(.plain)
                         .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                        .overlay(alignment: .trailing) {
+                            if showsPersistentItemActions {
+                                browserItemActionMenu(for: item)
+                                    .padding(.trailing, 8)
+                            }
+                        }
                         .contextMenu {
                             browserItemActionMenuContent(for: item)
                         }
@@ -521,6 +537,14 @@ struct RemoteServerBrowserView: View {
 
     private var isRootFolder: Bool {
         viewModel.currentPath == viewModel.rootPath
+    }
+
+    private var showsPersistentItemActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var itemAccessoryReservedWidth: CGFloat {
+        showsPersistentItemActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
     private var summaryMetrics: [SummaryMetricItem] {
@@ -684,6 +708,11 @@ struct RemoteServerBrowserView: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             browserItemActionMenuContent(for: item)
+                        }
+
+                        if showsPersistentItemActions {
+                            browserItemActionMenu(for: item)
+                                .padding(12)
                         }
                     }
                 }
@@ -1242,6 +1271,16 @@ struct RemoteServerBrowserView: View {
             onRemoveOffline: removeOfflineAction(for: item, availability: availability),
             onImport: importAction(for: item)
         )
+    }
+
+    private func browserItemActionMenu(for item: RemoteDirectoryItem) -> some View {
+        Menu {
+            browserItemActionMenuContent(for: item)
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Manage \(item.name)")
     }
 
     @ViewBuilder

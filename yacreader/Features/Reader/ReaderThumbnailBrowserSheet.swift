@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ReaderThumbnailBrowserSheet: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     let document: ComicDocument
     let currentPageIndex: Int
     let onSelectPage: (Int) -> Void
@@ -9,11 +11,44 @@ struct ReaderThumbnailBrowserSheet: View {
     @FocusState private var isPageNumberFieldFocused: Bool
     @State private var pageNumberText = ""
 
-    private let thumbnailWidth: CGFloat = 118
-    private let thumbnailHeight: CGFloat = 166
-
     private var pageCount: Int {
         document.pageCount ?? 0
+    }
+
+    private var usesRegularLayout: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var thumbnailWidth: CGFloat {
+        usesRegularLayout ? 144 : 118
+    }
+
+    private var thumbnailHeight: CGFloat {
+        usesRegularLayout ? 204 : 166
+    }
+
+    private var gridSpacing: CGFloat {
+        usesRegularLayout ? 22 : 18
+    }
+
+    private var gridHorizontalPadding: CGFloat {
+        usesRegularLayout ? 28 : 20
+    }
+
+    private var contentMaxWidth: CGFloat {
+        usesRegularLayout ? 980 : .infinity
+    }
+
+    private var gridColumns: [GridItem] {
+        [
+            GridItem(
+                .adaptive(
+                    minimum: thumbnailWidth + 20,
+                    maximum: thumbnailWidth + 28
+                ),
+                spacing: gridSpacing
+            )
+        ]
     }
 
     private var normalizedSelectedPageIndex: Int? {
@@ -38,8 +73,8 @@ struct ReaderThumbnailBrowserSheet: View {
                             pageOverviewCard(proxy: proxy)
 
                             LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: thumbnailWidth, maximum: thumbnailWidth), spacing: 16)],
-                                spacing: 18
+                                columns: gridColumns,
+                                spacing: gridSpacing
                             ) {
                                 ForEach(0..<pageCount, id: \.self) { pageIndex in
                                     ReaderThumbnailCell(
@@ -54,10 +89,12 @@ struct ReaderThumbnailBrowserSheet: View {
                                     .id(pageIndex)
                                 }
                             }
-                            .padding(.horizontal, 20)
+                            .padding(.horizontal, gridHorizontalPadding)
+                            .frame(maxWidth: contentMaxWidth)
                         }
                         .padding(.top, 12)
                         .padding(.bottom, 28)
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .navigationTitle("Pages")
@@ -98,6 +135,7 @@ struct ReaderThumbnailBrowserSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(980)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }
@@ -164,15 +202,17 @@ struct ReaderThumbnailBrowserSheet: View {
             }
         }
         .padding(20)
+        .frame(maxWidth: contentMaxWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color(.secondarySystemGroupedBackground))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
-        .padding(.horizontal, 20)
+        .padding(.horizontal, gridHorizontalPadding)
+        .frame(maxWidth: .infinity)
     }
 
     private func openSelectedPage() {

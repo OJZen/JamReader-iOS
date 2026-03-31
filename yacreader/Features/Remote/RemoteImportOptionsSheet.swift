@@ -82,10 +82,14 @@ struct RemoteImportOptionsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                introductionSection
+                Section {
+                    introductionSection
+                }
+
                 scopeSection
                 destinationSection
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Import Options")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -122,14 +126,17 @@ struct RemoteImportOptionsSheet: View {
                 )
             }
         }
+        .adaptiveSheetWidth(720)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
     private var introductionSection: some View {
-        Section {
-            ImportSheetContextRow(title: title)
-        } footer: {
-            Text(introductionFooterText)
-        }
+        ImportSheetContextCard(
+            title: title,
+            message: message,
+            supplementaryNotice: supplementaryNotice
+        )
     }
 
     private var scopeSection: some View {
@@ -144,11 +151,11 @@ struct RemoteImportOptionsSheet: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
         } header: {
-            Text("Choose Scope")
-        } footer: {
-            Text(selectedScope.summaryText)
+            Text("Import Scope")
         }
     }
 
@@ -169,12 +176,20 @@ struct RemoteImportOptionsSheet: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
                 .disabled(!option.isSelectable)
             }
         } header: {
             Text("Choose Destination")
         } footer: {
             Text(ImportDestinationSheetCopy.destinationFooter)
+        }
+    }
+
+    private var isSelectedDestinationSelectable: Bool {
+        destinationViewModel.options.contains {
+            $0.selection == selectedDestination && $0.isSelectable
         }
     }
 
@@ -186,21 +201,6 @@ struct RemoteImportOptionsSheet: View {
         hasAppliedSuggestedDestination = true
         selectedDestination = destinationViewModel.suggestedSelection
     }
-
-    private var isSelectedDestinationSelectable: Bool {
-        destinationViewModel.options.contains {
-            $0.selection == selectedDestination && $0.isSelectable
-        }
-    }
-
-    private var introductionFooterText: String {
-        [message, supplementaryNotice]
-            .compactMap { value in
-                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? nil : trimmed
-            }
-            .joined(separator: "\n\n")
-    }
 }
 
 private struct RemoteImportScopeRow: View {
@@ -208,11 +208,18 @@ private struct RemoteImportScopeRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(scope.title)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(scope.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Text(scope.summaryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Spacer(minLength: 12)
 
@@ -222,6 +229,8 @@ private struct RemoteImportScopeRow: View {
                     .foregroundStyle(.blue)
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
     }
 }
