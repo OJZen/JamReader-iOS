@@ -254,7 +254,17 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         }
 
         if scrollView.zoomScale > scrollView.minimumZoomScale + 0.01 {
-            onTapRegion(.center)
+            let tapLocation = gestureRecognizer.location(in: self)
+            let viewWidth = max(bounds.width, 1)
+            let horizontalRatio = tapLocation.x / viewWidth
+
+            if horizontalRatio < tapEdgeRatio {
+                onTapRegion(.leading)
+            } else if horizontalRatio > 1 - tapEdgeRatio {
+                onTapRegion(.trailing)
+            } else {
+                onTapRegion(.center)
+            }
             return
         }
 

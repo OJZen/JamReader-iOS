@@ -183,7 +183,10 @@ private final class RemotePDFRandomAccessDataSource {
             }
         }
 
-        semaphore.wait()
+        let waitResult = semaphore.wait(timeout: .now() + 30)
+        guard waitResult == .success else {
+            throw RemotePDFThumbnailExtractionError.truncatedRead
+        }
         let blockData = try resultBox.result?.get() ?? {
             throw RemotePDFThumbnailExtractionError.truncatedRead
         }()
@@ -269,5 +272,11 @@ private final class RemotePDFFileReaderProxy: @unchecked Sendable {
 }
 
 private final class RemotePDFReadResultBox: @unchecked Sendable {
-    nonisolated(unsafe) var result: Result<Data, Error>?
+    private let lock = NSLock()
+    private var _result: Result<Data, Error>?
+
+    var result: Result<Data, Error>? {
+        get { lock.withLock { _result } }
+        set { lock.withLock { _result = newValue } }
+    }
 }

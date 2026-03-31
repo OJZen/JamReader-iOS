@@ -40,6 +40,7 @@ final class ReaderSessionController: ObservableObject {
             state.isPageJumpPresented = true
         case .dismissPageJump:
             state.isPageJumpPresented = false
+            state.pendingPageNumberText = ""
         case .updatePendingPageNumberText(let text):
             state.pendingPageNumberText = text
         }
@@ -53,8 +54,13 @@ final class ReaderSessionController: ObservableObject {
         _ descriptor: ReaderContentDescriptor,
         preferredPageIndex: Int? = nil
     ) {
+        let currentLayout = state.layout
         state.descriptor = descriptor
-        state.layout = descriptor.layout
+        // Preserve user's manual layout changes unless the content kind demands a different layout.
+        if currentLayout.pagingMode != descriptor.layout.pagingMode
+            || currentLayout.readingDirection != descriptor.layout.readingDirection {
+            state.layout = descriptor.layout
+        }
         state.currentPageIndex = clampedPageIndex(
             preferredPageIndex ?? state.currentPageIndex,
             pageCount: descriptor.pageCount

@@ -984,7 +984,7 @@ final class RemoteServerBrowsingService {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             }
         }
-        throw lastError!
+        throw lastError ?? RemoteServerBrowsingError.operationFailed("Retry operation failed without a recorded error.")
     }
 
     private func isRetryableError(_ error: Error) -> Bool {

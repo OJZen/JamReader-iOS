@@ -430,6 +430,9 @@ private enum ZIPArchiveEntryReader {
         }
     }
 
+    /// Hard cap on decompressed output to guard against ZIP bombs and corrupted headers.
+    private static let maximumDecompressedSize = 256 * 1_024 * 1_024
+
     nonisolated private static func decompressDeflatedData(rawDeflateData: Data, expectedSize: Int, entryPath: String) throws -> Data {
         guard !rawDeflateData.isEmpty else {
             return Data()
@@ -460,11 +463,12 @@ private enum ZIPArchiveEntryReader {
             stream.avail_in = uInt(rawDeflateData.count)
 
             var output = Data()
-            if expectedSize > 0 {
-                output.reserveCapacity(expectedSize)
+            let clampedExpectedSize = expectedSize > 0 ? min(expectedSize, maximumDecompressedSize) : 0
+            if clampedExpectedSize > 0 {
+                output.reserveCapacity(clampedExpectedSize)
             }
 
-            let chunkSize = max(65_536, min(expectedSize > 0 ? expectedSize : 65_536, 1_048_576))
+            let chunkSize = max(65_536, min(clampedExpectedSize > 0 ? clampedExpectedSize : 65_536, 1_048_576))
             var buffer = [UInt8](repeating: 0, count: chunkSize)
 
             while true {
@@ -484,6 +488,10 @@ private enum ZIPArchiveEntryReader {
                     output.append(contentsOf: buffer.prefix(producedBytes))
                 }
 
+                if output.count > maximumDecompressedSize {
+                    throw ZIPArchiveError.inflateFailed(entryPath)
+                }
+
                 if inflateStatus == Z_STREAM_END {
                     break
                 }
@@ -499,7 +507,7 @@ private enum ZIPArchiveEntryReader {
 }
 
 private actor ZIPArchivePageSource: ComicPageDataSource {
-    private let fileHandle: FileHandle
+    private let archiveURL: URL
     private let entries: [ZIPArchiveEntry]
     private let sharedCache = ReaderPageCache.shared
     private let cacheNamespace: String
@@ -511,13 +519,9 @@ private actor ZIPArchivePageSource: ComicPageDataSource {
     }()
 
     init(archiveURL: URL, entries: [ZIPArchiveEntry]) throws {
-        self.fileHandle = try FileHandle(forReadingFrom: archiveURL)
+        self.archiveURL = archiveURL
         self.entries = entries
         self.cacheNamespace = ReaderPageCache.namespace(for: archiveURL)
-    }
-
-    deinit {
-        try? fileHandle.close()
     }
 
     func dataForPage(at index: Int) async throws -> Data {
@@ -538,7 +542,8 @@ private actor ZIPArchivePageSource: ComicPageDataSource {
             return cachedPage
         }
 
-        let pageData = try ZIPArchiveEntryReader.data(using: fileHandle, for: entries[index])
+        // Each read gets its own FileHandle to avoid seek/read interleaving across concurrent calls.
+        let pageData = try ZIPArchiveEntryReader.data(in: archiveURL, for: entries[index])
         cache.setObject(pageData as NSData, forKey: NSNumber(value: index), cost: pageData.count)
         await sharedCache.store(pageData, for: cacheKey)
         return pageData

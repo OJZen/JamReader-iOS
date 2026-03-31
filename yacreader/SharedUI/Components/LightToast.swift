@@ -35,6 +35,7 @@ private struct LightToastModifier: ViewModifier {
     @Binding var isPresented: Bool
     let message: String
     let systemImage: String?
+    @State private var dismissTask: Task<Void, Never>?
 
     func body(content: Content) -> some View {
         content
@@ -44,11 +45,18 @@ private struct LightToastModifier: ViewModifier {
                         .padding(.bottom, Spacing.xxl)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            dismissTask?.cancel()
+                            dismissTask = Task { @MainActor in
+                                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                                guard !Task.isCancelled else { return }
                                 withAnimation(AppAnimation.standard) {
                                     isPresented = false
                                 }
                             }
+                        }
+                        .onDisappear {
+                            dismissTask?.cancel()
+                            dismissTask = nil
                         }
                 }
             }
