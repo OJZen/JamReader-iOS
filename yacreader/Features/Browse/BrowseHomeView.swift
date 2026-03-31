@@ -51,9 +51,6 @@ struct BrowseHomeView: View {
         .onChange(of: quickAccessItems.map(\.id)) { _, _ in
             debounceSplitSync()
         }
-        .sheet(item: $editorDraft) { draft in
-            remoteServerEditor(for: draft)
-        }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
         }
@@ -97,6 +94,9 @@ struct BrowseHomeView: View {
                 }
                 .refreshable {
                     viewModel.load()
+                }
+                .sheet(item: $editorDraft) { draft in
+                    remoteServerEditor(for: draft)
                 }
                 .navigationDestination(item: $navigationRequest) { request in
                     navigationDestination(for: request)
@@ -145,6 +145,9 @@ struct BrowseHomeView: View {
             }
             .refreshable {
                 viewModel.load()
+            }
+            .sheet(item: $editorDraft) { draft in
+                remoteServerEditor(for: draft)
             }
         } detail: {
             NavigationStack {
