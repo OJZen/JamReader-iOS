@@ -1,5 +1,73 @@
 import SwiftUI
 
+// MARK: - Config Objects
+
+/// Groups the current page navigation state for the reader controls sheet.
+struct ReaderControlsPageState {
+    let pageIndicatorText: String?
+    let currentPageNumber: Int?
+    let pageCount: Int?
+    let currentPageIsBookmarked: Bool
+    let bookmarkItems: [ReaderBookmarkItem]
+}
+
+/// Groups the current display/layout settings for the reader controls sheet.
+struct ReaderControlsDisplayState {
+    let fitMode: ReaderFitMode
+    let pagingMode: ReaderPagingMode
+    let spreadMode: ReaderSpreadMode
+    let readingDirection: ReaderReadingDirection
+    let coverAsSinglePage: Bool
+    let rotation: ReaderRotationAngle
+}
+
+/// Feature capability flags for the reader controls sheet.
+struct ReaderControlsCapabilities {
+    let supportsImageLayoutControls: Bool
+    let supportsDoublePageSpread: Bool
+    let supportsRotationControls: Bool
+}
+
+/// Optional library metadata for the reader controls sheet.
+/// Nil when viewing remote comics without library integration.
+struct ReaderControlsMetadata {
+    let isFavorite: Bool?
+    let isRead: Bool?
+    let rating: Int?
+}
+
+/// All callback actions for the reader controls sheet.
+struct ReaderControlsActions {
+    // Navigation
+    let onDone: () -> Void
+    let onOpenThumbnails: () -> Void
+    let onGoToBookmark: (Int) -> Void
+    let onGoToPageNumber: (Int) -> Void
+
+    // Bookmarks
+    let onToggleBookmark: () -> Void
+
+    // Layout
+    let onSetFitMode: (ReaderFitMode) -> Void
+    let onSetPagingMode: (ReaderPagingMode) -> Void
+    let onSetSpreadMode: (ReaderSpreadMode) -> Void
+    let onSetReadingDirection: (ReaderReadingDirection) -> Void
+    let onSetCoverAsSinglePage: (Bool) -> Void
+
+    // Rotation
+    let onRotateCounterClockwise: () -> Void
+    let onRotateClockwise: () -> Void
+    let onResetRotation: () -> Void
+
+    // Optional metadata actions (nil for remote reader)
+    var onToggleFavorite: (() -> Void)? = nil
+    var onToggleReadStatus: (() -> Void)? = nil
+    var onSetRating: ((Int) -> Void)? = nil
+    var onOpenQuickMetadata: (() -> Void)? = nil
+    var onOpenMetadata: (() -> Void)? = nil
+    var onOpenOrganization: (() -> Void)? = nil
+}
+
 // MARK: - Sheet Container
 
 struct ReaderControlsContainer<Content: View>: View {

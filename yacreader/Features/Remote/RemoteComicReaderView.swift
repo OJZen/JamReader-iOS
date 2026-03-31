@@ -642,44 +642,52 @@ struct RemoteComicReaderView: View {
         }
         .sheet(isPresented: $isShowingReaderControls) {
             ReaderControlsSheet(
-                pageIndicatorText: pageIndicatorText,
-                currentPageNumber: currentPageNumber,
-                pageCount: document?.pageCount,
-                currentPageIsBookmarked: currentPageIsBookmarked,
-                bookmarkItems: bookmarkItems,
-                supportsImageLayoutControls: supportsImageLayoutControls,
-                supportsDoublePageSpread: supportsDoublePageSpread,
-                supportsRotationControls: supportsRotationControls,
-                fitMode: effectiveReaderLayout.fitMode,
-                pagingMode: effectiveReaderLayout.pagingMode,
-                spreadMode: effectiveReaderLayout.spreadMode,
-                readingDirection: effectiveReaderLayout.readingDirection,
-                coverAsSinglePage: effectiveReaderLayout.coverAsSinglePage,
-                rotation: effectiveReaderLayout.rotation,
-                onDone: { isShowingReaderControls = false },
-                onOpenThumbnails: {
-                    pendingReaderAction = .thumbnails
-                    isShowingReaderControls = false
-                },
-                onToggleBookmark: toggleBookmark,
-                onGoToBookmark: { pageIndex in
-                    updateVisiblePage(to: pageIndex)
-                    persistProgress(force: true)
-                    isShowingReaderControls = false
-                },
-                onGoToPageNumber: { pageNumber in
-                    updateVisiblePage(to: pageNumber - 1)
-                    persistProgress(force: true)
-                    isShowingReaderControls = false
-                },
-                onSetFitMode: setFitMode,
-                onSetPagingMode: setPagingMode,
-                onSetSpreadMode: setSpreadMode,
-                onSetReadingDirection: setReadingDirection,
-                onSetCoverAsSinglePage: setCoverAsSinglePage,
-                onRotateCounterClockwise: rotateCounterClockwise,
-                onRotateClockwise: rotateClockwise,
-                onResetRotation: resetRotation
+                pageState: ReaderControlsPageState(
+                    pageIndicatorText: pageIndicatorText,
+                    currentPageNumber: currentPageNumber,
+                    pageCount: document?.pageCount,
+                    currentPageIsBookmarked: currentPageIsBookmarked,
+                    bookmarkItems: bookmarkItems
+                ),
+                displayState: ReaderControlsDisplayState(
+                    fitMode: effectiveReaderLayout.fitMode,
+                    pagingMode: effectiveReaderLayout.pagingMode,
+                    spreadMode: effectiveReaderLayout.spreadMode,
+                    readingDirection: effectiveReaderLayout.readingDirection,
+                    coverAsSinglePage: effectiveReaderLayout.coverAsSinglePage,
+                    rotation: effectiveReaderLayout.rotation
+                ),
+                capabilities: ReaderControlsCapabilities(
+                    supportsImageLayoutControls: supportsImageLayoutControls,
+                    supportsDoublePageSpread: supportsDoublePageSpread,
+                    supportsRotationControls: supportsRotationControls
+                ),
+                actions: ReaderControlsActions(
+                    onDone: { isShowingReaderControls = false },
+                    onOpenThumbnails: {
+                        pendingReaderAction = .thumbnails
+                        isShowingReaderControls = false
+                    },
+                    onGoToBookmark: { pageIndex in
+                        updateVisiblePage(to: pageIndex)
+                        persistProgress(force: true)
+                        isShowingReaderControls = false
+                    },
+                    onGoToPageNumber: { pageNumber in
+                        updateVisiblePage(to: pageNumber - 1)
+                        persistProgress(force: true)
+                        isShowingReaderControls = false
+                    },
+                    onToggleBookmark: toggleBookmark,
+                    onSetFitMode: setFitMode,
+                    onSetPagingMode: setPagingMode,
+                    onSetSpreadMode: setSpreadMode,
+                    onSetReadingDirection: setReadingDirection,
+                    onSetCoverAsSinglePage: setCoverAsSinglePage,
+                    onRotateCounterClockwise: rotateCounterClockwise,
+                    onRotateClockwise: rotateClockwise,
+                    onResetRotation: resetRotation
+                )
             )
         }
         .alert(item: $alert) { alert in

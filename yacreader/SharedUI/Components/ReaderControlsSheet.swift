@@ -1,145 +1,38 @@
 import SwiftUI
 
 struct ReaderControlsSheet: View {
-    let pageIndicatorText: String?
-    let currentPageNumber: Int?
-    let pageCount: Int?
-    let currentPageIsBookmarked: Bool
-    let bookmarkItems: [ReaderBookmarkItem]
-    let supportsImageLayoutControls: Bool
-    let supportsDoublePageSpread: Bool
-    let supportsRotationControls: Bool
-    let fitMode: ReaderFitMode
-    let pagingMode: ReaderPagingMode
-    let spreadMode: ReaderSpreadMode
-    let readingDirection: ReaderReadingDirection
-    let coverAsSinglePage: Bool
-    let rotation: ReaderRotationAngle
-    let onDone: () -> Void
-    let onOpenThumbnails: () -> Void
-    let onToggleBookmark: () -> Void
-    let onGoToBookmark: (Int) -> Void
-    let onGoToPageNumber: (Int) -> Void
-    let onSetFitMode: (ReaderFitMode) -> Void
-    let onSetPagingMode: (ReaderPagingMode) -> Void
-    let onSetSpreadMode: (ReaderSpreadMode) -> Void
-    let onSetReadingDirection: (ReaderReadingDirection) -> Void
-    let onSetCoverAsSinglePage: (Bool) -> Void
-    let onRotateCounterClockwise: () -> Void
-    let onRotateClockwise: () -> Void
-    let onResetRotation: () -> Void
-    var isFavorite: Bool? = nil
-    var isRead: Bool? = nil
-    var rating: Int? = nil
-    var onToggleFavorite: (() -> Void)? = nil
-    var onToggleReadStatus: (() -> Void)? = nil
-    var onSetRating: ((Int) -> Void)? = nil
-    var onOpenQuickMetadata: (() -> Void)? = nil
-    var onOpenMetadata: (() -> Void)? = nil
-    var onOpenOrganization: (() -> Void)? = nil
-
-    init(
-        pageIndicatorText: String?,
-        currentPageNumber: Int?,
-        pageCount: Int?,
-        currentPageIsBookmarked: Bool,
-        bookmarkItems: [ReaderBookmarkItem],
-        isFavorite: Bool? = nil,
-        isRead: Bool? = nil,
-        rating: Int? = nil,
-        supportsImageLayoutControls: Bool,
-        supportsDoublePageSpread: Bool,
-        supportsRotationControls: Bool,
-        fitMode: ReaderFitMode,
-        pagingMode: ReaderPagingMode,
-        spreadMode: ReaderSpreadMode,
-        readingDirection: ReaderReadingDirection,
-        coverAsSinglePage: Bool,
-        rotation: ReaderRotationAngle,
-        onDone: @escaping () -> Void,
-        onToggleFavorite: (() -> Void)? = nil,
-        onToggleReadStatus: (() -> Void)? = nil,
-        onOpenQuickMetadata: (() -> Void)? = nil,
-        onOpenMetadata: (() -> Void)? = nil,
-        onOpenOrganization: (() -> Void)? = nil,
-        onOpenThumbnails: @escaping () -> Void,
-        onToggleBookmark: @escaping () -> Void,
-        onSetRating: ((Int) -> Void)? = nil,
-        onGoToBookmark: @escaping (Int) -> Void,
-        onGoToPageNumber: @escaping (Int) -> Void,
-        onSetFitMode: @escaping (ReaderFitMode) -> Void,
-        onSetPagingMode: @escaping (ReaderPagingMode) -> Void,
-        onSetSpreadMode: @escaping (ReaderSpreadMode) -> Void,
-        onSetReadingDirection: @escaping (ReaderReadingDirection) -> Void,
-        onSetCoverAsSinglePage: @escaping (Bool) -> Void,
-        onRotateCounterClockwise: @escaping () -> Void,
-        onRotateClockwise: @escaping () -> Void,
-        onResetRotation: @escaping () -> Void
-    ) {
-        self.pageIndicatorText = pageIndicatorText
-        self.currentPageNumber = currentPageNumber
-        self.pageCount = pageCount
-        self.currentPageIsBookmarked = currentPageIsBookmarked
-        self.bookmarkItems = bookmarkItems
-        self.supportsImageLayoutControls = supportsImageLayoutControls
-        self.supportsDoublePageSpread = supportsDoublePageSpread
-        self.supportsRotationControls = supportsRotationControls
-        self.fitMode = fitMode
-        self.pagingMode = pagingMode
-        self.spreadMode = spreadMode
-        self.readingDirection = readingDirection
-        self.coverAsSinglePage = coverAsSinglePage
-        self.rotation = rotation
-        self.onDone = onDone
-        self.onOpenThumbnails = onOpenThumbnails
-        self.onToggleBookmark = onToggleBookmark
-        self.onGoToBookmark = onGoToBookmark
-        self.onGoToPageNumber = onGoToPageNumber
-        self.onSetFitMode = onSetFitMode
-        self.onSetPagingMode = onSetPagingMode
-        self.onSetSpreadMode = onSetSpreadMode
-        self.onSetReadingDirection = onSetReadingDirection
-        self.onSetCoverAsSinglePage = onSetCoverAsSinglePage
-        self.onRotateCounterClockwise = onRotateCounterClockwise
-        self.onRotateClockwise = onRotateClockwise
-        self.onResetRotation = onResetRotation
-        self.isFavorite = isFavorite
-        self.isRead = isRead
-        self.rating = rating
-        self.onToggleFavorite = onToggleFavorite
-        self.onToggleReadStatus = onToggleReadStatus
-        self.onSetRating = onSetRating
-        self.onOpenQuickMetadata = onOpenQuickMetadata
-        self.onOpenMetadata = onOpenMetadata
-        self.onOpenOrganization = onOpenOrganization
-    }
+    let pageState: ReaderControlsPageState
+    let displayState: ReaderControlsDisplayState
+    let capabilities: ReaderControlsCapabilities
+    let actions: ReaderControlsActions
+    var metadata: ReaderControlsMetadata? = nil
 
     var body: some View {
-        ReaderControlsContainer(title: "Settings", onDone: onDone) {
+        ReaderControlsContainer(title: "Settings", onDone: actions.onDone) {
             ReaderLayoutControlsSection(
-                supportsImageLayoutControls: supportsImageLayoutControls,
-                supportsDoublePageSpread: supportsDoublePageSpread,
-                pagingMode: pagingMode,
-                spreadMode: spreadMode,
-                readingDirection: readingDirection,
-                coverAsSinglePage: coverAsSinglePage,
-                onSetPagingMode: onSetPagingMode,
-                onSetSpreadMode: onSetSpreadMode,
-                onSetReadingDirection: onSetReadingDirection,
-                onSetCoverAsSinglePage: onSetCoverAsSinglePage
+                supportsImageLayoutControls: capabilities.supportsImageLayoutControls,
+                supportsDoublePageSpread: capabilities.supportsDoublePageSpread,
+                pagingMode: displayState.pagingMode,
+                spreadMode: displayState.spreadMode,
+                readingDirection: displayState.readingDirection,
+                coverAsSinglePage: displayState.coverAsSinglePage,
+                onSetPagingMode: actions.onSetPagingMode,
+                onSetSpreadMode: actions.onSetSpreadMode,
+                onSetReadingDirection: actions.onSetReadingDirection,
+                onSetCoverAsSinglePage: actions.onSetCoverAsSinglePage
             )
 
             ReaderViewControlsSection(
-                supportsRotationControls: supportsRotationControls,
-                rotation: rotation,
-                onRotateCounterClockwise: onRotateCounterClockwise,
-                onRotateClockwise: onRotateClockwise,
-                onResetRotation: onResetRotation
+                supportsRotationControls: capabilities.supportsRotationControls,
+                rotation: displayState.rotation,
+                onRotateCounterClockwise: actions.onRotateCounterClockwise,
+                onRotateClockwise: actions.onRotateClockwise,
+                onResetRotation: actions.onResetRotation
             )
 
             ReaderBookmarksControlsSection(
-                bookmarkItems: bookmarkItems,
-                onGoToBookmark: onGoToBookmark
+                bookmarkItems: pageState.bookmarkItems,
+                onGoToBookmark: actions.onGoToBookmark
             )
         }
     }

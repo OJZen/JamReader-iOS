@@ -252,86 +252,96 @@ struct ComicReaderView: View {
 
     private var readerControlsSheet: some View {
         ReaderControlsSheet(
-            pageIndicatorText: viewModel.pageIndicatorText,
-            currentPageNumber: viewModel.currentPageNumber,
-            pageCount: viewModel.pageCount,
-            currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
-            bookmarkItems: viewModel.bookmarkItems,
-            isFavorite: viewModel.isFavorite,
-            isRead: viewModel.comic.read,
-            rating: viewModel.rating,
-            supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
-            supportsDoublePageSpread: supportsDoublePageSpread,
-            supportsRotationControls: viewModel.supportsRotationControls,
-            fitMode: readerSession.state.layout.fitMode,
-            pagingMode: readerSession.state.layout.pagingMode,
-            spreadMode: readerSession.state.layout.spreadMode,
-            readingDirection: readerSession.state.layout.readingDirection,
-            coverAsSinglePage: readerSession.state.layout.coverAsSinglePage,
-            rotation: readerSession.state.layout.rotation,
-            onDone: { isShowingReaderControls = false },
-            onToggleFavorite: viewModel.toggleFavoriteStatus,
-            onToggleReadStatus: viewModel.toggleReadStatus,
-            onOpenQuickMetadata: {
-                pendingReaderAction = .quickMetadata
-                isShowingReaderControls = false
-            },
-            onOpenMetadata: {
-                pendingReaderAction = .metadata
-                isShowingReaderControls = false
-            },
-            onOpenOrganization: {
-                pendingReaderAction = .organization
-                isShowingReaderControls = false
-            },
-            onOpenThumbnails: {
-                pendingReaderAction = .thumbnails
-                isShowingReaderControls = false
-            },
-            onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
-            onSetRating: viewModel.setRating,
-            onGoToBookmark: { pageIndex in
-                viewModel.goToBookmark(pageIndex: pageIndex)
-                readerSession.apply(.goToPage(pageIndex))
-                isShowingReaderControls = false
-            },
-            onGoToPageNumber: { pageNumber in
-                viewModel.goToPage(number: pageNumber)
-                readerSession.apply(.goToPage(pageNumber - 1))
-                isShowingReaderControls = false
-            },
-            onSetFitMode: { fitMode in
-                viewModel.setFitMode(fitMode)
-                synchronizeReaderSession()
-            },
-            onSetPagingMode: { pagingMode in
-                viewModel.setPagingMode(pagingMode)
-                synchronizeReaderSession()
-            },
-            onSetSpreadMode: { spreadMode in
-                viewModel.setSpreadMode(spreadMode)
-                synchronizeReaderSession()
-            },
-            onSetReadingDirection: { readingDirection in
-                viewModel.setReadingDirection(readingDirection)
-                synchronizeReaderSession()
-            },
-            onSetCoverAsSinglePage: { coverAsSinglePage in
-                viewModel.setCoverAsSinglePage(coverAsSinglePage)
-                synchronizeReaderSession()
-            },
-            onRotateCounterClockwise: {
-                viewModel.rotateCounterClockwise()
-                synchronizeReaderSession()
-            },
-            onRotateClockwise: {
-                viewModel.rotateClockwise()
-                synchronizeReaderSession()
-            },
-            onResetRotation: {
-                viewModel.resetRotation()
-                synchronizeReaderSession()
-            }
+            pageState: ReaderControlsPageState(
+                pageIndicatorText: viewModel.pageIndicatorText,
+                currentPageNumber: viewModel.currentPageNumber,
+                pageCount: viewModel.pageCount,
+                currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
+                bookmarkItems: viewModel.bookmarkItems
+            ),
+            displayState: ReaderControlsDisplayState(
+                fitMode: readerSession.state.layout.fitMode,
+                pagingMode: readerSession.state.layout.pagingMode,
+                spreadMode: readerSession.state.layout.spreadMode,
+                readingDirection: readerSession.state.layout.readingDirection,
+                coverAsSinglePage: readerSession.state.layout.coverAsSinglePage,
+                rotation: readerSession.state.layout.rotation
+            ),
+            capabilities: ReaderControlsCapabilities(
+                supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
+                supportsDoublePageSpread: supportsDoublePageSpread,
+                supportsRotationControls: viewModel.supportsRotationControls
+            ),
+            actions: ReaderControlsActions(
+                onDone: { isShowingReaderControls = false },
+                onOpenThumbnails: {
+                    pendingReaderAction = .thumbnails
+                    isShowingReaderControls = false
+                },
+                onGoToBookmark: { pageIndex in
+                    viewModel.goToBookmark(pageIndex: pageIndex)
+                    readerSession.apply(.goToPage(pageIndex))
+                    isShowingReaderControls = false
+                },
+                onGoToPageNumber: { pageNumber in
+                    viewModel.goToPage(number: pageNumber)
+                    readerSession.apply(.goToPage(pageNumber - 1))
+                    isShowingReaderControls = false
+                },
+                onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
+                onSetFitMode: { fitMode in
+                    viewModel.setFitMode(fitMode)
+                    synchronizeReaderSession()
+                },
+                onSetPagingMode: { pagingMode in
+                    viewModel.setPagingMode(pagingMode)
+                    synchronizeReaderSession()
+                },
+                onSetSpreadMode: { spreadMode in
+                    viewModel.setSpreadMode(spreadMode)
+                    synchronizeReaderSession()
+                },
+                onSetReadingDirection: { readingDirection in
+                    viewModel.setReadingDirection(readingDirection)
+                    synchronizeReaderSession()
+                },
+                onSetCoverAsSinglePage: { coverAsSinglePage in
+                    viewModel.setCoverAsSinglePage(coverAsSinglePage)
+                    synchronizeReaderSession()
+                },
+                onRotateCounterClockwise: {
+                    viewModel.rotateCounterClockwise()
+                    synchronizeReaderSession()
+                },
+                onRotateClockwise: {
+                    viewModel.rotateClockwise()
+                    synchronizeReaderSession()
+                },
+                onResetRotation: {
+                    viewModel.resetRotation()
+                    synchronizeReaderSession()
+                },
+                onToggleFavorite: viewModel.toggleFavoriteStatus,
+                onToggleReadStatus: viewModel.toggleReadStatus,
+                onSetRating: viewModel.setRating,
+                onOpenQuickMetadata: {
+                    pendingReaderAction = .quickMetadata
+                    isShowingReaderControls = false
+                },
+                onOpenMetadata: {
+                    pendingReaderAction = .metadata
+                    isShowingReaderControls = false
+                },
+                onOpenOrganization: {
+                    pendingReaderAction = .organization
+                    isShowingReaderControls = false
+                }
+            ),
+            metadata: ReaderControlsMetadata(
+                isFavorite: viewModel.isFavorite,
+                isRead: viewModel.comic.read,
+                rating: viewModel.rating
+            )
         )
     }
 
