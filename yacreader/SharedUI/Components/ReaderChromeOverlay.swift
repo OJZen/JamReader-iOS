@@ -10,22 +10,60 @@ private enum ReaderChromeMetrics {
     static let buttonSize: CGFloat = 44
     static let compactButtonSize: CGFloat = 28
     static let statusTopOffset: CGFloat = 78
-    static let scrubberThumbnailWidth: CGFloat = 40
-    static let scrubberThumbnailHeight: CGFloat = 58
-    static let scrubberItemWidth: CGFloat = 46
-    static let scrubberItemHeight: CGFloat = 76
-    static let scrubberFrameHeight: CGFloat = 100
-    static let scrubberTopInset: CGFloat = 18
-    static let scrubberBottomInset: CGFloat = 4
-    static let scrubberItemSpacing: CGFloat = 4
-    static let scrubberFocusDistance: CGFloat = 150
-    static let scrubberMaxScale: CGFloat = 1.34
-    static let scrubberMinScale: CGFloat = 0.78
-    static let scrubberMaxLift: CGFloat = 7
     static let floatingPreviewCornerRadius: CGFloat = 18
     static let floatingPreviewWidthFraction: CGFloat = 0.6
     static let floatingPreviewMinWidth: CGFloat = 220
     static let floatingPreviewMaxWidth: CGFloat = 420
+}
+
+/// Encapsulates all scrubber size values so they can scale with the device's size class.
+private struct ReaderScrubberLayout {
+    let thumbnailWidth: CGFloat
+    let thumbnailHeight: CGFloat
+    let itemWidth: CGFloat
+    let itemHeight: CGFloat
+    let frameHeight: CGFloat
+    let topInset: CGFloat
+    let bottomInset: CGFloat
+    let itemSpacing: CGFloat
+    let focusDistance: CGFloat
+    let maxScale: CGFloat
+    let minScale: CGFloat
+    let maxLift: CGFloat
+
+    var itemStride: CGFloat { itemWidth + itemSpacing }
+
+    /// iPhone / compact multitasking window.
+    static let compact = ReaderScrubberLayout(
+        thumbnailWidth: 40,
+        thumbnailHeight: 58,
+        itemWidth: 46,
+        itemHeight: 76,
+        frameHeight: 100,
+        topInset: 18,
+        bottomInset: 4,
+        itemSpacing: 4,
+        focusDistance: 150,
+        maxScale: 1.34,
+        minScale: 0.78,
+        maxLift: 7
+    )
+
+    /// iPad / regular horizontal size class — ~1.35× larger so thumbnails are easier to tap.
+    static let regular = ReaderScrubberLayout(
+        thumbnailWidth: 54,
+        thumbnailHeight: 78,
+        itemWidth: 62,
+        itemHeight: 104,
+        frameHeight: 132,
+        topInset: 24,
+        bottomInset: 6,
+        itemSpacing: 5,
+        focusDistance: 200,
+        maxScale: 1.34,
+        minScale: 0.78,
+        maxLift: 9
+    )
 }
 
 // MARK: - Surface Container
@@ -265,6 +303,7 @@ struct ReaderBottomBar: View {
     let onPageIndicatorTapped: () -> Void
     let onScrubberInteractionChanged: (Bool) -> Void
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var scrubberCoordinator: ReaderThumbnailScrubberCoordinator
 
     init(
@@ -288,6 +327,10 @@ struct ReaderBottomBar: View {
         )
     }
 
+    private var scrubberLayout: ReaderScrubberLayout {
+        horizontalSizeClass == .regular ? .regular : .compact
+    }
+
     private var displayedPage: Int {
         min(max(scrubberCoordinator.focusedPageIndex + 1, 1), max(pageCount, 1))
     }
@@ -302,6 +345,7 @@ struct ReaderBottomBar: View {
                 ReaderThumbnailScrubber(
                     document: document,
                     pageCount: pageCount,
+                    layout: scrubberLayout,
                     coordinator: scrubberCoordinator
                 ) { pageIndex in
                     onPageSelected(pageIndex + 1)
@@ -415,6 +459,7 @@ struct ReaderBottomBar: View {
 private struct ReaderThumbnailScrubber: View {
     let document: ComicDocument
     let pageCount: Int
+    let layout: ReaderScrubberLayout
     @ObservedObject var coordinator: ReaderThumbnailScrubberCoordinator
     let onPageCommitted: (Int) -> Void
 
@@ -423,18 +468,19 @@ private struct ReaderThumbnailScrubber: View {
     var body: some View {
         GeometryReader { proxy in
             let viewportWidth = proxy.size.width
-            let horizontalInset = max((viewportWidth - ReaderChromeMetrics.scrubberItemWidth) / 2, 0)
+            let horizontalInset = max((viewportWidth - layout.itemWidth) / 2, 0)
 
             ScrollViewReader { scrollProxy in
                 ZStack {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        LazyHStack(spacing: ReaderChromeMetrics.scrubberItemSpacing) {
+                        LazyHStack(spacing: layout.itemSpacing) {
                             ForEach(0..<pageCount, id: \.self) { pageIndex in
                                 ReaderThumbnailScrubberItem(
                                     document: document,
                                     pageIndex: pageIndex,
                                     viewportWidth: viewportWidth,
                                     coordinateSpaceName: coordinateSpaceName,
+                                    layout: layout,
                                     isFocused: pageIndex == coordinator.focusedPageIndex
                                 )
                                 .id(pageIndex)
@@ -453,8 +499,8 @@ private struct ReaderThumbnailScrubber: View {
                             }
                         }
                         .padding(.horizontal, horizontalInset)
-                        .padding(.top, ReaderChromeMetrics.scrubberTopInset)
-                        .padding(.bottom, ReaderChromeMetrics.scrubberBottomInset)
+                        .padding(.top, layout.topInset)
+                        .padding(.bottom, layout.bottomInset)
                         // Placed inside the UIScrollView's content host so that
                         // findGestureHost() reliably finds this UIScrollView as a
                         // direct superview ancestor — avoiding the .mask wrapper
@@ -462,7 +508,7 @@ private struct ReaderThumbnailScrubber: View {
                         .background {
                             TouchInteractionTracker(
                                 pageCount: pageCount,
-                                itemStride: ReaderChromeMetrics.scrubberItemWidth + ReaderChromeMetrics.scrubberItemSpacing,
+                                itemStride: layout.itemStride,
                                 onBegan: { coordinator.beginInteraction() },
                                 onEnded: { coordinator.endInteraction() },
                                 onCenteredPageIndexChanged: { coordinator.queueNearestPageIndexUpdate($0) }
@@ -526,7 +572,7 @@ private struct ReaderThumbnailScrubber: View {
                 }
             }
         }
-        .frame(height: ReaderChromeMetrics.scrubberFrameHeight)
+        .frame(height: layout.frameHeight)
     }
 
     private func nearestPageIndex(from midpoints: [Int: CGFloat], viewportWidth: CGFloat) -> Int? {
@@ -546,23 +592,24 @@ private struct ReaderThumbnailScrubberItem: View {
     let pageIndex: Int
     let viewportWidth: CGFloat
     let coordinateSpaceName: String
+    let layout: ReaderScrubberLayout
     let isFocused: Bool
 
     var body: some View {
         GeometryReader { proxy in
             let distance = abs(proxy.frame(in: .named(coordinateSpaceName)).midX - viewportWidth / 2)
-            let normalizedDistance = min(distance / ReaderChromeMetrics.scrubberFocusDistance, 1)
-            let scale = ReaderChromeMetrics.scrubberMaxScale
-                - ((ReaderChromeMetrics.scrubberMaxScale - ReaderChromeMetrics.scrubberMinScale) * normalizedDistance)
+            let normalizedDistance = min(distance / layout.focusDistance, 1)
+            let scale = layout.maxScale
+                - ((layout.maxScale - layout.minScale) * normalizedDistance)
             let opacity = 1 - (normalizedDistance * 0.28)
-            let lift = (1 - normalizedDistance) * ReaderChromeMetrics.scrubberMaxLift
+            let lift = (1 - normalizedDistance) * layout.maxLift
 
             VStack(spacing: 0) {
                 ReaderPageThumbnailView(
                     document: document,
                     pageIndex: pageIndex,
-                    width: ReaderChromeMetrics.scrubberThumbnailWidth,
-                    height: ReaderChromeMetrics.scrubberThumbnailHeight,
+                    width: layout.thumbnailWidth,
+                    height: layout.thumbnailHeight,
                     cornerRadius: 13,
                     style: .scrubber
                 )
@@ -575,8 +622,8 @@ private struct ReaderThumbnailScrubberItem: View {
                 }
             }
             .frame(
-                width: ReaderChromeMetrics.scrubberThumbnailWidth,
-                height: ReaderChromeMetrics.scrubberThumbnailHeight,
+                width: layout.thumbnailWidth,
+                height: layout.thumbnailHeight,
                 alignment: .bottom
             )
             .scaleEffect(scale, anchor: .bottom)
@@ -594,8 +641,8 @@ private struct ReaderThumbnailScrubberItem: View {
             )
         }
         .frame(
-            width: ReaderChromeMetrics.scrubberItemWidth,
-            height: ReaderChromeMetrics.scrubberItemHeight
+            width: layout.itemWidth,
+            height: layout.itemHeight
         )
     }
 }
