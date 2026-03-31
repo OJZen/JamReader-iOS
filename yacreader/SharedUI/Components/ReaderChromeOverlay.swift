@@ -183,32 +183,36 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
 struct ReaderTopBar: View {
     let title: String
     let onBack: () -> Void
+    let secondarySystemImage: String?
+    let secondaryAccessibilityLabel: String?
+    let onSecondaryAction: (() -> Void)?
+    let isSecondaryDisabled: Bool
     let onMenu: () -> Void
     let isMenuDisabled: Bool
 
     init(
         title: String,
         onBack: @escaping () -> Void,
+        secondarySystemImage: String? = nil,
+        secondaryAccessibilityLabel: String? = nil,
+        onSecondaryAction: (() -> Void)? = nil,
+        isSecondaryDisabled: Bool = false,
         onMenu: @escaping () -> Void,
         isMenuDisabled: Bool = false
     ) {
         self.title = title
         self.onBack = onBack
+        self.secondarySystemImage = secondarySystemImage
+        self.secondaryAccessibilityLabel = secondaryAccessibilityLabel
+        self.onSecondaryAction = onSecondaryAction
+        self.isSecondaryDisabled = isSecondaryDisabled
         self.onMenu = onMenu
         self.isMenuDisabled = isMenuDisabled
     }
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                    .background(.white.opacity(0.12), in: Circle())
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
+            chromeButton(systemImage: "chevron.left", action: onBack)
 
             Text(title)
                 .font(AppFont.headline())
@@ -217,19 +221,30 @@ struct ReaderTopBar: View {
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(action: onMenu) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                    .background(.white.opacity(0.12), in: Circle())
-                    .contentShape(Circle())
+            if let secondarySystemImage, let onSecondaryAction {
+                chromeButton(systemImage: secondarySystemImage, action: onSecondaryAction)
+                    .disabled(isSecondaryDisabled)
+                    .opacity(isSecondaryDisabled ? 0.4 : 1)
+                    .accessibilityLabel(secondaryAccessibilityLabel ?? "Reader Action")
             }
-            .buttonStyle(.plain)
+
+            chromeButton(systemImage: "ellipsis", action: onMenu)
             .disabled(isMenuDisabled)
             .opacity(isMenuDisabled ? 0.4 : 1)
         }
         .padding(.vertical, ReaderChromeMetrics.barVerticalPadding)
+    }
+
+    private func chromeButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
+                .background(.white.opacity(0.12), in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -268,6 +283,10 @@ struct ReaderBottomBar: View {
 
     private var displayedPage: Int {
         min(max(scrubberCoordinator.focusedPageIndex + 1, 1), max(pageCount, 1))
+    }
+
+    private var currentPageIndex: Int {
+        max(min(currentPage - 1, max(pageCount - 1, 0)), 0)
     }
 
     var body: some View {
@@ -328,6 +347,21 @@ struct ReaderBottomBar: View {
             let pageIndex = max(min(newValue - 1, max(pageCount - 1, 0)), 0)
             DispatchQueue.main.async {
                 scrubberCoordinator.syncCurrentPage(pageIndex)
+            }
+        }
+        .onAppear {
+            DispatchQueue.main.async {
+                scrubberCoordinator.realign(to: currentPageIndex)
+            }
+        }
+        .onChange(of: document.fileURL) { _, _ in
+            DispatchQueue.main.async {
+                scrubberCoordinator.realign(to: currentPageIndex)
+            }
+        }
+        .onChange(of: pageCount) { _, _ in
+            DispatchQueue.main.async {
+                scrubberCoordinator.realign(to: currentPageIndex)
             }
         }
         .onChange(of: scrubberCoordinator.isInteracting) { _, isInteracting in
@@ -427,15 +461,12 @@ private struct ReaderThumbnailScrubber: View {
                             endPoint: .trailing
                         )
                     }
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                coordinator.beginInteraction()
-                            }
-                            .onEnded { _ in
-                                coordinator.endInteraction()
-                            }
-                    )
+                    .overlay {
+                        TouchInteractionTracker(
+                            onBegan: { coordinator.beginInteraction() },
+                            onEnded: { coordinator.endInteraction() }
+                        )
+                    }
                     .onAppear {
                         DispatchQueue.main.async {
                             coordinator.handleAppear()
@@ -614,6 +645,7 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
     private var requestSequence = 0
     private var settleTask: Task<Void, Never>?
     private var previewDismissTask: Task<Void, Never>?
+    private var alignmentRetryTask: Task<Void, Never>?
     private var lastCommittedPageIndex: Int
     private var isTouchActive = false
     private var pendingNearestPageIndex: Int?
@@ -627,10 +659,12 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
     deinit {
         settleTask?.cancel()
         previewDismissTask?.cancel()
+        alignmentRetryTask?.cancel()
     }
 
     func handleAppear() {
         enqueueScroll(to: focusedPageIndex, animated: false)
+        scheduleAlignmentRetry(to: focusedPageIndex)
     }
 
     func handleViewportChange() {
@@ -639,6 +673,20 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
         }
 
         enqueueScroll(to: focusedPageIndex, animated: false)
+        scheduleAlignmentRetry(to: focusedPageIndex)
+    }
+
+    func realign(to pageIndex: Int) {
+        let clampedIndex = max(pageIndex, 0)
+        focusedPageIndex = clampedIndex
+        lastCommittedPageIndex = clampedIndex
+
+        guard !isInteracting else {
+            return
+        }
+
+        enqueueScroll(to: clampedIndex, animated: false)
+        scheduleAlignmentRetry(to: clampedIndex)
     }
 
     func syncCurrentPage(_ pageIndex: Int) {
@@ -659,6 +707,8 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
             return
         }
 
+        alignmentRetryTask?.cancel()
+        alignmentRetryTask = nil
         settleTask?.cancel()
         settleTask = nil
         previewDismissTask?.cancel()
@@ -715,6 +765,8 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
     }
 
     func commitTap(on pageIndex: Int) {
+        alignmentRetryTask?.cancel()
+        alignmentRetryTask = nil
         settleTask?.cancel()
         settleTask = nil
         previewDismissTask?.cancel()
@@ -729,6 +781,8 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
     }
 
     func cancelPendingWork() {
+        alignmentRetryTask?.cancel()
+        alignmentRetryTask = nil
         settleTask?.cancel()
         settleTask = nil
         previewDismissTask?.cancel()
@@ -793,6 +847,22 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
             id: requestSequence,
             pageIndex: pageIndex
         )
+    }
+
+    private func scheduleAlignmentRetry(to pageIndex: Int) {
+        alignmentRetryTask?.cancel()
+        alignmentRetryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 140_000_000)
+            guard
+                let self,
+                !Task.isCancelled,
+                !self.isInteracting
+            else {
+                return
+            }
+
+            self.enqueueScroll(to: pageIndex, animated: false)
+        }
     }
 
     private func schedulePreviewDismiss(after delay: TimeInterval) {
@@ -930,5 +1000,58 @@ struct ReaderBottomDock<Content: View>: View {
         .padding(.vertical, Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.ultraThinMaterial, in: Capsule())
+    }
+}
+
+// MARK: - UIKit Touch Tracker (replaces SwiftUI DragGesture for CI compliance)
+
+/// Detects touch-down and touch-up using a UIKit long press recognizer with zero delay.
+/// Used to track interaction state on the thumbnail scrubber strip.
+private struct TouchInteractionTracker: UIViewRepresentable {
+    let onBegan: () -> Void
+    let onEnded: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onBegan: onBegan, onEnded: onEnded)
+    }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.backgroundColor = .clear
+
+        let recognizer = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handlePress(_:))
+        )
+        recognizer.minimumPressDuration = 0
+        recognizer.cancelsTouchesInView = false
+        view.addGestureRecognizer(recognizer)
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        context.coordinator.onBegan = onBegan
+        context.coordinator.onEnded = onEnded
+    }
+
+    final class Coordinator {
+        var onBegan: () -> Void
+        var onEnded: () -> Void
+
+        init(onBegan: @escaping () -> Void, onEnded: @escaping () -> Void) {
+            self.onBegan = onBegan
+            self.onEnded = onEnded
+        }
+
+        @objc func handlePress(_ recognizer: UILongPressGestureRecognizer) {
+            switch recognizer.state {
+            case .began:
+                onBegan()
+            case .ended, .cancelled, .failed:
+                onEnded()
+            default:
+                break
+            }
+        }
     }
 }
