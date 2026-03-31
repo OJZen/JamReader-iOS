@@ -76,6 +76,7 @@ final class RemoteWebDAVClient {
     ) async throws -> [RemoteWebDAVDirectoryEntry] {
         var request = URLRequest(url: ensuredDirectoryURL(directoryURL))
         request.httpMethod = "PROPFIND"
+        request.timeoutInterval = 30
         request.httpBody = Self.propfindBody
         request.setValue(depth, forHTTPHeaderField: "Depth")
         request.setValue("application/xml; charset=utf-8", forHTTPHeaderField: "Content-Type")
@@ -132,6 +133,7 @@ final class RemoteWebDAVClient {
     ) async throws {
         var request = URLRequest(url: fileURL)
         request.httpMethod = "GET"
+        request.timeoutInterval = 60
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         if let authorizationHeader {
             request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")

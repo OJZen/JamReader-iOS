@@ -1,9 +1,12 @@
 import CryptoKit
 import Foundation
+import os
 
 #if canImport(SQLite3)
 import SQLite3
 #endif
+
+private let scannerLog = Logger(subsystem: "com.yacreader.ios", category: "LibraryScanner")
 
 enum LibraryScannerError: LocalizedError {
     case sqliteUnavailable
@@ -228,7 +231,11 @@ final class LibraryScanner {
                 reusedComicCount: previousComicCount
             )
         } catch {
-            _ = try? execute("ROLLBACK;", database: database)
+            do {
+                try execute("ROLLBACK;", database: database)
+            } catch {
+                scannerLog.error("ROLLBACK failed during append scan: \(error.localizedDescription)")
+            }
             throw error
         }
         #else
@@ -456,7 +463,11 @@ final class LibraryScanner {
                 reusedComicCount: reusedComicCount
             )
         } catch {
-            _ = try? execute("ROLLBACK;", database: database)
+            do {
+                try execute("ROLLBACK;", database: database)
+            } catch {
+                scannerLog.error("ROLLBACK failed during full scan: \(error.localizedDescription)")
+            }
             throw error
         }
     }
@@ -566,7 +577,11 @@ final class LibraryScanner {
                 reusedComicCount: context.consumedReusableComicIDs.count
             )
         } catch {
-            _ = try? execute("ROLLBACK;", database: database)
+            do {
+                try execute("ROLLBACK;", database: database)
+            } catch {
+                scannerLog.error("ROLLBACK failed during subtree refresh: \(error.localizedDescription)")
+            }
             throw error
         }
     }

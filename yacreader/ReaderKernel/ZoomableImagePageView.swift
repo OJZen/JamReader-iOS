@@ -220,6 +220,10 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
     }
 
     private func queueZoomStateChanged(_ isZoomed: Bool) {
+        guard lastReportedZoomState != isZoomed else {
+            return
+        }
+
         pendingZoomState = isZoomed
 
         guard !hasQueuedZoomStateFlush else {

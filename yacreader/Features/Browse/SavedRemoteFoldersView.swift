@@ -3,11 +3,14 @@ import SwiftUI
 
 private enum SavedRemoteFoldersLayoutMetrics {
     static let horizontalInset: CGFloat = 12
+    static let rowAccessoryReservedWidth: CGFloat = 36
 }
 
 struct SavedRemoteFoldersView: View {
     let dependencies: AppDependencies
     let focusedProfile: RemoteServerProfile?
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @StateObject private var viewModel: SavedRemoteFoldersViewModel
     @State private var searchText = ""
@@ -46,11 +49,18 @@ struct SavedRemoteFoldersView: View {
                                     shortcut: entry.shortcut,
                                     profile: entry.profile,
                                     showsNavigationIndicator: false,
-                                    showsServerName: false
+                                    showsServerName: false,
+                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
                                 )
                             }
                             .buttonStyle(.plain)
                             .insetCardListRow(horizontalInset: SavedRemoteFoldersLayoutMetrics.horizontalInset)
+                            .overlay(alignment: .trailing) {
+                                if showsPersistentItemActions {
+                                    savedFolderActionMenu(for: entry)
+                                        .padding(.trailing, 8)
+                                }
+                            }
                             .contextMenu {
                                 savedFolderActionMenuContent(for: entry)
                             }
@@ -68,6 +78,11 @@ struct SavedRemoteFoldersView: View {
         }
         .scrollContentBackground(.hidden)
         .background(background)
+        .overlay {
+            if viewModel.isLoading && viewModel.entries.isEmpty {
+                ProgressView()
+            }
+        }
         .navigationTitle("Saved Folders")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "Search saved remote folders")
@@ -116,6 +131,14 @@ struct SavedRemoteFoldersView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    private var showsPersistentItemActions: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var itemAccessoryReservedWidth: CGFloat {
+        showsPersistentItemActions ? SavedRemoteFoldersLayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
     private var filteredEntries: [SavedRemoteFoldersViewModel.ShortcutEntry] {
@@ -375,6 +398,18 @@ struct SavedRemoteFoldersView: View {
         }
     }
 
+    private func savedFolderActionMenu(
+        for entry: SavedRemoteFoldersViewModel.ShortcutEntry
+    ) -> some View {
+        Menu {
+            savedFolderActionMenuContent(for: entry)
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Manage \(entry.shortcut.title)")
+    }
+
     @ViewBuilder
     private func savedFolderSwipeActions(
         for entry: SavedRemoteFoldersViewModel.ShortcutEntry
@@ -399,6 +434,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
     typealias ShortcutEntry = RemoteResolvedFolderShortcut
 
     @Published private(set) var entries: [ShortcutEntry] = []
+    @Published private(set) var isLoading = false
     @Published var alert: BrowseHomeAlert?
 
     private let shortcutSnapshotStore: RemoteFolderShortcutSnapshotStore
@@ -431,6 +467,8 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
     }
 
     func load() async {
+        isLoading = true
+        defer { isLoading = false }
         do {
             entries = try shortcutSnapshotStore.loadEntries()
             alert = nil
@@ -533,6 +571,7 @@ private struct SavedRemoteFolderRenameSheet: View {
                 }
             }
         }
+        .adaptiveSheetWidth(520)
         .presentationDetents([.medium])
         .onAppear {
             isFocused = true

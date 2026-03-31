@@ -63,6 +63,7 @@ final class RemoteHTTPRangeFileReader: RemoteRandomAccessFileReader {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 30
         request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         request.setValue(
             "bytes=\(offset)-\(offset + UInt64(length) - 1)",
@@ -97,6 +98,7 @@ final class RemoteHTTPRangeFileReader: RemoteRandomAccessFileReader {
 
         var headRequest = URLRequest(url: url)
         headRequest.httpMethod = "HEAD"
+        headRequest.timeoutInterval = 15
         headRequest.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         if let authorizationHeader {
             headRequest.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
@@ -115,6 +117,7 @@ final class RemoteHTTPRangeFileReader: RemoteRandomAccessFileReader {
 
         var rangeRequest = URLRequest(url: url)
         rangeRequest.httpMethod = "GET"
+        rangeRequest.timeoutInterval = 30
         rangeRequest.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
         rangeRequest.setValue("bytes=0-0", forHTTPHeaderField: "Range")
         if let authorizationHeader {

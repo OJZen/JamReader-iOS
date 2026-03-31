@@ -1304,6 +1304,7 @@ final class RemoteServerBrowsingService {
         let components = normalizedPath
             .split(separator: "/")
             .map(String.init)
+            .filter { $0 != ".." && $0 != "." && !$0.isEmpty }
 
         if components.isEmpty {
             return destinationURL.appendingPathComponent(reference.fileName, isDirectory: false)

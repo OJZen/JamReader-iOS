@@ -98,6 +98,8 @@ private struct TARArchiveParser {
 
     let archiveURL: URL
 
+    private static let maxEntries = 100_000
+
     func parseEntries() throws -> [TARArchiveEntry] {
         let fileHandle: FileHandle
         do {
@@ -118,6 +120,9 @@ private struct TARArchiveParser {
         var pendingPAXValues: [String: String] = [:]
 
         while offset + UInt64(Self.blockSize) <= fileSize {
+            guard entries.count < Self.maxEntries else {
+                break
+            }
             let header = try readData(
                 from: offset,
                 length: Self.blockSize,
@@ -236,6 +241,8 @@ private struct TARArchiveParser {
         return String(decoding: trimmedData, as: UTF8.self)
     }
 
+    private static let maxPAXRecordLength = 1_048_576
+
     private func parsePAXRecords(_ data: Data) -> [String: String] {
         var result: [String: String] = [:]
         var position = 0
@@ -249,7 +256,8 @@ private struct TARArchiveParser {
             let lengthData = Data(bytes[position..<spaceIndex])
             guard let lengthString = String(data: lengthData, encoding: .utf8),
                   let recordLength = Int(lengthString),
-                  recordLength > 0
+                  recordLength > 0,
+                  recordLength <= Self.maxPAXRecordLength
             else {
                 break
             }

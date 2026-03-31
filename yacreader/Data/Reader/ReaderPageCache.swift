@@ -47,10 +47,11 @@ actor ReaderPageCache {
 
     nonisolated static func namespace(for documentURL: URL) -> String {
         let standardizedURL = documentURL.standardizedFileURL
-        let values = try? standardizedURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        let values = try? standardizedURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey, .fileResourceIdentifierKey])
         let fileSize = values?.fileSize ?? 0
         let modificationInterval = Int64(values?.contentModificationDate?.timeIntervalSince1970 ?? 0)
-        let rawNamespace = "\(standardizedURL.path)|\(fileSize)|\(modificationInterval)"
+        let resourceID = values?.fileResourceIdentifier.map { "\($0)" } ?? ""
+        let rawNamespace = "\(standardizedURL.path)|\(fileSize)|\(modificationInterval)|\(resourceID)"
         return hashedKey(for: rawNamespace)
     }
 
