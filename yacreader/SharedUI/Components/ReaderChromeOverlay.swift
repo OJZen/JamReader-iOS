@@ -349,6 +349,7 @@ struct ReaderBottomBar: View {
                     .transition(.scale(scale: 0.92).combined(with: .opacity))
                 }
             }
+            .animation(.spring(response: 0.28, dampingFraction: 0.82), value: scrubberCoordinator.isPreviewVisible)
         }
         .onChange(of: currentPage) { _, newValue in
             let pageIndex = max(min(newValue - 1, max(pageCount - 1, 0)), 0)

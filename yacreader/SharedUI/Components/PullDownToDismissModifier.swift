@@ -230,8 +230,10 @@ private struct PullDownGestureLayer: UIViewRepresentable {
             switch recognizer.state {
             case .changed:
                 if !hasStartedVerticalDrag {
-                    // Only activate for predominantly vertical downward drags
-                    guard abs(translation.y) > abs(translation.x) * 1.2,
+                    // Only activate for steep downward drags (≥63° from horizontal).
+                    // The 2.0× ratio prevents accidental activation when the user swipes
+                    // on the thumbnail scrubber with a slight vertical component.
+                    guard abs(translation.y) > abs(translation.x) * 2.0,
                           translation.y > 12 else {
                         return
                     }
