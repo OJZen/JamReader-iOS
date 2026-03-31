@@ -1125,33 +1125,41 @@ private struct TouchInteractionTracker: UIViewRepresentable {
             gestureHost = nil
         }
 
+        /// Finds the scroll view that owns this background helper view.
+        ///
+        /// The DFS-on-every-level approach is intentionally avoided here.
+        /// `TouchInteractionTracker` lives in the `.background` of the thumbnail
+        /// `ScrollView`, meaning its UIKit view is a sibling or shallow ancestor
+        /// of the target `UIScrollView`.  When the reader is open, a DFS from
+        /// any common ancestor would find the reader's `UICollectionView` (which
+        /// appears first in the ZStack subview order) instead of the scrubber's
+        /// `UIScrollView`, breaking both interaction tracking and auto-centering.
+        ///
+        /// Instead: walk the superview chain and at each level check whether the
+        /// current view itself is a scroll view, then check only its DIRECT
+        /// siblings (no recursion into sibling subtrees).  This reliably finds
+        /// the immediately enclosing scroll view without escaping into the
+        /// reader's content layer.
         private func findGestureHost() -> UIScrollView? {
             var candidate: UIView? = self
 
             while let current = candidate {
-                if let scrollView = findScrollView(in: current) {
+                // Direct-ancestor hit (e.g., background view placed inside the scroll view's content).
+                if let scrollView = current as? UIScrollView {
                     return scrollView
+                }
+
+                // Direct-sibling hit (typical case: .background places the helper
+                // alongside the UIScrollView in the same SwiftUI container).
+                if let parent = current.superview {
+                    for sibling in parent.subviews where sibling !== current {
+                        if let scrollView = sibling as? UIScrollView {
+                            return scrollView
+                        }
+                    }
                 }
 
                 candidate = current.superview
-            }
-
-            if let window {
-                return findScrollView(in: window)
-            }
-
-            return nil
-        }
-
-        private func findScrollView(in root: UIView) -> UIScrollView? {
-            if let scrollView = root as? UIScrollView {
-                return scrollView
-            }
-
-            for subview in root.subviews {
-                if let scrollView = findScrollView(in: subview) {
-                    return scrollView
-                }
             }
 
             return nil
