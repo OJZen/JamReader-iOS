@@ -140,7 +140,7 @@ struct LibraryHomeView: View {
                     .listStyle(.insetGrouped)
                 }
             }
-            .navigationTitle("书库")
+            .navigationTitle("Library")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 addLibraryToolbarItem
@@ -176,7 +176,7 @@ struct LibraryHomeView: View {
             List(selection: $selectedLibraryID) {
                 splitLibrariesSection
             }
-            .navigationTitle("书库")
+            .navigationTitle("Library")
             .listStyle(.sidebar)
             .toolbar {
                 addLibraryToolbarItem

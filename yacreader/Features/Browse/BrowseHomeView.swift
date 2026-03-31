@@ -92,7 +92,7 @@ struct BrowseHomeView: View {
     private var compactLayout: some View {
         NavigationStack {
             compactContent
-                .navigationTitle("浏览")
+                .navigationTitle("Browse")
                 .navigationBarTitleDisplayMode(.large)
                 .toolbar {
                     addServerToolbarItem
@@ -140,7 +140,7 @@ struct BrowseHomeView: View {
                     .listStyle(.sidebar)
                 }
             }
-            .navigationTitle("浏览")
+            .navigationTitle("Browse")
             .toolbar {
                 addServerToolbarItem
             }

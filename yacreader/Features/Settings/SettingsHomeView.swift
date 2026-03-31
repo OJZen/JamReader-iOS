@@ -88,7 +88,7 @@ struct SettingsHomeView: View {
 
     private var compactLayout: some View {
         NavigationStack {
-            settingsList(title: "设置", displayMode: .large) {
+            settingsList(title: "Settings", displayMode: .large) {
                 readingSection
                 remoteSection
                 storageSection
@@ -114,7 +114,7 @@ struct SettingsHomeView: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationTitle("设置")
+            .navigationTitle("Settings")
         } detail: {
             NavigationStack {
                 splitDetailContent(for: selectedPane.wrappedValue ?? .overview)
@@ -393,7 +393,7 @@ struct SettingsHomeView: View {
     private func splitDetailContent(for pane: SettingsHomePane) -> some View {
         switch pane {
         case .overview:
-            settingsList(title: "设置", displayMode: .inline) {
+            settingsList(title: "Settings", displayMode: .inline) {
                 readingSection
                 remoteSection
                 storageSection
@@ -419,7 +419,7 @@ struct SettingsHomeView: View {
     }
 
     private func settingsList<Content: View>(
-        title: String,
+        title: LocalizedStringKey,
         displayMode: NavigationBarItem.TitleDisplayMode,
         @ViewBuilder content: () -> Content
     ) -> some View {
@@ -532,7 +532,7 @@ private enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
 
     var id: String { rawValue }
 
-    var title: String {
+    var title: LocalizedStringKey {
         switch self {
         case .overview:
             return "Overview"
