@@ -455,6 +455,19 @@ private struct ReaderThumbnailScrubber: View {
                         .padding(.horizontal, horizontalInset)
                         .padding(.top, ReaderChromeMetrics.scrubberTopInset)
                         .padding(.bottom, ReaderChromeMetrics.scrubberBottomInset)
+                        // Placed inside the UIScrollView's content host so that
+                        // findGestureHost() reliably finds this UIScrollView as a
+                        // direct superview ancestor — avoiding the .mask wrapper
+                        // that previously blocked sibling detection.
+                        .background {
+                            TouchInteractionTracker(
+                                pageCount: pageCount,
+                                itemStride: ReaderChromeMetrics.scrubberItemWidth + ReaderChromeMetrics.scrubberItemSpacing,
+                                onBegan: { coordinator.beginInteraction() },
+                                onEnded: { coordinator.endInteraction() },
+                                onCenteredPageIndexChanged: { coordinator.queueNearestPageIndexUpdate($0) }
+                            )
+                        }
                     }
                     .contentShape(Rectangle())
                     .coordinateSpace(name: coordinateSpaceName)
@@ -468,15 +481,6 @@ private struct ReaderThumbnailScrubber: View {
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
-                        )
-                    }
-                    .background {
-                        TouchInteractionTracker(
-                            pageCount: pageCount,
-                            itemStride: ReaderChromeMetrics.scrubberItemWidth + ReaderChromeMetrics.scrubberItemSpacing,
-                            onBegan: { coordinator.beginInteraction() },
-                            onEnded: { coordinator.endInteraction() },
-                            onCenteredPageIndexChanged: { coordinator.queueNearestPageIndexUpdate($0) }
                         )
                     }
                     .onAppear {
@@ -1126,40 +1130,26 @@ private struct TouchInteractionTracker: UIViewRepresentable {
             gestureHost = nil
         }
 
-        /// Finds the scroll view that owns this background helper view.
+        /// Finds the thumbnail UIScrollView that owns this background helper view.
         ///
-        /// The DFS-on-every-level approach is intentionally avoided here.
-        /// `TouchInteractionTracker` lives in the `.background` of the thumbnail
-        /// `ScrollView`, meaning its UIKit view is a sibling or shallow ancestor
-        /// of the target `UIScrollView`.  When the reader is open, a DFS from
-        /// any common ancestor would find the reader's `UICollectionView` (which
-        /// appears first in the ZStack subview order) instead of the scrubber's
-        /// `UIScrollView`, breaking both interaction tracking and auto-centering.
+        /// `TouchInteractionTracker` is placed as `.background` of the padded `LazyHStack`,
+        /// which is the *content* of the thumbnail `ScrollView`.  In UIKit terms the
+        /// GestureInstallerView is a subview (potentially several levels down) inside the
+        /// UIScrollView's content host.  Walking the superview chain therefore always reaches
+        /// the thumbnail UIScrollView before any other scroll view — the reader's
+        /// UICollectionView lives in a completely different ZStack branch.
         ///
-        /// Instead: walk the superview chain and at each level check whether the
-        /// current view itself is a scroll view, then check only its DIRECT
-        /// siblings (no recursion into sibling subtrees).  This reliably finds
-        /// the immediately enclosing scroll view without escaping into the
-        /// reader's content layer.
+        /// We stop at the first UIScrollView we encounter.  Sibling search is intentionally
+        /// removed: when the tracker was outside the ScrollView, a .mask wrapper created a
+        /// sibling UIView that hid the real UIScrollView from direct-sibling detection, causing
+        /// the algorithm to escape into the reader layer and find the UICollectionView instead.
         private func findGestureHost() -> UIScrollView? {
             var candidate: UIView? = self
 
             while let current = candidate {
-                // Direct-ancestor hit (e.g., background view placed inside the scroll view's content).
                 if let scrollView = current as? UIScrollView {
                     return scrollView
                 }
-
-                // Direct-sibling hit (typical case: .background places the helper
-                // alongside the UIScrollView in the same SwiftUI container).
-                if let parent = current.superview {
-                    for sibling in parent.subviews where sibling !== current {
-                        if let scrollView = sibling as? UIScrollView {
-                            return scrollView
-                        }
-                    }
-                }
-
                 candidate = current.superview
             }
 
