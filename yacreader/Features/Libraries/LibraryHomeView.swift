@@ -21,6 +21,7 @@ struct LibraryHomeView: View {
     @State private var compactNavigationPath: [UUID] = []
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
 
     var body: some View {
         Group {
@@ -171,7 +172,7 @@ struct LibraryHomeView: View {
     }
 
     private var splitViewLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $selectedLibraryID) {
                 splitLibrariesSection
             }
@@ -576,6 +577,7 @@ private struct LibraryRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 }
 
@@ -603,6 +605,7 @@ private struct LibrarySidebarRowView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 }
 

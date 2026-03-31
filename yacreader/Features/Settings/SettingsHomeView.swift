@@ -18,6 +18,7 @@ struct SettingsHomeView: View {
     @State private var isShowingClearDownloadsConfirmation = false
     @State private var isShowingClearThumbnailsConfirmation = false
     @State private var isShowingClearImportedComicsConfirmation = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @State private var alert: SettingsAlertState?
 
     var body: some View {
@@ -97,7 +98,7 @@ struct SettingsHomeView: View {
     }
 
     private var splitViewLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: selectedPane) {
                 ForEach(SettingsHomePane.allCases) { pane in
                     Button {

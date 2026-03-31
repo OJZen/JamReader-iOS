@@ -13,6 +13,7 @@ struct BrowseHomeView: View {
     @State private var navigationRequest: BrowseHomeNavigationRequest?
     @State private var splitSelection: BrowseHomeSplitSelection?
     @State private var splitSyncTask: Task<Void, Never>?
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -123,7 +124,7 @@ struct BrowseHomeView: View {
     }
 
     private var splitViewLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             Group {
                 if displayedProfiles.isEmpty && !showsQuickAccess {
                     BrowseHomeEmptyState(onAddServer: presentCreateServerSheet)
@@ -514,6 +515,7 @@ private struct BrowseHomeServerRow: View {
         }
         .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 
     private var protocolSystemImage: String {
@@ -560,6 +562,7 @@ private struct BrowseHomeQuickAccessRow: View {
         }
         .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 }
 

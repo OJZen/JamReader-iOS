@@ -103,6 +103,12 @@ struct ComicReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .background {
+            Button("", action: dismiss.callAsFunction)
+                .keyboardShortcut("w", modifiers: .command)
+                .allowsHitTesting(false)
+                .opacity(0)
+        }
         .task {
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
             viewModel.loadIfNeeded()
