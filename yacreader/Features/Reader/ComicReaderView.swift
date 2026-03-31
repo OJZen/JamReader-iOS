@@ -423,7 +423,7 @@ struct ComicReaderView: View {
             from: readerSession.state.pendingPageNumberText,
             pageCount: pageCount
         ) else {
-            viewModel.alert = LibraryAlertState(
+            viewModel.alert = AppAlertState(
                 title: "Invalid Page Number",
                 message: ReaderPageJumpResolver.validationMessage(pageCount: pageCount)
             )

@@ -8,7 +8,7 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
     @Published var isShowingCreateSheet = false
     @Published var pendingCollectionName = ""
     @Published var selectedLabelColor: LibraryLabelColor = .blue
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let descriptor: LibraryDescriptor
     let sectionKind: LibraryOrganizationSectionKind
@@ -70,9 +70,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             collections = snapshot.collections(for: sectionKind)
         } catch {
             collections = []
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Load \(sectionKind.title)",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -90,7 +90,7 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
     func createCollection() {
         let trimmedName = pendingCollectionName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Name Required",
                 message: "Enter a name before creating a new \(sectionKind == .labels ? "tag" : "reading list")."
             )
@@ -115,9 +115,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             isShowingCreateSheet = false
             load()
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Create \(sectionKind == .labels ? "Tag" : "Reading List")",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -129,7 +129,7 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
     ) -> Bool {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Name Required",
                 message: "Enter a name before saving this \(collection.type == .label ? "tag" : "reading list")."
             )
@@ -139,7 +139,7 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
         if collections.contains(where: {
             $0.id != collection.id && $0.displayTitle.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Name Already Used",
                 message: trimmedName
             )
@@ -175,9 +175,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             }
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update \(collection.type == .label ? "Tag" : "Reading List")",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -201,9 +201,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             collections.removeAll { $0.id == collection.id }
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Delete \(collection.type == .label ? "Tag" : "Reading List")",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }

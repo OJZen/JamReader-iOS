@@ -345,12 +345,12 @@ struct BrowseHomeView: View {
         for draft: RemoteServerEditorDraft
     ) -> some View {
         RemoteServerEditorSheet(draft: draft) { updatedDraft in
-            let result = viewModel.save(draft: updatedDraft)
-            if case .success = result {
+            let alertState = viewModel.save(draft: updatedDraft)
+            if alertState == nil {
                 editorDraft = nil
                 synchronizeSplitSelection()
             }
-            return result
+            return alertState
         }
         .id(draft.id)
     }

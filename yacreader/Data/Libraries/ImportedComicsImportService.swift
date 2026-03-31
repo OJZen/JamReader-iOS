@@ -191,7 +191,7 @@ final class ImportedComicsImportService {
                 throw CancellationError()
             } catch {
                 scanSummary = nil
-                scanErrorMessage = error.localizedDescription
+                scanErrorMessage = error.userFacingMessage
             }
         } else {
             scanSummary = nil

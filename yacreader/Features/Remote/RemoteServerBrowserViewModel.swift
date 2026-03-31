@@ -78,7 +78,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     @Published private(set) var activeProgress: RemoteBrowserProgressState?
     @Published private(set) var isCurrentFolderSaved = false
     @Published var feedback: RemoteBrowserFeedbackState?
-    @Published var alert: RemoteAlertState?
+    @Published var alert: AppAlertState?
 
     let profile: RemoteServerProfile
     let currentPath: String
@@ -397,9 +397,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 autoDismissAfter: 2.6
             )
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: isCurrentFolderSaved ? "Failed to Remove Shortcut" : "Failed to Save Shortcut",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -419,7 +419,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         cancellationController: RemoteImportCancellationController
     ) async {
         guard item.canOpenAsComic else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Import Unavailable",
                 message: "Only supported remote comic files can be imported."
             )
@@ -427,7 +427,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         guard let reference = try? browsingService.makeComicFileReference(from: item) else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Import Unavailable",
                 message: "This remote comic could not be prepared for import."
             )
@@ -461,7 +461,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 }
             )
             guard importUsesCurrentRemoteCopy(downloadResult) else {
-                alert = RemoteAlertState(
+                alert = AppAlertState(
                     title: "Import Requires Current Remote Copy",
                     message: importUnavailableMessage(for: downloadResult)
                 )
@@ -498,7 +498,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         } catch {
             presentImportFailureFeedback(
                 title: "Failed to Import Comic",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -510,7 +510,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         cancellationController: RemoteImportCancellationController
     ) async {
         guard item.isDirectory else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Import Unavailable",
                 message: "Only remote folders can be imported recursively."
             )
@@ -530,7 +530,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             )
             guard !importableItems.isEmpty else {
                 clearBackgroundImportProgress()
-                alert = RemoteAlertState(
+                alert = AppAlertState(
                     title: "Nothing to Import",
                     message: scope == .includeSubfolders
                         ? "No supported comic files were found in \(item.name) or its subfolders."
@@ -553,7 +553,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             clearBackgroundImportProgress()
             presentImportFailureFeedback(
                 title: "Folder Import Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -564,7 +564,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         cancellationController: RemoteImportCancellationController
     ) async {
         guard canImportCurrentFolderRecursively else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Nothing to Import",
                 message: "There are no supported comic files in this remote folder or its subfolders yet."
             )
@@ -602,7 +602,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             }
             guard !importableItems.isEmpty else {
                 clearBackgroundImportProgress()
-                alert = RemoteAlertState(
+                alert = AppAlertState(
                     title: "Nothing to Import",
                     message: scope == .includeSubfolders
                         ? "No supported comic files were found in this remote folder or its subfolders."
@@ -625,7 +625,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             clearBackgroundImportProgress()
             presentImportFailureFeedback(
                 title: "Folder Import Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -637,7 +637,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     ) async {
         let visibleComics = items.filter(\.canOpenAsComic)
         guard !visibleComics.isEmpty else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Nothing to Import",
                 message: "There are no visible supported comic files in the current browser results."
             )
@@ -660,7 +660,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         feedback = nil
 
         guard item.canOpenAsComic else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Offline Save Unavailable",
                 message: "Only supported remote comic files can be saved for offline reading."
             )
@@ -668,7 +668,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         guard let reference = try? browsingService.makeComicFileReference(from: item) else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Offline Save Unavailable",
                 message: "This remote comic could not be prepared for offline reading."
             )
@@ -707,9 +707,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 autoDismissAfter: 3.2
             )
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Save Offline Copy",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -719,7 +719,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         let comics = items.filter(\.canOpenAsComic)
         guard !comics.isEmpty else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Nothing to Save",
                 message: "There are no supported remote comic files in the current results yet."
             )
@@ -792,7 +792,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             refreshProgressState()
 
             guard savedCount > 0 || refreshedCount > 0 else {
-                alert = RemoteAlertState(
+                alert = AppAlertState(
                     title: "Offline Save Failed",
                     message: "No visible comics could be saved for offline reading."
                 )
@@ -817,9 +817,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 kind: .success
             )
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Offline Save Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -832,7 +832,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         }
 
         guard let reference = try? browsingService.makeComicFileReference(from: item) else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Remove Offline Copy Failed",
                 message: "This remote comic could not be matched to a downloaded copy."
             )
@@ -849,9 +849,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 autoDismissAfter: 2.6
             )
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Remove Offline Copy Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -889,7 +889,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         guard removedCount > 0 else {
             if !failedNames.isEmpty {
-                alert = RemoteAlertState(
+                alert = AppAlertState(
                     title: "Remove Downloaded Copies Failed",
                     message: "No downloaded copies could be removed from this device."
                 )
@@ -1003,7 +1003,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        let primaryAction: RemoteAlertPrimaryAction? = (result.createdLibrary || result.hasImportedAnyComics)
+        let primaryAction: AppAlertAction? = (result.createdLibrary || result.hasImportedAnyComics)
             ? .openLibrary(result.importedDestinationID, 1)
             : nil
 
@@ -1045,35 +1045,35 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return RemoteBrowserLoadIssue(
                 kind: .authentication,
                 title: "Sign-in Failed",
-                message: error.localizedDescription,
+                message: error.userFacingMessage,
                 recoverySuggestion: "Open the server settings and verify the username or password, then try again."
             )
         case .connectionFailed:
             return RemoteBrowserLoadIssue(
                 kind: .connection,
                 title: "Server Unreachable",
-                message: error.localizedDescription,
+                message: error.userFacingMessage,
                 recoverySuggestion: "Make sure this device can reach the remote server on the current network. You can still try opening a recently cached comic below."
             )
         case .shareUnavailable:
             return RemoteBrowserLoadIssue(
                 kind: .shareUnavailable,
                 title: "Location Unavailable",
-                message: error.localizedDescription,
+                message: error.userFacingMessage,
                 recoverySuggestion: "The saved remote root may have changed or gone offline. Review the server settings, then refresh."
             )
         case .remotePathUnavailable:
             return RemoteBrowserLoadIssue(
                 kind: .remotePathUnavailable,
                 title: "Folder Not Found",
-                message: error.localizedDescription,
+                message: error.userFacingMessage,
                 recoverySuggestion: "This folder may have been moved or deleted on the server. Try going up one level or return to the saved root folder."
             )
         case .accessDenied:
             return RemoteBrowserLoadIssue(
                 kind: .accessDenied,
                 title: "Access Denied",
-                message: error.localizedDescription,
+                message: error.userFacingMessage,
                 recoverySuggestion: "The current credentials or permissions do not allow this folder. Try a different location or review the saved server settings."
             )
         case .invalidProfile, .providerIntegrationUnavailable, .unsupportedComicFile,
@@ -1081,7 +1081,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return RemoteBrowserLoadIssue(
                 kind: .generic,
                 title: "Remote Browser Not Ready Yet",
-                message: error.localizedDescription,
+                message: error.userFacingMessage,
                 recoverySuggestion: "Try refreshing this folder again. If the problem keeps coming back, return to the server list and review the saved connection."
             )
         }
@@ -1174,7 +1174,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         } catch {
             presentImportFailureFeedback(
                 title: "Folder Import Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return
         }
@@ -1216,7 +1216,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         } catch {
             presentImportFailureFeedback(
                 title: "Folder Import Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

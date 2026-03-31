@@ -449,7 +449,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                     case .failure(let error):
                         if let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0))
                             as? VerticalReaderPageCell {
-                            cell.setError(error.localizedDescription)
+                            cell.setError(error.userFacingMessage)
                         }
                     }
                 }

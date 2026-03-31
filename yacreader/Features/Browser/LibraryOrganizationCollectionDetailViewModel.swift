@@ -6,7 +6,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     @Published private(set) var collection: LibraryOrganizationCollection
     @Published private(set) var comics: [LibraryComic] = []
     @Published private(set) var isLoading = false
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let descriptor: LibraryDescriptor
 
@@ -57,7 +57,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     ) -> Bool {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Name Required",
                 message: "Enter a name before saving this \(collection.type == .label ? "tag" : "reading list")."
             )
@@ -87,9 +87,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update \(collection.type == .label ? "Tag" : "Reading List")",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -111,9 +111,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             }
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Delete \(collection.type == .label ? "Tag" : "Reading List")",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -137,9 +137,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
             applyUpdatedComic(comic.updatingFavorite(updatedValue))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Favorites",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -165,9 +165,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
 
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Favorites",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -185,9 +185,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
             applyUpdatedComic(comic.updatingReadState(updatedValue))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Read Status",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -210,9 +210,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
             applyUpdatedComic(comic.updatingRating(ratingValue))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Rating",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -241,9 +241,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
 
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Read Status",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -283,9 +283,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
         } catch {
             comics = []
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Load Collection",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -319,9 +319,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 labelColor: collection.labelColor
             )
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Collection",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -362,9 +362,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Collection",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -377,9 +377,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             load()
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Remove Comic",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }

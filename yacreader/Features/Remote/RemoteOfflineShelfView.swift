@@ -168,7 +168,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             cacheSummary = .empty
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Unavailable",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -208,7 +208,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         } catch {
             alert = BrowseHomeAlert(
                 title: "Remove Downloaded Copy Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -231,7 +231,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         } catch {
             alert = BrowseHomeAlert(
                 title: "Clear Downloaded Copies Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -249,7 +249,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             try? rebuildEntries()
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Action Failed",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

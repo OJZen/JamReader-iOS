@@ -261,7 +261,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                 if isSelectionMode {
                     endSelectionMode()
                 }
-                viewModel.alert = LibraryAlertState(
+                viewModel.alert = AppAlertState(
                     title: result.alertTitle,
                     message: result.alertMessage
                 )

@@ -816,9 +816,9 @@ private final class ComicImageSpreadViewController: UIViewController {
             case .failure(let error):
                 let fallbackMessage = pageNames.joined(separator: ", ")
                 self.presentError(
-                    error.localizedDescription.isEmpty
+                    error.userFacingMessage.isEmpty
                         ? "Unable to decode spread: \(fallbackMessage)"
-                        : error.localizedDescription
+                        : error.userFacingMessage
                 )
             }
         }

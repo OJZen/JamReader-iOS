@@ -346,7 +346,7 @@ struct RemoteComicLoadingView: View {
                 loadErrorMessage = "The remote comic open was canceled."
             }
         } catch {
-            loadErrorMessage = error.localizedDescription
+            loadErrorMessage = error.userFacingMessage
         }
     }
 
@@ -461,7 +461,7 @@ struct RemoteComicReaderView: View {
     @State private var isShowingThumbnailBrowser = false
     @State private var pendingReaderAction: RemoteReaderSecondaryAction?
     @State private var bookmarkPageIndices: [Int]
-    @State private var alert: RemoteAlertState?
+    @State private var alert: AppAlertState?
     @State private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     @State private var pendingProgressPersistenceTask: Task<Void, Never>?
     @State private var accessState: RemoteComicAccessState
@@ -864,9 +864,9 @@ struct RemoteComicReaderView: View {
                 preferredPageIndex: initialPageIndex(for: loadedDocument.pageCount)
             )
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Open Remote Comic",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -929,7 +929,7 @@ struct RemoteComicReaderView: View {
             from: readerSession.state.pendingPageNumberText,
             pageCount: pageCount
         ) else {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Invalid Page Number",
                 message: ReaderPageJumpResolver.validationMessage(pageCount: pageCount)
             )
@@ -1207,9 +1207,9 @@ struct RemoteComicReaderView: View {
             )
             lastPersistedProgressSnapshot = snapshot
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Save Remote Progress",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -1275,9 +1275,9 @@ struct RemoteComicReaderView: View {
             }
             scheduleNoticeDismissalIfNeeded()
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Refresh Remote Comic",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

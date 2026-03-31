@@ -181,7 +181,7 @@ final class LibraryStorageManager {
                 )
             }
         } catch {
-            return LibraryAccessSnapshot(lastError: error.localizedDescription)
+            return LibraryAccessSnapshot(lastError: error.userFacingMessage)
         }
     }
 

@@ -5,15 +5,15 @@ struct RemoteServerEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    let onSave: (RemoteServerEditorDraft) -> Result<Void, RemoteAlertState>
+    let onSave: (RemoteServerEditorDraft) -> AppAlertState?
 
     @State private var draft: RemoteServerEditorDraft
-    @State private var alert: RemoteAlertState?
+    @State private var alert: AppAlertState?
     @FocusState private var isNameFieldFocused: Bool
 
     init(
         draft: RemoteServerEditorDraft,
-        onSave: @escaping (RemoteServerEditorDraft) -> Result<Void, RemoteAlertState>
+        onSave: @escaping (RemoteServerEditorDraft) -> AppAlertState?
     ) {
         self.onSave = onSave
         _draft = State(initialValue: draft)
@@ -152,10 +152,7 @@ struct RemoteServerEditorSheet: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button(draft.actionTitle) {
-                        switch onSave(draft) {
-                        case .success:
-                            break
-                        case .failure(let alertState):
+                        if let alertState = onSave(draft) {
                             alert = alertState
                         }
                     }

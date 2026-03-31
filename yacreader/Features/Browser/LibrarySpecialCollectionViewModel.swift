@@ -6,7 +6,7 @@ import UIKit
 final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var comics: [LibraryComic] = []
     @Published private(set) var isLoading = false
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let descriptor: LibraryDescriptor
     let kind: LibrarySpecialCollectionKind
@@ -80,9 +80,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             )
             applyUpdatedComic(comic.updatingFavorite(updatedValue))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Favorites",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -114,9 +114,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
 
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Favorites",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -134,9 +134,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             )
             applyUpdatedComic(comic.updatingReadState(updatedValue))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Read Status",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -159,9 +159,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             )
             applyUpdatedComic(comic.updatingRating(ratingValue))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Rating",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -196,9 +196,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
 
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Read Status",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -211,9 +211,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             load()
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Remove Comic",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -261,7 +261,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             )
         } catch {
             comics = []
-            alert = LibraryAlertState(title: "Failed to Load Collection", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Load Collection", message: error.userFacingMessage)
         }
     }
 

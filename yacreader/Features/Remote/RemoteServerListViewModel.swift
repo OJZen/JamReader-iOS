@@ -1,17 +1,6 @@
 import Combine
 import Foundation
 
-enum RemoteAlertPrimaryAction: Equatable {
-    case openLibrary(UUID, Int64)
-
-    var title: String {
-        switch self {
-        case .openLibrary:
-            return "Open Library"
-        }
-    }
-}
-
 struct RemoteBrowserFeedbackState: Identifiable, Equatable {
     enum Kind: Equatable {
         case success
@@ -22,14 +11,14 @@ struct RemoteBrowserFeedbackState: Identifiable, Equatable {
     let title: String
     let message: String?
     let kind: Kind
-    let primaryAction: RemoteAlertPrimaryAction?
+    let primaryAction: AppAlertAction?
     let autoDismissAfter: TimeInterval?
 
     init(
         title: String,
         message: String? = nil,
         kind: Kind = .success,
-        primaryAction: RemoteAlertPrimaryAction? = nil,
+        primaryAction: AppAlertAction? = nil,
         autoDismissAfter: TimeInterval? = nil
     ) {
         self.title = title
@@ -37,23 +26,6 @@ struct RemoteBrowserFeedbackState: Identifiable, Equatable {
         self.kind = kind
         self.primaryAction = primaryAction
         self.autoDismissAfter = autoDismissAfter
-    }
-}
-
-struct RemoteAlertState: Identifiable, Error {
-    let id = UUID()
-    let title: String
-    let message: String
-    let primaryAction: RemoteAlertPrimaryAction?
-
-    init(
-        title: String,
-        message: String,
-        primaryAction: RemoteAlertPrimaryAction? = nil
-    ) {
-        self.title = title
-        self.message = message
-        self.primaryAction = primaryAction
     }
 }
 
@@ -92,7 +64,7 @@ final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var shortcutCountByServerID: [UUID: Int] = [:]
     @Published private(set) var cacheSummaryByServerID: [UUID: RemoteComicCacheSummary] = [:]
     @Published private(set) var shortcutCount = 0
-    @Published var alert: RemoteAlertState?
+    @Published var alert: AppAlertState?
 
     private let profileStore: RemoteServerProfileStore
     private let folderShortcutStore: RemoteFolderShortcutStore
@@ -146,9 +118,9 @@ final class RemoteServerListViewModel: ObservableObject {
             profiles = []
             shortcutCount = 0
             cacheSummaryByServerID = [:]
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Load Remote Servers",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -198,7 +170,7 @@ final class RemoteServerListViewModel: ObservableObject {
         )
     }
 
-    func save(draft: RemoteServerEditorDraft) -> Result<Void, RemoteAlertState> {
+    func save(draft: RemoteServerEditorDraft) -> AppAlertState? {
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let host = draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
         let shareName = draft.shareName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -207,11 +179,9 @@ final class RemoteServerListViewModel: ObservableObject {
         let password = draft.password.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let port = Int(draft.portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return .failure(
-                RemoteAlertState(
-                    title: "Invalid Port",
-                    message: "Enter a numeric port for this remote server."
-                )
+            return AppAlertState(
+                title: "Invalid Port",
+                message: "Enter a numeric port for this remote server."
             )
         }
 
@@ -242,20 +212,16 @@ final class RemoteServerListViewModel: ObservableObject {
             .map(\.message)
 
         if draft.authenticationMode.requiresPassword && password.isEmpty && !draft.hasStoredPassword {
-            return .failure(
-                RemoteAlertState(
-                    title: "Password Required",
-                    message: "Enter a password for this remote server, or switch the connection to Guest."
-                )
+            return AppAlertState(
+                title: "Password Required",
+                message: "Enter a password for this remote server, or switch the connection to Guest."
             )
         }
 
         if !blockingIssues.isEmpty {
-            return .failure(
-                RemoteAlertState(
-                    title: "Incomplete Server",
-                    message: blockingIssues.joined(separator: "\n")
-                )
+            return AppAlertState(
+                title: "Incomplete Server",
+                message: blockingIssues.joined(separator: "\n")
             )
         }
 
@@ -311,13 +277,11 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
-            return .success(())
+            return nil
         } catch {
-            return .failure(
-                RemoteAlertState(
-                    title: "Failed to Save Server",
-                    message: error.localizedDescription
-                )
+            return AppAlertState(
+                title: "Failed to Save Server",
+                message: error.userFacingMessage
             )
         }
     }
@@ -344,9 +308,9 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshShortcutCount()
             refreshCacheSummaries()
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Remove Server",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -368,9 +332,9 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshCacheSummaries()
             refreshRecentActivity()
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Clear Cache",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -405,9 +369,9 @@ final class RemoteServerListViewModel: ObservableObject {
             try readingProgressStore.deleteSession(session)
             refreshRecentActivity()
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Delete History",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -417,9 +381,9 @@ final class RemoteServerListViewModel: ObservableObject {
             try readingProgressStore.deleteSessions(for: profile)
             refreshRecentActivity()
         } catch {
-            alert = RemoteAlertState(
+            alert = AppAlertState(
                 title: "Failed to Clear History",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

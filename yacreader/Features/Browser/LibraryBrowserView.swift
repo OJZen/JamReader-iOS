@@ -375,7 +375,7 @@ struct LibraryBrowserView: View {
                 if isSelectionMode {
                     endSelectionMode()
                 }
-                viewModel.alert = LibraryAlertState(
+                viewModel.alert = AppAlertState(
                     title: result.alertTitle,
                     message: result.alertMessage
                 )
@@ -426,9 +426,9 @@ struct LibraryBrowserView: View {
             case .success(let urls):
                 viewModel.importComicFiles(from: urls)
             case .failure(let error):
-                viewModel.alert = LibraryAlertState(
+                viewModel.alert = AppAlertState(
                     title: "Import Failed",
-                    message: error.localizedDescription
+                    message: error.userFacingMessage
                 )
             }
         }

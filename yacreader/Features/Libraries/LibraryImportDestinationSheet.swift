@@ -132,7 +132,7 @@ final class LibraryImportDestinationSheetViewModel: ObservableObject {
 
     @Published private(set) var options: [LibraryImportDestinationOption] = []
     @Published private(set) var suggestedSelection: LibraryImportDestinationSelection
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     private let importedComicsImportService: ImportedComicsImportService
     private let preferredSelection: LibraryImportDestinationSelection?
@@ -177,9 +177,9 @@ final class LibraryImportDestinationSheetViewModel: ObservableObject {
             alert = nil
         } catch {
             options = []
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Import Destinations Unavailable",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

@@ -298,7 +298,7 @@ struct LibraryHomeView: View {
 
         if let compatibilityIssue = item.accessSnapshot.database.compatibilityIssueDescription {
             let versionText = item.accessSnapshot.database.version ?? "Unknown"
-            viewModel.alert = LibraryAlertState(
+            viewModel.alert = AppAlertState(
                 title: "Library Version Not Supported",
                 message: compatibilityIssue + "\n\nDetected DB version: \(versionText)."
             )
@@ -609,7 +609,7 @@ private struct LibrarySidebarRowView: View {
     }
 }
 
-private func makeLibraryAlert(for alert: LibraryAlertState) -> Alert {
+private func makeLibraryAlert(for alert: AppAlertState) -> Alert {
     if let primaryAction = alert.primaryAction {
         return Alert(
             title: Text(alert.title),

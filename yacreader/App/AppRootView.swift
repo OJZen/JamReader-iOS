@@ -113,7 +113,7 @@ struct AppRootView: View {
                     onPrimaryAction: feedback.primaryAction.map { action in
                         {
                             remoteBackgroundImportController.dismissFeedback()
-                            handleRemoteAlertPrimaryAction(action)
+                            handleAppAlertAction(action)
                         }
                     },
                     onDismiss: {
@@ -144,7 +144,7 @@ struct AppRootView: View {
         }
     }
 
-    private func handleRemoteAlertPrimaryAction(_ action: RemoteAlertPrimaryAction) {
+    private func handleAppAlertAction(_ action: AppAlertAction) {
         switch action {
         case .openLibrary(let libraryID, let folderID):
             AppNavigationRouter.openLibrary(libraryID, folderID: folderID)

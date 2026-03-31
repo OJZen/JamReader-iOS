@@ -12,7 +12,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var allowsDoublePageSpread = true
     @Published private(set) var isFavorite: Bool
     @Published private(set) var rating: Int
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let descriptor: LibraryDescriptor
 
@@ -160,7 +160,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             normalizeBookmarks(for: document.pageCount)
             persistProgress(force: true)
         } catch {
-            alert = LibraryAlertState(title: "Failed to Open Comic", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Open Comic", message: error.userFacingMessage)
         }
     }
 
@@ -282,7 +282,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             )
             publishComicUpdate(comic.updatingFavorite(updatedValue))
         } catch {
-            alert = LibraryAlertState(title: "Failed to Update Favorites", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Update Favorites", message: error.userFacingMessage)
         }
     }
 
@@ -303,7 +303,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             )
             publishComicUpdate(comic.updatingRating(ratingValue))
         } catch {
-            alert = LibraryAlertState(title: "Failed to Update Rating", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Update Rating", message: error.userFacingMessage)
         }
     }
 
@@ -337,7 +337,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             ))
             persistProgress(force: true)
         } catch {
-            alert = LibraryAlertState(title: "Failed to Update Read Status", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Update Read Status", message: error.userFacingMessage)
         }
     }
 
@@ -455,7 +455,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             lastPersistedProgressSnapshot = snapshot
             publishComicUpdate(comic.updatingReadingProgress(progress))
         } catch {
-            alert = LibraryAlertState(title: "Failed to Save Progress", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Save Progress", message: error.userFacingMessage)
         }
     }
 
@@ -504,7 +504,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             bookmarkPageIndices = bookmarkArray
             publishComicUpdate(comic.updatingBookmarkPageIndices(bookmarkArray))
         } catch {
-            alert = LibraryAlertState(title: "Failed to Save Bookmarks", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Save Bookmarks", message: error.userFacingMessage)
         }
     }
 

@@ -8,7 +8,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
     @Published private(set) var isSaving = false
     @Published private(set) var isImportingComicInfo = false
     @Published private(set) var loadFailed = false
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let descriptor: LibraryDescriptor
     let comic: LibraryComic
@@ -75,9 +75,9 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
             loadFailed = true
             metadata = LibraryComicMetadata(comic: comic)
             originalMetadata = metadata
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Load Metadata",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -100,9 +100,9 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
             originalMetadata = metadata
             return comic.applying(metadata: metadata)
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Save Metadata",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return nil
         }
@@ -125,7 +125,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
                     for: descriptor,
                     comic: comic
                 ) else {
-                    alert = LibraryAlertState(
+                    alert = AppAlertState(
                         title: "ComicInfo Not Found",
                         message: "The selected comic does not contain an embedded ComicInfo.xml file."
                     )
@@ -134,9 +134,9 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
 
                 metadata.applyImportedComicInfo(importedComicInfo, policy: policy)
             } catch {
-                alert = LibraryAlertState(
+                alert = AppAlertState(
                     title: "Failed to Import ComicInfo",
-                    message: error.localizedDescription
+                    message: error.userFacingMessage
                 )
             }
         }

@@ -19,7 +19,7 @@ struct SettingsHomeView: View {
     @State private var isShowingClearThumbnailsConfirmation = false
     @State private var isShowingClearImportedComicsConfirmation = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var alert: SettingsAlertState?
+    @State private var alert: AppAlertState?
 
     var body: some View {
         Group {
@@ -474,9 +474,9 @@ struct SettingsHomeView: View {
             }
             refresh()
         } catch {
-            alert = SettingsAlertState(
+            alert = AppAlertState(
                 title: "Failed to Clear Downloads",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -486,9 +486,9 @@ struct SettingsHomeView: View {
             try RemoteComicThumbnailPipeline.shared.clearCache()
             refresh()
         } catch {
-            alert = SettingsAlertState(
+            alert = AppAlertState(
                 title: "Failed to Clear Thumbnails",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -498,9 +498,9 @@ struct SettingsHomeView: View {
             try dependencies.importedComicsImportService.clearImportedComicsLibrary()
             refresh()
         } catch {
-            alert = SettingsAlertState(
+            alert = AppAlertState(
                 title: "Failed to Clear Imported Comics",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

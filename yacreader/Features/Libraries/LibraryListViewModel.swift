@@ -22,38 +22,10 @@ struct LibraryListItem: Identifiable, Equatable {
     }
 }
 
-struct LibraryAlertState: Identifiable {
-    enum PrimaryAction {
-        case openLibrary(UUID, Int64)
-
-        var title: String {
-            switch self {
-            case .openLibrary:
-                return "Open Library"
-            }
-        }
-    }
-
-    let id = UUID()
-    let title: String
-    let message: String
-    let primaryAction: PrimaryAction?
-
-    init(
-        title: String,
-        message: String,
-        primaryAction: PrimaryAction? = nil
-    ) {
-        self.title = title
-        self.message = message
-        self.primaryAction = primaryAction
-    }
-}
-
 @MainActor
 final class LibraryListViewModel: ObservableObject {
     @Published private(set) var items: [LibraryListItem] = []
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     private let store: LibraryDescriptorStore
     private let storageManager: LibraryStorageManager
@@ -88,7 +60,7 @@ final class LibraryListViewModel: ObservableObject {
             descriptors = normalizedDescriptors
             rebuildItems()
         } catch {
-            alert = LibraryAlertState(title: "Failed to Load Libraries", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Load Libraries", message: error.userFacingMessage)
         }
     }
 
@@ -130,13 +102,13 @@ final class LibraryListViewModel: ObservableObject {
             try store.save(descriptors)
             rebuildItems()
         } catch {
-            alert = LibraryAlertState(title: "Failed to Save Libraries", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Save Libraries", message: error.userFacingMessage)
             return
         }
 
         if addedCount == 0, !duplicateNames.isEmpty, failedItemNames.isEmpty {
             let names = duplicateNames.sorted().joined(separator: ", ")
-            alert = LibraryAlertState(title: "Library Already Added", message: names)
+            alert = AppAlertState(title: "Library Already Added", message: names)
             return
         }
 
@@ -160,7 +132,7 @@ final class LibraryListViewModel: ObservableObject {
             messageLines.append("Failed to add \(failedItemNames.count) item(s): \(previewList(from: failedItemNames)).")
         }
 
-        alert = LibraryAlertState(
+        alert = AppAlertState(
             title: addedCount > 0 ? "Libraries Updated" : "Add Finished with Warnings",
             message: messageLines.joined(separator: "\n")
         )
@@ -197,14 +169,14 @@ final class LibraryListViewModel: ObservableObject {
             try store.save(descriptors)
             rebuildItems()
         } catch {
-            alert = LibraryAlertState(title: "Failed to Remove Library", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
         }
     }
 
     func renameLibrary(id: UUID, to proposedName: String) -> Bool {
         let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            alert = LibraryAlertState(title: "Invalid Library Name", message: "Enter a name for this library.")
+            alert = AppAlertState(title: "Invalid Library Name", message: "Enter a name for this library.")
             return false
         }
 
@@ -215,7 +187,7 @@ final class LibraryListViewModel: ObservableObject {
         if descriptors.contains(where: {
             $0.id != id && $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
-            alert = LibraryAlertState(title: "Library Name Already Used", message: trimmedName)
+            alert = AppAlertState(title: "Library Name Already Used", message: trimmedName)
             return false
         }
 
@@ -227,7 +199,7 @@ final class LibraryListViewModel: ObservableObject {
             rebuildItems()
             return true
         } catch {
-            alert = LibraryAlertState(title: "Failed to Rename Library", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Rename Library", message: error.userFacingMessage)
             return false
         }
     }
@@ -240,7 +212,7 @@ final class LibraryListViewModel: ObservableObject {
             try store.save(descriptors)
             rebuildItems()
         } catch {
-            alert = LibraryAlertState(title: "Failed to Remove Library", message: error.localizedDescription)
+            alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
         }
     }
 
@@ -250,7 +222,7 @@ final class LibraryListViewModel: ObservableObject {
             return
         }
 
-        alert = LibraryAlertState(title: "Import Failed", message: error.localizedDescription)
+        alert = AppAlertState(title: "Import Failed", message: error.userFacingMessage)
     }
 
     private func importComicResources(
@@ -302,17 +274,24 @@ final class LibraryListViewModel: ObservableObject {
                 messageLines.append("Failed to import \(result.failedItemNames.count) item(s): \(previewList(from: result.failedItemNames)).")
             }
 
-            alert = LibraryAlertState(
-                title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
-                message: messageLines.joined(separator: "\n"),
-                primaryAction: (result.createdLibrary || result.hasImportedAnyComics)
-                    ? .openLibrary(result.importedDestinationID, 1)
-                    : nil
-            )
+            if (result.createdLibrary || result.hasImportedAnyComics) {
+                let action = AppAlertAction.openLibrary(result.importedDestinationID, 1)
+                alert = AppAlertState(
+                    title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
+                    message: messageLines.joined(separator: "\n"),
+                    actionTitle: action.title,
+                    action: action
+                )
+            } else {
+                alert = AppAlertState(
+                    title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
+                    message: messageLines.joined(separator: "\n")
+                )
+            }
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Import Comics",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

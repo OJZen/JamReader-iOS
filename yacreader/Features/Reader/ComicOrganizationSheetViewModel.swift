@@ -5,7 +5,7 @@ import Foundation
 final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var snapshot: LibraryOrganizationSnapshot = .empty
     @Published private(set) var isLoading = false
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let comic: LibraryComic
 
@@ -63,9 +63,9 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
             )
         } catch {
             snapshot = .empty
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Load Organization",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -93,9 +93,9 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
 
             snapshot.update(collection.updatingAssignment(updatedMembership))
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Organization",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

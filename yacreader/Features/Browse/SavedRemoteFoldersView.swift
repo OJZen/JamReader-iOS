@@ -476,7 +476,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
             entries = []
             alert = BrowseHomeAlert(
                 title: "Saved Folders Unavailable",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -502,7 +502,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
         } catch {
             alert = BrowseHomeAlert(
                 title: "Failed to Rename Shortcut",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -514,7 +514,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
         } catch {
             alert = BrowseHomeAlert(
                 title: "Failed to Remove Shortcut",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }

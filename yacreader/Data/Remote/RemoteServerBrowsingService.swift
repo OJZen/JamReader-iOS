@@ -648,7 +648,7 @@ final class RemoteServerBrowsingService {
             invalidateCachedSummaries()
         } catch {
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
-                "The downloaded remote comic cache could not be cleared. \(error.localizedDescription)"
+                "The downloaded remote comic cache could not be cleared. \(error.userFacingMessage)"
             )
         }
     }
@@ -665,7 +665,7 @@ final class RemoteServerBrowsingService {
             invalidateCachedSummaries()
         } catch {
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
-                "The downloaded remote comic cache could not be cleared. \(error.localizedDescription)"
+                "The downloaded remote comic cache could not be cleared. \(error.userFacingMessage)"
             )
         }
     }
@@ -704,7 +704,7 @@ final class RemoteServerBrowsingService {
                 removedAnyCachedFile = true
             } catch {
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
-                    "The downloaded copy could not be removed from this device. \(error.localizedDescription)"
+                    "The downloaded copy could not be removed from this device. \(error.userFacingMessage)"
                 )
             }
         }
@@ -1752,7 +1752,7 @@ final class RemoteServerBrowsingService {
                 remainingBytes -= candidate.size
             } catch {
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
-                    "The downloaded remote comic cache could not be trimmed automatically. \(error.localizedDescription)"
+                    "The downloaded remote comic cache could not be trimmed automatically. \(error.userFacingMessage)"
                 )
             }
         }
@@ -2025,7 +2025,7 @@ final class RemoteServerBrowsingService {
             return RemoteServerBrowsingError.connectionFailed(profile.endpointDisplayHost)
         }
 
-        return RemoteServerBrowsingError.operationFailed(error.localizedDescription)
+        return RemoteServerBrowsingError.operationFailed(error.userFacingMessage)
     }
 
     private func cachedFallbackMessage(

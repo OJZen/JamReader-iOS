@@ -107,7 +107,7 @@ struct RemoteServerBrowserView: View {
                         onPrimaryAction: feedback.primaryAction.map { action in
                             {
                                 viewModel.dismissFeedback()
-                                handleRemoteAlertPrimaryAction(action)
+                                handleAppAlertAction(action)
                             }
                         },
                         onDismiss: {
@@ -118,7 +118,7 @@ struct RemoteServerBrowserView: View {
             }
         }
         .alert(item: $viewModel.alert) { alert in
-            makeRemoteAlert(for: alert, onPrimaryAction: handleRemoteAlertPrimaryAction(_:))
+            makeRemoteAlert(for: alert, onPrimaryAction: handleAppAlertAction(_:))
         }
         .confirmationDialog(
             pendingOfflineRemoval?.title ?? "Remove downloaded copies?",
@@ -1225,7 +1225,7 @@ struct RemoteServerBrowserView: View {
             return
         }
 
-        viewModel.alert = RemoteAlertState(
+        viewModel.alert = AppAlertState(
             title: "Import Already Running",
             message: "Another remote import is already running in the app. Wait for it to finish or cancel it from the import banner."
         )
@@ -1429,7 +1429,7 @@ struct RemoteServerBrowserView: View {
         )
     }
 
-    private func handleRemoteAlertPrimaryAction(_ action: RemoteAlertPrimaryAction) {
+    private func handleAppAlertAction(_ action: AppAlertAction) {
         switch action {
         case .openLibrary(let libraryID, let folderID):
             AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
@@ -1516,8 +1516,8 @@ struct ThumbnailPreheatPlan {
 }
 
 func makeRemoteAlert(
-    for alert: RemoteAlertState,
-    onPrimaryAction: @escaping (RemoteAlertPrimaryAction) -> Void = { _ in }
+    for alert: AppAlertState,
+    onPrimaryAction: @escaping (AppAlertAction) -> Void = { _ in }
 ) -> Alert {
     if let primaryAction = alert.primaryAction {
         return Alert(

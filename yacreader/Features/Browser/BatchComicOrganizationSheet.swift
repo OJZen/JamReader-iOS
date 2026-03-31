@@ -68,7 +68,7 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
     @Published private(set) var snapshot: LibraryOrganizationSnapshot = .empty
     @Published private(set) var isLoading = false
     @Published var mode: BatchOrganizationMode = .add
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let selectedComicCount: Int
 
@@ -129,9 +129,9 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
             snapshot = try databaseReader.loadOrganizationSnapshot(databaseURL: databaseURL)
         } catch {
             snapshot = .empty
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Load Organization",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
         }
     }
@@ -161,9 +161,9 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
 
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Organization",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -314,7 +314,7 @@ struct BatchComicOrganizationSheet: View {
 final class BatchComicMetadataSheetViewModel: ObservableObject {
     @Published var patch = BatchComicMetadataPatch()
     @Published private(set) var isSaving = false
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let selectedComicCount: Int
 
@@ -364,9 +364,9 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
             )
             return true
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Update Metadata",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return false
         }
@@ -503,7 +503,7 @@ struct BatchComicMetadataSheet: View {
 final class BatchComicInfoImportSheetViewModel: ObservableObject {
     @Published private(set) var isImporting = false
     @Published var policy: ComicInfoImportPolicy = .fillMissing
-    @Published var alert: LibraryAlertState?
+    @Published var alert: AppAlertState?
 
     let selectedComics: [LibraryComic]
     let importScope: BatchComicInfoImportScope
@@ -552,9 +552,9 @@ final class BatchComicInfoImportSheetViewModel: ObservableObject {
                 policy: policy
             )
         } catch {
-            alert = LibraryAlertState(
+            alert = AppAlertState(
                 title: "Failed to Import ComicInfo",
-                message: error.localizedDescription
+                message: error.userFacingMessage
             )
             return nil
         }
