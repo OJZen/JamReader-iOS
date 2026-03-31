@@ -11,6 +11,9 @@ struct RemoteServerDetailView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
+    private let sourceProfile: RemoteServerProfile
+    // Called instead of local sheet when parent owns the editor (split-view mode).
+    var onRequestEdit: ((RemoteServerEditorDraft) -> Void)?
 
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var profile: RemoteServerProfile
@@ -21,8 +24,14 @@ struct RemoteServerDetailView: View {
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
 
-    init(profile: RemoteServerProfile, dependencies: AppDependencies) {
+    init(
+        profile: RemoteServerProfile,
+        dependencies: AppDependencies,
+        onRequestEdit: ((RemoteServerEditorDraft) -> Void)? = nil
+    ) {
         self.dependencies = dependencies
+        self.sourceProfile = profile
+        self.onRequestEdit = onRequestEdit
         _profile = State(initialValue: profile)
         _viewModel = StateObject(
             wrappedValue: RemoteServerListViewModel(
@@ -60,9 +69,18 @@ struct RemoteServerDetailView: View {
         .onAppear {
             refreshDetailState(forceReload: true)
         }
+        .onChange(of: sourceProfile) { _, updated in
+            // When the parent (split-view sidebar) passes an updated profile
+            // after a save, sync state and reload so the detail stays current.
+            profile = updated
+            refreshDetailState()
+        }
         .refreshable {
             refreshDetailState(forceReload: true)
         }
+        // Only present the editor sheet locally in compact (iPhone) mode.
+        // In split-view the parent's sidebar sheet owns the presentation so
+        // that exactly ONE sheet is active in the window at a time.
         .sheet(item: $editorDraft) { draft in
             remoteServerEditor(for: draft)
         }
@@ -386,7 +404,12 @@ struct RemoteServerDetailView: View {
     @ViewBuilder
     private var remoteServerActionMenuContent: some View {
         Button {
-            editorDraft = viewModel.makeEditDraft(for: profile)
+            let draft = viewModel.makeEditDraft(for: profile)
+            if let onRequestEdit {
+                onRequestEdit(draft)
+            } else {
+                editorDraft = draft
+            }
         } label: {
             Label("Edit Server", systemImage: "square.and.pencil")
         }

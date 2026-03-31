@@ -471,8 +471,11 @@ private struct ReaderThumbnailScrubber: View {
                     }
                     .background {
                         TouchInteractionTracker(
+                            pageCount: pageCount,
+                            itemStride: ReaderChromeMetrics.scrubberItemWidth + ReaderChromeMetrics.scrubberItemSpacing,
                             onBegan: { coordinator.beginInteraction() },
-                            onEnded: { coordinator.endInteraction() }
+                            onEnded: { coordinator.endInteraction() },
+                            onCenteredPageIndexChanged: { coordinator.queueNearestPageIndexUpdate($0) }
                         )
                     }
                     .onAppear {
@@ -1017,11 +1020,20 @@ struct ReaderBottomDock<Content: View>: View {
 /// The recognizer is installed on the enclosing scroll view so the scrubber can still
 /// receive horizontal pan gestures while we mirror interaction state into SwiftUI.
 private struct TouchInteractionTracker: UIViewRepresentable {
+    let pageCount: Int
+    let itemStride: CGFloat
     let onBegan: () -> Void
     let onEnded: () -> Void
+    let onCenteredPageIndexChanged: (Int) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onBegan: onBegan, onEnded: onEnded)
+        Coordinator(
+            pageCount: pageCount,
+            itemStride: itemStride,
+            onBegan: onBegan,
+            onEnded: onEnded,
+            onCenteredPageIndexChanged: onCenteredPageIndexChanged
+        )
     }
 
     func makeUIView(context: Context) -> GestureInstallerView {
@@ -1029,13 +1041,17 @@ private struct TouchInteractionTracker: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: GestureInstallerView, context: Context) {
+        context.coordinator.pageCount = pageCount
+        context.coordinator.itemStride = itemStride
         context.coordinator.onBegan = onBegan
         context.coordinator.onEnded = onEnded
+        context.coordinator.onCenteredPageIndexChanged = onCenteredPageIndexChanged
+        uiView.installGesturesIfNeeded()
     }
 
     final class GestureInstallerView: UIView {
         let coordinator: Coordinator
-        private weak var gestureHost: UIView?
+        private weak var gestureHost: UIScrollView?
 
         init(coordinator: Coordinator) {
             self.coordinator = coordinator
@@ -1058,11 +1074,16 @@ private struct TouchInteractionTracker: UIViewRepresentable {
             }
         }
 
-        private func installGesturesIfNeeded() {
+        func installGesturesIfNeeded() {
             guard let host = findGestureHost() else {
                 return
             }
 
+            guard gestureHost !== host || coordinator.pressRecognizer == nil else {
+                return
+            }
+
+            removeInstalledGestures()
             gestureHost = host
 
             if coordinator.pressRecognizer == nil {
@@ -1077,18 +1098,12 @@ private struct TouchInteractionTracker: UIViewRepresentable {
                 coordinator.pressRecognizer = pressRecognizer
             }
 
-            if coordinator.panRecognizer == nil {
-                let panRecognizer = UIPanGestureRecognizer(
-                    target: coordinator,
-                    action: #selector(Coordinator.handlePan(_:))
-                )
-                panRecognizer.cancelsTouchesInView = false
-                panRecognizer.delaysTouchesBegan = false
-                panRecognizer.delaysTouchesEnded = false
-                panRecognizer.delegate = coordinator
-                host.addGestureRecognizer(panRecognizer)
-                coordinator.panRecognizer = panRecognizer
-            }
+            host.panGestureRecognizer.addTarget(
+                coordinator,
+                action: #selector(Coordinator.handlePan(_:))
+            )
+            coordinator.panRecognizer = host.panGestureRecognizer
+            coordinator.observedScrollView = host
         }
 
         private func removeInstalledGestures() {
@@ -1097,26 +1112,49 @@ private struct TouchInteractionTracker: UIViewRepresentable {
             }
 
             if let panRecognizer = coordinator.panRecognizer {
-                gestureHost?.removeGestureRecognizer(panRecognizer)
+                panRecognizer.removeTarget(
+                    coordinator,
+                    action: #selector(Coordinator.handlePan(_:))
+                )
             }
 
             coordinator.pressRecognizer = nil
             coordinator.panRecognizer = nil
+            coordinator.observedScrollView = nil
+            coordinator.stopScrollObservation()
             gestureHost = nil
         }
 
-        private func findGestureHost() -> UIView? {
-            var view: UIView? = self
+        private func findGestureHost() -> UIScrollView? {
+            var candidate: UIView? = self
 
-            while let current = view?.superview {
-                if current is UIScrollView {
-                    return current
+            while let current = candidate {
+                if let scrollView = findScrollView(in: current) {
+                    return scrollView
                 }
 
-                view = current
+                candidate = current.superview
             }
 
-            return superview
+            if let window {
+                return findScrollView(in: window)
+            }
+
+            return nil
+        }
+
+        private func findScrollView(in root: UIView) -> UIScrollView? {
+            if let scrollView = root as? UIScrollView {
+                return scrollView
+            }
+
+            for subview in root.subviews {
+                if let scrollView = findScrollView(in: subview) {
+                    return scrollView
+                }
+            }
+
+            return nil
         }
 
         deinit {
@@ -1125,22 +1163,38 @@ private struct TouchInteractionTracker: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var pageCount: Int
+        var itemStride: CGFloat
         var onBegan: () -> Void
         var onEnded: () -> Void
+        var onCenteredPageIndexChanged: (Int) -> Void
         weak var pressRecognizer: UILongPressGestureRecognizer?
         weak var panRecognizer: UIPanGestureRecognizer?
+        weak var observedScrollView: UIScrollView?
         private var isInteractionActive = false
         private var isPanActive = false
+        private var displayLink: CADisplayLink?
+        private var lastReportedCenteredPageIndex: Int?
 
-        init(onBegan: @escaping () -> Void, onEnded: @escaping () -> Void) {
+        init(
+            pageCount: Int,
+            itemStride: CGFloat,
+            onBegan: @escaping () -> Void,
+            onEnded: @escaping () -> Void,
+            onCenteredPageIndexChanged: @escaping (Int) -> Void
+        ) {
+            self.pageCount = pageCount
+            self.itemStride = itemStride
             self.onBegan = onBegan
             self.onEnded = onEnded
+            self.onCenteredPageIndexChanged = onCenteredPageIndexChanged
         }
 
         @objc func handlePress(_ recognizer: UILongPressGestureRecognizer) {
             switch recognizer.state {
             case .began:
                 beginInteractionIfNeeded()
+                startScrollObservationIfNeeded()
             case .ended, .cancelled, .failed:
                 DispatchQueue.main.async { [weak self] in
                     guard let self, !self.isPanActive else {
@@ -1159,11 +1213,14 @@ private struct TouchInteractionTracker: UIViewRepresentable {
             case .began:
                 isPanActive = true
                 beginInteractionIfNeeded()
+                startScrollObservationIfNeeded()
             case .changed:
                 if !isPanActive {
                     isPanActive = true
                     beginInteractionIfNeeded()
                 }
+                startScrollObservationIfNeeded()
+                sampleCenteredPageIndex()
             case .ended, .cancelled, .failed:
                 guard isPanActive else {
                     return
@@ -1174,6 +1231,12 @@ private struct TouchInteractionTracker: UIViewRepresentable {
             default:
                 break
             }
+        }
+
+        func stopScrollObservation() {
+            displayLink?.invalidate()
+            displayLink = nil
+            lastReportedCenteredPageIndex = nil
         }
 
         private func beginInteractionIfNeeded() {
@@ -1192,6 +1255,51 @@ private struct TouchInteractionTracker: UIViewRepresentable {
 
             isInteractionActive = false
             onEnded()
+        }
+
+        private func startScrollObservationIfNeeded() {
+            sampleCenteredPageIndex()
+
+            guard displayLink == nil else {
+                return
+            }
+
+            let displayLink = CADisplayLink(target: self, selector: #selector(handleDisplayLinkTick))
+            displayLink.add(to: .main, forMode: .common)
+            self.displayLink = displayLink
+        }
+
+        @objc private func handleDisplayLinkTick() {
+            sampleCenteredPageIndex()
+
+            guard let observedScrollView else {
+                stopScrollObservation()
+                return
+            }
+
+            if !observedScrollView.isDragging && !observedScrollView.isDecelerating && !isInteractionActive {
+                stopScrollObservation()
+            }
+        }
+
+        private func sampleCenteredPageIndex() {
+            guard pageCount > 0,
+                  itemStride > 0,
+                  let observedScrollView else {
+                return
+            }
+
+            let centeredPageIndex = min(
+                max(Int(round(observedScrollView.contentOffset.x / itemStride)), 0),
+                pageCount - 1
+            )
+
+            guard centeredPageIndex != lastReportedCenteredPageIndex else {
+                return
+            }
+
+            lastReportedCenteredPageIndex = centeredPageIndex
+            onCenteredPageIndexChanged(centeredPageIndex)
         }
 
         func gestureRecognizer(

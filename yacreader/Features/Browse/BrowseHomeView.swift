@@ -51,6 +51,9 @@ struct BrowseHomeView: View {
         .onChange(of: quickAccessItems.map(\.id)) { _, _ in
             debounceSplitSync()
         }
+        .sheet(item: $editorDraft) { draft in
+            remoteServerEditor(for: draft)
+        }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
         }
@@ -94,9 +97,6 @@ struct BrowseHomeView: View {
                 }
                 .refreshable {
                     viewModel.load()
-                }
-                .sheet(item: $editorDraft) { draft in
-                    remoteServerEditor(for: draft)
                 }
                 .navigationDestination(item: $navigationRequest) { request in
                     navigationDestination(for: request)
@@ -145,9 +145,6 @@ struct BrowseHomeView: View {
             }
             .refreshable {
                 viewModel.load()
-            }
-            .sheet(item: $editorDraft) { draft in
-                remoteServerEditor(for: draft)
             }
         } detail: {
             NavigationStack {
@@ -372,7 +369,8 @@ struct BrowseHomeView: View {
             if let profile = displayedProfiles.first(where: { $0.id == profileID }) {
                 RemoteServerDetailView(
                     profile: profile,
-                    dependencies: dependencies
+                    dependencies: dependencies,
+                    onRequestEdit: { draft in editorDraft = draft }
                 )
             } else {
                 ContentUnavailableView(
@@ -389,6 +387,12 @@ struct BrowseHomeView: View {
     }
 
     private func presentCreateServerSheet() {
+        // Cancel any pending debounced sync and stabilise the split selection
+        // NOW. If the sync fires mid-presentation it can swap the detail
+        // column view controller, which tears down the sheet on iOS.
+        splitSyncTask?.cancel()
+        splitSyncTask = nil
+        synchronizeSplitSelection()
         editorDraft = viewModel.makeCreateDraft()
     }
 
