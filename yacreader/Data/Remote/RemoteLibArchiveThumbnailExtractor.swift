@@ -126,6 +126,9 @@ private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource
             let blockOffset = alignedBlockOffset(for: currentOffset)
             let block = try blockData(at: blockOffset)
             let blockRelativeOffset = Int(currentOffset - blockOffset)
+            guard blockRelativeOffset >= 0, blockRelativeOffset < block.count else {
+                break
+            }
             let chunkLength = min(remainingBytes, block.count - blockRelativeOffset)
 
             block.withUnsafeBytes { sourceBuffer in

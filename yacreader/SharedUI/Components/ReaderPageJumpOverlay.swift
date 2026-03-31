@@ -133,7 +133,8 @@ struct ReaderPageJumpOverlay: View {
 
         let screenHeight = UIScreen.main.bounds.height
         let overlap = max(0, screenHeight - endFrame.minY)
-        let targetLift = overlap > 0 ? min(140, overlap * 0.36) : 0
+        // Re-center the dialog in the available space above the keyboard.
+        let targetLift = overlap > 0 ? overlap * 0.5 : 0
         let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
 
         withAnimation(.easeOut(duration: duration)) {
