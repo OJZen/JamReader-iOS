@@ -7,6 +7,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
     @Published private(set) var isLoading = false
     @Published private(set) var isSaving = false
     @Published private(set) var isImportingComicInfo = false
+    @Published private(set) var loadFailed = false
     @Published var alert: LibraryAlertState?
 
     let descriptor: LibraryDescriptor
@@ -71,6 +72,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
             metadata = loadedMetadata
             originalMetadata = loadedMetadata
         } catch {
+            loadFailed = true
             metadata = LibraryComicMetadata(comic: comic)
             originalMetadata = metadata
             alert = LibraryAlertState(

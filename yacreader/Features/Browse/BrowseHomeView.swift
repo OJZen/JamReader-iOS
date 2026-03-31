@@ -12,6 +12,7 @@ struct BrowseHomeView: View {
     @State private var pendingDeletionProfile: RemoteServerProfile?
     @State private var navigationRequest: BrowseHomeNavigationRequest?
     @State private var splitSelection: BrowseHomeSplitSelection?
+    @State private var splitSyncTask: Task<Void, Never>?
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -38,16 +39,16 @@ struct BrowseHomeView: View {
             viewModel.loadIfNeeded()
         }
         .onAppear {
-            synchronizeSplitSelection()
+            debounceSplitSync()
         }
         .onChange(of: horizontalSizeClass) { _, _ in
-            synchronizeSplitSelection()
+            debounceSplitSync()
         }
         .onChange(of: displayedProfiles.map(\.id)) { _, _ in
-            synchronizeSplitSelection()
+            debounceSplitSync()
         }
         .onChange(of: quickAccessItems.map(\.id)) { _, _ in
-            synchronizeSplitSelection()
+            debounceSplitSync()
         }
         .sheet(isPresented: serverEditorPresented) {
             if let draft = editorDraft {
@@ -393,6 +394,15 @@ struct BrowseHomeView: View {
 
     private func presentCreateServerSheet() {
         editorDraft = viewModel.makeCreateDraft()
+    }
+
+    private func debounceSplitSync() {
+        splitSyncTask?.cancel()
+        splitSyncTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            synchronizeSplitSelection()
+        }
     }
 
     private func synchronizeSplitSelection() {

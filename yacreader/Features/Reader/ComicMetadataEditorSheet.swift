@@ -32,6 +32,12 @@ struct ComicMetadataEditorSheet: View {
                 if viewModel.isLoading {
                     ProgressView("Loading Metadata")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if viewModel.loadFailed {
+                    ContentUnavailableView(
+                        "Failed to Load Metadata",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text("The metadata for this comic could not be loaded. Close and try again.")
+                    )
                 } else {
                     Form {
                         Section {
@@ -126,10 +132,11 @@ struct ComicMetadataEditorSheet: View {
                             dismiss()
                         }
                     }
-                    .disabled(viewModel.isLoading || viewModel.isSaving || viewModel.isImportingComicInfo || !viewModel.hasChanges)
+                    .disabled(viewModel.isLoading || viewModel.isSaving || viewModel.isImportingComicInfo || !viewModel.hasChanges || viewModel.loadFailed)
                 }
             }
         }
+        .adaptiveSheetWidth(760)
         .presentationDetents([.large])
         .interactiveDismissDisabled(viewModel.isSaving || viewModel.isImportingComicInfo)
         .task {

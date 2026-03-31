@@ -1,6 +1,6 @@
 import UIKit
 
-final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
+final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     let contentContainerView = UIView()
 
     var onTapRegion: ((ReaderTapRegion) -> Void)?
@@ -30,6 +30,14 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
     private lazy var singleTapGestureRecognizer: UITapGestureRecognizer = {
         let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
         gestureRecognizer.numberOfTapsRequired = 1
+        return gestureRecognizer
+    }()
+
+    /// Edge tap recognizer fires instantly (no require-to-fail delay) for responsive page turns.
+    private lazy var edgeTapGestureRecognizer: UITapGestureRecognizer = {
+        let gestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleEdgeTap(_:)))
+        gestureRecognizer.numberOfTapsRequired = 1
+        gestureRecognizer.delegate = self
         return gestureRecognizer
     }()
 
@@ -145,6 +153,8 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         scrollView.showsVerticalScrollIndicator = false
 
         singleTapGestureRecognizer.require(toFail: doubleTapGestureRecognizer)
+        singleTapGestureRecognizer.require(toFail: edgeTapGestureRecognizer)
+        scrollView.addGestureRecognizer(edgeTapGestureRecognizer)
         scrollView.addGestureRecognizer(singleTapGestureRecognizer)
         scrollView.addGestureRecognizer(doubleTapGestureRecognizer)
 
@@ -251,38 +261,45 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate {
         onZoomStateChanged?(pendingZoomState)
     }
 
+    // MARK: - UIGestureRecognizerDelegate
+
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === edgeTapGestureRecognizer else {
+            return true
+        }
+        return isEdgeTap(gestureRecognizer)
+    }
+
+    private func isEdgeTap(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        let tapLocation = gestureRecognizer.location(in: self)
+        let viewWidth = max(bounds.width, 1)
+        let horizontalRatio = tapLocation.x / viewWidth
+        return horizontalRatio < tapEdgeRatio || horizontalRatio > 1 - tapEdgeRatio
+    }
+
     @objc
-    private func handleSingleTap(_ gestureRecognizer: UITapGestureRecognizer) {
-        guard let onTapRegion else {
-            return
-        }
-
-        if scrollView.zoomScale > scrollView.minimumZoomScale + 0.01 {
-            let tapLocation = gestureRecognizer.location(in: self)
-            let viewWidth = max(bounds.width, 1)
-            let horizontalRatio = tapLocation.x / viewWidth
-
-            if horizontalRatio < tapEdgeRatio {
-                onTapRegion(.leading)
-            } else if horizontalRatio > 1 - tapEdgeRatio {
-                onTapRegion(.trailing)
-            } else {
-                onTapRegion(.center)
-            }
-            return
-        }
-
+    private func handleEdgeTap(_ gestureRecognizer: UITapGestureRecognizer) {
+        guard let onTapRegion else { return }
         let tapLocation = gestureRecognizer.location(in: self)
         let viewWidth = max(bounds.width, 1)
         let horizontalRatio = tapLocation.x / viewWidth
 
         if horizontalRatio < tapEdgeRatio {
             onTapRegion(.leading)
-        } else if horizontalRatio > 1 - tapEdgeRatio {
-            onTapRegion(.trailing)
         } else {
-            onTapRegion(.center)
+            onTapRegion(.trailing)
         }
+    }
+
+    @objc
+    private func handleSingleTap(_ gestureRecognizer: UITapGestureRecognizer) {
+        guard let onTapRegion else {
+            return
+        }
+
+        // Edge taps are handled by edgeTapGestureRecognizer (instant, no delay).
+        // This handler only processes center taps (toggle chrome / zoom state).
+        onTapRegion(.center)
     }
 
     @objc
