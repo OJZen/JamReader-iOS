@@ -89,7 +89,7 @@ struct ComicReaderView: View {
             }
         }
         .pullDownToDismiss(
-            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting,
+            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting && !isAnySheetPresented,
             isZoomed: isContentZoomed,
             onDismissGestureActiveChanged: { active in
                 isDismissGestureActive = active
@@ -341,8 +341,24 @@ struct ComicReaderView: View {
                 isFavorite: viewModel.isFavorite,
                 isRead: viewModel.comic.read,
                 rating: viewModel.rating
+            ),
+            fileInfo: ReaderControlsFileInfo(
+                fileName: viewModel.comic.fileName,
+                fileExtension: viewModel.document?.fileURL.pathExtension,
+                pageCount: viewModel.pageCount,
+                series: viewModel.comic.series,
+                volume: viewModel.comic.volume,
+                addedAt: viewModel.comic.addedAt,
+                lastOpenedAt: viewModel.comic.lastOpenedAt,
+                fileURL: viewModel.document?.fileURL
             )
         )
+    }
+
+    private var isAnySheetPresented: Bool {
+        isShowingReaderControls || isShowingMetadataSheet ||
+        isShowingQuickMetadataSheet || isShowingOrganizationSheet ||
+        isShowingThumbnailBrowser
     }
 
     private var readerTopBar: some View {

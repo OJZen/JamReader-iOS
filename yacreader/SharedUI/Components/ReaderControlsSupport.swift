@@ -36,6 +36,20 @@ struct ReaderControlsMetadata {
     let rating: Int?
 }
 
+/// File-level info displayed in the reader controls sheet.
+/// All fields are optional so the section degrades gracefully for remote comics.
+struct ReaderControlsFileInfo {
+    let fileName: String
+    let fileExtension: String?
+    let pageCount: Int?
+    let series: String?
+    let volume: String?
+    let addedAt: Date?
+    let lastOpenedAt: Date?
+    /// Used to compute file size lazily — may be nil for remote comics.
+    let fileURL: URL?
+}
+
 /// All callback actions for the reader controls sheet.
 struct ReaderControlsActions {
     // Navigation
@@ -577,7 +591,67 @@ struct ReaderRotationControlsSection: View {
     }
 }
 
-// MARK: - Rotated Content Host
+// MARK: - File Info Section
+
+struct ReaderFileInfoSection: View {
+    let fileInfo: ReaderControlsFileInfo
+
+    @State private var fileSizeText: String? = nil
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        Section("File Info") {
+            LabeledContent("File Name", value: fileInfo.fileName)
+
+            if let ext = fileInfo.fileExtension, !ext.isEmpty {
+                LabeledContent("Format", value: ext.uppercased())
+            }
+
+            if let pages = fileInfo.pageCount {
+                LabeledContent("Pages", value: "\(pages)")
+            }
+
+            if let series = fileInfo.series, !series.isEmpty {
+                LabeledContent("Series", value: series)
+            }
+
+            if let volume = fileInfo.volume, !volume.isEmpty {
+                LabeledContent("Volume", value: volume)
+            }
+
+            if let size = fileSizeText {
+                LabeledContent("File Size", value: size)
+            }
+
+            if let added = fileInfo.addedAt {
+                LabeledContent("Added", value: Self.dateFormatter.string(from: added))
+            }
+
+            if let opened = fileInfo.lastOpenedAt {
+                LabeledContent("Last Opened", value: Self.dateFormatter.string(from: opened))
+            }
+        }
+        .task(id: fileInfo.fileName) {
+            fileSizeText = await resolveFileSize()
+        }
+    }
+
+    private func resolveFileSize() async -> String? {
+        guard let url = fileInfo.fileURL else { return nil }
+        return await Task.detached(priority: .utility) {
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey])
+            guard let bytes = values?.fileSize, bytes > 0 else { return nil }
+            return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+        }.value
+    }
+}
+
 
 struct ReaderRotatedContentHost<Content: View>: View {
     let rotation: ReaderRotationAngle

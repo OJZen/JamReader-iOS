@@ -547,7 +547,7 @@ struct RemoteComicReaderView: View {
             }
         }
         .pullDownToDismiss(
-            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting,
+            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting && !isAnySheetPresented,
             isZoomed: isContentZoomed,
             onDismissGestureActiveChanged: { active in
                 isDismissGestureActive = active
@@ -687,6 +687,16 @@ struct RemoteComicReaderView: View {
                     onRotateCounterClockwise: rotateCounterClockwise,
                     onRotateClockwise: rotateClockwise,
                     onResetRotation: resetRotation
+                ),
+                fileInfo: ReaderControlsFileInfo(
+                    fileName: displayName,
+                    fileExtension: document?.fileURL.pathExtension,
+                    pageCount: document?.pageCount,
+                    series: nil,
+                    volume: nil,
+                    addedAt: nil,
+                    lastOpenedAt: nil,
+                    fileURL: document?.fileURL
                 )
             )
         }
@@ -697,6 +707,10 @@ struct RemoteComicReaderView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    private var isAnySheetPresented: Bool {
+        isShowingReaderControls || isShowingThumbnailBrowser
     }
 
     private var supportsDoublePageSpread: Bool {

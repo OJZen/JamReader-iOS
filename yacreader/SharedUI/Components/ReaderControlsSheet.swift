@@ -6,9 +6,14 @@ struct ReaderControlsSheet: View {
     let capabilities: ReaderControlsCapabilities
     let actions: ReaderControlsActions
     var metadata: ReaderControlsMetadata? = nil
+    var fileInfo: ReaderControlsFileInfo? = nil
 
     var body: some View {
         ReaderControlsContainer(title: "Settings", onDone: actions.onDone) {
+            if let fileInfo {
+                ReaderFileInfoSection(fileInfo: fileInfo)
+            }
+
             ReaderNavigationControlsSection(
                 pageIndicatorText: pageState.pageIndicatorText,
                 currentPageNumber: pageState.currentPageNumber,
