@@ -59,15 +59,19 @@ struct ComicReaderView: View {
         ) {
             Group {
                 if viewModel.isLoading {
-                    ProgressView("Opening Comic")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ReaderFallbackStateView(
+                        title: "Opening Comic",
+                        systemImage: nil,
+                        message: nil,
+                        showsProgress: true
+                    )
                 } else if let document = viewModel.document {
                     readerContent(for: document)
                 } else {
-                    ContentUnavailableView(
-                        "Comic Unavailable",
+                    ReaderFallbackStateView(
+                        title: "Comic Unavailable",
                         systemImage: "book.closed",
-                        description: Text("The selected comic could not be opened.")
+                        message: "The selected comic could not be opened."
                     )
                 }
             }
@@ -103,6 +107,7 @@ struct ComicReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .statusBar(hidden: !readerSession.state.isChromeVisible)
         .background {
             Button("", action: dismiss.callAsFunction)
                 .keyboardShortcut("w", modifiers: .command)
@@ -242,12 +247,22 @@ struct ComicReaderView: View {
                 }
             }
         ) { unsupportedDocument in
-            ContentUnavailableView(
-                "Reader Not Ready",
+            ReaderFallbackStateView(
+                title: "Reader Not Ready",
                 systemImage: "shippingbox",
-                description: Text("`. \(unsupportedDocument.fileExtension)` files are already indexed by the library, but archive page extraction is still being ported.\n\n\(unsupportedDocument.reason)")
+                message: unsupportedReaderMessage(for: unsupportedDocument)
             )
         }
+    }
+
+    private func unsupportedReaderMessage(for unsupportedDocument: UnsupportedComicDocument) -> String {
+        let fileExtension = unsupportedDocument.fileExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if fileExtension.isEmpty {
+            return unsupportedDocument.reason
+        }
+
+        return "\(fileExtension.uppercased()) reading support is still being ported.\n\n\(unsupportedDocument.reason)"
     }
 
     private var readerControlsSheet: some View {
@@ -350,7 +365,8 @@ struct ComicReaderView: View {
                 volume: viewModel.comic.volume,
                 addedAt: viewModel.comic.addedAt,
                 lastOpenedAt: viewModel.comic.lastOpenedAt,
-                fileURL: viewModel.document?.fileURL
+                fileURL: viewModel.document?.fileURL,
+                coverDocument: viewModel.document
             )
         )
     }

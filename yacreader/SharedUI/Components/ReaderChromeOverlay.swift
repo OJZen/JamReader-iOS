@@ -33,6 +33,47 @@ private struct ReaderScrubberLayout {
 
     var itemStride: CGFloat { itemWidth + itemSpacing }
 
+    func scaled(by scale: CGFloat) -> ReaderScrubberLayout {
+        ReaderScrubberLayout(
+            thumbnailWidth: thumbnailWidth * scale,
+            thumbnailHeight: thumbnailHeight * scale,
+            itemWidth: itemWidth * scale,
+            itemHeight: itemHeight * scale,
+            frameHeight: frameHeight * scale,
+            topInset: topInset * scale,
+            bottomInset: bottomInset * scale,
+            itemSpacing: itemSpacing * scale,
+            focusDistance: focusDistance * scale,
+            maxScale: maxScale,
+            minScale: minScale,
+            maxLift: maxLift * scale
+        )
+    }
+
+    static func adaptive(
+        horizontalSizeClass: UserInterfaceSizeClass?,
+        viewportBounds: CGRect = ReaderViewportResolver.currentBounds,
+        userInterfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
+    ) -> ReaderScrubberLayout {
+        let baseLayout: ReaderScrubberLayout = horizontalSizeClass == .regular ? .regular : .compact
+
+        guard userInterfaceIdiom == .pad,
+              horizontalSizeClass == .regular,
+              viewportBounds.height > viewportBounds.width
+        else {
+            return baseLayout
+        }
+
+        let minimumPortraitHeight: CGFloat = 1_024
+        let maximumPortraitHeight: CGFloat = 1_366
+        let maximumScaleIncrease: CGFloat = 0.18
+        let clampedHeight = min(max(viewportBounds.height, minimumPortraitHeight), maximumPortraitHeight)
+        let progress = (clampedHeight - minimumPortraitHeight) / (maximumPortraitHeight - minimumPortraitHeight)
+        let scale = 1 + (progress * maximumScaleIncrease)
+
+        return baseLayout.scaled(by: scale)
+    }
+
     /// iPhone / compact multitasking window.
     static let compact = ReaderScrubberLayout(
         thumbnailWidth: 40,
@@ -286,7 +327,11 @@ struct ReaderTopBar: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                .background(.white.opacity(0.12), in: Circle())
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -328,7 +373,7 @@ struct ReaderBottomBar: View {
     }
 
     private var scrubberLayout: ReaderScrubberLayout {
-        horizontalSizeClass == .regular ? .regular : .compact
+        ReaderScrubberLayout.adaptive(horizontalSizeClass: horizontalSizeClass)
     }
 
     private var displayedPage: Int {
@@ -368,7 +413,11 @@ struct ReaderBottomBar: View {
                 }
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, Spacing.xxs)
-                .background(.white.opacity(0.12), in: Capsule())
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                }
             }
             .buttonStyle(.plain)
         }
@@ -949,9 +998,10 @@ struct ReaderTopStatusStack<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(spacing: Spacing.xs) {
+        VStack(spacing: Spacing.xxs) {
             content()
         }
+        .frame(maxWidth: 420)
         .padding(.top, safeAreaInsets.top + ReaderChromeMetrics.statusTopOffset)
         .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -1049,6 +1099,11 @@ struct ReaderStatusBadge<Content: View>: View {
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, 7)
             .background(.ultraThinMaterial, in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
     }
 }
 

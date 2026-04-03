@@ -5,6 +5,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
 
     var onTapRegion: ((ReaderTapRegion) -> Void)?
     var onZoomStateChanged: ((Bool) -> Void)?
+    var onInteractionBegan: (() -> Void)?
     var tapEdgeRatio: CGFloat = 0.24
 
     var maximumZoomScale: CGFloat {
@@ -15,7 +16,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
         scrollView.zoomScale <= scrollView.minimumZoomScale + 0.01
     }
 
-    private let scrollView = UIScrollView()
+    private let scrollView = ReaderTouchAwareScrollView()
     private var naturalContentSize: CGSize = .zero
     private var lastReportedZoomState: Bool?
     private var pendingZoomState: Bool?
@@ -140,6 +141,9 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         scrollView.backgroundColor = .black
         scrollView.delegate = self
+        scrollView.onTouchesBegan = { [weak self] in
+            self?.onInteractionBegan?()
+        }
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.minimumZoomScale = 1
         scrollView.maximumZoomScale = 4
@@ -349,5 +353,14 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
         ) {
             self.scrollView.zoom(to: zoomRect, animated: false)
         }
+    }
+}
+
+private final class ReaderTouchAwareScrollView: UIScrollView {
+    var onTouchesBegan: (() -> Void)?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        onTouchesBegan?()
+        super.touchesBegan(touches, with: event)
     }
 }

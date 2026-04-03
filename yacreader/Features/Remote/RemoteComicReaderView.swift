@@ -111,75 +111,11 @@ struct RemoteComicLoadingView: View {
                     )
                 } else if let loadErrorMessage {
                     RemoteComicLoadingCard {
-                        VStack(spacing: 16) {
-                            Image(systemName: "wifi.exclamationmark")
-                                .font(.system(size: 30, weight: .semibold))
-                                .foregroundStyle(.white)
-
-                            Text("Remote Comic Unavailable")
-                                .font(.headline.weight(.semibold))
-                                .foregroundStyle(.white)
-
-                            Text(loadErrorMessage)
-                                .font(.subheadline)
-                                .foregroundStyle(Color.white.opacity(0.78))
-                                .multilineTextAlignment(.center)
-
-                            HStack(spacing: 12) {
-                                RemoteComicLoadingActionButton(
-                                    title: "Back",
-                                    kind: .secondary,
-                                    action: cancelCurrentLoadAndDismiss
-                                )
-
-                                RemoteComicLoadingActionButton(
-                                    title: "Retry",
-                                    kind: .primary,
-                                    action: { startLoading(force: true) }
-                                )
-                            }
-                        }
+                        errorStateContent(message: loadErrorMessage)
                     }
                 } else {
                     RemoteComicLoadingCard {
-                        VStack(spacing: 16) {
-                            if downloadProgress > 0 {
-                                ProgressView(value: downloadProgress)
-                                    .progressViewStyle(.linear)
-                                    .tint(.white)
-                                    .frame(maxWidth: 280)
-                                Text("\(Int(downloadProgress * 100))%")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Color.white.opacity(0.82))
-                                if !downloadSpeed.isEmpty {
-                                    Text(downloadSpeed)
-                                        .font(.caption2)
-                                        .foregroundStyle(Color.white.opacity(0.64))
-                                }
-                            } else {
-                                ProgressView()
-                                    .tint(.white)
-                            }
-
-                            Text(loadingMessage)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .multilineTextAlignment(.center)
-
-                            HStack(spacing: 12) {
-                                RemoteComicLoadingActionButton(
-                                    title: downloadProgress > 0 ? "Cancel Download" : "Cancel",
-                                    kind: .secondary,
-                                    action: { cancelCurrentLoad() }
-                                )
-
-                                RemoteComicLoadingActionButton(
-                                    title: "Back",
-                                    kind: .primary,
-                                    action: cancelCurrentLoadAndDismiss
-                                )
-                            }
-                        }
+                        loadingStateContent
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -205,6 +141,108 @@ struct RemoteComicLoadingView: View {
         .onDisappear {
             loadTask?.cancel()
             loadTask = nil
+        }
+    }
+
+    @ViewBuilder
+    private var loadingStateContent: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            loadingHeader(
+                title: item.name,
+                subtitle: loadingMessage
+            )
+
+            if downloadProgress > 0 {
+                VStack(alignment: .leading, spacing: 12) {
+                    ProgressView(value: downloadProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+
+                    RemoteComicLoadingMetricRow(
+                        label: "Progress",
+                        value: "\(Int(downloadProgress * 100))%"
+                    )
+
+                    if !downloadSpeed.isEmpty {
+                        RemoteComicLoadingMetricRow(
+                            label: "Speed",
+                            value: downloadSpeed
+                        )
+                    }
+                }
+            } else {
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .tint(.white)
+
+                    Text("Connecting")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.86))
+                }
+            }
+
+            HStack(spacing: 12) {
+                RemoteComicLoadingActionButton(
+                    title: "Back",
+                    kind: .secondary,
+                    action: cancelCurrentLoadAndDismiss
+                )
+
+                RemoteComicLoadingActionButton(
+                    title: downloadProgress > 0 ? "Cancel Download" : "Cancel",
+                    kind: .primary,
+                    action: { cancelCurrentLoad() }
+                )
+            }
+        }
+    }
+
+    private func errorStateContent(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            loadingHeader(
+                title: item.name,
+                subtitle: "Remote Comic Unavailable"
+            )
+
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 24, height: 24)
+
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.white.opacity(0.78))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 12) {
+                RemoteComicLoadingActionButton(
+                    title: "Back",
+                    kind: .secondary,
+                    action: cancelCurrentLoadAndDismiss
+                )
+
+                RemoteComicLoadingActionButton(
+                    title: "Retry",
+                    kind: .primary,
+                    action: { startLoading(force: true) }
+                )
+            }
+        }
+    }
+
+    private func loadingHeader(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(Color.white.opacity(0.74))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -385,19 +423,19 @@ private struct RemoteComicLoadingCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack {
+        VStack(alignment: .leading) {
             content()
         }
         .frame(maxWidth: 360)
         .padding(.horizontal, 24)
-        .padding(.vertical, 22)
+        .padding(.vertical, 24)
         .background(
-            Color.white.opacity(0.09),
+            .ultraThinMaterial,
             in: RoundedRectangle(cornerRadius: 28, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
         }
         .shadow(color: .black.opacity(0.34), radius: 24, y: 18)
         .padding(.horizontal, 24)
@@ -423,16 +461,33 @@ private struct RemoteComicLoadingActionButton: View {
                 .padding(.vertical, 12)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(kind == .primary ? Color.black : Color.white)
+        .foregroundStyle(.white)
         .background(
-            kind == .primary ? Color.white : Color.white.opacity(0.10),
+            kind == .primary ? Color.white.opacity(0.16) : Color.white.opacity(0.08),
             in: Capsule()
         )
         .overlay {
-            if kind == .secondary {
-                Capsule()
-                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
-            }
+            Capsule()
+                .stroke(Color.white.opacity(kind == .primary ? 0.12 : 0.16), lineWidth: 1)
+        }
+    }
+}
+
+private struct RemoteComicLoadingMetricRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.white.opacity(0.62))
+
+            Spacer(minLength: 0)
+
+            Text(value)
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white.opacity(0.86))
         }
     }
 }
@@ -517,15 +572,19 @@ struct RemoteComicReaderView: View {
         ) {
             Group {
                 if isLoading {
-                    ProgressView("Opening Remote Comic")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ReaderFallbackStateView(
+                        title: "Opening Remote Comic",
+                        systemImage: nil,
+                        message: nil,
+                        showsProgress: true
+                    )
                 } else if let document {
                     readerContent(for: document)
                 } else {
-                    ContentUnavailableView(
-                        "Comic Unavailable",
+                    ReaderFallbackStateView(
+                        title: "Comic Unavailable",
                         systemImage: "book.closed",
-                        description: Text("The downloaded remote comic could not be opened.")
+                        message: "The downloaded remote comic could not be opened."
                     )
                 }
             }
@@ -561,6 +620,7 @@ struct RemoteComicReaderView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .statusBar(hidden: !readerSession.state.isChromeVisible)
         .background {
             Button("", action: dismiss.callAsFunction)
                 .keyboardShortcut("w", modifiers: .command)
@@ -696,7 +756,8 @@ struct RemoteComicReaderView: View {
                     volume: nil,
                     addedAt: nil,
                     lastOpenedAt: nil,
-                    fileURL: document?.fileURL
+                    fileURL: document?.fileURL,
+                    coverDocument: document
                 )
             )
         }
@@ -805,30 +866,40 @@ struct RemoteComicReaderView: View {
 
     @ViewBuilder
     private var readerStatusOverlay: some View {
-        if let backgroundDownloadProgress {
+        if isRefreshingRemoteCopy {
+            ReaderStatusBadge {
+                HStack(spacing: 10) {
+                    ProgressView()
+
+                    Text("Refreshing Remote Copy")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(2)
+                }
+            }
+        } else if let backgroundDownloadProgress {
             ReaderStatusBadge {
                 HStack(spacing: 10) {
                     if backgroundDownloadProgress > 0 {
                         ProgressView(value: backgroundDownloadProgress)
-                            .frame(width: 56)
+                            .frame(width: 52)
+
+                        Text(backgroundDownloadStatusText(for: backgroundDownloadProgress))
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(2)
+
+                        Text("\(Int(backgroundDownloadProgress * 100))%")
+                            .font(.caption.weight(.medium).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.72))
                     } else {
                         ProgressView()
-                    }
 
-                    Text(backgroundDownloadStatusText(for: backgroundDownloadProgress))
-                        .font(.caption.weight(.semibold))
+                        Text(backgroundDownloadStatusText(for: backgroundDownloadProgress))
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(2)
+                    }
                 }
             }
-        }
-
-        if isRefreshingRemoteCopy {
-            ReaderStatusBadge {
-                ProgressView("Refreshing Remote Copy")
-                    .font(.caption.weight(.semibold))
-            }
-        }
-
-        if let transientNoticeMessage {
+        } else if let transientNoticeMessage {
             ReaderStatusBadge {
                 Text(transientNoticeMessage)
                     .font(.caption.weight(.semibold))
@@ -852,10 +923,10 @@ struct RemoteComicReaderView: View {
                 }
             }
         ) { unsupportedDocument in
-            ContentUnavailableView(
-                "Unsupported Comic",
+            ReaderFallbackStateView(
+                title: "Unsupported Comic",
                 systemImage: "doc.badge.questionmark",
-                description: Text(unsupportedDocument.reason)
+                message: unsupportedDocument.reason
             )
         }
     }
@@ -1093,12 +1164,8 @@ struct RemoteComicReaderView: View {
         closeResources(for: previousDocument, keeping: loadedDocument)
     }
 
-    private func backgroundDownloadStatusText(for progress: Double) -> String {
-        if progress > 0 {
-            return "Saving Offline Copy \(Int(progress * 100))%"
-        }
-
-        return "Saving Offline Copy"
+    private func backgroundDownloadStatusText(for _: Double) -> String {
+        return "Background download in progress"
     }
 
     @MainActor

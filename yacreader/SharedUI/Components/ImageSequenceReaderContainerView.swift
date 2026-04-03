@@ -77,13 +77,22 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     private var spreads: [ReaderSpreadDescriptor]
     private var controllerCache: [Int: ComicImageSpreadViewController] = [:]
     private var prefetchTask: Task<Void, Never>?
+    private var controllerPrewarmWorkItem: DispatchWorkItem?
     private var memoryWarningObserver: NSObjectProtocol?
     private let pageTurnFeedbackGenerator = UIImpactFeedbackGenerator(style: .light)
+    private let coldPageTurnFeedbackThresholdNanoseconds: UInt64 = 1_500_000_000
+    private let controllerRetentionRadius = 3
+    private let prefetchRadius = 3
+    private let neighborPrewarmRadius = 2
     private var lastReportedPageIndex: Int?
     private var currentPageIndex: Int
     private var currentSpreadIndex: Int
     private var lastViewportSize: CGSize = .zero
     private var pendingScrollSpreadIndex: Int?
+    private var staleRequestedPageIndexToIgnore: Int?
+    private var lastInteractionBeganUptimeNanoseconds: UInt64?
+    private var lastSuccessfulPageTurnUptimeNanoseconds: UInt64?
+    private var animatedTransitionTargetSpreadIndex: Int?
 
     init(
         document: ImageSequenceComicDocument,
@@ -110,6 +119,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
     deinit {
         prefetchTask?.cancel()
+        controllerPrewarmWorkItem?.cancel()
         let cachedControllers = Array(controllerCache.values)
         controllerCache.removeAll()
         Task { @MainActor in
@@ -145,7 +155,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         ])
 
         observeMemoryWarningsIfNeeded()
-        pageTurnFeedbackGenerator.prepare()
+        preparePageTurnFeedback()
         collectionView.reloadData()
     }
 
@@ -248,10 +258,20 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
         if documentChanged || layoutChanged {
             self.spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: document.pageCount, layout: layout)
+            staleRequestedPageIndexToIgnore = nil
             clearControllerCache()
             collectionView.reloadData()
             displaySpread(containing: requestedPageIndex, animated: false)
             return
+        }
+
+        if let staleRequestedPageIndexToIgnore {
+            if requestedPageIndex == staleRequestedPageIndexToIgnore,
+               currentPageIndex != staleRequestedPageIndexToIgnore {
+                return
+            }
+
+            self.staleRequestedPageIndexToIgnore = nil
         }
 
         guard requestedPageIndex != currentPageIndex else {
@@ -289,7 +309,12 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         cell.setHostedView(controller.view)
-        controller.prepareForPresentation()
+        if animatedTransitionTargetSpreadIndex == indexPath.item {
+            ReaderPerformanceTrace.log("willDisplay spread=\(indexPath.item) using prewarm during animation")
+            controller.prewarmForUpcomingPresentation()
+        } else {
+            controller.prepareForPresentation()
+        }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
@@ -322,7 +347,21 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         if spreadIndex != currentSpreadIndex {
             onZoomStateChanged?(false)
         }
-        controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
+        ReaderPerformanceTrace.log(
+            "displaySpread target=\(spreadIndex) animated=\(animated) loaded=\(controllerCache[spreadIndex] != nil)"
+        )
+        animatedTransitionTargetSpreadIndex = animated ? spreadIndex : nil
+        if let controller = controller(forSpreadIndex: spreadIndex) {
+            if animated {
+                ReaderPerformanceTrace.measure("prewarmForUpcomingPresentation spread=\(spreadIndex)") {
+                    controller.prewarmForUpcomingPresentation()
+                }
+            } else {
+                ReaderPerformanceTrace.measure("prepareForPresentation spread=\(spreadIndex)") {
+                    controller.prepareForPresentation()
+                }
+            }
+        }
         currentSpreadIndex = spreadIndex
         currentPageIndex = spreads[spreadIndex].primaryPageIndex
         scrollToSpread(spreadIndex, animated: animated)
@@ -358,11 +397,17 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             return
         }
 
-        controller(forSpreadIndex: currentSpreadIndex)?.prepareForPresentation()
+        if animated {
+            controller(forSpreadIndex: currentSpreadIndex)?.prewarmForUpcomingPresentation()
+        } else {
+            controller(forSpreadIndex: currentSpreadIndex)?.prepareForPresentation()
+        }
         scrollToSpread(currentSpreadIndex, animated: animated)
         if !animated {
             ensureControllerHosted(forSpreadIndex: currentSpreadIndex)
         }
+        prefetchAround(spreadIndex: currentSpreadIndex)
+        scheduleNeighborPrewarm(around: currentSpreadIndex)
     }
 
     private func finalizeVisibleSpread() {
@@ -377,14 +422,17 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
         currentSpreadIndex = spreadIndex
         currentPageIndex = spread.primaryPageIndex
+        animatedTransitionTargetSpreadIndex = nil
         if spreadIndex != previousSpreadIndex {
             onZoomStateChanged?(false)
+            ReaderPerformanceTrace.log("finalizeVisibleSpread moved \(previousSpreadIndex) -> \(spreadIndex)")
             controller(forSpreadIndex: spreadIndex)?.prepareForPresentation()
         }
         ensureControllerHosted(forSpreadIndex: spreadIndex)
         notifyPageChangedIfNeeded(spread.primaryPageIndex)
         trimCache(around: spreadIndex)
         prefetchAround(spreadIndex: spreadIndex)
+        scheduleNeighborPrewarm(around: spreadIndex)
     }
 
     private func ensureControllerHosted(forSpreadIndex spreadIndex: Int, remainingAttempts: Int = 2) {
@@ -438,6 +486,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             guard let self, spreadIndex == self.currentSpreadIndex else { return }
             self.onZoomStateChanged?(isZoomed)
         }
+        controller.onInteractionBegan = { [weak self, spreadIndex] in
+            self?.handleInteractionBegan(on: spreadIndex)
+        }
         addChild(controller)
         controller.didMove(toParent: self)
         controllerCache[spreadIndex] = controller
@@ -445,6 +496,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     }
 
     private func handleTapRegion(_ tapRegion: ReaderTapRegion) {
+        ReaderPerformanceTrace.log(
+            "tap region=\(tapRegion) spread=\(currentSpreadIndex) sinceTouch=\(ReaderPerformanceTrace.formatInterval(since: lastInteractionBeganUptimeNanoseconds))ms"
+        )
         switch tapRegion {
         case .center:
             onReaderTap(.center)
@@ -453,7 +507,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             let step = layout.readingDirection == .leftToRight ? -1 : 1
             navigateByReadingOrder(step: step)
             if currentSpreadIndex != previousSpreadIndex {
-                pageTurnFeedbackGenerator.impactOccurred()
+                emitPageTurnFeedbackIfNeeded()
             } else {
                 onReaderTap(.leading)
             }
@@ -462,7 +516,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             let step = layout.readingDirection == .leftToRight ? 1 : -1
             navigateByReadingOrder(step: step)
             if currentSpreadIndex != previousSpreadIndex {
-                pageTurnFeedbackGenerator.impactOccurred()
+                emitPageTurnFeedbackIfNeeded()
             } else {
                 onReaderTap(.trailing)
             }
@@ -478,11 +532,12 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             adjustedStep = -step
         }
 
+        staleRequestedPageIndexToIgnore = currentPageIndex
         displaySpread(at: currentSpreadIndex + adjustedStep, animated: true)
     }
 
     private func trimCache(around spreadIndex: Int) {
-        let allowedRange = max(0, spreadIndex - 2)...(spreadIndex + 2)
+        let allowedRange = max(0, spreadIndex - controllerRetentionRadius)...(spreadIndex + controllerRetentionRadius)
         let obsoleteKeys = controllerCache.keys.filter { !allowedRange.contains($0) }
         for key in obsoleteKeys {
             removeCachedController(forSpreadIndex: key)
@@ -507,7 +562,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     }
 
     private func prefetchAround(spreadIndex: Int) {
-        let prefetchRange = max(0, spreadIndex - 2)...min(spreads.count - 1, spreadIndex + 2)
+        let prefetchRange = max(0, spreadIndex - prefetchRadius)...min(spreads.count - 1, spreadIndex + prefetchRadius)
         let nearbyPageIndices = Array(Set(prefetchRange
             .flatMap { spreads[$0].displayPageIndices(for: layout.readingDirection) }
             .filter { $0 != currentPageIndex }))
@@ -519,11 +574,76 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
         let pageSource = document.pageSource
         prefetchTask?.cancel()
+        ReaderPerformanceTrace.log("prefetchAround spread=\(spreadIndex) pages=\(nearbyPageIndices)")
         prefetchTask = Task(priority: .utility) {
             await pageSource.prefetchPages(at: nearbyPageIndices)
         }
 
+        preparePageTurnFeedback()
+    }
+
+    private func scheduleNeighborPrewarm(around spreadIndex: Int) {
+        guard spreads.count > 1 else {
+            return
+        }
+
+        controllerPrewarmWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.prewarmNeighbors(around: spreadIndex)
+        }
+        controllerPrewarmWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
+    }
+
+    private func prewarmNeighbors(around spreadIndex: Int) {
+        let neighborIndices = (max(0, spreadIndex - neighborPrewarmRadius)...min(spreads.count - 1, spreadIndex + neighborPrewarmRadius))
+            .filter { $0 != spreadIndex }
+            .sorted { lhs, rhs in
+                abs(lhs - spreadIndex) < abs(rhs - spreadIndex)
+            }
+
+        ReaderPerformanceTrace.log("prewarmNeighbors around=\(spreadIndex) neighbors=\(neighborIndices)")
+        for neighborIndex in neighborIndices {
+            controller(forSpreadIndex: neighborIndex)?.prepareForPresentation()
+        }
+    }
+
+    private func preparePageTurnFeedback() {
         pageTurnFeedbackGenerator.prepare()
+    }
+
+    private func handleInteractionBegan(on spreadIndex: Int) {
+        lastInteractionBeganUptimeNanoseconds = DispatchTime.now().uptimeNanoseconds
+        ReaderPerformanceTrace.log("interactionBegan spread=\(spreadIndex)")
+        preparePageTurnFeedback()
+    }
+
+    private func emitPageTurnFeedbackIfNeeded() {
+        let now = DispatchTime.now().uptimeNanoseconds
+        defer {
+            lastSuccessfulPageTurnUptimeNanoseconds = now
+            preparePageTurnFeedback()
+        }
+
+        guard shouldEmitPageTurnFeedback(now: now) else {
+            ReaderPerformanceTrace.log(
+                "pageTurnFeedback skipped after idle=\(ReaderPerformanceTrace.formatInterval(since: lastSuccessfulPageTurnUptimeNanoseconds))ms"
+            )
+            return
+        }
+
+        ReaderPerformanceTrace.measure("pageTurnFeedback impactOccurred") {
+            pageTurnFeedbackGenerator.impactOccurred()
+        }
+    }
+
+    private func shouldEmitPageTurnFeedback(now: UInt64) -> Bool {
+        guard let lastSuccessfulPageTurnUptimeNanoseconds else {
+            return true
+        }
+
+        return now - lastSuccessfulPageTurnUptimeNanoseconds < coldPageTurnFeedbackThresholdNanoseconds
     }
 
     private func observeMemoryWarningsIfNeeded() {
@@ -545,6 +665,8 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     private func handleMemoryWarning() {
         prefetchTask?.cancel()
         prefetchTask = nil
+        controllerPrewarmWorkItem?.cancel()
+        controllerPrewarmWorkItem = nil
 
         let keys = Array(controllerCache.keys)
         for key in keys where key != currentSpreadIndex {
@@ -649,6 +771,7 @@ private final class ComicImageSpreadViewController: UIViewController {
     private var previewObserver: NSObjectProtocol?
     private let onTapRegion: (ReaderTapRegion) -> Void
     var onZoomStateChanged: ((Bool) -> Void)?
+    var onInteractionBegan: (() -> Void)?
 
     init(
         spreadIndex: Int,
@@ -714,6 +837,9 @@ private final class ComicImageSpreadViewController: UIViewController {
         zoomablePageView.onZoomStateChanged = { [weak self] isZoomed in
             self?.onZoomStateChanged?(isZoomed)
         }
+        zoomablePageView.onInteractionBegan = { [weak self] in
+            self?.onInteractionBegan?()
+        }
 
         rotationContainerView.backgroundColor = .black
         zoomablePageView.contentContainerView.addSubview(rotationContainerView)
@@ -755,6 +881,9 @@ private final class ComicImageSpreadViewController: UIViewController {
         hasStartedLoading = true
         activityIndicator.startAnimating()
         messageLabel.isHidden = true
+        ReaderPerformanceTrace.log(
+            "spread=\(spreadIndex) loadImagesIfNeeded pages=\(spread.displayPageIndices(for: layout.readingDirection))"
+        )
 
         let pageSource = document.pageSource
         let pageIndices = spread.displayPageIndices(for: layout.readingDirection)
@@ -768,6 +897,7 @@ private final class ComicImageSpreadViewController: UIViewController {
         applyPreviewIfAvailable(for: pageIndices, resetZoomScale: true)
 
         loadTask = Task { [weak self] in
+            let loadStart = DispatchTime.now().uptimeNanoseconds
             let result = await Task.detached(priority: .userInitiated) { () -> Result<[LoadedComicPage], Error> in
                 do {
                     var loadedPages: [LoadedComicPage] = []
@@ -802,6 +932,9 @@ private final class ComicImageSpreadViewController: UIViewController {
             switch result {
             case .success(let loadedPages):
                 let shouldResetZoomScale = self.imageViews.isEmpty
+                ReaderPerformanceTrace.log(
+                    "spread=\(self.spreadIndex) loadSuccess pages=\(loadedPages.count) elapsed=\(ReaderPerformanceTrace.format(nanoseconds: DispatchTime.now().uptimeNanoseconds - loadStart))ms"
+                )
                 loadedPages.forEach { loadedPage in
                     ReaderPagePreviewStore.shared.store(
                         loadedPage.image,
@@ -816,6 +949,9 @@ private final class ComicImageSpreadViewController: UIViewController {
                     self.needsViewportResetOnNextLayout = false
                 }
             case .failure(let error):
+                ReaderPerformanceTrace.log(
+                    "spread=\(self.spreadIndex) loadFailure elapsed=\(ReaderPerformanceTrace.format(nanoseconds: DispatchTime.now().uptimeNanoseconds - loadStart))ms error=\(error.localizedDescription)"
+                )
                 let fallbackMessage = pageNames.joined(separator: ", ")
                 self.presentError(
                     error.userFacingMessage.isEmpty
@@ -875,6 +1011,7 @@ private final class ComicImageSpreadViewController: UIViewController {
             return
         }
 
+        ReaderPerformanceTrace.log("spread=\(spreadIndex) appliedPreview pages=\(pageIndices)")
         activityIndicator.stopAnimating()
         messageLabel.isHidden = true
         loadedPages = previewPages
@@ -972,18 +1109,40 @@ private final class ComicImageSpreadViewController: UIViewController {
     }
 
     func prepareForPresentation() {
-        loadViewIfNeeded()
-        needsViewportResetOnNextLayout = true
-        view.setNeedsLayout()
+        ReaderPerformanceTrace.measure(
+            "spread=\(spreadIndex) prepareForPresentation loadedPages=\(loadedPages.count)"
+        ) {
+            loadViewIfNeeded()
+            view.setNeedsLayout()
 
-        guard !loadedPages.isEmpty else {
-            onZoomStateChanged?(false)
-            return
+            guard !loadedPages.isEmpty else {
+                onZoomStateChanged?(false)
+                return
+            }
+
+            view.layoutIfNeeded()
+            let shouldResetViewport = needsViewportResetOnNextLayout || !zoomablePageView.isAtPreferredZoom
+            guard shouldResetViewport else {
+                return
+            }
+
+            if layoutLoadedPages(resetZoomScale: true) {
+                needsViewportResetOnNextLayout = false
+            }
         }
+    }
 
-        view.layoutIfNeeded()
-        if layoutLoadedPages(resetZoomScale: true) {
-            needsViewportResetOnNextLayout = false
+    func prewarmForUpcomingPresentation() {
+        ReaderPerformanceTrace.measure(
+            "spread=\(spreadIndex) prewarmForUpcomingPresentation loadedPages=\(loadedPages.count)"
+        ) {
+            loadViewIfNeeded()
+            guard !loadedPages.isEmpty else {
+                return
+            }
+
+            // Let the actual on-screen presentation reset viewport if needed.
+            view.setNeedsLayout()
         }
     }
 

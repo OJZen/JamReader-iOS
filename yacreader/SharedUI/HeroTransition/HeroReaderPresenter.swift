@@ -55,6 +55,7 @@ struct HeroReaderPresenter<Item: Identifiable, Content: View>: UIViewControllerR
 
                 let hostingVC = DismissTrackingHostingController(rootView: parent.content(item))
                 hostingVC.modalPresentationStyle = .overFullScreen
+                hostingVC.modalPresentationCapturesStatusBarAppearance = true
                 hostingVC.transitioningDelegate = delegate
                 hostingVC.onDismiss = { [weak self] in
                     guard let self else { return }
@@ -104,6 +105,10 @@ final class _HeroPresenterViewController: UIViewController {
 /// dismissed and fires a callback to clear the binding.
 final class DismissTrackingHostingController<Content: View>: UIHostingController<Content> {
     var onDismiss: (() -> Void)?
+
+    override var preferredStatusBarUpdateAnimation: UIStatusBarAnimation {
+        .fade
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
