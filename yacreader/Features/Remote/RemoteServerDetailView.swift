@@ -46,7 +46,7 @@ struct RemoteServerDetailView: View {
 
     var body: some View {
         List {
-            summarySection
+            connectionSection
             quickAccessSection
             recentComicsSection
         }
@@ -135,17 +135,6 @@ struct RemoteServerDetailView: View {
         }
     }
 
-    private var summarySection: some View {
-        Section {
-            serverSummaryCard
-                .insetCardListRow(
-                    horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset,
-                    top: 14,
-                    bottom: 10
-                )
-        }
-    }
-
     private func remoteServerEditor(
         for draft: RemoteServerEditorDraft
     ) -> some View {
@@ -160,67 +149,56 @@ struct RemoteServerDetailView: View {
         .id(draft.id)
     }
 
-    private var serverSummaryCard: some View {
-        InsetCard(
-            cornerRadius: 18,
-            contentPadding: 14,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
-            HStack(alignment: .top, spacing: 12) {
-                RemoteServerGlyph(profile: profile, size: 42, cornerRadius: 12, iconFont: .title3)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(profile.displayTitle)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-
-                    Text(profile.providerDisplayTitle)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(profile.providerKind.tintColor)
-                        .lineLimit(1)
-                }
+    private var connectionSection: some View {
+        Section("Server") {
+            LabeledContent("Type") {
+                Text(profile.providerDisplayTitle)
+                    .foregroundStyle(profile.providerKind.tintColor)
             }
 
-            SummaryMetricGroup(
-                metrics: summaryMetrics,
-                style: .compactValue,
-                horizontalSpacing: 8,
-                verticalSpacing: 8
-            )
+            LabeledContent("Server") {
+                Text(profile.endpointDisplaySummary)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
 
-            RemoteInlineMetadataLine(
-                items: summaryMetadataItems,
-                horizontalSpacing: 8,
-                verticalSpacing: 4
-            )
+            LabeledContent("Path") {
+                Text(profile.shareDisplaySummary)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+            }
+
+            if !profile.username.isEmpty, profile.authenticationMode.requiresUsername {
+                LabeledContent("Username") {
+                    Text(profile.username)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
         }
     }
 
     private var quickAccessSection: some View {
-        Section("Quick Access") {
+        Section("Shortcuts") {
             ForEach(quickAccessItems) { item in
                 Button {
                     navigationRequest = item.navigationRequest
                 } label: {
-                    RemoteInsetListRowCard {
-                        RemoteServerDetailShortcutRow(item: item)
-                    }
+                    RemoteServerDetailShortcutRow(item: item)
                 }
                 .buttonStyle(.plain)
-                .insetCardListRow(horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset)
             }
         }
     }
 
     private var recentComicsSection: some View {
-        Section("Recent Comics") {
+        Section("Recent") {
             if recentSessions.isEmpty {
                 ContentUnavailableView(
-                    "No Browsing History",
+                    "No Recent Comics",
                     systemImage: "clock.arrow.circlepath",
-                    description: Text("Open a comic from this remote server and it will appear here.")
+                    description: Text("Open a comic on this server to keep it here.")
                 )
                 .padding(.vertical, 24)
             } else {
@@ -304,58 +282,11 @@ struct RemoteServerDetailView: View {
     }
 
     private var browserEntryTitle: String {
-        browserEntryIsRoot ? "Browse Remote Library" : "Continue Browsing"
+        browserEntryIsRoot ? "Browse" : "Continue"
     }
 
     private var browserEntryDisplayText: String {
         browserEntryRawPath.isEmpty ? "/" : browserEntryRawPath
-    }
-
-    private var summaryMetrics: [SummaryMetricItem] {
-        [
-            SummaryMetricItem(
-                title: "Saved",
-                value: "\(savedFolderCount)",
-                tint: .teal
-            ),
-            SummaryMetricItem(
-                title: "Offline",
-                value: "\(offlineCopyCount)",
-                tint: .green
-            ),
-            SummaryMetricItem(
-                title: "Recent",
-                value: "\(recentHistoryCount)",
-                tint: .orange
-            )
-        ]
-    }
-
-    private var summaryMetadataItems: [RemoteInlineMetadataItem] {
-        var items = [
-            RemoteInlineMetadataItem(
-                systemImage: "server.rack",
-                text: profile.endpointDisplaySummary,
-                tint: .blue
-            ),
-            RemoteInlineMetadataItem(
-                systemImage: "point.3.connected.trianglepath.dotted",
-                text: profile.shareDisplaySummary,
-                tint: .teal
-            )
-        ]
-
-        if !profile.username.isEmpty, profile.authenticationMode.requiresUsername {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "person.text.rectangle",
-                    text: profile.username,
-                    tint: .secondary
-                )
-            )
-        }
-
-        return items
     }
 
     private var quickAccessItems: [RemoteServerDetailShortcutItem] {
@@ -375,10 +306,9 @@ struct RemoteServerDetailView: View {
                 RemoteServerDetailShortcutItem(
                     id: "saved-folders",
                     title: "Saved Folders",
-                    subtitle: "Open shortcuts for this server.",
-                    systemImage: "star",
+                    subtitle: savedFolderCount == 1 ? "1 saved" : "\(savedFolderCount) saved",
+                    systemImage: "star.fill",
                     tint: .teal,
-                    badgeTitle: "\(savedFolderCount)",
                     navigationRequest: .savedFolders(profile)
                 )
             )
@@ -389,10 +319,9 @@ struct RemoteServerDetailView: View {
                 RemoteServerDetailShortcutItem(
                     id: "offline-shelf",
                     title: "Offline Shelf",
-                    subtitle: "Open comics kept on this device.",
-                    systemImage: "arrow.down.circle",
+                    subtitle: offlineCopyCount == 1 ? "1 downloaded" : "\(offlineCopyCount) downloaded",
+                    systemImage: "arrow.down.circle.fill",
                     tint: .green,
-                    badgeTitle: "\(offlineCopyCount)",
                     navigationRequest: .offlineShelf(profile)
                 )
             )
@@ -419,7 +348,7 @@ struct RemoteServerDetailView: View {
                 navigationRequest = .savedFolders(profile)
             } label: {
                 Label(
-                    savedFolderCount == 1 ? "Open Saved Folder" : "Open Saved Folders",
+                    savedFolderCount == 1 ? "Saved Folder" : "Saved Folders",
                     systemImage: "star"
                 )
             }
@@ -430,7 +359,7 @@ struct RemoteServerDetailView: View {
                 navigationRequest = .offlineShelf(profile)
             } label: {
                 Label(
-                    offlineCopyCount == 1 ? "Open Offline Copy" : "Open Offline Shelf",
+                    offlineCopyCount == 1 ? "Offline Copy" : "Offline Shelf",
                     systemImage: "arrow.down.circle"
                 )
             }
@@ -441,7 +370,7 @@ struct RemoteServerDetailView: View {
                 viewModel.clearRecentHistory(for: profile)
                 refreshDetailState(forceReload: true)
             } label: {
-                Label("Clear Browsing History", systemImage: "clock.arrow.circlepath")
+                Label("Clear History", systemImage: "clock.arrow.circlepath")
             }
         }
 
@@ -450,7 +379,7 @@ struct RemoteServerDetailView: View {
                 viewModel.clearCache(for: profile)
                 refreshDetailState(forceReload: true)
             } label: {
-                Label("Clear Download Cache", systemImage: "trash")
+                Label("Clear Downloads", systemImage: "trash")
             }
         }
 
@@ -522,7 +451,6 @@ private struct RemoteServerDetailShortcutItem: Identifiable {
     let subtitle: String
     let systemImage: String
     let tint: Color
-    var badgeTitle: String? = nil
     let navigationRequest: RemoteServerDetailNavigationRequest
 }
 
@@ -530,36 +458,31 @@ private struct RemoteServerDetailShortcutRow: View {
     let item: RemoteServerDetailShortcutItem
 
     var body: some View {
-        HStack(spacing: 12) {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title)
-                        .font(.headline)
+        HStack(spacing: Spacing.sm) {
+            ListIconBadge(
+                systemImage: item.systemImage,
+                tint: item.tint
+            )
 
-                    Text(item.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            } icon: {
-                Image(systemName: item.systemImage)
-                    .font(.title3)
-                    .frame(width: 28, height: 28)
-                    .foregroundStyle(item.tint)
-            }
-            .labelStyle(.titleAndIcon)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                Text(item.title)
+                    .font(AppFont.body())
+                    .foregroundStyle(Color.textPrimary)
 
-            if let badgeTitle = item.badgeTitle {
-                StatusBadge(title: badgeTitle, tint: item.tint)
+                Text(item.subtitle)
+                    .font(AppFont.footnote())
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
             }
+
+            Spacer(minLength: Spacing.xs)
 
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .font(AppFont.caption2(.semibold))
+                .foregroundStyle(Color.textTertiary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 }

@@ -16,17 +16,16 @@ struct LibraryOrganizationCollectionCard: View {
                     Text(collection.countText)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+
+                    if let metadataText = collection.metadataText {
+                        Text(metadataText)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 0)
-            }
-
-            HStack(spacing: 8) {
-                StatusBadge(title: collection.sectionKind.title, tint: .blue)
-
-                if let labelColor = collection.labelColor {
-                    StatusBadge(title: labelColor.displayName, tint: labelColor.swiftUIColor)
-                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 168, alignment: .topLeading)
@@ -53,6 +52,27 @@ struct LibraryOrganizationCollectionCard: View {
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.blue)
                 }
+        }
+    }
+}
+
+private extension LibraryOrganizationCollection {
+    var metadataText: String? {
+        var parts = [typeTitle]
+
+        if let labelColor {
+            parts.append(labelColor.displayName)
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var typeTitle: String {
+        switch type {
+        case .label:
+            return "Tag"
+        case .readingList:
+            return "Reading List"
         }
     }
 }

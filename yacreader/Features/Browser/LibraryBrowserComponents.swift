@@ -6,7 +6,7 @@ struct LibraryShortcutCardItem: Identifiable {
     let subtitle: String?
     let systemImageName: String
     let tint: Color
-    let badgeTitle: String?
+    let metadataText: String?
     let destination: AnyView
 
     init(
@@ -15,7 +15,7 @@ struct LibraryShortcutCardItem: Identifiable {
         subtitle: String? = nil,
         systemImageName: String,
         tint: Color,
-        badgeTitle: String? = nil,
+        metadataText: String? = nil,
         destination: AnyView
     ) {
         self.id = id
@@ -23,7 +23,7 @@ struct LibraryShortcutCardItem: Identifiable {
         self.subtitle = subtitle
         self.systemImageName = systemImageName
         self.tint = tint
-        self.badgeTitle = badgeTitle
+        self.metadataText = metadataText
         self.destination = destination
     }
 }
@@ -103,7 +103,12 @@ struct LibraryFolderRow: View {
                         .lineLimit(1)
                 }
 
-                AdaptiveStatusBadgeGroup(badges: folder.browserBadgeItems)
+                if let metadataText = folder.browserMetadataText {
+                    Text(metadataText)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
             }
         } trailingAccessory: {
             EmptyView()
@@ -127,6 +132,13 @@ struct LibraryShortcutCard: View {
                             .foregroundStyle(Color.textSecondary)
                             .lineLimit(2)
                     }
+
+                    if let metadataText = item.metadataText {
+                        Text(metadataText)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                 }
             } icon: {
                 Image(systemName: item.systemImageName)
@@ -134,10 +146,6 @@ struct LibraryShortcutCard: View {
                     .foregroundStyle(item.tint)
             }
             .labelStyle(.titleAndIcon)
-
-            if let badgeTitle = item.badgeTitle {
-                StatusBadge(title: badgeTitle, tint: item.tint)
-            }
 
             Spacer(minLength: 0)
         }
@@ -161,6 +169,13 @@ struct LibraryShortcutRow: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
+
+                    if let metadataText = item.metadataText {
+                        Text(metadataText)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
                 }
             } icon: {
                 Image(systemName: item.systemImageName)
@@ -170,10 +185,6 @@ struct LibraryShortcutRow: View {
             }
             .labelStyle(.titleAndIcon)
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            if let badgeTitle = item.badgeTitle {
-                StatusBadge(title: badgeTitle, tint: item.tint)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
@@ -211,7 +222,19 @@ struct ContinueReadingRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                AdaptiveStatusBadgeGroup(badges: comic.continueReadingRowBadges)
+                if let metadataText = comic.browserMetadataText {
+                    Text(metadataText)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+
+                ComicStatusMetaRow(
+                    progressText: comic.progressText,
+                    isRead: comic.read,
+                    isFavorite: comic.isFavorite,
+                    bookmarkCount: comic.bookmarkPageIndices.count
+                )
             }
         } trailingAccessory: {
             EmptyView()
@@ -247,7 +270,19 @@ struct ContinueReadingCard: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
 
-                    AdaptiveStatusBadgeGroup(badges: comic.continueReadingCardBadges)
+                    if let metadataText = comic.browserMetadataText {
+                        Text(metadataText)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+
+                    ComicStatusMetaRow(
+                        progressText: comic.progressText,
+                        isRead: comic.read,
+                        isFavorite: comic.isFavorite,
+                        bookmarkCount: comic.bookmarkPageIndices.count
+                    )
 
                     Spacer(minLength: 0)
 
@@ -332,7 +367,12 @@ struct LibraryFolderCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                AdaptiveStatusBadgeGroup(badges: folder.browserBadgeItems)
+                if let metadataText = folder.browserMetadataText {
+                    Text(metadataText)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
             }
         }
     }
@@ -368,22 +408,21 @@ struct LibraryComicRow: View {
             )
         } content: {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .top, spacing: Spacing.xs) {
-                    Text(comic.displayTitle)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(2)
-
-                    Spacer(minLength: 8)
-
-                    if let issueLabel = comic.issueLabel {
-                        StatusBadge(title: "#\(issueLabel)", tint: .blue)
-                    }
-                }
+                Text(comic.displayTitle)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
 
                 if comic.subtitle != comic.fileName {
                     Text(comic.subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if let metadataText = comic.browserMetadataText {
+                    Text(metadataText)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
 
@@ -442,7 +481,19 @@ struct LibraryComicCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                AdaptiveStatusBadgeGroup(badges: comic.browserCardBadges)
+                if let metadataText = comic.browserMetadataText {
+                    Text(metadataText)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+
+                ComicStatusMetaRow(
+                    progressText: comic.progressText,
+                    isRead: comic.read,
+                    isFavorite: comic.isFavorite,
+                    bookmarkCount: comic.bookmarkPageIndices.count
+                )
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -522,64 +573,35 @@ struct LibraryBrowserListRowShell<
 }
 
 extension LibraryFolder {
-    var browserBadgeItems: [StatusBadgeItem] {
-        var badges = [StatusBadgeItem(title: type.title, tint: .orange)]
+    var browserMetadataText: String? {
+        var parts: [String] = []
 
-        if finished {
-            badges.append(StatusBadgeItem(title: "Finished", tint: .green))
-        } else if completed {
-            badges.append(StatusBadgeItem(title: "Complete", tint: .blue))
+        if !isRoot && type != .comic {
+            parts.append(type.title)
         }
 
-        return badges
+        if finished {
+            parts.append("Finished")
+        } else if completed {
+            parts.append("Complete")
+        }
+
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 
 extension LibraryComic {
-    var issueBadgeItem: StatusBadgeItem? {
-        issueLabel.map { StatusBadgeItem(title: "#\($0)", tint: .blue) }
-    }
+    var browserMetadataText: String? {
+        var parts: [String] = []
 
-    var continueReadingRowBadges: [StatusBadgeItem] {
-        var badges = [StatusBadgeItem(title: progressText, tint: read ? .green : .orange)]
-
-        if !bookmarkPageIndices.isEmpty {
-            badges.append(StatusBadgeItem(title: "\(bookmarkPageIndices.count) bookmarks", tint: .blue))
+        if let issueLabel {
+            parts.append("#\(issueLabel)")
         }
 
-        return badges
-    }
-
-    var continueReadingCardBadges: [StatusBadgeItem] {
-        [
-            StatusBadgeItem(title: progressText, tint: read ? .green : .orange),
-            StatusBadgeItem(title: type.title, tint: .gray)
-        ]
-    }
-
-    var browserRowBadges: [StatusBadgeItem] {
-        var badges: [StatusBadgeItem] = []
-        badges.append(StatusBadgeItem(title: progressText, tint: read ? .green : .orange))
-        badges.append(StatusBadgeItem(title: type.title, tint: .gray))
-
-        if isFavorite {
-            badges.append(StatusBadgeItem(title: "Favorite", tint: .yellow))
+        if type != .comic || parts.isEmpty {
+            parts.append(type.title)
         }
 
-        if !bookmarkPageIndices.isEmpty {
-            badges.append(StatusBadgeItem(title: "\(bookmarkPageIndices.count) bookmarks", tint: .blue))
-        }
-
-        return badges
-    }
-
-    var browserCardBadges: [StatusBadgeItem] {
-        var badges = browserRowBadges
-
-        if let issueBadgeItem {
-            badges.insert(issueBadgeItem, at: 0)
-        }
-
-        return badges
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

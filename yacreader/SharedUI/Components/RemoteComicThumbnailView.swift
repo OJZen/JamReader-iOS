@@ -1,5 +1,6 @@
 import Combine
 import CryptoKit
+import ImageIO
 import SwiftUI
 import UIKit
 
@@ -101,9 +102,8 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
         targetSize: CGSize,
         scale: CGFloat
     ) {
-        loadTask?.cancel()
-
         guard item.canOpenAsComic else {
+            loadTask?.cancel()
             requestID = nil
             loadedItemID = nil
             image = nil
@@ -116,6 +116,15 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
         )
         let requestID = "\(item.id)#\(normalizedMaxPixelSize)"
         let itemID = "\(item.id)#\(item.fileSize ?? 0)"
+
+        if self.requestID == requestID,
+           self.loadedItemID == itemID,
+           image != nil || loadTask != nil {
+            return
+        }
+
+        loadTask?.cancel()
+
         let seededImage = RemoteComicThumbnailPipeline.shared.cachedImage(
             for: item,
             browsingService: browsingService,
@@ -151,7 +160,6 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
     func cancel() {
         loadTask?.cancel()
         loadTask = nil
-        loadedItemID = nil
     }
 
     deinit {
@@ -191,12 +199,12 @@ final class RemoteComicThumbnailPipeline {
             maximumCachedThumbnailCount: maximumCachedThumbnailCount,
             maximumTotalCacheBytes: maximumTotalCacheBytes
         )
-        cache.countLimit = 256
-        cache.totalCostLimit = 64 * 1_024 * 1_024
+        cache.countLimit = 384
+        cache.totalCostLimit = 96 * 1_024 * 1_024
         // Smaller limit for the HQ cache — it stores at most one image per item
         // (the largest fetched size) and memory cost is higher per entry.
-        highQualityCache.countLimit = 200
-        highQualityCache.totalCostLimit = 48 * 1_024 * 1_024
+        highQualityCache.countLimit = 256
+        highQualityCache.totalCostLimit = 72 * 1_024 * 1_024
     }
 
     func image(
@@ -268,16 +276,12 @@ final class RemoteComicThumbnailPipeline {
 
         // Before going to the network, check whether we already have a larger version
         // of this item in the high-quality cache (e.g. the grid loaded 416 px and now
-        // the list wants 152 px).  Downsampling in memory is instant and avoids any
-        // SMB round-trip.
+        // the list wants 152 px). Avoid synchronous renderer work on the main actor
+        // while the list is scrolling; the HQ image is already decoded and cheap to
+        // scale down at display time.
         let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
         if let hqImage = highQualityCache.object(forKey: hqKey) {
-            let hqPixels = Int(max(hqImage.size.width, hqImage.size.height) * hqImage.scale)
-            if hqPixels >= maxPixelSize {
-                let downsampled = Self.downsampledImage(from: hqImage, maxPixelSize: maxPixelSize)
-                cache.setObject(downsampled, forKey: nsCacheKey, cost: Self.cacheCost(for: downsampled))
-                return downsampled
-            }
+            return hqImage
         }
 
         if let inFlightTask = inFlightTasks[cacheKey] {
@@ -378,11 +382,6 @@ final class RemoteComicThumbnailPipeline {
 
         let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
         if let hqImage = highQualityCache.object(forKey: hqKey) {
-            let hqPixels = Int(max(hqImage.size.width, hqImage.size.height) * hqImage.scale)
-            if hqPixels >= maxPixelSize {
-                return Self.downsampledImage(from: hqImage, maxPixelSize: maxPixelSize)
-            }
-
             return hqImage
         }
 
@@ -559,7 +558,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         label: "YACReader.RemoteThumbnailDiskCacheMaintenance",
         qos: .utility
     )
-    private let minimumTouchInterval: TimeInterval = 180
+    private let minimumTouchInterval: TimeInterval = 6 * 60 * 60
 
     nonisolated(unsafe) private var cachedSummary: RemoteThumbnailCacheSummary?
     nonisolated(unsafe) private var trimScheduled = false
@@ -609,13 +608,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     }
 
     nonisolated func loadCachedImage(at fileURL: URL) -> UIImage? {
-        guard fileManager.fileExists(atPath: fileURL.path),
-              let image = UIImage(contentsOfFile: fileURL.path)
-        else {
-            return nil
-        }
-
-        return image
+        decodedCachedImage(at: fileURL)
     }
 
     /// Async variant — performs the disk read on the maintenance queue so the
@@ -623,15 +616,37 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     nonisolated func loadCachedImageAsync(at fileURL: URL) async -> UIImage? {
         await withCheckedContinuation { continuation in
             maintenanceQueue.async { [self] in
-                guard fileManager.fileExists(atPath: fileURL.path),
-                      let image = UIImage(contentsOfFile: fileURL.path)
-                else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                continuation.resume(returning: image)
+                continuation.resume(returning: decodedCachedImage(at: fileURL))
             }
         }
+    }
+
+    nonisolated private func decodedCachedImage(at fileURL: URL) -> UIImage? {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions) else {
+            return UIImage(contentsOfFile: fileURL.path)
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024
+        ]
+
+        guard let decodedThumbnail = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            thumbnailOptions as CFDictionary
+        ) else {
+            return UIImage(contentsOfFile: fileURL.path)
+        }
+
+        return UIImage(cgImage: decodedThumbnail)
     }
 
     nonisolated func storeEncodedThumbnailData(_ data: Data, at fileURL: URL) throws {
@@ -658,22 +673,6 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         let now = Date()
         guard shouldScheduleTouch(for: fileURL.path, now: now) else {
             return
-        }
-
-        maintenanceQueue.async { [weak self] in
-            guard let self else {
-                return
-            }
-
-            guard self.fileManager.fileExists(atPath: fileURL.path) else {
-                self.clearRecordedTouch(for: fileURL.path)
-                return
-            }
-
-            try? self.fileManager.setAttributes(
-                [.modificationDate: now],
-                ofItemAtPath: fileURL.path
-            )
         }
     }
 
@@ -819,11 +818,16 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
                 continue
             }
 
+            let persistedAccessDate = values?.contentModificationDate ?? .distantPast
+            let inMemoryAccessDate = withTouchStateLock {
+                recentTouchDatesByPath[fileURL.path]
+            } ?? .distantPast
+
             cachedFiles.append(
                 CachedThumbnailFileRecord(
                     url: fileURL,
                     size: Int64(values?.fileSize ?? 0),
-                    lastAccessDate: values?.contentModificationDate ?? .distantPast
+                    lastAccessDate: max(persistedAccessDate, inMemoryAccessDate)
                 )
             )
         }

@@ -331,7 +331,7 @@ struct LibrarySpecialCollectionView: View {
                 }
             }
         } message: { comic in
-            Text("\"\(comic.displayTitle)\" will be removed from this library and deleted from local storage.")
+            Text("Deletes \"\(comic.displayTitle)\" from this library and removes the local file.")
         }
         .onChange(of: searchQuery) { _, _ in
             if isSelectionMode {
@@ -391,8 +391,6 @@ struct LibrarySpecialCollectionView: View {
 
     private var listContent: some View {
         List {
-            summarySection
-
             if showsFilterControls {
                 filterControlsSection
             }
@@ -414,10 +412,8 @@ struct LibrarySpecialCollectionView: View {
     private var gridContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                summaryCard
-
                 if showsFilterControls {
-                    filterControlsCard
+                    filterControlsContent
                 }
 
                 if displayedComics.isEmpty {
@@ -443,46 +439,10 @@ struct LibrarySpecialCollectionView: View {
         }
     }
 
-    private var summarySection: some View {
-        Section {
-            summaryCard
-                .insetCardListRow(
-                    horizontalInset: LayoutMetrics.horizontalInset,
-                    top: 14,
-                    bottom: 10
-                )
-        }
-    }
-
-    private var summaryCard: some View {
-        InsetCard(
-            cornerRadius: 18,
-            contentPadding: 14,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
-            SummaryMetricGroup(
-                metrics: summaryMetrics,
-                style: .compactValue,
-                horizontalSpacing: 8,
-                verticalSpacing: 8
-            )
-
-            InlineMetadataLine(items: summaryMetadataItems)
-
-            Label(
-                summaryDescription,
-                systemImage: hasActiveFilter ? "magnifyingglass" : viewModel.kind.systemImageName
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(2)
-        }
-    }
-
     private var filterControlsSection: some View {
         Section {
-            filterControlsCard
+            filterControlsContent
+                .padding(.vertical, Spacing.xxxs)
                 .insetCardListRow(
                     horizontalInset: LayoutMetrics.horizontalInset,
                     top: 0,
@@ -491,26 +451,17 @@ struct LibrarySpecialCollectionView: View {
         }
     }
 
-    private var filterControlsCard: some View {
-        InsetCard(
-            cornerRadius: 18,
-            contentPadding: 12,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
+    private var filterControlsContent: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
                 comicFilter = selectedFilter
             }
 
             if canResetFilters {
-                Button {
-                    resetFilters()
-                } label: {
-                    Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
+                Button("Clear Filters", action: resetFilters)
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
             }
         }
     }
@@ -701,10 +652,6 @@ struct LibrarySpecialCollectionView: View {
 
     private var hasCondensedTopBarActions: Bool {
         canImportComicInfo || canAdjustRecentWindow || canSortComics
-    }
-
-    private var kindSubtitle: String {
-        viewModel.kind.subtitleText(recentDays: viewModel.currentRecentDays)
     }
 
     private var showsFilterControls: Bool {
@@ -909,107 +856,8 @@ struct LibrarySpecialCollectionView: View {
         comicFilter != .all || !trimmedSearchQuery.isEmpty
     }
 
-    private var summaryText: String {
-        guard hasActiveFilter else {
-            return viewModel.summaryText
-        }
-
-        if !trimmedSearchQuery.isEmpty {
-            return displayedComics.count == 1
-                ? "1 comic matches \"\(trimmedSearchQuery)\"."
-                : "\(displayedComics.count) comics match \"\(trimmedSearchQuery)\"."
-        }
-
-        return displayedComics.count == 1
-            ? "1 comic is visible in \(comicFilter.title.lowercased())."
-            : "\(displayedComics.count) comics are visible in \(comicFilter.title.lowercased())."
-    }
-
     private var contentSectionTitle: String {
-        hasActiveFilter ? "Visible Comics" : "All Comics"
-    }
-
-    private var summaryMetrics: [SummaryMetricItem] {
-        var metrics = [
-            SummaryMetricItem(
-                title: viewModel.kind.title,
-                value: "\(viewModel.comics.count)",
-                tint: summaryTint
-            )
-        ]
-
-        if viewModel.kind == .recent {
-            metrics.append(
-                SummaryMetricItem(
-                    title: "Window",
-                    value: "\(viewModel.currentRecentDays)d",
-                    tint: .orange
-                )
-            )
-        }
-
-        if hasActiveFilter {
-            metrics.append(
-                SummaryMetricItem(
-                    title: "Visible",
-                    value: "\(displayedComics.count)",
-                    tint: .blue
-                )
-            )
-        }
-
-        return metrics
-    }
-
-    private var summaryMetadataItems: [InlineMetadataItem] {
-        var items = [InlineMetadataItem]()
-
-        if viewModel.kind == .recent {
-            items.append(
-                InlineMetadataItem(
-                    systemImage: "calendar.badge.clock",
-                    text: "Last \(viewModel.currentRecentDays) days",
-                    tint: .orange
-                )
-            )
-        }
-
-        if comicFilter != .all {
-            items.append(
-                InlineMetadataItem(
-                    systemImage: comicFilter.systemImageName,
-                    text: comicFilter.title,
-                    tint: .teal
-                )
-            )
-        }
-
-        if !trimmedSearchQuery.isEmpty {
-            items.append(
-                InlineMetadataItem(
-                    systemImage: "magnifyingglass",
-                    text: "\"\(trimmedSearchQuery)\"",
-                    tint: .orange
-                )
-            )
-        }
-
-        return items
-    }
-
-    private var summaryDescription: String {
-        hasActiveFilter ? summaryText : kindSubtitle
-    }
-
-    private var summaryTint: Color {
-        switch viewModel.kind {
-        case .reading:
-            return .green
-        case .favorites:
-            return .yellow
-        case .recent:
-            return .orange
-        }
+        hasActiveFilter ? "Results" : "Comics"
     }
 
     private var emptyStateTitle: String {

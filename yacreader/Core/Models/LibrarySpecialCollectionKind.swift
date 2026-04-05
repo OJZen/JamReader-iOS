@@ -69,11 +69,11 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
     var emptyStateDescription: String {
         switch self {
         case .reading:
-            return "Open a comic and stop before finishing it to keep it in Reading."
+            return "Open a comic and leave it unfinished to keep it here."
         case .favorites:
-            return "Use the star button in the reader to add comics to Favorites."
+            return "Use the star button to add favorites."
         case .recent:
-            return "Recently imported comics will appear here automatically."
+            return "Imported comics appear here automatically."
         }
     }
 

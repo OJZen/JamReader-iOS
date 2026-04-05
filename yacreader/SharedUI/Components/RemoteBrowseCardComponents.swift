@@ -6,14 +6,18 @@ struct RemoteInsetListRowCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        InsetCard(
-            cornerRadius: cornerRadius,
-            contentPadding: contentPadding,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
-            content()
-        }
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(contentPadding)
+            .background(
+                Color(.systemBackground),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
@@ -57,11 +61,12 @@ struct RemoteSavedFolderCard: View {
                         verticalSpacing: 4
                     )
 
-                    RemoteInlineMetadataLine(
-                        items: secondaryMetadataItems,
-                        horizontalSpacing: 8,
-                        verticalSpacing: 4
-                    )
+                    if let supportingText {
+                        Text(supportingText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -89,49 +94,14 @@ struct RemoteSavedFolderCard: View {
         ]
     }
 
-    private var secondaryMetadataItems: [RemoteInlineMetadataItem] {
-        var items = [FormOverviewItem]()
+    private var supportingText: String? {
+        let updatedText = shortcut.updatedAt.formatted(date: .abbreviated, time: .omitted)
 
-        if !showsServerName {
-            items.append(FormOverviewItem(title: "Server", value: profile.name))
+        if showsServerName {
+            return updatedText
         }
 
-        items.append(
-            FormOverviewItem(
-                title: "Provider",
-                value: profile.providerKind.title
-            )
-        )
-
-        items.append(
-            FormOverviewItem(
-                title: "Updated",
-                value: shortcut.updatedAt.formatted(date: .abbreviated, time: .omitted)
-            )
-        )
-
-        return items.map { item in
-            switch item.title {
-            case "Server":
-                return RemoteInlineMetadataItem(
-                    systemImage: "server.rack",
-                    text: item.value,
-                    tint: .secondary
-                )
-            case "Provider":
-                return RemoteInlineMetadataItem(
-                    systemImage: "externaldrive.connected.to.line.below",
-                    text: item.value,
-                    tint: profile.providerKind.tintColor
-                )
-            default:
-                return RemoteInlineMetadataItem(
-                    systemImage: "clock",
-                    text: item.value,
-                    tint: .secondary
-                )
-            }
-        }
+        return "\(profile.name) · \(updatedText)"
     }
 }
 
@@ -178,6 +148,28 @@ struct RemoteInlineMetadataLine: View {
                         RemoteInlineMetadataToken(item: item)
                     }
                 }
+            }
+        }
+    }
+}
+
+struct RemoteInlineMetadataStrip: View {
+    let items: [RemoteInlineMetadataItem]
+    var spacing: CGFloat = 10
+
+    private var visibleItems: [RemoteInlineMetadataItem] {
+        items.filter { !$0.text.isEmpty }
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if !visibleItems.isEmpty {
+            HStack(spacing: spacing) {
+                ForEach(visibleItems) { item in
+                    RemoteInlineMetadataToken(item: item)
+                }
+
+                Spacer(minLength: 0)
             }
         }
     }

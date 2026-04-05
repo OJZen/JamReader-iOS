@@ -2,8 +2,8 @@ import Combine
 import SwiftUI
 
 enum ImportDestinationSheetCopy {
-    static let destinationFooter = "Files are copied into the selected library and indexed automatically. Mirrored or read-only libraries stay browse-only."
-    static let remoteImportNotice = "Remote imports download the selected comics to this device first, then copy them into the chosen local library."
+    static let destinationFooter = "Files are copied into the selected library. Mirrored or read-only libraries stay browse-only."
+    static let remoteImportNotice = "Remote imports download comics to this device before adding them to a local library."
 }
 
 struct ImportSheetContextCard: View {

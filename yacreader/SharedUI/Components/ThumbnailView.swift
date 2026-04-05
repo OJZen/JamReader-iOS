@@ -52,12 +52,19 @@ struct ThumbnailView<Loader: ThumbnailLoading>: View {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(Color.black.opacity(0.08), lineWidth: 1)
         }
-        .task(id: requestID) {
-            loadAction(loader, CGSize(width: width, height: height), displayScale)
+        .onAppear {
+            performLoad()
+        }
+        .onChange(of: requestID) { _, _ in
+            performLoad()
         }
         .onDisappear {
             loader.cancel()
         }
+    }
+
+    private func performLoad() {
+        loadAction(loader, CGSize(width: width, height: height), displayScale)
     }
 
     private var requestID: String {

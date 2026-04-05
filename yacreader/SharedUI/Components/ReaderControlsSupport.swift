@@ -48,6 +48,8 @@ struct ReaderControlsFileInfo {
     let lastOpenedAt: Date?
     /// Used to compute file size lazily — may be nil for remote comics.
     let fileURL: URL?
+    /// Used to render a compact cover preview when the reader already has the document loaded.
+    let coverDocument: ComicDocument?
 }
 
 /// All callback actions for the reader controls sheet.
@@ -88,6 +90,7 @@ struct ReaderControlsContainer<Content: View>: View {
     let title: String
     let onDone: () -> Void
     @ViewBuilder let content: () -> Content
+    @State private var selectedDetent: PresentationDetent = .large
 
     var body: some View {
         NavigationStack {
@@ -106,7 +109,7 @@ struct ReaderControlsContainer<Content: View>: View {
         }
         .adaptiveSheetWidth(680)
         .presentationBackground(Color.surfaceGrouped)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
         .presentationDragIndicator(.visible)
     }
 }
@@ -253,86 +256,22 @@ struct ReaderBookmarksControlsSection: View {
 // MARK: - Navigation Section (kept for external callers)
 
 struct ReaderNavigationControlsSection: View {
-    let pageIndicatorText: String?
-    let currentPageNumber: Int?
-    let pageCount: Int?
     let onOpenThumbnails: () -> Void
-    let onGoToPageNumber: (Int) -> Void
-
-    @State private var selectedPageNumber: Double
 
     init(
-        pageIndicatorText: String?,
-        currentPageNumber: Int?,
-        pageCount: Int?,
+        pageIndicatorText _: String?,
+        currentPageNumber _: Int?,
+        pageCount _: Int?,
         onOpenThumbnails: @escaping () -> Void,
-        onGoToPageNumber: @escaping (Int) -> Void
+        onGoToPageNumber _: @escaping (Int) -> Void
     ) {
-        self.pageIndicatorText = pageIndicatorText
-        self.currentPageNumber = currentPageNumber
-        self.pageCount = pageCount
         self.onOpenThumbnails = onOpenThumbnails
-        self.onGoToPageNumber = onGoToPageNumber
-        _selectedPageNumber = State(initialValue: Double(currentPageNumber ?? 1))
-    }
-
-    private var canUsePageSlider: Bool {
-        guard let pageCount else {
-            return false
-        }
-
-        return pageCount > 1
-    }
-
-    private var normalizedSelectedPageNumber: Int {
-        guard let pageCount else {
-            return Int(selectedPageNumber.rounded())
-        }
-
-        return min(max(1, Int(selectedPageNumber.rounded())), pageCount)
     }
 
     var body: some View {
-        if let pageIndicatorText {
-            Section("Navigate") {
-                LabeledContent("Current Page", value: pageIndicatorText)
-
-                Button(action: onOpenThumbnails) {
-                    Label("Browse Thumbnails", systemImage: "square.grid.3x2")
-                }
-
-                if canUsePageSlider, let pageCount {
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        HStack {
-                            Text("Quick Scrub")
-                                .font(AppFont.subheadline(.medium))
-
-                            Spacer()
-
-                            Text("Page \(normalizedSelectedPageNumber) / \(pageCount)")
-                                .font(AppFont.caption().monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Slider(
-                            value: $selectedPageNumber,
-                            in: 1...Double(pageCount),
-                            step: 1
-                        )
-
-                        Button {
-                            onGoToPageNumber(normalizedSelectedPageNumber)
-                        } label: {
-                            Label("Open Selected Page", systemImage: "play.circle")
-                        }
-                    }
-                    .padding(.vertical, Spacing.xxs)
-                }
-            }
-            .onChange(of: currentPageNumber) { _, newValue in
-                if let newValue {
-                    selectedPageNumber = Double(newValue)
-                }
+        Section("Pages") {
+            Button(action: onOpenThumbnails) {
+                Label("Browse Thumbnails", systemImage: "square.grid.3x2")
             }
         }
     }
@@ -383,7 +322,7 @@ struct ReaderReadingStatusControlsSection: View {
 
             Button(action: onToggleBookmark) {
                 Label(
-                    currentPageIsBookmarked ? "Remove Current Bookmark" : "Bookmark Current Page",
+                    currentPageIsBookmarked ? "Remove Bookmark" : "Add Bookmark",
                     systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
                 )
             }
@@ -508,52 +447,34 @@ struct ReaderDisplaySettingsControlsSection: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Page Layout")
-                            .font(AppFont.subheadline(.medium))
-
-                        if supportsDoublePageSpread {
-                            Picker("Page Layout", selection: spreadModeBinding) {
-                                ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
-                                    Text(spreadMode.title).tag(spreadMode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        } else {
-                            LabeledContent("Mode", value: ReaderSpreadMode.singlePage.title)
-                            Text("iPhone uses single-page reading. Double-page mode is available on iPad.")
-                                .font(AppFont.caption())
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.vertical, Spacing.xxs)
-
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("Reading Direction")
-                            .font(AppFont.subheadline(.medium))
-
-                        Picker("Reading Direction", selection: readingDirectionBinding) {
-                            ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
-                                Text(readingDirection.title).tag(readingDirection)
+                    if supportsDoublePageSpread {
+                        Picker("Page Layout", selection: spreadModeBinding) {
+                            ForEach(ReaderSpreadMode.allCases, id: \.self) { spreadMode in
+                                Text(spreadMode.title).tag(spreadMode)
                             }
                         }
                         .pickerStyle(.segmented)
+                    } else {
+                        LabeledContent("Page Layout", value: ReaderSpreadMode.singlePage.title)
                     }
-                    .padding(.vertical, Spacing.xxs)
+
+                    Picker("Reading Direction", selection: readingDirectionBinding) {
+                        ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
+                            Text(readingDirection.title).tag(readingDirection)
+                        }
+                    }
+                    .pickerStyle(.segmented)
 
                     if supportsDoublePageSpread, spreadMode == .doublePage {
                         Toggle("Show Covers as Single Page", isOn: coverAsSinglePageBinding)
                     }
-                } else {
-                    Text("Vertical mode is optimized for mobile scrolling. Page spread and rotation controls are hidden for consistency.")
-                        .font(AppFont.caption())
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, Spacing.xxs)
                 }
             } header: {
                 Text("Display")
             } footer: {
-                Text("Layout preferences are remembered separately for comics and manga, matching mobile reading habits.")
+                if isVerticalContinuousMode {
+                    Text("Page layout and rotation are unavailable in vertical scroll.")
+                }
             }
         }
     }
@@ -571,7 +492,7 @@ struct ReaderRotationControlsSection: View {
     var body: some View {
         if supportsRotationControls {
             Section("Rotation") {
-                LabeledContent("Current Rotation", value: rotation.title)
+                LabeledContent("Current", value: rotation.title)
 
                 Button(action: onRotateCounterClockwise) {
                     Label("Rotate Left", systemImage: "rotate.left")
@@ -606,40 +527,131 @@ struct ReaderFileInfoSection: View {
     }()
 
     var body: some View {
-        Section("File Info") {
-            LabeledContent("File Name", value: fileInfo.fileName)
+        Section {
+            HStack(alignment: .top, spacing: 14) {
+                coverPreview
 
-            if let ext = fileInfo.fileExtension, !ext.isEmpty {
-                LabeledContent("Format", value: ext.uppercased())
-            }
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(fileInfo.fileName)
+                            .font(AppFont.headline(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
 
-            if let pages = fileInfo.pageCount {
-                LabeledContent("Pages", value: "\(pages)")
-            }
+                        if let subtitle = subtitleText {
+                            Text(subtitle)
+                                .font(AppFont.footnote())
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
 
-            if let series = fileInfo.series, !series.isEmpty {
-                LabeledContent("Series", value: series)
-            }
+                    if !summaryChips.isEmpty {
+                        FlexibleChipWrap(items: summaryChips)
+                    }
 
-            if let volume = fileInfo.volume, !volume.isEmpty {
-                LabeledContent("Volume", value: volume)
+                    if !detailRows.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(detailRows, id: \.label) { row in
+                                LabeledContent(row.label, value: row.value)
+                                    .font(AppFont.caption())
+                            }
+                        }
+                    }
+                }
             }
-
-            if let size = fileSizeText {
-                LabeledContent("File Size", value: size)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
             }
-
-            if let added = fileInfo.addedAt {
-                LabeledContent("Added", value: Self.dateFormatter.string(from: added))
-            }
-
-            if let opened = fileInfo.lastOpenedAt {
-                LabeledContent("Last Opened", value: Self.dateFormatter.string(from: opened))
-            }
+            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+            .listRowBackground(Color.clear)
         }
         .task(id: fileInfo.fileName) {
             fileSizeText = await resolveFileSize()
         }
+    }
+
+    @ViewBuilder
+    private var coverPreview: some View {
+        if let coverDocument = fileInfo.coverDocument {
+            ReaderPageThumbnailView(
+                document: coverDocument,
+                pageIndex: 0,
+                width: 84,
+                height: 118,
+                cornerRadius: 14,
+                style: .browser
+            )
+        } else {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.tertiarySystemFill))
+                .frame(width: 84, height: 118)
+                .overlay {
+                    Image(systemName: "book.closed")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+        }
+    }
+
+    private var subtitleText: String? {
+        let components: [String] = [fileInfo.series, volumeText]
+            .compactMap { value in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+
+        guard !components.isEmpty else {
+            return nil
+        }
+
+        return components.joined(separator: " · ")
+    }
+
+    private var volumeText: String? {
+        guard let volume = fileInfo.volume, !volume.isEmpty else {
+            return nil
+        }
+
+        return "Vol. \(volume)"
+    }
+
+    private var summaryChips: [String] {
+        var chips: [String] = []
+
+        if let ext = fileInfo.fileExtension, !ext.isEmpty {
+            chips.append(ext.uppercased())
+        }
+
+        if let pages = fileInfo.pageCount {
+            chips.append("\(pages) pages")
+        }
+
+        if let fileSizeText, !fileSizeText.isEmpty {
+            chips.append(fileSizeText)
+        }
+
+        return chips
+    }
+
+    private var detailRows: [ReaderFileInfoRow] {
+        var rows: [ReaderFileInfoRow] = []
+
+        if let added = fileInfo.addedAt {
+            rows.append(.init(label: "Added", value: Self.dateFormatter.string(from: added)))
+        }
+
+        if let opened = fileInfo.lastOpenedAt {
+            rows.append(.init(label: "Last Opened", value: Self.dateFormatter.string(from: opened)))
+        }
+
+        return rows
     }
 
     private func resolveFileSize() async -> String? {
@@ -649,6 +661,55 @@ struct ReaderFileInfoSection: View {
             guard let bytes = values?.fileSize, bytes > 0 else { return nil }
             return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
         }.value
+    }
+}
+
+private struct ReaderFileInfoRow {
+    let label: String
+    let value: String
+}
+
+private struct FlexibleChipWrap: View {
+    let items: [String]
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            HStack(spacing: 8) {
+                ForEach(items, id: \.self) { item in
+                    chip(item)
+                }
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(chunked(items, size: 2), id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(row, id: \.self) { item in
+                            chip(item)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(_ text: String) -> some View {
+        Text(text)
+            .font(AppFont.caption(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(.tertiarySystemGroupedBackground))
+            )
+    }
+
+    private func chunked(_ items: [String], size: Int) -> [[String]] {
+        stride(from: 0, to: items.count, by: size).map { index in
+            Array(items[index..<min(index + size, items.count)])
+        }
     }
 }
 

@@ -23,13 +23,15 @@ struct LibraryOrganizationCollectionEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Name") {
+                Section {
                     TextField(namePrompt, text: $proposedName)
                         .focused($isNameFieldFocused)
+                } header: {
+                    Text("Name")
                 }
 
                 if collection.type == .label {
-                    Section("Color") {
+                    Section {
                         Picker("Color", selection: $selectedLabelColor) {
                             ForEach(LibraryLabelColor.allCases) { color in
                                 HStack {
@@ -41,6 +43,8 @@ struct LibraryOrganizationCollectionEditorSheet: View {
                                 .tag(color)
                             }
                         }
+                    } header: {
+                        Text("Color")
                     }
                 }
             }

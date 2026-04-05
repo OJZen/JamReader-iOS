@@ -51,6 +51,7 @@ final class FrameAnchor {
     }
 }
 
+@MainActor
 struct HeroSourceAnchorView: UIViewRepresentable {
     let id: String
 
@@ -58,16 +59,18 @@ struct HeroSourceAnchorView: UIViewRepresentable {
         let view = UIView()
         view.backgroundColor = .clear
         view.isUserInteractionEnabled = false
-        Task { @MainActor in
-            HeroSourceRegistry.shared.register(view: view, for: id)
-        }
+        view.accessibilityIdentifier = id
+        HeroSourceRegistry.shared.register(view: view, for: id)
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        Task { @MainActor in
-            HeroSourceRegistry.shared.register(view: uiView, for: id)
-        }
+        uiView.accessibilityIdentifier = id
+        HeroSourceRegistry.shared.register(view: uiView, for: id)
+    }
+
+    static func dismantleUIView(_ uiView: UIView, coordinator: ()) {
+        HeroSourceRegistry.shared.unregister(view: uiView, for: uiView.accessibilityIdentifier ?? "")
     }
 }
 

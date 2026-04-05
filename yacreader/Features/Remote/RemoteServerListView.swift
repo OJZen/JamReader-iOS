@@ -1,9 +1,7 @@
-import Combine
 import SwiftUI
 
 struct RemoteServerListView: View {
     private enum LayoutMetrics {
-        static let horizontalInset: CGFloat = 12
         static let rowAccessoryReservedWidth: CGFloat = 36
     }
 
@@ -30,19 +28,17 @@ struct RemoteServerListView: View {
 
     var body: some View {
         List {
-            summarySection
-
             if viewModel.profiles.isEmpty {
                 Section {
                     ContentUnavailableView(
                         "No Remote Servers",
                         systemImage: "server.rack",
-                        description: Text("Add a remote server to manage browsing access for comics stored on your network.")
+                        description: Text("Add a server to browse comics.")
                     )
                     .padding(.vertical, 24)
                 }
             } else {
-                Section("Configured Servers") {
+                Section("Servers") {
                     ForEach(viewModel.profiles) { profile in
                         Button {
                             navigationRequest = .detail(profile)
@@ -56,7 +52,6 @@ struct RemoteServerListView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                         .overlay(alignment: .trailing) {
                             if showsPersistentRowActions {
                                 persistentActionMenu(for: profile)
@@ -94,10 +89,8 @@ struct RemoteServerListView: View {
         .refreshable {
             viewModel.load()
         }
-        .sheet(isPresented: serverEditorPresented) {
-            if let draft = editorDraft {
-                remoteServerEditor(for: draft)
-            }
+        .sheet(item: $editorDraft) { draft in
+            remoteServerEditor(for: draft)
         }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
@@ -131,44 +124,6 @@ struct RemoteServerListView: View {
         showsPersistentRowActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
-    private var summarySection: some View {
-        Section {
-            InsetCard(
-                cornerRadius: 18,
-                contentPadding: 14,
-                backgroundColor: Color(.systemBackground),
-                strokeOpacity: 0.04
-            ) {
-                SummaryMetricGroup(
-                    metrics: summaryMetrics,
-                    style: .compactValue,
-                    horizontalSpacing: 8,
-                    verticalSpacing: 8
-                )
-
-                Label(
-                    "Edit connection settings, review authentication, and clear server-specific history or downloaded cache when paths change.",
-                    systemImage: "slider.horizontal.3"
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
-            }
-            .insetCardListRow(
-                horizontalInset: LayoutMetrics.horizontalInset,
-                top: 14,
-                bottom: 10
-            )
-        }
-    }
-
-    private var serverEditorPresented: Binding<Bool> {
-        Binding(
-            get: { editorDraft != nil },
-            set: { if !$0 { editorDraft = nil } }
-        )
-    }
-
     private func remoteServerEditor(
         for draft: RemoteServerEditorDraft
     ) -> some View {
@@ -180,32 +135,6 @@ struct RemoteServerListView: View {
             return alertState
         }
         .id(draft.id)
-    }
-
-    private var totalOfflineCopyCount: Int {
-        viewModel.profiles.reduce(0) { partialResult, profile in
-            partialResult + viewModel.cacheSummary(for: profile).fileCount
-        }
-    }
-
-    private var summaryMetrics: [SummaryMetricItem] {
-        [
-            SummaryMetricItem(
-                title: "Servers",
-                value: viewModel.serverCountText,
-                tint: .blue
-            ),
-            SummaryMetricItem(
-                title: "Saved",
-                value: viewModel.shortcutCountText,
-                tint: .teal
-            ),
-            SummaryMetricItem(
-                title: "Cached",
-                value: "\(totalOfflineCopyCount)",
-                tint: .green
-            )
-        ]
     }
 
     @ViewBuilder
@@ -228,7 +157,7 @@ struct RemoteServerListView: View {
                 navigationRequest = .savedFolders(profile)
             } label: {
                 Label(
-                    savedFolderCount == 1 ? "Open Saved Folder" : "Open Saved Folders",
+                    savedFolderCount == 1 ? "Saved Folder" : "Saved Folders",
                     systemImage: "star"
                 )
             }
@@ -239,7 +168,7 @@ struct RemoteServerListView: View {
                 navigationRequest = .offlineShelf(profile)
             } label: {
                 Label(
-                    offlineCopyCount == 1 ? "Open Offline Copy" : "Open Offline Shelf",
+                    offlineCopyCount == 1 ? "Offline Copy" : "Offline Shelf",
                     systemImage: "arrow.down.circle"
                 )
             }
@@ -249,7 +178,7 @@ struct RemoteServerListView: View {
             Button(role: .destructive) {
                 viewModel.clearRecentHistory(for: profile)
             } label: {
-                Label("Clear Browsing History", systemImage: "clock.arrow.circlepath")
+                Label("Clear History", systemImage: "clock.arrow.circlepath")
             }
         }
 
@@ -257,7 +186,7 @@ struct RemoteServerListView: View {
             Button(role: .destructive) {
                 viewModel.clearCache(for: profile)
             } label: {
-                Label("Clear Download Cache", systemImage: "trash")
+                Label("Clear Downloads", systemImage: "trash")
             }
         }
 
@@ -305,177 +234,74 @@ struct RemoteServerRow: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
-        InsetListRowCard {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 12) {
-                    RemoteServerGlyph(profile: profile, size: 42, cornerRadius: 12, iconFont: .title3)
+        HStack(spacing: Spacing.sm) {
+            ListIconBadge(
+                systemImage: protocolSystemImage,
+                tint: profile.providerKind.tintColor
+            )
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(profile.displayTitle)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
+            VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                Text(profile.displayTitle)
+                    .font(AppFont.body())
+                    .foregroundStyle(Color.textPrimary)
+                    .lineLimit(1)
 
-                        Text(profile.providerDisplayTitle)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(profile.providerKind.tintColor)
-                            .lineLimit(1)
-                    }
-                }
+                Text(connectionSummary)
+                    .font(AppFont.footnote())
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
 
-                RemoteInlineMetadataLine(
-                    items: connectionMetadataItems,
-                    horizontalSpacing: 8,
-                    verticalSpacing: 4
-                )
-
-                if !managementMetadataItems.isEmpty {
-                    RemoteInlineMetadataLine(
-                        items: managementMetadataItems,
-                        horizontalSpacing: 8,
-                        verticalSpacing: 4
-                    )
+                if let statusSummary {
+                    Text(statusSummary)
+                        .font(AppFont.caption())
+                        .foregroundStyle(Color.textTertiary)
+                        .lineLimit(1)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .padding(.trailing, trailingAccessoryReservedWidth)
+
+            Spacer(minLength: Spacing.xs)
+
+            Image(systemName: "chevron.right")
+                .font(AppFont.caption2(.semibold))
+                .foregroundStyle(Color.textTertiary)
+        }
+        .padding(.vertical, Spacing.xxs)
+        .padding(.trailing, trailingAccessoryReservedWidth)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
+    }
+
+    private var protocolSystemImage: String {
+        switch profile.providerKind {
+        case .smb:
+            return "externaldrive.connected.to.line.below"
+        case .webdav:
+            return "globe"
         }
     }
 
-    private var connectionMetadataItems: [RemoteInlineMetadataItem] {
-        var items = [
-            RemoteInlineMetadataItem(
-                systemImage: "folder.fill",
-                text: profile.endpointDisplaySummary,
-                tint: .blue
-            ),
-            RemoteInlineMetadataItem(
-                systemImage: "point.3.connected.trianglepath.dotted",
-                text: profile.shareDisplaySummary,
-                tint: .teal
-            )
+    private var connectionSummary: String {
+        profile.endpointDisplaySummary.isEmpty
+            ? profile.providerKind.title
+            : profile.endpointDisplaySummary
+    }
+
+    private var statusSummary: String? {
+        let segments = [
+            savedFolderCount > 0 ? "\(savedFolderCount) saved" : nil,
+            offlineCopyCount > 0 ? "\(offlineCopyCount) downloaded" : nil
         ]
+        .compactMap { $0 }
 
-        if !profile.username.isEmpty, profile.authenticationMode.requiresUsername {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "person.text.rectangle",
-                    text: profile.username,
-                    tint: .secondary
-                )
-            )
+        if !segments.isEmpty {
+            return segments.joined(separator: " · ")
         }
 
-        return items
-    }
-
-    private var managementMetadataItems: [RemoteInlineMetadataItem] {
-        var items = [RemoteInlineMetadataItem]()
-
-        if savedFolderCount > 0 {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "star",
-                    text: "\(savedFolderCount) saved",
-                    tint: .teal
-                )
-            )
+        guard recentHistoryCount > 0 else {
+            return nil
         }
 
-        if offlineCopyCount > 0 {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "arrow.down.circle",
-                    text: "\(offlineCopyCount) cached",
-                    tint: .green
-                )
-            )
-        }
-
-        if recentHistoryCount > 0 {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "clock.arrow.circlepath",
-                    text: "\(recentHistoryCount) recent",
-                    tint: .orange
-                )
-            )
-        }
-
-        return items
-    }
-}
-
-struct RemoteServerGlyph: View {
-    let profile: RemoteServerProfile
-    var size: CGFloat = 56
-    var cornerRadius: CGFloat = 16
-    var iconFont: Font = .title2
-
-    private var authenticationTint: Color {
-        profile.authenticationMode == .guest ? .orange : .green
-    }
-
-    private var authenticationSystemImage: String {
-        profile.authenticationMode == .guest ? "person.fill" : "lock.fill"
-    }
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        profile.providerKind.tintColor.opacity(0.22),
-                        profile.providerKind.tintColor.opacity(0.08)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: profile.providerKind.systemImage)
-                    .font(iconFont.weight(.semibold))
-                    .foregroundStyle(profile.providerKind.tintColor)
-            }
-            .overlay(alignment: .bottomTrailing) {
-                Image(systemName: authenticationSystemImage)
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(6)
-                    .background(authenticationTint, in: Circle())
-                    .overlay {
-                        Circle()
-                            .stroke(Color(.secondarySystemBackground), lineWidth: 2)
-                    }
-                    .offset(x: size >= 50 ? 6 : 4, y: size >= 50 ? 6 : 4)
-            }
-    }
-}
-
-private struct RemoteServerInfoLine: View {
-    let systemImage: String
-    let text: String
-    var tint: Color = .secondary
-    var lineLimit = 1
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(tint)
-                .frame(width: 14)
-                .padding(.top, 2)
-
-            Text(text)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .lineLimit(lineLimit)
-                .multilineTextAlignment(.leading)
-
-            Spacer(minLength: 0)
-        }
+        return recentHistoryCount == 1 ? "1 recent" : "\(recentHistoryCount) recent"
     }
 }
 

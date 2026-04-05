@@ -36,16 +36,14 @@ struct ComicMetadataEditorSheet: View {
                     ContentUnavailableView(
                         "Failed to Load Metadata",
                         systemImage: "exclamationmark.triangle",
-                        description: Text("The metadata for this comic could not be loaded. Close and try again.")
+                        description: Text("Metadata couldn't be loaded. Close and try again.")
                     )
                 } else {
                     Form {
-                        Section {
-                            ComicMetadataOverviewContent(
-                                title: viewModel.metadata.displayTitle,
-                                fileName: viewModel.metadata.fileName,
-                                badges: metadataHeaderBadges
-                            )
+                        if viewModel.metadata.fileName != viewModel.metadata.displayTitle {
+                            Section("Comic") {
+                                LabeledContent("File", value: viewModel.metadata.fileName)
+                            }
                         }
 
                         Section("Core") {
@@ -162,10 +160,6 @@ struct ComicMetadataEditorSheet: View {
                 viewModel.metadata[keyPath: keyPath] = newValue
             }
         )
-    }
-
-    private var metadataHeaderBadges: [StatusBadgeItem] {
-        [StatusBadgeItem(title: viewModel.metadata.type.title, tint: .gray)]
     }
 }
 

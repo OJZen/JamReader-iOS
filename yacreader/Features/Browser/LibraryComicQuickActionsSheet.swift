@@ -42,7 +42,7 @@ struct LibraryComicQuickActionsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                Section("Comic") {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(comic.displayTitle)
                             .font(.headline)
@@ -53,24 +53,11 @@ struct LibraryComicQuickActionsSheet: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
 
-                        FlowLayout(spacing: 8) {
-                            StatusBadge(title: comic.progressText, tint: comic.read ? .green : .orange)
-                            StatusBadge(title: comic.type.title, tint: .gray)
-
-                            if comic.isFavorite {
-                                StatusBadge(title: "Favorite", tint: .yellow)
-                            }
-
-                            if selectedRating > 0 {
-                                StatusBadge(
-                                    title: selectedRating == 1 ? "1 star" : "\(selectedRating) stars",
-                                    tint: .orange
-                                )
-                            }
-
-                            if !comic.bookmarkPageIndices.isEmpty {
-                                StatusBadge(title: "\(comic.bookmarkPageIndices.count) bookmarks", tint: .blue)
-                            }
+                        if !comicSummaryText.isEmpty {
+                            Text(comicSummaryText)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(2)
                         }
                     }
                     .padding(.vertical, 6)
@@ -134,7 +121,7 @@ struct LibraryComicQuickActionsSheet: View {
                     }
                 }
             }
-            .navigationTitle("Comic Actions")
+            .navigationTitle("Comic")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -157,6 +144,29 @@ struct LibraryComicQuickActionsSheet: View {
 
         return min(max(Int(rating.rounded()), 0), 5)
     }
+
+    private var comicSummaryText: String {
+        var parts: [String] = [comic.progressText]
+
+        if let metadataText = comic.browserMetadataText {
+            parts.append(metadataText)
+        }
+
+        if comic.isFavorite {
+            parts.append("Favorite")
+        }
+
+        if selectedRating > 0 {
+            parts.append(selectedRating == 1 ? "1 star" : "\(selectedRating) stars")
+        }
+
+        let bookmarkCount = comic.bookmarkPageIndices.count
+        if bookmarkCount > 0 {
+            parts.append(bookmarkCount == 1 ? "1 bookmark" : "\(bookmarkCount) bookmarks")
+        }
+
+        return parts.joined(separator: " · ")
+    }
 }
 
 struct LibrarySelectionActionsSheet: View {
@@ -177,9 +187,10 @@ struct LibrarySelectionActionsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                Section("Selection") {
                     Text(selectionSummary)
-                        .font(.headline)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 }
 
@@ -248,7 +259,7 @@ struct LibrarySelectionActionsSheet: View {
                     }
                 }
             }
-            .navigationTitle("Selection Actions")
+            .navigationTitle("Selection")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

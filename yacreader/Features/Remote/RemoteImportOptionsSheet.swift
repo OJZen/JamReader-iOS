@@ -155,7 +155,7 @@ struct RemoteImportOptionsSheet: View {
                 .contentShape(Rectangle())
             }
         } header: {
-            Text("Import Scope")
+            Text("Scope")
         }
     }
 
@@ -181,7 +181,7 @@ struct RemoteImportOptionsSheet: View {
                 .disabled(!option.isSelectable)
             }
         } header: {
-            Text("Choose Destination")
+            Text("Destination")
         } footer: {
             Text(ImportDestinationSheetCopy.destinationFooter)
         }

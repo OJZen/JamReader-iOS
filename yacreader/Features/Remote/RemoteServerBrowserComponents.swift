@@ -72,10 +72,9 @@ struct RemoteDirectoryItemListRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                RemoteInlineMetadataLine(
+                RemoteInlineMetadataStrip(
                     items: supportingMetadataItems,
-                    horizontalSpacing: 8,
-                    verticalSpacing: 4
+                    spacing: 8
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -84,7 +83,6 @@ struct RemoteDirectoryItemListRow: View {
         .padding(.vertical, Spacing.xs)
         .padding(.trailing, trailingAccessoryReservedWidth)
         .contentShape(Rectangle())
-        .hoverEffect(.highlight)
     }
 
     private var supportingMetadataItems: [RemoteInlineMetadataItem] {

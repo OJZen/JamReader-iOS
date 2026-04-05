@@ -1,7 +1,5 @@
 import SwiftUI
 
-private enum BrowseLayoutMetrics {}
-
 struct BrowseHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -251,12 +249,12 @@ struct BrowseHomeView: View {
                 .buttonStyle(.plain)
             }
         } header: {
-            Text("Quick Access")
+            Text("Shortcuts")
         }
     }
 
     private var splitQuickAccessSection: some View {
-        Section("Quick Access") {
+        Section("Shortcuts") {
             ForEach(quickAccessItems) { item in
                 Button {
                     splitSelection = item.splitSelection
@@ -273,7 +271,7 @@ struct BrowseHomeView: View {
 
     private var displayedProfiles: [RemoteServerProfile] {
         viewModel.profiles.sorted {
-            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending
         }
     }
 
@@ -297,10 +295,9 @@ struct BrowseHomeView: View {
                 BrowseHomeShortcutItem(
                     id: "saved-folders",
                     title: "Saved Folders",
-                    subtitle: "\(totalSavedFolderCount) bookmarked",
+                    subtitle: totalSavedFolderCount == 1 ? "1 saved" : "\(totalSavedFolderCount) saved",
                     systemImage: "star.fill",
                     tint: .teal,
-                    badgeCount: totalSavedFolderCount,
                     navigationRequest: .savedFolders
                 )
             )
@@ -311,10 +308,9 @@ struct BrowseHomeView: View {
                 BrowseHomeShortcutItem(
                     id: "offline-shelf",
                     title: "Offline Shelf",
-                    subtitle: "\(totalOfflineCopyCount) cached",
+                    subtitle: totalOfflineCopyCount == 1 ? "1 downloaded" : "\(totalOfflineCopyCount) downloaded",
                     systemImage: "arrow.down.circle.fill",
                     tint: .green,
-                    badgeCount: totalOfflineCopyCount,
                     navigationRequest: .offlineShelf
                 )
             )
@@ -376,7 +372,7 @@ struct BrowseHomeView: View {
                 ContentUnavailableView(
                     "Server Unavailable",
                     systemImage: "server.rack",
-                    description: Text("The selected server is no longer available on this device.")
+                    description: Text("This server is no longer available on this device.")
                 )
             }
         case .savedFolders:
@@ -458,7 +454,6 @@ private struct BrowseHomeShortcutItem: Identifiable {
     let subtitle: String
     let systemImage: String
     let tint: Color
-    let badgeCount: Int
     let navigationRequest: BrowseHomeNavigationRequest
 
     var splitSelection: BrowseHomeSplitSelection {
@@ -487,7 +482,7 @@ private struct BrowseHomeServerRow: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(profile.name)
+                Text(profile.displayTitle)
                     .font(AppFont.body())
                     .foregroundStyle(Color.textPrimary)
                     .lineLimit(1)
@@ -495,10 +490,6 @@ private struct BrowseHomeServerRow: View {
                 HStack(spacing: Spacing.xxs) {
                     Text(profile.endpointDisplaySummary)
                         .lineLimit(1)
-
-                    Text("·")
-
-                    Text(profile.providerKind.title)
                 }
                 .font(AppFont.footnote())
                 .foregroundStyle(Color.textSecondary)
@@ -549,10 +540,6 @@ private struct BrowseHomeQuickAccessRow: View {
 
             Spacer(minLength: Spacing.xs)
 
-            Text("\(item.badgeCount)")
-                .font(AppFont.subheadline())
-                .foregroundStyle(Color.textSecondary)
-
             if showsDisclosureIndicator {
                 Image(systemName: "chevron.right")
                     .font(AppFont.caption2(.semibold))
@@ -572,7 +559,7 @@ private struct BrowseHomeEmptyState: View {
         EmptyStateView(
             systemImage: "server.rack",
             title: "No Servers",
-            description: "Add a remote server to browse your comic library over the network.",
+            description: "Add a server to browse comics.",
             actionTitle: "Add Server",
             action: onAddServer
         )
@@ -592,8 +579,8 @@ private struct BrowseHomeDetailPlaceholder: View {
         } description: {
             Text(
                 hasServers
-                    ? "Choose a remote server or quick access shortcut from the sidebar."
-                    : "Add a remote server to start browsing comics over your network."
+                    ? "Choose a server or shortcut."
+                    : "Add a server to browse comics."
             )
         } actions: {
             if !hasServers {

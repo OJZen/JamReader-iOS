@@ -1,5 +1,40 @@
 import SwiftUI
 
+struct ReaderFallbackStateView: View {
+    let title: String
+    let systemImage: String?
+    let message: String?
+    var showsProgress = false
+
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            if showsProgress {
+                ProgressView()
+                    .tint(.white)
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.86))
+            }
+
+            Text(title)
+                .font(AppFont.headline(.semibold))
+                .foregroundStyle(.white)
+
+            if let message, !message.isEmpty {
+                Text(message)
+                    .font(AppFont.callout())
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, Spacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.ignoresSafeArea())
+    }
+}
+
 struct ReaderDocumentContentView<UnsupportedContent: View>: View {
     let document: ComicDocument
     let pageIndex: Int

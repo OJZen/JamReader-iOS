@@ -15,9 +15,15 @@ struct LibraryListItem: Identifiable, Equatable {
     var rowSubtitle: String {
         let comics = accessSnapshot.database.comicCount
         let folders = accessSnapshot.database.folderCount
-        if comics > 0 || folders > 0 {
+
+        if accessSnapshot.database.exists {
+            if comics == 0 && folders == 0 {
+                return "Empty library"
+            }
+
             return "\(comics) comics · \(folders) folders"
         }
+
         return accessSnapshot.sourceStatus
     }
 }

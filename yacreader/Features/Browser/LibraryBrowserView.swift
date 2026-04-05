@@ -113,7 +113,7 @@ struct LibraryBrowserView: View {
                         }
                         .buttonStyle(.borderedProminent)
 
-                        Text("This creates a compatible `library.ydb`, inserts the root folder, and performs an initial scan of supported comic files.")
+                        Text("Creates `library.ydb`, adds the root folder, and scans supported comic files.")
                             .font(AppFont.footnote())
                             .foregroundStyle(Color.textSecondary)
                             .multilineTextAlignment(.center)
@@ -485,7 +485,7 @@ struct LibraryBrowserView: View {
                 }
             }
         } message: { comic in
-            Text("\"\(comic.displayTitle)\" will be removed from this library and deleted from local storage.")
+            Text("Deletes \"\(comic.displayTitle)\" from this library and removes the local file.")
         }
     }
 
@@ -896,18 +896,8 @@ struct LibraryBrowserView: View {
         let displayedComics = filteredSortedComics(content.comics, localQuery: folderSearchQuery)
 
         return List {
-            Section {
-                overviewCard(
-                    content,
-                    displayedSubfolders: displayedSubfolders,
-                    displayedComics: displayedComics,
-                    titleFont: .headline
-                )
-                .insetCardListRow(
-                    horizontalInset: LayoutMetrics.horizontalInset,
-                    top: 14,
-                    bottom: 10
-                )
+            if hasLibraryStatus {
+                libraryStatusListSection
             }
 
             if showsLocalFolderControls(for: content) {
@@ -945,15 +935,12 @@ struct LibraryBrowserView: View {
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.xl) {
-                overviewCard(
-                    content,
-                    displayedSubfolders: displayedSubfolders,
-                    displayedComics: displayedComics,
-                    titleFont: .title2.weight(.semibold)
-                )
+                if hasLibraryStatus {
+                    libraryStatusGridSection
+                }
 
                 if showsLocalFolderControls(for: content) {
-                    localControlsCard(content)
+                    localControlsGridContent(content)
                 }
 
                 if content.folder.isRoot && !hasActiveLocalFolderSearch {
@@ -1005,7 +992,6 @@ struct LibraryBrowserView: View {
             ),
             systemImageName: kind.systemImageName,
             tint: .blue,
-            badgeTitle: count > 0 ? collectionCountTitle(for: kind) : nil,
             destination: AnyView(
                 LibrarySpecialCollectionView(
                     descriptor: viewModel.descriptor,
@@ -1040,9 +1026,9 @@ struct LibraryBrowserView: View {
     ) -> String {
         switch sectionKind {
         case .labels:
-            return "Group comics across folders with lightweight tags."
+            return "Tags across folders"
         case .readingLists:
-            return "Build reading queues for arcs, runs, and custom orders."
+            return "Custom reading queues"
         }
     }
 
@@ -1280,7 +1266,8 @@ struct LibraryBrowserView: View {
 
     private func localControlsListSection(_ content: LibraryFolderContent) -> some View {
         Section {
-            localControlsCard(content)
+            localFolderControls(content)
+                .padding(.vertical, Spacing.xxxs)
                 .insetCardListRow(
                     horizontalInset: LayoutMetrics.horizontalInset,
                     top: 0,
@@ -1289,130 +1276,70 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private func localControlsCard(_ content: LibraryFolderContent) -> some View {
-        InsetCard(
-            cornerRadius: CornerRadius.lg,
-            contentPadding: Spacing.sm,
-            backgroundColor: Color.surfaceGroupedSecondary,
-            strokeOpacity: 0
-        ) {
-            localFolderControls(content)
+    @ViewBuilder
+    private var libraryStatusListSection: some View {
+        Section("Status") {
+            libraryStatusContent
         }
     }
 
-    private func overviewCard(
-        _ content: LibraryFolderContent,
-        displayedSubfolders: [LibraryFolder],
-        displayedComics: [LibraryComic],
-        titleFont: Font
-    ) -> some View {
-        InsetCard(
-            cornerRadius: CornerRadius.sheet,
-            contentPadding: Spacing.sm,
-            backgroundColor: Color.surfacePrimary,
-            strokeOpacity: 0.04
-        ) {
-            HStack(alignment: .top, spacing: Spacing.sm) {
-                Image(systemName: content.folder.isRoot ? "books.vertical.fill" : "folder.fill")
-                    .font(.title3)
-                    .foregroundStyle(content.folder.isRoot ? .blue : .orange)
-                    .frame(width: 30, height: 30)
-
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(content.folder.displayName)
-                        .font(titleFont)
-
-                    Text(viewModel.folderPath)
-                        .font(AppFont.subheadline())
-                        .foregroundStyle(Color.textSecondary)
-                        .textSelection(.enabled)
-                        .lineLimit(2)
-
-                    AdaptiveStatusBadgeGroup(
-                        badges: overviewBadgeItems(
-                            content,
-                            displayedSubfolders: displayedSubfolders,
-                            displayedComics: displayedComics
-                        )
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            maintenanceSummaryView
-
-            if let scanProgress = viewModel.scanProgress {
-                scanProgressPanel(scanProgress)
-            }
-
-            if let compatibilityPresentation = viewModel.compatibilityPresentation {
-                libraryImportCompatibilityPanel(compatibilityPresentation)
-            }
+    private var libraryStatusGridSection: some View {
+        gridSection(title: "Status") {
+            libraryStatusContent
         }
+    }
+
+    @ViewBuilder
+    private var libraryStatusContent: some View {
+        if let maintenanceSummaryLine {
+            Label(maintenanceSummaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                .font(AppFont.footnote())
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(2)
+        }
+
+        if let scanProgress = viewModel.scanProgress {
+            scanProgressPanel(scanProgress)
+        }
+
+        if let compatibilityPresentation = viewModel.compatibilityPresentation {
+            libraryImportCompatibilityPanel(compatibilityPresentation)
+        }
+    }
+
+    private func localControlsGridContent(_ content: LibraryFolderContent) -> some View {
+        localFolderControls(content)
+            .padding(.horizontal, LayoutMetrics.horizontalInset)
+    }
+
+    private var hasLibraryStatus: Bool {
+        maintenanceSummaryLine != nil
+            || viewModel.scanProgress != nil
+            || viewModel.compatibilityPresentation != nil
+    }
+
+    private var maintenanceSummaryLine: String? {
+        if let maintenanceRecord = viewModel.maintenanceRecord {
+            return maintenanceRecord.summaryLine
+        }
+
+        return viewModel.lastInitializationSummary?.summaryLine
     }
 
     private func libraryImportCompatibilityPanel(
         _ presentation: LibraryCompatibilityPresentation
     ) -> some View {
-        HStack(alignment: .top, spacing: Spacing.sm) {
+        Label {
+            Text(presentation.bannerMessage ?? presentation.bannerTitle ?? "Direct imports unavailable.")
+                .font(AppFont.footnote())
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(2)
+        } icon: {
             Image(systemName: presentation.iconName ?? "externaldrive.badge.exclamationmark")
-                .font(AppFont.headline())
+                .font(AppFont.footnote(.semibold))
                 .foregroundStyle(presentation.tint ?? .orange)
-
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(presentation.bannerTitle ?? "Direct Imports Unavailable")
-                    .font(AppFont.subheadline(.semibold))
-
-                Text(presentation.bannerMessage ?? "")
-                    .font(AppFont.footnote())
-                    .foregroundStyle(Color.textSecondary)
-            }
         }
-        .padding(Spacing.sm)
-        .background((presentation.tint ?? .orange).opacity(0.12), in: RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var maintenanceSummaryView: some View {
-        if let maintenanceRecord = viewModel.maintenanceRecord {
-            Label(maintenanceRecord.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                .font(AppFont.caption())
-                .foregroundStyle(Color.textSecondary)
-                .lineLimit(2)
-        } else if let summary = viewModel.lastInitializationSummary {
-            Label(summary.summaryLine, systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                .font(AppFont.caption())
-                .foregroundStyle(Color.textSecondary)
-                .lineLimit(2)
-        }
-    }
-
-    private func overviewBadgeItems(
-        _ content: LibraryFolderContent,
-        displayedSubfolders: [LibraryFolder],
-        displayedComics: [LibraryComic]
-    ) -> [StatusBadgeItem] {
-        var badges = [
-            StatusBadgeItem(
-                title: folderCountTitle(displayed: displayedSubfolders.count, total: content.subfolders.count),
-                tint: .blue
-            ),
-            StatusBadgeItem(
-                title: comicCountTitle(displayed: displayedComics.count, total: content.comics.count),
-                tint: .green
-            ),
-            StatusBadgeItem(title: content.folder.type.title, tint: .orange)
-        ]
-
-        if comicFilter != .all {
-            badges.append(StatusBadgeItem(title: comicFilter.title, tint: .teal))
-        }
-
-        if hasActiveLocalFolderSearch {
-            badges.append(StatusBadgeItem(title: "Searching", tint: .pink))
-        }
-
-        return badges
+        .labelStyle(.titleAndIcon)
     }
 
     @ViewBuilder
@@ -1816,11 +1743,6 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private func collectionCountTitle(for kind: LibrarySpecialCollectionKind) -> String {
-        let count = viewModel.specialCollectionCount(for: kind)
-        return count == 1 ? "1 comic" : "\(count) comics"
-    }
-
     private func collectionPreviewHeader(
         for kind: LibrarySpecialCollectionKind
     ) -> some View {
@@ -1833,11 +1755,14 @@ struct LibraryBrowserView: View {
             NavigationLink {
                 specialCollectionDestination(kind)
             } label: {
-                CompactActionChip(
-                    title: "See All",
-                    systemImage: "arrow.right",
-                    tint: .blue
-                )
+                HStack(spacing: 4) {
+                    Text("See All")
+
+                    Image(systemName: "chevron.right")
+                        .font(AppFont.caption(.semibold))
+                }
+                .font(AppFont.subheadline(.semibold))
+                .foregroundStyle(Color.appAccent)
             }
             .buttonStyle(.plain)
         }
@@ -1894,26 +1819,22 @@ struct LibraryBrowserView: View {
     }
 
     private func scanProgressPanel(_ progress: LibraryScanProgress) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(spacing: Spacing.sm) {
-                ProgressView()
-                    .controlSize(.small)
+        HStack(alignment: .top, spacing: Spacing.sm) {
+            ProgressView()
+                .controlSize(.small)
+                .padding(.top, 2)
 
+            VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 Text(progress.title)
-                    .font(AppFont.subheadline(.semibold))
-            }
+                    .font(AppFont.footnote(.semibold))
 
-            Text(progress.detailLine)
-                .font(AppFont.caption())
-                .foregroundStyle(Color.textSecondary)
-                .lineLimit(2)
+                Text(progress.detailLine)
+                    .font(AppFont.caption())
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(2)
+            }
         }
-        .padding(Spacing.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
-                .fill(Color.accentColor.opacity(0.08))
-        )
+        .padding(.vertical, Spacing.xxxs)
     }
 
     @ViewBuilder
@@ -1921,12 +1842,12 @@ struct LibraryBrowserView: View {
         if isSelectionMode {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: Spacing.sm) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
                 folderLocationControls(content)
 
                 if !(content.subfolders.isEmpty && content.comics.isEmpty) {
                     LibraryInlineSearchField(
-                        prompt: content.folder.isRoot ? "Filter this library section" : "Filter this folder",
+                        prompt: content.folder.isRoot ? "Filter library" : "Filter folder",
                         text: $folderSearchQuery
                     )
 
@@ -1943,7 +1864,7 @@ struct LibraryBrowserView: View {
                             folderSearchQuery = ""
                             comicFilter = .all
                         } label: {
-                            Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
+                            Text("Clear Filters")
                                 .font(AppFont.caption(.semibold))
                         }
                         .buttonStyle(.plain)
@@ -1957,7 +1878,7 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func folderLocationControls(_ content: LibraryFolderContent) -> some View {
         if !content.folder.isRoot {
-            HStack(spacing: Spacing.sm) {
+            HStack(spacing: Spacing.md) {
                 if let parentFolderID = parentFolderID(for: content) {
                     NavigationLink {
                         LibraryBrowserView(
@@ -1966,11 +1887,9 @@ struct LibraryBrowserView: View {
                             dependencies: dependencies
                         )
                     } label: {
-                        CompactActionChip(
-                            title: "Up",
-                            systemImage: "arrow.up.backward",
-                            tint: .blue
-                        )
+                        Label("Up", systemImage: "arrow.up.backward")
+                            .font(AppFont.subheadline(.semibold))
+                            .foregroundStyle(Color.appAccent)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1983,11 +1902,9 @@ struct LibraryBrowserView: View {
                             dependencies: dependencies
                         )
                     } label: {
-                        CompactActionChip(
-                            title: "Root",
-                            systemImage: "house",
-                            tint: .teal
-                        )
+                        Label("Library", systemImage: "house")
+                            .font(AppFont.subheadline(.semibold))
+                            .foregroundStyle(Color.textSecondary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -2001,41 +1918,6 @@ struct LibraryBrowserView: View {
         }
 
         return content.folder.parentID > 0 ? content.folder.parentID : 1
-    }
-
-    private func folderCountTitle(displayed: Int, total: Int) -> String {
-        countTitle(
-            displayed: displayed,
-            total: total,
-            singular: "folder",
-            plural: "folders",
-            useFilteredCount: hasActiveLocalFolderSearch && displayed != total
-        )
-    }
-
-    private func comicCountTitle(displayed: Int, total: Int) -> String {
-        countTitle(
-            displayed: displayed,
-            total: total,
-            singular: "comic",
-            plural: "comics",
-            useFilteredCount: hasActiveLocalFolderSearch || comicFilter != .all
-        )
-    }
-
-    private func countTitle(
-        displayed: Int,
-        total: Int,
-        singular: String,
-        plural: String,
-        useFilteredCount: Bool
-    ) -> String {
-        let totalNoun = total == 1 ? singular : plural
-        guard useFilteredCount, displayed != total else {
-            return "\(total) \(totalNoun)"
-        }
-
-        return "\(displayed) of \(total) \(totalNoun)"
     }
 
     private func filteredContentEmptyStateView(_ content: LibraryFolderContent) -> some View {
@@ -2127,8 +2009,6 @@ struct LibraryBrowserView: View {
 
     private var searchResultsView: some View {
         List {
-            searchResultsSummarySection
-
             if viewModel.isSearching {
                 Section {
                     HStack {
@@ -2151,6 +2031,10 @@ struct LibraryBrowserView: View {
                         .padding(.vertical, Spacing.xl)
                     }
                 } else {
+                    if !results.comics.isEmpty {
+                        searchResultsFilterSection(totalComicCount: results.comics.count)
+                    }
+
                     if !results.folders.isEmpty {
                         Section {
                             ForEach(results.folders) { folder in
@@ -2195,96 +2079,19 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private var searchResultsSummarySection: some View {
+    @ViewBuilder
+    private func searchResultsFilterSection(totalComicCount: Int) -> some View {
         Section {
-            SectionSummaryCard(
-                title: "Search",
-                badges: searchResultBadgeItems,
-                titleFont: AppFont.headline(),
-                cornerRadius: CornerRadius.xl,
-                contentPadding: Spacing.md,
-                strokeOpacity: 0.04
-            ) {
-                if let results = viewModel.searchResults {
-                    SummaryMetricGroup(
-                        metrics: searchResultMetrics(for: results),
-                        style: .compactValue
-                    )
-
-                    Text(results.summaryText)
-                        .font(AppFont.caption())
-                        .foregroundStyle(Color.textSecondary)
-
-                    if !results.comics.isEmpty {
-                        Text(searchFilterSummaryText(totalCount: results.comics.count))
-                            .font(AppFont.caption())
-                            .foregroundStyle(Color.textSecondary)
-
-                        FilterChipBar(
-                            items: LibraryComicQuickFilter.allCases.filter { $0 != .all },
-                            selection: comicFilterChipBinding,
-                            label: { $0.title }
-                        )
-                    }
-            } else if viewModel.isSearching {
-                Text("Searching library database...")
-                    .font(AppFont.caption())
-                    .foregroundStyle(Color.textSecondary)
-            }
-        }
-        .insetCardListRow(
-            horizontalInset: LayoutMetrics.horizontalInset,
-            top: Spacing.sm,
-            bottom: Spacing.sm
-        )
-    }
-}
-
-    private var searchResultBadgeItems: [StatusBadgeItem] {
-        guard let results = viewModel.searchResults else {
-            return viewModel.isSearching ? [StatusBadgeItem(title: "Searching", tint: .blue)] : []
-        }
-
-        var badges = [StatusBadgeItem]()
-
-        if comicFilter != .all, !results.comics.isEmpty {
-            badges.append(StatusBadgeItem(title: comicFilter.title, tint: .teal))
-        }
-
-        if results.isEmpty {
-            badges.append(StatusBadgeItem(title: "No Results", tint: .orange))
-        }
-
-        return badges
-    }
-
-    private func searchResultMetrics(
-        for results: LibrarySearchResults
-    ) -> [SummaryMetricItem] {
-        var metrics = [
-            SummaryMetricItem(
-                title: "Folders",
-                value: "\(results.folders.count)",
-                tint: .blue
-            ),
-            SummaryMetricItem(
-                title: "Comics",
-                value: "\(results.comics.count)",
-                tint: .green
+            FilterChipBar(
+                items: LibraryComicQuickFilter.allCases.filter { $0 != .all },
+                selection: comicFilterChipBinding,
+                label: { $0.title }
             )
-        ]
-
-        if comicFilter != .all, !results.comics.isEmpty {
-            metrics.append(
-                SummaryMetricItem(
-                    title: "Visible",
-                    value: "\(visibleComics.count)",
-                    tint: .teal
-                )
-            )
+        } header: {
+            Text("Filter")
+        } footer: {
+            Text(searchFilterSummaryText(totalCount: totalComicCount))
         }
-
-        return metrics
     }
 
     private func searchFilterSummaryText(totalCount: Int) -> String {

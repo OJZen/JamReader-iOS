@@ -362,7 +362,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                 }
             }
         } message: { comic in
-            Text("\"\(comic.displayTitle)\" will be removed from this library and deleted from local storage.")
+            Text("Deletes \"\(comic.displayTitle)\" from this library and removes the local file.")
         }
         .onChange(of: searchQuery) { _, _ in
             if isSelectionMode {
@@ -417,8 +417,6 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var listContent: some View {
         List {
-            summarySection
-
             if showsFilterControls {
                 filterControlsSection
             }
@@ -440,10 +438,8 @@ struct LibraryOrganizationCollectionDetailView: View {
     private var gridContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                summaryCard
-
                 if showsFilterControls {
-                    filterControlsCard
+                    filterControlsContent
                 }
 
                 if displayedComics.isEmpty {
@@ -469,46 +465,10 @@ struct LibraryOrganizationCollectionDetailView: View {
         }
     }
 
-    private var summarySection: some View {
-        Section {
-            summaryCard
-                .insetCardListRow(
-                    horizontalInset: LayoutMetrics.horizontalInset,
-                    top: 14,
-                    bottom: 10
-                )
-        }
-    }
-
-    private var summaryCard: some View {
-        InsetCard(
-            cornerRadius: 18,
-            contentPadding: 14,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
-            SummaryMetricGroup(
-                metrics: summaryMetrics,
-                style: .compactValue,
-                horizontalSpacing: 8,
-                verticalSpacing: 8
-            )
-
-            InlineMetadataLine(items: summaryMetadataItems)
-
-            Label(
-                summaryDescription,
-                systemImage: hasActiveFilter ? "magnifyingglass" : viewModel.collection.systemImageName
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(2)
-        }
-    }
-
     private var filterControlsSection: some View {
         Section {
-            filterControlsCard
+            filterControlsContent
+                .padding(.vertical, Spacing.xxxs)
                 .insetCardListRow(
                     horizontalInset: LayoutMetrics.horizontalInset,
                     top: 0,
@@ -517,26 +477,17 @@ struct LibraryOrganizationCollectionDetailView: View {
         }
     }
 
-    private var filterControlsCard: some View {
-        InsetCard(
-            cornerRadius: 18,
-            contentPadding: 12,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
+    private var filterControlsContent: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
                 comicFilter = selectedFilter
             }
 
             if canResetFilters {
-                Button {
-                    resetFilters()
-                } label: {
-                    Label("Reset Filters", systemImage: "line.3.horizontal.decrease.circle")
-                        .font(.caption.weight(.semibold))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
+                Button("Clear Filters", action: resetFilters)
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.accentColor)
             }
         }
     }
@@ -933,109 +884,8 @@ struct LibraryOrganizationCollectionDetailView: View {
         comicFilter != .all || !trimmedSearchQuery.isEmpty
     }
 
-    private var summaryText: String {
-        guard hasActiveFilter else {
-            return viewModel.summaryText
-        }
-
-        if !trimmedSearchQuery.isEmpty {
-            return displayedComics.count == 1
-                ? "1 comic matches \"\(trimmedSearchQuery)\"."
-                : "\(displayedComics.count) comics match \"\(trimmedSearchQuery)\"."
-        }
-
-        return displayedComics.count == 1
-            ? "1 comic is visible in \(comicFilter.title.lowercased())."
-            : "\(displayedComics.count) comics are visible in \(comicFilter.title.lowercased())."
-    }
-
     private var contentSectionTitle: String {
-        hasActiveFilter ? "Visible Comics" : "All Comics"
-    }
-
-    private var summaryMetrics: [SummaryMetricItem] {
-        var metrics = [
-            SummaryMetricItem(
-                title: "Comics",
-                value: "\(viewModel.comics.count)",
-                tint: collectionAccentColor
-            )
-        ]
-
-        if hasActiveFilter {
-            metrics.append(
-                SummaryMetricItem(
-                    title: "Visible",
-                    value: "\(displayedComics.count)",
-                    tint: .blue
-                )
-            )
-        }
-
-        return metrics
-    }
-
-    private var summaryMetadataItems: [InlineMetadataItem] {
-        var items = [
-            InlineMetadataItem(
-                systemImage: viewModel.collection.systemImageName,
-                text: collectionTypeLabel,
-                tint: collectionAccentColor
-            )
-        ]
-
-        if comicFilter != .all {
-            items.append(
-                InlineMetadataItem(
-                    systemImage: comicFilter.systemImageName,
-                    text: comicFilter.title,
-                    tint: .teal
-                )
-            )
-        }
-
-        if !trimmedSearchQuery.isEmpty {
-            items.append(
-                InlineMetadataItem(
-                    systemImage: "magnifyingglass",
-                    text: "\"\(trimmedSearchQuery)\"",
-                    tint: .orange
-                )
-            )
-        }
-
-        return items
-    }
-
-    private var collectionTypeLabel: String {
-        switch viewModel.collection.type {
-        case .label:
-            return "Tag"
-        case .readingList:
-            return "Reading List"
-        }
-    }
-
-    private var collectionAccentColor: Color {
-        switch viewModel.collection.type {
-        case .label:
-            return (viewModel.collection.labelColor ?? .blue).swiftUIColor
-        case .readingList:
-            return .orange
-        }
-    }
-
-    private var summaryDescription: String {
-        hasActiveFilter ? summaryText : collectionSummaryDescription
-    }
-
-    private var collectionSummaryDescription: String {
-        switch viewModel.collection.type {
-        case .label:
-            return "Use this tag to group comics across folders without changing the library structure."
-        case .readingList:
-            return "Use this reading list to keep a custom queue and reading order together."
-        }
+        hasActiveFilter ? "Results" : "Comics"
     }
 
     private var emptyStateTitle: String {

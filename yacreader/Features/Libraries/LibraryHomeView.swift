@@ -134,10 +134,7 @@ struct LibraryHomeView: View {
                     )
                     .background(Color.surfaceGrouped)
                 } else {
-                    List {
-                        compactLibrariesSection
-                    }
-                    .listStyle(.insetGrouped)
+                    compactContent
                 }
             }
             .navigationTitle("Library")
@@ -169,6 +166,13 @@ struct LibraryHomeView: View {
                 }
             }
         }
+    }
+
+    private var compactContent: some View {
+        List {
+            compactLibrariesSection
+        }
+        .listStyle(.insetGrouped)
     }
 
     private var splitViewLayout: some View {

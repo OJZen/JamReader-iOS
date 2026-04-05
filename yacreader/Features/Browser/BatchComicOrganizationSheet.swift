@@ -21,9 +21,9 @@ enum BatchOrganizationMode: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .add:
-            return "Add the selected comics to tags and reading lists."
+            return "Adds selected comics to tags and reading lists."
         case .remove:
-            return "Remove the selected comics from tags and reading lists."
+            return "Removes selected comics from tags and reading lists."
         }
     }
 
@@ -49,18 +49,6 @@ enum BatchOrganizationMode: String, CaseIterable, Identifiable {
 enum BatchComicInfoImportScope {
     case selected
     case visible
-
-    func selectionBadgeTitle(for comicCount: Int) -> String {
-        let label: String
-        switch self {
-        case .selected:
-            label = comicCount == 1 ? "1 selected comic" : "\(comicCount) selected comics"
-        case .visible:
-            label = comicCount == 1 ? "1 visible comic" : "\(comicCount) visible comics"
-        }
-
-        return label
-    }
 }
 
 @MainActor
@@ -203,11 +191,8 @@ struct BatchComicOrganizationSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List {
-                        Section {
-                            BatchSheetOverviewContent(
-                                title: "Batch Organize",
-                                badges: summaryBadges
-                            )
+                        Section("Selection") {
+                            LabeledContent("Comics", value: viewModel.selectedComicCountText)
                         }
 
                         Section {
@@ -226,7 +211,7 @@ struct BatchComicOrganizationSheet: View {
 
                         Section {
                             if viewModel.labels.isEmpty {
-                                Text("No tags available.")
+                                Text("No tags yet.")
                                     .foregroundStyle(.secondary)
                             } else {
                                 ForEach(viewModel.labels) { collection in
@@ -246,13 +231,13 @@ struct BatchComicOrganizationSheet: View {
                             Text("Tags")
                         } footer: {
                             if viewModel.labels.isEmpty {
-                                Text("Create tags from the library root.")
+                                Text("Create tags in Library.")
                             }
                         }
 
                         Section {
                             if viewModel.readingLists.isEmpty {
-                                Text("No reading lists available.")
+                                Text("No reading lists yet.")
                                     .foregroundStyle(.secondary)
                             } else {
                                 ForEach(viewModel.readingLists) { collection in
@@ -272,7 +257,7 @@ struct BatchComicOrganizationSheet: View {
                             Text("Reading Lists")
                         } footer: {
                             if viewModel.readingLists.isEmpty {
-                                Text("Create reading lists from the library root.")
+                                Text("Create reading lists in Library.")
                             }
                         }
                     }
@@ -339,7 +324,7 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
     }
 
     var helperText: String {
-        "Enable the fields you want to update. Leaving a text field empty clears that value. Rating supports Unrated or 1-5 stars."
+        "Turn on the fields to update. Blank text clears the value. Rating supports Unrated or 1-5 stars."
     }
 
     var canApply: Bool {
@@ -401,10 +386,13 @@ struct BatchComicMetadataSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    BatchSheetOverviewContent(
-                        title: "Batch Metadata",
-                        badges: summaryBadges
-                    )
+                    LabeledContent("Comics", value: viewModel.selectedComicCountText)
+
+                    if viewModel.patch.enabledFieldCount > 0 {
+                        LabeledContent("Fields", value: enabledFieldCountText)
+                    }
+                } header: {
+                    Text("Selection")
                 } footer: {
                     Text(viewModel.helperText)
                 }
@@ -527,10 +515,6 @@ final class BatchComicInfoImportSheetViewModel: ObservableObject {
         selectedComics.count
     }
 
-    var summaryText: String {
-        importScope.selectionBadgeTitle(for: selectedComicCount)
-    }
-
     var policySummaryText: String {
         policy.summaryText
     }
@@ -589,11 +573,9 @@ struct BatchComicInfoImportSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    BatchSheetOverviewContent(
-                        title: "Import ComicInfo",
-                        badges: summaryBadges
-                    )
+                Section("Selection") {
+                    LabeledContent("Scope", value: scopeTitle)
+                    LabeledContent("Comics", value: "\(viewModel.selectedComicCount)")
                 }
 
                 Section {
@@ -605,13 +587,20 @@ struct BatchComicInfoImportSheet: View {
                     }
                     .pickerStyle(.inline)
                 } header: {
-                    Text("Import Strategy")
+                    Text("Strategy")
                 } footer: {
                     Text(viewModel.policySummaryText)
                 }
 
                 Section("Included Fields") {
-                    FormOverviewContent(items: importedFieldItems)
+                    LabeledContent(
+                        "Core",
+                        value: "Title, series, issue number, volume, and story arc"
+                    )
+                    LabeledContent(
+                        "Details",
+                        value: "Credits, publisher, format, language, characters, teams, locations, review, and tags"
+                    )
                 }
             }
             .navigationTitle("ComicInfo")
@@ -672,60 +661,21 @@ private struct BatchMetadataFieldToggle<Editor: View>: View {
     }
 }
 
-private extension BatchComicOrganizationSheet {
-    var summaryBadges: [StatusBadgeItem] {
-        [
-            StatusBadgeItem(title: viewModel.selectedComicCountText, tint: .blue),
-            StatusBadgeItem(title: viewModel.mode.title, tint: viewModel.mode.actionTint),
-        ]
-    }
-}
-
 private extension BatchComicMetadataSheet {
-    var summaryBadges: [StatusBadgeItem] {
-        var badges = [StatusBadgeItem(title: viewModel.selectedComicCountText, tint: .blue)]
-
-        if viewModel.patch.enabledFieldCount > 0 {
-            let title = viewModel.patch.enabledFieldCount == 1
-                ? "1 field"
-                : "\(viewModel.patch.enabledFieldCount) fields"
-            badges.append(StatusBadgeItem(title: title, tint: .orange))
-        }
-
-        return badges
+    var enabledFieldCountText: String {
+        viewModel.patch.enabledFieldCount == 1
+            ? "1 field"
+            : "\(viewModel.patch.enabledFieldCount) fields"
     }
 }
 
 private extension BatchComicInfoImportSheet {
-    var summaryBadges: [StatusBadgeItem] {
-        [
-            StatusBadgeItem(title: viewModel.summaryText, tint: .blue),
-            StatusBadgeItem(title: viewModel.policy.title, tint: .teal),
-        ]
-    }
-
-    var importedFieldItems: [FormOverviewItem] {
-        [
-            FormOverviewItem(
-                title: "Core",
-                value: "Title, series, issue number, volume, and story arc"
-            ),
-            FormOverviewItem(
-                title: "Details",
-                value: "Credits, publisher, format, language, characters, teams, locations, review, and tags"
-            ),
-        ]
-    }
-}
-
-private struct BatchSheetOverviewContent: View {
-    let title: String
-    let badges: [StatusBadgeItem]
-
-    var body: some View {
-        Text(title)
-            .font(.headline)
-
-        AdaptiveStatusBadgeGroup(badges: badges)
+    var scopeTitle: String {
+        switch viewModel.importScope {
+        case .selected:
+            return "Selected"
+        case .visible:
+            return "Visible"
+        }
     }
 }

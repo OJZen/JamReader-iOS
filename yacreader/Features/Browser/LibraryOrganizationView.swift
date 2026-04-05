@@ -160,15 +160,6 @@ struct LibraryOrganizationView: View {
 
     private var listContent: some View {
         List {
-            Section {
-                summaryCard
-                    .insetCardListRow(
-                        horizontalInset: LayoutMetrics.horizontalInset,
-                        top: 14,
-                        bottom: 10
-                    )
-            }
-
             if displayedCollections.isEmpty {
                 Section {
                     emptyStateView
@@ -204,8 +195,6 @@ struct LibraryOrganizationView: View {
     private var gridContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                summaryCard
-
                 if displayedCollections.isEmpty {
                     emptyStateView
                         .frame(maxWidth: .infinity)
@@ -242,30 +231,6 @@ struct LibraryOrganizationView: View {
         }
     }
 
-    private var summaryCard: some View {
-        InsetCard(
-            cornerRadius: 18,
-            contentPadding: 14,
-            backgroundColor: Color(.systemBackground),
-            strokeOpacity: 0.04
-        ) {
-            SummaryMetricGroup(
-                metrics: summaryMetrics,
-                style: .compactValue,
-                horizontalSpacing: 8,
-                verticalSpacing: 8
-            )
-
-            Label(
-                hasSearchQuery ? summaryText : sectionSummaryDescription,
-                systemImage: hasSearchQuery ? "magnifyingglass" : viewModel.sectionKind.systemImageName
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .lineLimit(2)
-        }
-    }
-
     private var emptyStateView: some View {
         ContentUnavailableView(
             emptyStateTitle,
@@ -288,54 +253,8 @@ struct LibraryOrganizationView: View {
         }
     }
 
-    private var summaryText: String {
-        if hasSearchQuery {
-            return displayedCollections.count == 1
-                ? "1 collection matches \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
-                : "\(displayedCollections.count) collections match \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
-        }
-
-        return viewModel.summaryText
-    }
-
     private var contentSectionTitle: String {
-        "All \(viewModel.sectionKind.title)"
-    }
-
-    private var summaryMetrics: [SummaryMetricItem] {
-        var metrics = [
-            SummaryMetricItem(
-                title: viewModel.sectionKind.title,
-                value: "\(viewModel.collections.count)",
-                tint: .orange
-            ),
-            SummaryMetricItem(
-                title: "Comics",
-                value: "\(viewModel.collections.reduce(0) { $0 + $1.comicCount })",
-                tint: .green
-            )
-        ]
-
-        if hasSearchQuery {
-            metrics.append(
-                SummaryMetricItem(
-                    title: "Visible",
-                    value: "\(displayedCollections.count)",
-                    tint: .blue
-                )
-            )
-        }
-
-        return metrics
-    }
-
-    private var sectionSummaryDescription: String {
-        switch viewModel.sectionKind {
-        case .labels:
-            return "Use tags to group comics across folders without changing the library structure."
-        case .readingLists:
-            return "Build reading queues for arcs, storylines, and custom reading orders."
-        }
+        hasSearchQuery ? "Results" : viewModel.sectionKind.title
     }
 
     private var hasSearchQuery: Bool {
@@ -348,7 +267,7 @@ struct LibraryOrganizationView: View {
 
     private var emptyStateDescription: String {
         hasSearchQuery
-            ? "No \(viewModel.sectionKind.title.lowercased()) matched \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
+            ? "No matches for \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
             : viewModel.sectionKind.emptyStateDescription
     }
 
@@ -635,11 +554,13 @@ private struct LibraryOrganizationCreateSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section(viewModel.sectionKind.createActionTitle) {
+                Section("Name") {
                     TextField(viewModel.sectionKind.createNamePrompt, text: $viewModel.pendingCollectionName)
                         .focused($isNameFieldFocused)
+                }
 
-                    if viewModel.supportsLabelColorSelection {
+                if viewModel.supportsLabelColorSelection {
+                    Section("Color") {
                         Picker("Color", selection: $viewModel.selectedLabelColor) {
                             ForEach(LibraryLabelColor.allCases) { color in
                                 HStack {

@@ -181,19 +181,11 @@ struct RemoteComicLoadingView: View {
                 }
             }
 
-            HStack(spacing: 12) {
-                RemoteComicLoadingActionButton(
-                    title: "Back",
-                    kind: .secondary,
-                    action: cancelCurrentLoadAndDismiss
-                )
-
-                RemoteComicLoadingActionButton(
-                    title: downloadProgress > 0 ? "Cancel Download" : "Cancel",
-                    kind: .primary,
-                    action: { cancelCurrentLoad() }
-                )
-            }
+            RemoteComicLoadingActionButton(
+                title: "Cancel",
+                kind: .primary,
+                action: cancelCurrentLoadAndDismiss
+            )
         }
     }
 

@@ -47,9 +47,9 @@ enum LibraryOrganizationSectionKind: String, CaseIterable, Identifiable, Hashabl
     var emptyStateDescription: String {
         switch self {
         case .labels:
-            return "Create tags to group comics across folders and build lightweight collections."
+            return "Create tags to group comics."
         case .readingLists:
-            return "Create reading lists for arcs, storylines, and custom reading queues."
+            return "Create reading lists for custom queues."
         }
     }
 
@@ -83,9 +83,9 @@ enum LibraryOrganizationSectionKind: String, CaseIterable, Identifiable, Hashabl
     var detailEmptyStateDescription: String {
         switch self {
         case .labels:
-            return "Add comics from the reader to start using this tag."
+            return "Add comics to use this tag."
         case .readingLists:
-            return "Add comics from the reader to build a custom reading queue."
+            return "Add comics to build this reading list."
         }
     }
 

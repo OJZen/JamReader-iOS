@@ -15,11 +15,7 @@ struct SettingsHomeView: View {
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .balanced
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
-    @State private var isShowingClearDownloadsConfirmation = false
-    @State private var isShowingClearThumbnailsConfirmation = false
-    @State private var isShowingClearImportedComicsConfirmation = false
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var alert: AppAlertState?
 
     var body: some View {
         Group {
@@ -30,49 +26,6 @@ struct SettingsHomeView: View {
             }
         }
         .task { refresh() }
-        .confirmationDialog(
-            "Clear downloaded remote comics?",
-            isPresented: $isShowingClearDownloadsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Downloads", role: .destructive) {
-                clearRemoteDownloads()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Downloaded copies, browsing history, and remembered folder positions will be removed. Saved remote servers stay intact.")
-        }
-        .confirmationDialog(
-            "Clear cached remote thumbnails?",
-            isPresented: $isShowingClearThumbnailsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Thumbnails", role: .destructive) {
-                clearRemoteThumbnails()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Only generated remote cover thumbnails are removed. Downloads and reading progress stay intact.")
-        }
-        .confirmationDialog(
-            "Clear imported comics?",
-            isPresented: $isShowingClearImportedComicsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Imported Comics", role: .destructive) {
-                clearImportedComicsLibrary()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("All files currently stored in the local Imported Comics library will be removed. The library itself stays in the app as an empty library.")
-        }
-        .alert(item: $alert) { alertState in
-            Alert(
-                title: Text(alertState.title),
-                message: Text(alertState.message),
-                dismissButton: .default(Text("OK"))
-            )
-        }
     }
 
     private var usesSplitViewLayout: Bool {
@@ -148,7 +101,7 @@ struct SettingsHomeView: View {
         } header: {
             Text("Reading")
         } footer: {
-            Text("Default reader layout applied when opening each content type.")
+            Text("Default reader layout for each type.")
         }
     }
 
@@ -195,9 +148,16 @@ struct SettingsHomeView: View {
                 RemoteCacheSettingsView(dependencies: dependencies)
             } label: {
                 Label {
-                    Text("Manage Cache")
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textPrimary)
+                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                        Text("Manage Cache")
+                            .font(AppFont.body())
+                            .foregroundStyle(Color.textPrimary)
+
+                        Text(storageFooter)
+                            .font(AppFont.footnote())
+                            .foregroundStyle(Color.textSecondary)
+                            .lineLimit(1)
+                    }
                 } icon: {
                     SettingsIcon(
                         systemName: "externaldrive.fill",
@@ -278,7 +238,7 @@ struct SettingsHomeView: View {
                         .foregroundStyle(Color.textSecondary)
                 } label: {
                     Label {
-                        Text("Imported Comics Library")
+                        Text("Imported Comics")
                             .font(AppFont.body())
                             .foregroundStyle(Color.textPrimary)
                     } icon: {
@@ -291,48 +251,7 @@ struct SettingsHomeView: View {
             } header: {
                 Text("Storage")
             } footer: {
-                Text(storageFooter)
-            }
-
-            if !remoteCacheSummary.isEmpty
-                || !remoteThumbnailCacheSummary.isEmpty
-                || !importedComicsLibrarySummary.isEmpty {
-                Section {
-                    if !remoteCacheSummary.isEmpty {
-                        Button {
-                            isShowingClearDownloadsConfirmation = true
-                        } label: {
-                            Label("Clear Remote Downloads",
-                                  systemImage: "trash")
-                                .font(AppFont.body())
-                                .foregroundStyle(Color.appDanger)
-                        }
-                    }
-
-                    if !remoteThumbnailCacheSummary.isEmpty {
-                        Button {
-                            isShowingClearThumbnailsConfirmation = true
-                        } label: {
-                            Label("Clear Cover Thumbnails",
-                                  systemImage: "trash")
-                                .font(AppFont.body())
-                                .foregroundStyle(Color.appDanger)
-                        }
-                    }
-
-                    if !importedComicsLibrarySummary.isEmpty {
-                        Button {
-                            isShowingClearImportedComicsConfirmation = true
-                        } label: {
-                            Label("Clear Imported Comics",
-                                  systemImage: "trash")
-                                .font(AppFont.body())
-                                .foregroundStyle(Color.appDanger)
-                        }
-                    }
-                } footer: {
-                    Text("Clearing downloads also removes browsing history and remembered server positions. Clearing imported comics empties the Imported Comics library but keeps the library entry.")
-                }
+                Text("Manage Cache for cleanup.")
             }
         }
     }
@@ -341,11 +260,11 @@ struct SettingsHomeView: View {
         let total = remoteCacheSummary.totalBytes
             + remoteThumbnailCacheSummary.totalBytes
             + importedComicsLibrarySummary.totalBytes
-        guard total > 0 else { return "No local remote data on this device." }
+        guard total > 0 else { return "No remote data." }
         let size = ByteCountFormatter.string(
             fromByteCount: total, countStyle: .file
         )
-        return "\(size) used on this device."
+        return "\(size) on this device."
     }
 
     // MARK: - About
@@ -464,54 +383,12 @@ struct SettingsHomeView: View {
             .importedComicsLibraryStorageSummary()
     }
 
-    private func clearRemoteDownloads() {
-        do {
-            try dependencies.remoteServerBrowsingService.clearCachedComics()
-            try dependencies.remoteReadingProgressStore.clearAllSessions()
-            let profiles = (try? dependencies.remoteServerProfileStore
-                .load()) ?? []
-            for profile in profiles {
-                RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
-            }
-            refresh()
-        } catch {
-            alert = AppAlertState(
-                title: "Failed to Clear Downloads",
-                message: error.userFacingMessage
-            )
-        }
-    }
-
-    private func clearRemoteThumbnails() {
-        do {
-            try RemoteComicThumbnailPipeline.shared.clearCache()
-            refresh()
-        } catch {
-            alert = AppAlertState(
-                title: "Failed to Clear Thumbnails",
-                message: error.userFacingMessage
-            )
-        }
-    }
-
-    private func clearImportedComicsLibrary() {
-        do {
-            try dependencies.importedComicsImportService.clearImportedComicsLibrary()
-            refresh()
-        } catch {
-            alert = AppAlertState(
-                title: "Failed to Clear Imported Comics",
-                message: error.userFacingMessage
-            )
-        }
-    }
-
     private func detailText(for pane: SettingsHomePane) -> String {
         switch pane {
         case .overview:
-            return "Reader defaults, remote access, storage, and app info"
+            return "Reading, remote, storage, and app info"
         case .reading:
-            return "Comic, manga, and webcomic reader presets"
+            return "Reader defaults by content type"
         case .remote:
             return remoteCachePolicyPreset.title
         case .storage:
