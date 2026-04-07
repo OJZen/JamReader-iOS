@@ -3,11 +3,6 @@ import SwiftUI
 import UIKit
 
 struct RemoteServerBrowserView: View {
-    private enum LayoutMetrics {
-        static let horizontalInset: CGFloat = 12
-        static let rowAccessoryReservedWidth: CGFloat = 36
-    }
-
     @Environment(\.displayScale) private var displayScale
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -29,9 +24,14 @@ struct RemoteServerBrowserView: View {
     @State private var feedbackDismissTask: Task<Void, Never>?
     @StateObject private var visibilityTracker = RemoteComicVisibilityTracker()
     @State private var displaySnapshot = RemoteBrowserDisplaySnapshot.empty
+    @State private var renderedSections: [RemoteBrowserListSectionModel] = []
     @State private var thumbnailPreheatTask: Task<Void, Never>?
     @State private var thumbnailPreheatDebounceTask: Task<Void, Never>?
-    @State private var presentedItemActionSheetItem: RemoteDirectoryItem?
+    @State private var displaySnapshotRefreshTask: Task<Void, Never>?
+    @State private var sectionBuildDebounceTask: Task<Void, Never>?
+    @State private var sectionBuildTask: Task<Void, Never>?
+    @State private var isDisplaySnapshotRefreshing = false
+    @State private var isSectionBuildRefreshing = false
     @State private var presentedInfoItem: RemoteDirectoryItem?
 
     init(
@@ -54,95 +54,148 @@ struct RemoteServerBrowserView: View {
     }
 
     var body: some View {
-        browserContent
-        .navigationTitle(viewModel.navigationTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { browserToolbar }
-        .background(browserBackground)
-        .task {
-            await viewModel.loadIfNeeded()
-        }
-        .onAppear {
-            viewModel.refreshProgressState()
-            viewModel.refreshShortcutState()
-            configureDisplayModeIfNeeded()
-            configureSortModeIfNeeded()
-            refreshDisplaySnapshot()
-            scheduleThumbnailPreheat(immediately: true)
-        }
-        .onChange(of: viewModel.items) { _, _ in
-            refreshDisplaySnapshot()
-            scheduleThumbnailPreheat(immediately: true)
-        }
-        .onChange(of: searchText) { _, _ in
-            refreshDisplaySnapshot()
-            scheduleThumbnailPreheat()
-        }
-        .onChange(of: sortMode) { _, _ in
-            refreshDisplaySnapshot()
-            scheduleThumbnailPreheat(immediately: true)
-        }
-        .onChange(of: displayMode) { _, _ in
-            scheduleThumbnailPreheat(immediately: true)
-        }
-        .onChange(of: displayScale) { _, _ in
-            scheduleThumbnailPreheat(immediately: true)
-        }
-        .refreshable {
-            await viewModel.load()
-        }
-        .onChange(of: viewModel.feedback?.id) { _, _ in
-            scheduleFeedbackDismissalIfNeeded()
-        }
-        .onDisappear {
-            feedbackDismissTask?.cancel()
-            feedbackDismissTask = nil
-            cancelThumbnailPreheat()
-            visibilityTracker.reset()
-        }
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Filter this folder"
-        )
-        .overlay(alignment: .bottom) {
-            browserBottomOverlay
-        }
-        .alert(item: $viewModel.alert) { alert in
-            makeRemoteAlert(for: alert, onPrimaryAction: handleAppAlertAction(_:))
-        }
-        .confirmationDialog(
-            pendingOfflineRemoval?.title ?? "Remove downloaded copies?",
-            isPresented: Binding(
-                get: { pendingOfflineRemoval != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        pendingOfflineRemoval = nil
-                    }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let pendingOfflineRemoval {
-                Button(pendingOfflineRemoval.buttonTitle, role: .destructive) {
-                    viewModel.removeOfflineCopies(for: pendingOfflineRemoval.items)
-                    self.pendingOfflineRemoval = nil
-                }
-            }
+        browserPresentationLayer
+    }
 
-            Button("Cancel", role: .cancel) {
-                pendingOfflineRemoval = nil
+    private var browserBaseLayer: some View {
+        browserContent
+            .navigationTitle(viewModel.navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { browserToolbar }
+            .background(browserBackground)
+    }
+
+    private var browserLifecycleLayer: some View {
+        browserBaseLayer
+            .task {
+                await viewModel.loadIfNeeded()
             }
-        } message: {
-            if let pendingOfflineRemoval {
-                Text(pendingOfflineRemoval.message)
+            .onAppear(perform: handleBrowserAppear)
+            .onChange(of: viewModel.items) { _, _ in
+                handleItemsChanged()
+            }
+            .onChange(of: searchText) { _, _ in
+                handleSearchTextChanged()
+            }
+            .onChange(of: sortMode) { _, _ in
+                handleSortModeChanged()
+            }
+            .onChange(of: displaySnapshot) { _, _ in
+                scheduleSectionBuild(immediately: true)
+            }
+            .onChange(of: viewModel.progressByItemID) { _, _ in
+                scheduleSectionBuild()
+            }
+            .onChange(of: viewModel.cacheAvailabilityByItemID) { _, _ in
+                scheduleSectionBuild()
+            }
+            .onChange(of: displayMode) { _, _ in
+                scheduleThumbnailPreheat(immediately: true)
+            }
+            .onChange(of: displayScale) { _, _ in
+                scheduleThumbnailPreheat(immediately: true)
+            }
+            .refreshable {
+                await viewModel.load()
+            }
+            .onChange(of: viewModel.feedback?.id) { _, _ in
+                scheduleFeedbackDismissalIfNeeded()
+            }
+            .onDisappear(perform: handleBrowserDisappear)
+    }
+
+    private var browserPresentationLayer: some View {
+        browserLifecycleLayer
+            .searchable(
+                text: $searchText,
+                placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "Filter this folder"
+            )
+            .overlay(alignment: .bottom) {
+                browserBottomOverlay
+            }
+            .alert(item: $viewModel.alert, content: browserAlert)
+            .confirmationDialog(
+                pendingOfflineRemoval?.title ?? "Remove downloaded copies?",
+                isPresented: pendingOfflineRemovalDialogBinding,
+                titleVisibility: .visible
+            ) {
+                offlineRemovalDialogActions
+            } message: {
+                offlineRemovalDialogMessage
+            }
+            .sheet(item: $presentedInfoItem, content: browserInfoSheet)
+            .sheet(item: $importRequest, content: importSheet)
+            .navigationDestination(item: $navigationRequest, destination: navigationDestination)
+            .background(readerPresenter)
+    }
+
+    private var pendingOfflineRemovalDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingOfflineRemoval != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingOfflineRemoval = nil
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var offlineRemovalDialogActions: some View {
+        if let pendingOfflineRemoval {
+            Button(pendingOfflineRemoval.buttonTitle, role: .destructive) {
+                viewModel.removeOfflineCopies(for: pendingOfflineRemoval.items)
+                self.pendingOfflineRemoval = nil
             }
         }
-        .sheet(item: $presentedInfoItem, content: browserInfoSheet)
-        .sheet(item: $presentedItemActionSheetItem, content: browserItemActionSheet)
-        .sheet(item: $importRequest, content: importSheet)
-        .navigationDestination(item: $navigationRequest, destination: navigationDestination)
-        .background(readerPresenter)
+
+        Button("Cancel", role: .cancel) {
+            pendingOfflineRemoval = nil
+        }
+    }
+
+    @ViewBuilder
+    private var offlineRemovalDialogMessage: some View {
+        if let pendingOfflineRemoval {
+            Text(pendingOfflineRemoval.message)
+        }
+    }
+
+    private func browserAlert(for alert: AppAlertState) -> Alert {
+        makeRemoteAlert(for: alert, onPrimaryAction: handleAppAlertAction(_:))
+    }
+
+    private func handleBrowserAppear() {
+        viewModel.refreshProgressState()
+        viewModel.refreshShortcutState()
+        configureDisplayModeIfNeeded()
+        configureSortModeIfNeeded()
+        scheduleDisplaySnapshotRefresh()
+        scheduleThumbnailPreheat(immediately: true)
+    }
+
+    private func handleItemsChanged() {
+        scheduleDisplaySnapshotRefresh()
+        scheduleThumbnailPreheat(immediately: true)
+    }
+
+    private func handleSearchTextChanged() {
+        scheduleDisplaySnapshotRefresh()
+        scheduleThumbnailPreheat()
+    }
+
+    private func handleSortModeChanged() {
+        scheduleDisplaySnapshotRefresh()
+        scheduleThumbnailPreheat(immediately: true)
+    }
+
+    private func handleBrowserDisappear() {
+        feedbackDismissTask?.cancel()
+        feedbackDismissTask = nil
+        cancelThumbnailPreheat()
+        cancelBrowserBuildTasks()
+        visibilityTracker.reset()
     }
 
     private var browserBackground: some View {
@@ -374,16 +427,22 @@ struct RemoteServerBrowserView: View {
                     description: emptyFolderDescription
                 )
             } else if !hasVisibleItems {
-                browserUnavailableContent(
-                    title: "No Matches",
-                    systemImage: "magnifyingglass",
-                    description: noMatchesDescription
-                )
+                if isPreparingBrowserSnapshot {
+                    LoadingStateView(message: "Preparing Remote Library")
+                        .padding(.vertical, Spacing.lg)
+                } else {
+                    browserUnavailableContent(
+                        title: "No Matches",
+                        systemImage: "magnifyingglass",
+                        description: noMatchesDescription
+                    )
+                }
             } else {
                 RemoteServerBrowserListUIKitView(
-                    sections: uiKitListSections,
+                    sections: renderedSections,
                     profile: viewModel.profile,
                     browsingService: dependencies.remoteServerBrowsingService,
+                    onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
                     onOpenItem: { item in
                         if item.canOpenAsComic {
                             prepareHeroTransition(for: item, fallbackFrame: .zero)
@@ -432,16 +491,22 @@ struct RemoteServerBrowserView: View {
                     description: emptyFolderDescription
                 )
             } else if !hasVisibleItems {
-                browserUnavailableContent(
-                    title: "No Matches",
-                    systemImage: "magnifyingglass",
-                    description: noMatchesDescription
-                )
+                if isPreparingBrowserSnapshot {
+                    LoadingStateView(message: "Preparing Remote Library")
+                        .padding(.vertical, Spacing.lg)
+                } else {
+                    browserUnavailableContent(
+                        title: "No Matches",
+                        systemImage: "magnifyingglass",
+                        description: noMatchesDescription
+                    )
+                }
             } else {
                 RemoteServerBrowserGridUIKitView(
-                    sections: uiKitListSections,
+                    sections: renderedSections,
                     profile: viewModel.profile,
                     browsingService: dependencies.remoteServerBrowsingService,
+                    onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
                     onOpenItem: { item in
                         prepareHeroTransition(for: item, fallbackFrame: .zero)
                         openPrimaryAction(for: item)
@@ -472,243 +537,6 @@ struct RemoteServerBrowserView: View {
             }
         }
         .background(Color.surfaceGrouped)
-    }
-
-    @ViewBuilder
-    private var listContentSections: some View {
-        if viewModel.isLoading {
-            Section {
-                LoadingStateView(message: "Connecting to Remote Library")
-                    .padding(.vertical, Spacing.lg)
-            }
-        } else if viewModel.loadIssue != nil {
-            Section {
-                remoteErrorContent()
-            }
-        } else if viewModel.items.isEmpty {
-            Section {
-                browserUnavailableContent(
-                    title: "No Remote Files",
-                    systemImage: "folder",
-                    description: emptyFolderDescription
-                )
-            }
-        } else if !hasVisibleItems {
-            Section {
-                browserUnavailableContent(
-                    title: "No Matches",
-                    systemImage: "magnifyingglass",
-                    description: noMatchesDescription
-                )
-            }
-        } else {
-            if !displayedDirectories.isEmpty {
-                Section {
-                    ForEach(displayedDirectories) { item in
-                        Button {
-                            openPrimaryAction(for: item)
-                        } label: {
-                            RemoteInsetListRowCard {
-                                RemoteDirectoryItemListRow(
-                                    item: item,
-                                    readingSession: nil,
-                                    cacheAvailability: .unavailable,
-                                    profile: viewModel.profile,
-                                    browsingService: dependencies.remoteServerBrowsingService,
-                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
-                                )
-                                .equatable()
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.vertical, 6)
-                        .overlay(alignment: .trailing) {
-                            if showsPersistentItemActions {
-                                browserItemActionButton(for: item)
-                                    .padding(.trailing, 8)
-                            }
-                        }
-                    }
-                } header: {
-                    contentSectionHeader(
-                        title: folderSectionTitle,
-                        metadataItems: folderSectionMetadataItems
-                    )
-                }
-            }
-
-            if !displayedComicFiles.isEmpty {
-                Section {
-                    ForEach(displayedComicFiles) { item in
-                        let availability = viewModel.cacheAvailability(for: item)
-
-                        Button {
-                            prepareHeroTransition(for: item, fallbackFrame: .zero)
-                            openPrimaryAction(for: item)
-                        } label: {
-                            RemoteInsetListRowCard {
-                                RemoteDirectoryItemListRow(
-                                    item: item,
-                                    readingSession: viewModel.progress(for: item),
-                                    cacheAvailability: availability,
-                                    profile: viewModel.profile,
-                                    browsingService: dependencies.remoteServerBrowsingService,
-                                    heroSourceID: item.id,
-                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
-                                )
-                                .equatable()
-                            }
-                        }
-                        .onAppear {
-                            markComicVisible(item)
-                        }
-                        .onDisappear {
-                            markComicInvisible(item)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.vertical, 6)
-                        .overlay(alignment: .trailing) {
-                            if showsPersistentItemActions {
-                                browserItemActionButton(for: item)
-                                    .padding(.trailing, 8)
-                            }
-                        }
-                    }
-                } header: {
-                    contentSectionHeader(
-                        title: comicSectionTitle,
-                        metadataItems: comicSectionMetadataItems
-                    )
-                } footer: {
-                    if let unsupportedFilesNoticeText {
-                        Text(unsupportedFilesNoticeText)
-                    }
-                }
-            }
-        }
-    }
-
-    private var showsPersistentItemActions: Bool {
-        displayMode == .list || horizontalSizeClass == .regular
-    }
-
-    private var itemAccessoryReservedWidth: CGFloat {
-        showsPersistentItemActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
-    }
-
-    @ViewBuilder
-    private var gridContentSections: some View {
-        if viewModel.isLoading {
-            LoadingStateView(message: "Connecting to Remote Library")
-                .padding(.vertical, Spacing.lg)
-        } else if viewModel.loadIssue != nil {
-            remoteErrorContent()
-                .frame(maxWidth: .infinity)
-        } else if viewModel.items.isEmpty {
-            browserUnavailableContent(
-                title: "No Remote Files",
-                systemImage: "folder",
-                description: emptyFolderDescription
-            )
-        } else if !hasVisibleItems {
-            browserUnavailableContent(
-                title: "No Matches",
-                systemImage: "magnifyingglass",
-                description: noMatchesDescription
-            )
-        } else {
-            if !displayedDirectories.isEmpty {
-                remoteGridSection(
-                    title: folderSectionTitle,
-                    metadataItems: folderSectionMetadataItems,
-                    items: displayedDirectories
-                )
-            }
-
-            if !displayedComicFiles.isEmpty {
-                remoteGridSection(
-                    title: comicSectionTitle,
-                    metadataItems: comicSectionMetadataItems,
-                    items: displayedComicFiles
-                )
-
-                if displayedUnsupportedFileCount > 0 {
-                    unsupportedFilesNoticeView
-                }
-            }
-        }
-    }
-
-    private func remoteGridSection(
-        title: String,
-        metadataItems: [RemoteInlineMetadataItem],
-        items: [RemoteDirectoryItem]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
-            contentSectionHeader(title: title, metadataItems: metadataItems)
-
-            LazyVGrid(
-                columns: [GridItem(.adaptive(
-                    minimum: horizontalSizeClass == .regular ? 200 : 156,
-                    maximum: horizontalSizeClass == .regular ? 280 : 206
-                ), spacing: Spacing.sm)],
-                spacing: Spacing.sm
-            ) {
-                ForEach(items) { item in
-                    let availability = viewModel.cacheAvailability(for: item)
-
-                    ZStack(alignment: .topTrailing) {
-                        Button {
-                            prepareHeroTransition(for: item, fallbackFrame: .zero)
-                            openPrimaryAction(for: item)
-                        } label: {
-                            RemoteDirectoryGridCard(
-                                item: item,
-                                readingSession: viewModel.progress(for: item),
-                                cacheAvailability: availability,
-                                profile: viewModel.profile,
-                                browsingService: dependencies.remoteServerBrowsingService,
-                                heroSourceID: item.id
-                            )
-                            .equatable()
-                        }
-                        .onAppear {
-                            markComicVisible(item)
-                        }
-                        .onDisappear {
-                            markComicInvisible(item)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            browserItemActionMenuContent(for: item)
-                        }
-
-                        if showsPersistentItemActions {
-                            browserItemActionMenu(for: item)
-                                .padding(12)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func contentSectionHeader(
-        title: String,
-        metadataItems: [RemoteInlineMetadataItem]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            Text(title)
-                .font(AppFont.headline())
-
-            RemoteInlineMetadataLine(
-                items: metadataItems,
-                horizontalSpacing: Spacing.xs,
-                verticalSpacing: Spacing.xxs
-            )
-        }
-        .textCase(nil)
     }
 
     private func remoteErrorContent() -> some View {
@@ -859,46 +687,6 @@ struct RemoteServerBrowserView: View {
         }
     }
 
-    private var folderSectionTitle: String {
-        trimmedSearchText.isEmpty ? "Folders" : "Matching Folders"
-    }
-
-    private var comicSectionTitle: String {
-        trimmedSearchText.isEmpty ? "Comic Files" : "Matching Comics"
-    }
-
-    private var folderSectionMetadataItems: [RemoteInlineMetadataItem] {
-        [
-            RemoteInlineMetadataItem(
-                systemImage: "folder.fill",
-                text: displayedDirectories.count == 1 ? "1 folder" : "\(displayedDirectories.count) folders",
-                tint: .blue
-            )
-        ]
-    }
-
-    private var comicSectionMetadataItems: [RemoteInlineMetadataItem] {
-        var items = [
-            RemoteInlineMetadataItem(
-                systemImage: "book.closed.fill",
-                text: displayedComicFiles.count == 1 ? "1 comic" : "\(displayedComicFiles.count) comics",
-                tint: .green
-            )
-        ]
-
-        if !visibleOfflineComicFiles.isEmpty {
-            items.append(
-                RemoteInlineMetadataItem(
-                    systemImage: "arrow.down.circle.fill",
-                    text: visibleOfflineComicFiles.count == 1 ? "1 downloaded copy" : "\(visibleOfflineComicFiles.count) downloaded copies",
-                    tint: .orange
-                )
-            )
-        }
-
-        return items
-    }
-
     private var hasContextActions: Bool {
         viewModel.canImportCurrentFolderRecursively
             || !displayedComicFiles.isEmpty
@@ -930,6 +718,56 @@ struct RemoteServerBrowserView: View {
 
     private func scheduleThumbnailPreheat(immediately: Bool = false) {
         cancelThumbnailPreheat()
+
+        let items = displayedComicFiles
+        guard displayMode == .grid, !items.isEmpty else {
+            return
+        }
+
+        let visibleIDs = visibilityTracker.visibleIDs
+        let plan = thumbnailPreheatPlan(
+            visibleIDs: visibleIDs,
+            items: items
+        )
+        let estimatedItemWidth: CGFloat = horizontalSizeClass == .regular ? 292 : 212
+        let estimatedItemHeight = estimatedItemWidth / AppLayout.coverAspectRatio
+        let maxPixelSize = Int(max(estimatedItemWidth, estimatedItemHeight) * max(displayScale, 1))
+
+        let startPreheat = {
+            thumbnailPreheatTask = Task(priority: .utility) {
+                await preheatVisibleThumbnails(
+                    items: items,
+                    plan: plan,
+                    maxPixelSize: maxPixelSize
+                )
+            }
+        }
+
+        if immediately {
+            startPreheat()
+            return
+        }
+
+        thumbnailPreheatDebounceTask = Task(priority: .utility) {
+            do {
+                try await Task.sleep(for: .milliseconds(180))
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                startPreheat()
+                thumbnailPreheatDebounceTask = nil
+            }
+        }
     }
 
     private func cancelThumbnailPreheat() {
@@ -937,6 +775,17 @@ struct RemoteServerBrowserView: View {
         thumbnailPreheatDebounceTask = nil
         thumbnailPreheatTask?.cancel()
         thumbnailPreheatTask = nil
+    }
+
+    private func cancelBrowserBuildTasks() {
+        displaySnapshotRefreshTask?.cancel()
+        displaySnapshotRefreshTask = nil
+        sectionBuildDebounceTask?.cancel()
+        sectionBuildDebounceTask = nil
+        sectionBuildTask?.cancel()
+        sectionBuildTask = nil
+        isDisplaySnapshotRefreshing = false
+        isSectionBuildRefreshing = false
     }
 
     private func preheatVisibleThumbnails(
@@ -1046,22 +895,8 @@ struct RemoteServerBrowserView: View {
         )
     }
 
-    private func markComicVisible(_ item: RemoteDirectoryItem) {
-        guard item.canOpenAsComic else {
-            return
-        }
-
-        if visibilityTracker.markVisible(item.id) {
-            scheduleThumbnailPreheat()
-        }
-    }
-
-    private func markComicInvisible(_ item: RemoteDirectoryItem) {
-        guard item.canOpenAsComic else {
-            return
-        }
-
-        if visibilityTracker.markInvisible(item.id) {
+    private func handleVisibleComicIDsChanged(_ visibleIDs: Set<String>) {
+        if visibilityTracker.replaceVisibleIDs(visibleIDs) {
             scheduleThumbnailPreheat()
         }
     }
@@ -1082,66 +917,12 @@ struct RemoteServerBrowserView: View {
         displayedComicFiles.filter { viewModel.cacheAvailability(for: $0).hasLocalCopy }
     }
 
-    private var displayedUnsupportedFileCount: Int {
-        displaySnapshot.unsupportedFileCount
-    }
-
-    private var uiKitListSections: [RemoteBrowserListSectionModel] {
-        var sections: [RemoteBrowserListSectionModel] = []
-
-        if !displayedDirectories.isEmpty {
-            sections.append(
-                RemoteBrowserListSectionModel(
-                    kind: .directories,
-                    title: folderSectionTitle,
-                    metadataText: metadataText(from: folderSectionMetadataItems),
-                    footerText: nil,
-                    items: displayedDirectories.map {
-                        RemoteBrowserListRowModel(
-                            item: $0,
-                            readingSession: nil,
-                            cacheAvailability: .unavailable
-                        )
-                    }
-                )
-            )
-        }
-
-        if !displayedComicFiles.isEmpty {
-            sections.append(
-                RemoteBrowserListSectionModel(
-                    kind: .comics,
-                    title: comicSectionTitle,
-                    metadataText: metadataText(from: comicSectionMetadataItems),
-                    footerText: nil,
-                    items: displayedComicFiles.map {
-                        RemoteBrowserListRowModel(
-                            item: $0,
-                            readingSession: viewModel.progress(for: $0),
-                            cacheAvailability: viewModel.cacheAvailability(for: $0)
-                        )
-                    }
-                )
-            )
-        }
-
-        if let unsupportedFilesNoticeText {
-            sections.append(
-                RemoteBrowserListSectionModel(
-                    kind: .notice,
-                    title: "",
-                    metadataText: nil,
-                    footerText: unsupportedFilesNoticeText,
-                    items: []
-                )
-            )
-        }
-
-        return sections
-    }
-
     private var hasVisibleItems: Bool {
         !displayedDirectories.isEmpty || !displayedComicFiles.isEmpty
+    }
+
+    private var isPreparingBrowserSnapshot: Bool {
+        (isDisplaySnapshotRefreshing || isSectionBuildRefreshing) && !viewModel.items.isEmpty
     }
 
     private var emptyFolderDescription: String {
@@ -1154,25 +935,6 @@ struct RemoteServerBrowserView: View {
 
     private var noMatchesDescription: String {
         "No folders or comics match \"\(trimmedSearchText)\"."
-    }
-
-    private var unsupportedFilesNoticeText: String? {
-        guard displayedUnsupportedFileCount > 0 else {
-            return nil
-        }
-
-        return displayedUnsupportedFileCount == 1
-            ? "1 unsupported file hidden."
-            : "\(displayedUnsupportedFileCount) unsupported files hidden."
-    }
-
-    @ViewBuilder
-    private var unsupportedFilesNoticeView: some View {
-        if let unsupportedFilesNoticeText {
-            Text(unsupportedFilesNoticeText)
-                .font(AppFont.footnote())
-                .foregroundStyle(Color.textSecondary)
-        }
     }
 
     private func browserUnavailableContent(
@@ -1188,28 +950,101 @@ struct RemoteServerBrowserView: View {
         .padding(.vertical, Spacing.xl)
     }
 
-    private func metadataText(from items: [RemoteInlineMetadataItem]) -> String? {
-        let parts = items.compactMap { item in
-            item.text.isEmpty ? nil : item.text
+    private func scheduleDisplaySnapshotRefresh() {
+        displaySnapshotRefreshTask?.cancel()
+        isDisplaySnapshotRefreshing = true
+
+        let items = viewModel.items
+        let searchText = searchText
+        let sortMode = sortMode
+
+        displaySnapshotRefreshTask = Task.detached(priority: .userInitiated) {
+            let nextSnapshot = RemoteBrowserDisplaySnapshot.make(
+                from: items,
+                searchText: searchText,
+                sortMode: sortMode
+            )
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                if nextSnapshot != displaySnapshot {
+                    displaySnapshot = nextSnapshot
+                }
+                displaySnapshotRefreshTask = nil
+                isDisplaySnapshotRefreshing = false
+            }
         }
-        guard !parts.isEmpty else {
-            return nil
-        }
-        return parts.joined(separator: " · ")
     }
 
-    private func refreshDisplaySnapshot() {
-        let nextSnapshot = RemoteBrowserDisplaySnapshot.make(
-            from: viewModel.items,
-            searchText: searchText,
-            sortMode: sortMode
-        )
+    private func scheduleSectionBuild(immediately: Bool = false) {
+        sectionBuildDebounceTask?.cancel()
+        sectionBuildTask?.cancel()
+        isSectionBuildRefreshing = true
 
-        guard nextSnapshot != displaySnapshot else {
+        let snapshot = displaySnapshot
+        let progressByItemID = viewModel.progressByItemID
+        let cacheAvailabilityByItemID = viewModel.cacheAvailabilityByItemID
+        let trimmedSearchText = trimmedSearchText
+
+        let buildSections = {
+            sectionBuildTask = Task.detached(priority: .userInitiated) {
+                let nextSections = Self.buildUIKitSections(
+                    snapshot: snapshot,
+                    trimmedSearchText: trimmedSearchText,
+                    progressByItemID: progressByItemID,
+                    cacheAvailabilityByItemID: cacheAvailabilityByItemID
+                )
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await MainActor.run {
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    if nextSections != renderedSections {
+                        renderedSections = nextSections
+                    }
+                    sectionBuildTask = nil
+                    isSectionBuildRefreshing = false
+                }
+            }
+        }
+
+        if immediately {
+            buildSections()
             return
         }
 
-        displaySnapshot = nextSnapshot
+        sectionBuildDebounceTask = Task(priority: .userInitiated) {
+            do {
+                try await Task.sleep(for: .milliseconds(60))
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            await MainActor.run {
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                buildSections()
+                sectionBuildDebounceTask = nil
+            }
+        }
     }
 
     private func performImport(
@@ -1248,6 +1083,112 @@ struct RemoteServerBrowserView: View {
                 cancellationController: cancellationController
             )
         }
+    }
+
+    nonisolated private static func buildUIKitSections(
+        snapshot: RemoteBrowserDisplaySnapshot,
+        trimmedSearchText: String,
+        progressByItemID: [String: RemoteComicReadingSession],
+        cacheAvailabilityByItemID: [String: RemoteComicCachedAvailability]
+    ) -> [RemoteBrowserListSectionModel] {
+        var sections: [RemoteBrowserListSectionModel] = []
+
+        if !snapshot.directories.isEmpty {
+            sections.append(
+                RemoteBrowserListSectionModel(
+                    kind: .directories,
+                    title: trimmedSearchText.isEmpty ? "Folders" : "Matching Folders",
+                    metadataText: Self.metadataText(
+                        forCount: snapshot.directories.count,
+                        singular: "folder",
+                        plural: "folders"
+                    ),
+                    footerText: nil,
+                    items: snapshot.directories.map {
+                        RemoteBrowserListRowModel(
+                            item: $0,
+                            readingSession: nil,
+                            cacheAvailability: Self.unavailableCacheAvailability
+                        )
+                    }
+                )
+            )
+        }
+
+        if !snapshot.comicFiles.isEmpty {
+            let downloadedCopies = snapshot.comicFiles.reduce(into: 0) { count, item in
+                let itemID = Self.itemIdentifier(for: item)
+                if cacheAvailabilityByItemID[itemID]?.kind != .unavailable {
+                    count += 1
+                }
+            }
+
+            let comicMetadata = [
+                Self.metadataText(
+                    forCount: snapshot.comicFiles.count,
+                    singular: "comic",
+                    plural: "comics"
+                ),
+                downloadedCopies > 0
+                    ? Self.metadataText(
+                        forCount: downloadedCopies,
+                        singular: "downloaded copy",
+                        plural: "downloaded copies"
+                    )
+                    : nil
+            ]
+                .compactMap { $0 }
+                .joined(separator: " · ")
+
+            sections.append(
+                RemoteBrowserListSectionModel(
+                    kind: .comics,
+                    title: trimmedSearchText.isEmpty ? "Comic Files" : "Matching Comics",
+                    metadataText: comicMetadata.isEmpty ? nil : comicMetadata,
+                    footerText: nil,
+                    items: snapshot.comicFiles.map {
+                        let itemID = Self.itemIdentifier(for: $0)
+                        return RemoteBrowserListRowModel(
+                            item: $0,
+                            readingSession: progressByItemID[itemID],
+                            cacheAvailability: cacheAvailabilityByItemID[itemID] ?? Self.unavailableCacheAvailability
+                        )
+                    }
+                )
+            )
+        }
+
+        if snapshot.unsupportedFileCount > 0 {
+            sections.append(
+                RemoteBrowserListSectionModel(
+                    kind: .notice,
+                    title: "",
+                    metadataText: nil,
+                    footerText: snapshot.unsupportedFileCount == 1
+                        ? "1 unsupported file hidden."
+                        : "\(snapshot.unsupportedFileCount) unsupported files hidden.",
+                    items: []
+                )
+            )
+        }
+
+        return sections
+    }
+
+    nonisolated private static var unavailableCacheAvailability: RemoteComicCachedAvailability {
+        RemoteComicCachedAvailability(kind: .unavailable)
+    }
+
+    nonisolated private static func itemIdentifier(for item: RemoteDirectoryItem) -> String {
+        "\(item.serverID.uuidString)|\(item.providerKind.rawValue)|\(item.shareName)|\(item.cacheScopeKey)|\(item.path)"
+    }
+
+    nonisolated private static func metadataText(
+        forCount count: Int,
+        singular: String,
+        plural: String
+    ) -> String {
+        count == 1 ? "1 \(singular)" : "\(count) \(plural)"
     }
 
     private func startImportTask(
@@ -1304,81 +1245,6 @@ struct RemoteServerBrowserView: View {
         )
     }
 
-    @ViewBuilder
-    private func browserItemActionMenuContent(for item: RemoteDirectoryItem) -> some View {
-        let availability = viewModel.cacheAvailability(for: item)
-
-        RemoteBrowserItemActionMenuContent(
-            item: item,
-            cacheAvailability: availability,
-            onShowInfo: item.canOpenAsComic ? { presentedInfoItem = item } : nil,
-            onOpenOffline: openOfflineAction(for: item, availability: availability),
-            onSaveOffline: saveOfflineAction(for: item, availability: availability),
-            onRemoveOffline: removeOfflineAction(for: item, availability: availability),
-            onImport: importAction(for: item)
-        )
-    }
-
-    private func browserItemActionMenu(for item: RemoteDirectoryItem) -> some View {
-        Menu {
-            browserItemActionMenuContent(for: item)
-        } label: {
-            PersistentRowActionButtonLabel()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Manage \(item.name)")
-    }
-
-    private func browserItemActionButton(for item: RemoteDirectoryItem) -> some View {
-        Button {
-            presentedItemActionSheetItem = item
-        } label: {
-            PersistentRowActionButtonLabel()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Manage \(item.name)")
-    }
-
-    @ViewBuilder
-    private func browserItemActionSheet(for item: RemoteDirectoryItem) -> some View {
-        let availability = viewModel.cacheAvailability(for: item)
-
-        NavigationStack {
-            List {
-                RemoteBrowserItemActionMenuContent(
-                    item: item,
-                    cacheAvailability: availability,
-                    onShowInfo: item.canOpenAsComic ? {
-                        presentedItemActionSheetItem = nil
-                        presentedInfoItem = item
-                    } : nil,
-                    onOpenOffline: dismissingPresentedItemActionSheet(
-                        openOfflineAction(for: item, availability: availability)
-                    ),
-                    onSaveOffline: dismissingPresentedItemActionSheet(
-                        saveOfflineAction(for: item, availability: availability)
-                    ),
-                    onRemoveOffline: dismissingPresentedItemActionSheet(
-                        removeOfflineAction(for: item, availability: availability)
-                    ),
-                    onImport: dismissingPresentedItemActionSheet(importAction(for: item))
-                )
-            }
-            .scrollContentBackground(.hidden)
-            .background(Color.surfaceGrouped)
-            .navigationTitle(item.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        presentedItemActionSheetItem = nil
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
     private func browserInfoSheet(for item: RemoteDirectoryItem) -> some View {
         RemoteComicInfoSheet(
             profile: viewModel.profile,
@@ -1387,46 +1253,6 @@ struct RemoteServerBrowserView: View {
             cacheAvailability: viewModel.cacheAvailability(for: item),
             browsingService: dependencies.remoteServerBrowsingService
         )
-    }
-
-    private func dismissingPresentedItemActionSheet(_ action: (() -> Void)?) -> (() -> Void)? {
-        guard let action else {
-            return nil
-        }
-
-        return {
-            presentedItemActionSheetItem = nil
-            action()
-        }
-    }
-
-    @ViewBuilder
-    private func browserItemSwipeActions(for item: RemoteDirectoryItem) -> some View {
-        let availability = viewModel.cacheAvailability(for: item)
-
-        if let onRemoveOffline = removeOfflineAction(for: item, availability: availability) {
-            Button(role: .destructive, action: onRemoveOffline) {
-                Label("Remove", systemImage: "trash")
-            }
-        }
-
-        if let onSaveOffline = saveOfflineAction(for: item, availability: availability),
-           item.canOpenAsComic {
-            Button(action: onSaveOffline) {
-                Label(
-                    availability.kind == .unavailable ? "Offline" : "Refresh",
-                    systemImage: availability.kind == .unavailable
-                        ? "icloud.and.arrow.down"
-                        : "arrow.clockwise.icloud"
-                )
-            }
-            .tint(availability.kind == .unavailable ? .blue : .orange)
-        } else if let onImport = importAction(for: item), item.isDirectory {
-            Button(action: onImport) {
-                Label("Import", systemImage: "square.and.arrow.down")
-            }
-            .tint(.teal)
-        }
     }
 
     private func openOfflineAction(
@@ -1822,6 +1648,15 @@ final class RemoteComicVisibilityTracker: ObservableObject {
     func reset() {
         visibleIDs.removeAll()
     }
+
+    func replaceVisibleIDs(_ ids: Set<String>) -> Bool {
+        guard visibleIDs != ids else {
+            return false
+        }
+
+        visibleIDs = ids
+        return true
+    }
 }
 
 struct RemoteBrowserDisplaySnapshot: Equatable {
@@ -1835,7 +1670,7 @@ struct RemoteBrowserDisplaySnapshot: Equatable {
         unsupportedFileCount: 0
     )
 
-    static func make(
+    nonisolated static func make(
         from items: [RemoteDirectoryItem],
         searchText: String,
         sortMode: RemoteDirectorySortMode
@@ -1852,17 +1687,74 @@ struct RemoteBrowserDisplaySnapshot: Equatable {
         }
 
         return RemoteBrowserDisplaySnapshot(
-            directories: filteredItems
-                .filter(\.isDirectory)
-                .sorted(using: sortMode),
-            comicFiles: filteredItems
-                .filter(\.canOpenAsComic)
-                .sorted(using: sortMode),
+            directories: sortItems(
+                filteredItems.filter { $0.kind == .directory },
+                using: sortMode
+            ),
+            comicFiles: sortItems(
+                filteredItems.filter { $0.kind == .comicFile },
+                using: sortMode
+            ),
             unsupportedFileCount: filteredItems.reduce(into: 0) { count, item in
                 if item.kind == .unsupportedFile {
                     count += 1
                 }
             }
         )
+    }
+
+    nonisolated private static func sortItems(
+        _ items: [RemoteDirectoryItem],
+        using mode: RemoteDirectorySortMode
+    ) -> [RemoteDirectoryItem] {
+        items.sorted { lhs, rhs in
+            switch mode {
+            case .nameAscending:
+                return compareByName(lhs, rhs) < 0
+            case .recentlyUpdated:
+                return compareOptional(
+                    lhs.modifiedAt,
+                    rhs.modifiedAt,
+                    fallback: { compareByName(lhs, rhs) }
+                ) < 0
+            case .largestFirst:
+                return compareOptional(
+                    lhs.fileSize,
+                    rhs.fileSize,
+                    fallback: { compareByName(lhs, rhs) }
+                ) < 0
+            }
+        }
+    }
+
+    nonisolated private static func compareByName(
+        _ lhs: RemoteDirectoryItem,
+        _ rhs: RemoteDirectoryItem
+    ) -> Int {
+        switch lhs.name.localizedStandardCompare(rhs.name) {
+        case .orderedAscending:
+            return -1
+        case .orderedDescending:
+            return 1
+        case .orderedSame:
+            return 0
+        }
+    }
+
+    nonisolated private static func compareOptional<T: Comparable>(
+        _ lhs: T?,
+        _ rhs: T?,
+        fallback: () -> Int
+    ) -> Int {
+        switch (lhs, rhs) {
+        case let (lhs?, rhs?) where lhs != rhs:
+            return lhs > rhs ? -1 : 1
+        case (_?, nil):
+            return -1
+        case (nil, _?):
+            return 1
+        default:
+            return fallback()
+        }
     }
 }

@@ -62,9 +62,6 @@ struct SavedRemoteFoldersView: View {
                             .contextMenu {
                                 savedFolderActionMenuContent(for: entry)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                savedFolderSwipeActions(for: entry)
-                            }
                         }
                     } header: {
                         sectionHeader(for: section)
@@ -268,23 +265,6 @@ struct SavedRemoteFoldersView: View {
         .accessibilityLabel("Manage \(entry.shortcut.title)")
     }
 
-    @ViewBuilder
-    private func savedFolderSwipeActions(
-        for entry: SavedRemoteFoldersViewModel.ShortcutEntry
-    ) -> some View {
-        Button {
-            renameEntry = entry
-        } label: {
-            Label("Rename", systemImage: "pencil")
-        }
-        .tint(.blue)
-
-        Button(role: .destructive) {
-            pendingRemovalEntry = entry
-        } label: {
-            Label("Remove", systemImage: "trash")
-        }
-    }
 }
 
 @MainActor

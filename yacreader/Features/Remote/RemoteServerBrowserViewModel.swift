@@ -228,16 +228,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 path: currentPath
             )
-            items = loadedItems.sorted { lhs, rhs in
-                if lhs.kind != rhs.kind {
-                    return lhs.kind == .directory
-                }
-
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
-            progressByItemID = [:]
-            cacheAvailabilityByItemID = [:]
-            recentSessions = []
+            let sortedItems = await Self.sortBrowserItems(loadedItems)
+            items = sortedItems
             loadIssue = nil
             Self.rememberLastBrowsedPath(currentPath, for: profile)
             refreshShortcutState()
@@ -354,6 +346,22 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         recentSessions: recentSessions
                     )
                 )
+            }
+        }
+    }
+
+    private static func sortBrowserItems(_ items: [RemoteDirectoryItem]) async -> [RemoteDirectoryItem] {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let sortedItems = items.sorted { lhs, rhs in
+                    if lhs.kind != rhs.kind {
+                        return lhs.kind == .directory
+                    }
+
+                    return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+                }
+
+                continuation.resume(returning: sortedItems)
             }
         }
     }

@@ -5,6 +5,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     let sections: [RemoteBrowserListSectionModel]
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
+    let onVisibleComicIDsChanged: (Set<String>) -> Void
     let onOpenItem: (RemoteDirectoryItem) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
     let onOpenOffline: (RemoteDirectoryItem) -> Void
@@ -17,6 +18,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             sections: sections,
             profile: profile,
             browsingService: browsingService,
+            onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
             onOpenOffline: onOpenOffline,
@@ -38,6 +40,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             sections: sections,
             profile: profile,
             browsingService: browsingService,
+            onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
             onOpenOffline: onOpenOffline,
@@ -49,9 +52,16 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     }
 
     final class Coordinator: NSObject, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+        private enum UpdatePlan {
+            case none
+            case fullReload
+            case reconfigureVisibleItems([IndexPath])
+        }
+
         private var sections: [RemoteBrowserListSectionModel]
         private var profile: RemoteServerProfile
         private var browsingService: RemoteServerBrowsingService
+        private var onVisibleComicIDsChanged: (Set<String>) -> Void
         private var onOpenItem: (RemoteDirectoryItem) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
         private var onOpenOffline: (RemoteDirectoryItem) -> Void
@@ -59,11 +69,14 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         private var onRemoveOffline: (RemoteDirectoryItem) -> Void
         private var onImport: (RemoteDirectoryItem) -> Void
         private weak var controller: RemoteBrowserGridViewController?
+        private var lastReportedVisibleComicIDs: Set<String> = []
+        private var pendingVisibleComicIDReport: DispatchWorkItem?
 
         init(
             sections: [RemoteBrowserListSectionModel],
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
+            onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -74,6 +87,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
+            self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
             self.onOpenOffline = onOpenOffline
@@ -90,6 +104,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             sections: [RemoteBrowserListSectionModel],
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
+            onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -97,10 +112,11 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             onRemoveOffline: @escaping (RemoteDirectoryItem) -> Void,
             onImport: @escaping (RemoteDirectoryItem) -> Void
         ) {
-            let sectionsChanged = self.sections != sections
+            let updatePlan = Self.makeUpdatePlan(from: self.sections, to: sections)
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
+            self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
             self.onOpenOffline = onOpenOffline
@@ -108,9 +124,20 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             self.onRemoveOffline = onRemoveOffline
             self.onImport = onImport
 
-            if sectionsChanged {
+            switch updatePlan {
+            case .none:
+                break
+            case .fullReload:
                 controller?.markNeedsReload()
+            case .reconfigureVisibleItems(let indexPaths):
+                controller?.reconfigureVisibleItems(at: indexPaths)
             }
+
+            reportVisibleComicIDsIfNeeded()
+        }
+
+        deinit {
+            pendingVisibleComicIDReport?.cancel()
         }
 
         func numberOfSections(in collectionView: UICollectionView) -> Int {
@@ -321,6 +348,109 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
             return actions
         }
+
+        fileprivate func configureVisibleCell(_ cell: RemoteBrowserGridCell, at indexPath: IndexPath, collectionView: UICollectionView) {
+            guard indexPath.section < sections.count,
+                  indexPath.item < sections[indexPath.section].items.count else {
+                return
+            }
+
+            cell.configure(
+                row: sections[indexPath.section].items[indexPath.item],
+                profile: profile,
+                browsingService: browsingService,
+                itemWidth: itemWidth(for: collectionView)
+            )
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            scheduleVisibleComicIDsReport()
+        }
+
+        func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+            scheduleVisibleComicIDsReport()
+        }
+
+        func collectionView(_ collectionView: UICollectionView, didEndDisplaying cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+            scheduleVisibleComicIDsReport()
+        }
+
+        fileprivate func scheduleVisibleComicIDsReport() {
+            pendingVisibleComicIDReport?.cancel()
+
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.reportVisibleComicIDsIfNeeded()
+            }
+            pendingVisibleComicIDReport = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: workItem)
+        }
+
+        fileprivate func reportVisibleComicIDsIfNeeded() {
+            guard let collectionView = controller?.collectionView else {
+                return
+            }
+
+            pendingVisibleComicIDReport = nil
+
+            let visibleIDs = Set(
+                collectionView.indexPathsForVisibleItems.compactMap { indexPath -> String? in
+                    guard indexPath.section < sections.count,
+                          indexPath.item < sections[indexPath.section].items.count else {
+                        return nil
+                    }
+
+                    let row = sections[indexPath.section].items[indexPath.item]
+                    return row.item.canOpenAsComic ? row.item.id : nil
+                }
+            )
+
+            guard visibleIDs != lastReportedVisibleComicIDs else {
+                return
+            }
+
+            lastReportedVisibleComicIDs = visibleIDs
+            onVisibleComicIDsChanged(visibleIDs)
+        }
+
+        private static func makeUpdatePlan(
+            from oldSections: [RemoteBrowserListSectionModel],
+            to newSections: [RemoteBrowserListSectionModel]
+        ) -> UpdatePlan {
+            guard oldSections.count == newSections.count else {
+                return .fullReload
+            }
+
+            var changedIndexPaths: [IndexPath] = []
+
+            for (sectionIndex, pair) in zip(oldSections.indices, zip(oldSections, newSections)) {
+                let oldSection = pair.0
+                let newSection = pair.1
+
+                guard oldSection.kind == newSection.kind,
+                      oldSection.title == newSection.title,
+                      oldSection.metadataText == newSection.metadataText,
+                      oldSection.footerText == newSection.footerText,
+                      oldSection.items.count == newSection.items.count else {
+                    return .fullReload
+                }
+
+                for itemIndex in oldSection.items.indices {
+                    guard oldSection.items[itemIndex].id == newSection.items[itemIndex].id else {
+                        return .fullReload
+                    }
+
+                    if oldSection.items[itemIndex] != newSection.items[itemIndex] {
+                        changedIndexPaths.append(IndexPath(item: itemIndex, section: sectionIndex))
+                    }
+                }
+            }
+
+            if changedIndexPaths.isEmpty {
+                return .none
+            }
+
+            return .reconfigureVisibleItems(changedIndexPaths)
+        }
     }
 }
 
@@ -384,8 +514,35 @@ final class RemoteBrowserGridViewController: UIViewController {
         navigationBridge.detach()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        coordinator?.reportVisibleComicIDsIfNeeded()
+    }
+
     func markNeedsReload() {
         needsReload = true
+    }
+
+    func reconfigureVisibleItems(at indexPaths: [IndexPath]) {
+        guard let coordinator else {
+            return
+        }
+
+        let visibleSet = Set(collectionView.indexPathsForVisibleItems)
+        let targetIndexPaths = indexPaths.filter { visibleSet.contains($0) }
+        guard !targetIndexPaths.isEmpty else {
+            return
+        }
+
+        UIView.performWithoutAnimation {
+            for indexPath in targetIndexPaths {
+                guard let cell = collectionView.cellForItem(at: indexPath) as? RemoteBrowserGridCell else {
+                    continue
+                }
+
+                coordinator.configureVisibleCell(cell, at: indexPath, collectionView: collectionView)
+            }
+        }
     }
 
     func reloadIfNeeded() {
@@ -394,6 +551,7 @@ final class RemoteBrowserGridViewController: UIViewController {
         }
         needsReload = false
         collectionView.reloadData()
+        coordinator?.reportVisibleComicIDsIfNeeded()
     }
 }
 
@@ -594,15 +752,13 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         let pixelSize = Int(max(itemWidth, itemWidth / AppLayout.coverAspectRatio) * UIScreen.main.scale)
         let itemID = item.id
 
-        Task { @MainActor in
-            let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
-                for: item,
-                browsingService: browsingService,
-                maxPixelSize: pixelSize
-            )
-            if self.representedItemID == itemID, let seeded {
-                self.thumbnailImageView.image = seeded
-            }
+        let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
+            for: item,
+            browsingService: browsingService,
+            maxPixelSize: pixelSize
+        )
+        if representedItemID == itemID, let seeded {
+            thumbnailImageView.image = seeded
         }
 
         thumbnailTask = Task { @MainActor [weak self] in

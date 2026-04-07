@@ -139,7 +139,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         await load()
     }
 
-    func load() async {
+    func load(forceRefresh: Bool = false) async {
         guard !isLoading else {
             return
         }
@@ -150,7 +150,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
 
         do {
-            try rebuildEntries()
+            try rebuildEntries(forceRefresh: forceRefresh)
             alert = nil
         } catch {
             entries = []
@@ -171,7 +171,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 reference: entry.session.comicFileReference,
                 forceRefresh: true
             )
-            try rebuildEntries()
+            try rebuildEntries(forceRefresh: true)
 
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Updated",
@@ -187,7 +187,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
         do {
             try remoteServerBrowsingService.clearCachedComic(for: entry.session.comicFileReference)
-            try rebuildEntries()
+            try rebuildEntries(forceRefresh: true)
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Removed",
                 message: "\(entry.session.displayName) was removed from this device.",
@@ -209,7 +209,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             try remoteServerBrowsingService.clearCachedComics(for: profile)
             try remoteReadingProgressStore.deleteSessions(for: profile)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
-            try rebuildEntries()
+            try rebuildEntries(forceRefresh: true)
             let copyWord = removedCount == 1 ? "copy" : "copies"
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copies Removed",
@@ -235,7 +235,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         do {
             try await operation()
         } catch {
-            try? rebuildEntries()
+            try? rebuildEntries(forceRefresh: true)
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Action Failed",
                 message: error.userFacingMessage
@@ -243,8 +243,12 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         }
     }
 
-    private func rebuildEntries() throws {
-        let snapshot = try remoteOfflineLibrarySnapshotStore.loadSnapshot()
+    private func rebuildEntries(forceRefresh: Bool = false) throws {
+        if forceRefresh {
+            remoteOfflineLibrarySnapshotStore.invalidate()
+        }
+
+        let snapshot = try remoteOfflineLibrarySnapshotStore.loadSnapshot(forceRefresh: forceRefresh)
         entries = snapshot.offlineEntries
         cacheSummary = snapshot.cacheSummary
     }
@@ -346,9 +350,6 @@ struct RemoteOfflineShelfView: View {
                             .contextMenu {
                                 offlineShelfItemActionMenuContent(for: entry)
                             }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                offlineShelfItemSwipeActions(for: entry)
-                            }
                         }
                     } header: {
                         sectionHeader(for: section)
@@ -419,7 +420,7 @@ struct RemoteOfflineShelfView: View {
             await viewModel.loadIfNeeded()
         }
         .refreshable {
-            await viewModel.load()
+            await viewModel.load(forceRefresh: true)
         }
         .onChange(of: viewModel.feedback?.id) { _, _ in
             scheduleFeedbackDismissalIfNeeded()
@@ -730,27 +731,6 @@ struct RemoteOfflineShelfView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Manage \(entry.session.displayName)")
-    }
-
-    @ViewBuilder
-    private func offlineShelfItemSwipeActions(
-        for entry: RemoteOfflineComicEntry
-    ) -> some View {
-        Button {
-            Task<Void, Never> {
-                await viewModel.refreshDownloadedCopy(for: entry)
-            }
-        } label: {
-            Label("Refresh", systemImage: "arrow.clockwise.circle")
-        }
-        .tint(.blue)
-
-        Button {
-            presentRemovalConfirmation(for: entry)
-        } label: {
-            Label("Delete", systemImage: "trash")
-        }
-        .tint(.red)
     }
 
     private func presentRemovalConfirmation(for entry: RemoteOfflineComicEntry) {

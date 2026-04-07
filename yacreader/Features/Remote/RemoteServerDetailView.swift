@@ -230,13 +230,6 @@ struct RemoteServerDetailView: View {
                                 .padding(.trailing, 8)
                         }
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            deleteRecentSession(session)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
                 }
             }
         }

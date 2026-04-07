@@ -29,6 +29,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
     let sections: [RemoteBrowserListSectionModel]
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
+    let onVisibleComicIDsChanged: (Set<String>) -> Void
     let onOpenItem: (RemoteDirectoryItem) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
     let onOpenOffline: (RemoteDirectoryItem) -> Void
@@ -41,6 +42,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: sections,
             profile: profile,
             browsingService: browsingService,
+            onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
             onOpenOffline: onOpenOffline,
@@ -62,6 +64,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: sections,
             profile: profile,
             browsingService: browsingService,
+            onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
             onOpenOffline: onOpenOffline,
@@ -73,9 +76,16 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
     }
 
     final class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
+        private enum UpdatePlan {
+            case none
+            case fullReload
+            case reconfigureVisibleRows([IndexPath])
+        }
+
         private var sections: [RemoteBrowserListSectionModel]
         private var profile: RemoteServerProfile
         private var browsingService: RemoteServerBrowsingService
+        private var onVisibleComicIDsChanged: (Set<String>) -> Void
         private var onOpenItem: (RemoteDirectoryItem) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
         private var onOpenOffline: (RemoteDirectoryItem) -> Void
@@ -83,11 +93,14 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         private var onRemoveOffline: (RemoteDirectoryItem) -> Void
         private var onImport: (RemoteDirectoryItem) -> Void
         private weak var controller: RemoteBrowserListViewController?
+        private var lastReportedVisibleComicIDs: Set<String> = []
+        private var pendingVisibleComicIDReport: DispatchWorkItem?
 
         init(
             sections: [RemoteBrowserListSectionModel],
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
+            onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -98,6 +111,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
+            self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
             self.onOpenOffline = onOpenOffline
@@ -114,6 +128,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: [RemoteBrowserListSectionModel],
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
+            onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -121,10 +136,11 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             onRemoveOffline: @escaping (RemoteDirectoryItem) -> Void,
             onImport: @escaping (RemoteDirectoryItem) -> Void
         ) {
-            let sectionsChanged = self.sections != sections
+            let updatePlan = Self.makeUpdatePlan(from: self.sections, to: sections)
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
+            self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
             self.onOpenOffline = onOpenOffline
@@ -132,9 +148,20 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             self.onRemoveOffline = onRemoveOffline
             self.onImport = onImport
 
-            if sectionsChanged {
+            switch updatePlan {
+            case .none:
+                break
+            case .fullReload:
                 controller?.markNeedsReload()
+            case .reconfigureVisibleRows(let indexPaths):
+                controller?.reconfigureVisibleRows(at: indexPaths)
             }
+
+            reportVisibleComicIDsIfNeeded()
+        }
+
+        deinit {
+            pendingVisibleComicIDReport?.cancel()
         }
 
         func numberOfSections(in tableView: UITableView) -> Int {
@@ -184,7 +211,17 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         }
 
         func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-            nil
+            guard sections[section].kind != .notice else {
+                return nil
+            }
+
+            let header = tableView.dequeueReusableHeaderFooterView(
+                withIdentifier: RemoteBrowserListSectionHeaderView.reuseIdentifier
+            ) as? RemoteBrowserListSectionHeaderView ?? RemoteBrowserListSectionHeaderView(
+                reuseIdentifier: RemoteBrowserListSectionHeaderView.reuseIdentifier
+            )
+            header.configure(with: sections[section])
+            return header
         }
 
         func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
@@ -202,11 +239,11 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         }
 
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-            .leastNormalMagnitude
+            sections[section].kind == .notice ? .leastNormalMagnitude : UITableView.automaticDimension
         }
 
         func tableView(_ tableView: UITableView, estimatedHeightForHeaderInSection section: Int) -> CGFloat {
-            .leastNormalMagnitude
+            sections[section].kind == .notice ? .leastNormalMagnitude : 40
         }
 
         func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
@@ -215,55 +252,6 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
 
         func tableView(_ tableView: UITableView, estimatedHeightForFooterInSection section: Int) -> CGFloat {
             sections[section].footerText == nil ? .leastNormalMagnitude : 24
-        }
-
-        func tableView(
-            _ tableView: UITableView,
-            trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath
-        ) -> UISwipeActionsConfiguration? {
-            let row = sections[indexPath.section].items[indexPath.row]
-            var actions: [UIContextualAction] = []
-
-            if row.item.canOpenAsComic {
-                let saveAction = UIContextualAction(style: .normal, title: nil) { [weak self] _, _, completion in
-                    self?.onSaveOffline(row.item)
-                    completion(true)
-                }
-                saveAction.image = UIImage(
-                    systemName: row.cacheAvailability.kind == .unavailable
-                        ? "icloud.and.arrow.down"
-                        : "arrow.clockwise.icloud"
-                )
-                saveAction.backgroundColor = row.cacheAvailability.kind == .unavailable
-                    ? .systemBlue
-                    : .systemOrange
-                actions.append(saveAction)
-
-                if row.cacheAvailability.hasLocalCopy {
-                    let removeAction = UIContextualAction(style: .destructive, title: nil) { [weak self] _, _, completion in
-                        self?.onRemoveOffline(row.item)
-                        completion(true)
-                    }
-                    removeAction.image = UIImage(systemName: "trash")
-                    actions.append(removeAction)
-                }
-            } else if row.item.isDirectory {
-                let importAction = UIContextualAction(style: .normal, title: nil) { [weak self] _, _, completion in
-                    self?.onImport(row.item)
-                    completion(true)
-                }
-                importAction.image = UIImage(systemName: "square.and.arrow.down")
-                importAction.backgroundColor = .systemTeal
-                actions.append(importAction)
-            }
-
-            guard !actions.isEmpty else {
-                return nil
-            }
-
-            let configuration = UISwipeActionsConfiguration(actions: actions)
-            configuration.performsFirstActionWithFullSwipe = false
-            return configuration
         }
 
         private func menuElements(for row: RemoteBrowserListRowModel) -> [UIMenuElement] {
@@ -326,6 +314,108 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             }
 
             return actions
+        }
+
+        fileprivate func configureVisibleCell(_ cell: RemoteBrowserListCell, at indexPath: IndexPath) {
+            guard indexPath.section < sections.count,
+                  indexPath.row < sections[indexPath.section].items.count else {
+                return
+            }
+
+            cell.configure(
+                row: sections[indexPath.section].items[indexPath.row],
+                profile: profile,
+                browsingService: browsingService
+            )
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            scheduleVisibleComicIDsReport()
+        }
+
+        func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+            scheduleVisibleComicIDsReport()
+        }
+
+        func tableView(_ tableView: UITableView, didEndDisplaying cell: UITableViewCell, forRowAt indexPath: IndexPath) {
+            scheduleVisibleComicIDsReport()
+        }
+
+        fileprivate func scheduleVisibleComicIDsReport() {
+            pendingVisibleComicIDReport?.cancel()
+
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.reportVisibleComicIDsIfNeeded()
+            }
+            pendingVisibleComicIDReport = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: workItem)
+        }
+
+        fileprivate func reportVisibleComicIDsIfNeeded() {
+            guard let tableView = controller?.tableView else {
+                return
+            }
+
+            pendingVisibleComicIDReport = nil
+
+            let visibleIDs = Set(
+                (tableView.indexPathsForVisibleRows ?? []).compactMap { indexPath -> String? in
+                    guard indexPath.section < sections.count,
+                          indexPath.row < sections[indexPath.section].items.count else {
+                        return nil
+                    }
+
+                    let row = sections[indexPath.section].items[indexPath.row]
+                    return row.item.canOpenAsComic ? row.item.id : nil
+                }
+            )
+
+            guard visibleIDs != lastReportedVisibleComicIDs else {
+                return
+            }
+
+            lastReportedVisibleComicIDs = visibleIDs
+            onVisibleComicIDsChanged(visibleIDs)
+        }
+
+        private static func makeUpdatePlan(
+            from oldSections: [RemoteBrowserListSectionModel],
+            to newSections: [RemoteBrowserListSectionModel]
+        ) -> UpdatePlan {
+            guard oldSections.count == newSections.count else {
+                return .fullReload
+            }
+
+            var changedIndexPaths: [IndexPath] = []
+
+            for (sectionIndex, pair) in zip(oldSections.indices, zip(oldSections, newSections)) {
+                let oldSection = pair.0
+                let newSection = pair.1
+
+                guard oldSection.kind == newSection.kind,
+                      oldSection.title == newSection.title,
+                      oldSection.metadataText == newSection.metadataText,
+                      oldSection.footerText == newSection.footerText,
+                      oldSection.items.count == newSection.items.count else {
+                    return .fullReload
+                }
+
+                for rowIndex in oldSection.items.indices {
+                    guard oldSection.items[rowIndex].id == newSection.items[rowIndex].id else {
+                        return .fullReload
+                    }
+
+                    if oldSection.items[rowIndex] != newSection.items[rowIndex] {
+                        changedIndexPaths.append(IndexPath(row: rowIndex, section: sectionIndex))
+                    }
+                }
+            }
+
+            if changedIndexPaths.isEmpty {
+                return .none
+            }
+
+            return .reconfigureVisibleRows(changedIndexPaths)
         }
 
     }
@@ -395,8 +485,37 @@ final class RemoteBrowserListViewController: UIViewController {
         navigationBridge.detach()
     }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        coordinator?.reportVisibleComicIDsIfNeeded()
+    }
+
     func markNeedsReload() {
         needsReload = true
+    }
+
+    func reconfigureVisibleRows(at indexPaths: [IndexPath]) {
+        guard let coordinator,
+              let visibleIndexPaths = tableView.indexPathsForVisibleRows,
+              !visibleIndexPaths.isEmpty else {
+            return
+        }
+
+        let visibleSet = Set(visibleIndexPaths)
+        let targetIndexPaths = indexPaths.filter { visibleSet.contains($0) }
+        guard !targetIndexPaths.isEmpty else {
+            return
+        }
+
+        UIView.performWithoutAnimation {
+            for indexPath in targetIndexPaths {
+                guard let cell = tableView.cellForRow(at: indexPath) as? RemoteBrowserListCell else {
+                    continue
+                }
+
+                coordinator.configureVisibleCell(cell, at: indexPath)
+            }
+        }
     }
 
     func reloadIfNeeded() {
@@ -406,6 +525,7 @@ final class RemoteBrowserListViewController: UIViewController {
 
         needsReload = false
         tableView.reloadData()
+        coordinator?.reportVisibleComicIDsIfNeeded()
     }
 }
 
@@ -589,15 +709,13 @@ private final class RemoteBrowserListCell: UITableViewCell {
         let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * UIScreen.main.scale)
         let itemID = item.id
 
-        Task { @MainActor in
-            let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
-                for: item,
-                browsingService: browsingService,
-                maxPixelSize: pixelSize
-            )
-            if self.representedItemID == itemID, let seeded {
-                self.thumbnailImageView.image = seeded
-            }
+        let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
+            for: item,
+            browsingService: browsingService,
+            maxPixelSize: pixelSize
+        )
+        if representedItemID == itemID, let seeded {
+            thumbnailImageView.image = seeded
         }
 
         thumbnailTask = Task { @MainActor [weak self] in

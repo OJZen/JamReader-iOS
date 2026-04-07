@@ -65,16 +65,13 @@ final class RemoteServerBrowserNativeNavigationBridge {
     }
 
     private func navigationAppearanceHosts(for controller: UIViewController) -> [UIViewController] {
-        var candidate: UIViewController? = controller
-        var hosts: [UIViewController] = []
-
-        while let current = candidate {
-            if current.navigationController != nil {
-                hosts.append(current)
-            }
-            candidate = current.parent
+        guard controller.navigationController != nil else {
+            return []
         }
 
-        return hosts
+        // Keep the scroll-view bridge local to the UIKit browser controller.
+        // Walking the full parent chain can reach SwiftUI hosting controllers,
+        // which is where the earlier reparenting warnings came from.
+        return [controller]
     }
 }
