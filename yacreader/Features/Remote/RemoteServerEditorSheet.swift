@@ -2,8 +2,10 @@ import SwiftUI
 
 struct RemoteServerEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     let onSave: (RemoteServerEditorDraft) -> AppAlertState?
+    private let appliesSwiftUIPresentationModifiers: Bool
 
     @State private var draft: RemoteServerEditorDraft
     @State private var alert: AppAlertState?
@@ -11,137 +13,29 @@ struct RemoteServerEditorSheet: View {
 
     init(
         draft: RemoteServerEditorDraft,
+        appliesSwiftUIPresentationModifiers: Bool = true,
         onSave: @escaping (RemoteServerEditorDraft) -> AppAlertState?
     ) {
+        self.appliesSwiftUIPresentationModifiers = appliesSwiftUIPresentationModifiers
         self.onSave = onSave
         _draft = State(initialValue: draft)
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Provider") {
-                    Picker("Provider", selection: $draft.providerKind) {
-                        ForEach(RemoteProviderKind.allCases) { providerKind in
-                            Text(providerKind.title)
-                                .tag(providerKind)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                Section {
-                    TextField("Display Name", text: $draft.name)
-                        .focused($isNameFieldFocused)
-
-                    TextField("Host", text: $draft.host, prompt: Text("nas.local"))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-
-                    TextField("Port", text: $draft.portText)
-                        .keyboardType(.numberPad)
-                } header: {
-                    Text("Connection")
-                } footer: {
-                    Text(
-                        draft.providerKind == .smb
-                            ? (draft.usesDefaultPort
-                                ? "SMB uses 445."
-                                : "Use a custom port only if needed.")
-                            : (draft.usesDefaultPort
-                                ? "WebDAV uses 443 for HTTPS or 80 for HTTP."
-                                : "Use a custom port only if needed.")
-                    )
-                }
-
-                Section {
-                    TextField(
-                        draft.providerKind == .smb ? "Share" : "Server Path",
-                        text: $draft.shareName,
-                        prompt: Text(draft.providerKind == .smb ? "Comics" : "/remote.php/dav/files/you/Comics")
-                    )
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-
-                    TextField(
-                        "Base Directory",
-                        text: $draft.baseDirectoryPath,
-                        prompt: Text(draft.providerKind == .smb ? "/Manga/Weekly" : "/Weekly")
-                    )
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("Location")
-                } footer: {
-                    Text(
-                        draft.providerKind == .smb
-                            ? "Leave Base Directory empty to start at the root."
-                            : "Leave Base Directory empty to start at Server Path."
-                    )
-                }
-
-                Section {
-                    Picker("Authentication", selection: $draft.authenticationMode) {
-                        ForEach(RemoteServerAuthenticationMode.allCases) { mode in
-                            Text(mode.title)
-                                .tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    if draft.authenticationMode.requiresUsername {
-                        TextField("Username", text: $draft.username)
-                            .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    }
-
-                    if draft.authenticationMode.requiresPassword {
-                        SecureField("Password", text: $draft.password)
-                            .textContentType(.password)
-
-                        if draft.hasStoredPassword {
-                            LabeledContent("Saved Password") {
-                                Text(draft.savedPasswordStatusText)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Access")
-                } footer: {
-                    if draft.authenticationMode.requiresPassword, draft.hasStoredPassword {
-                        Text("Keeps the current password.")
-                    } else if draft.authenticationMode.requiresPassword {
-                        Text("Saved in Keychain.")
-                    }
-                }
-            }
-            .navigationTitle(draft.navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(draft.actionTitle) {
-                        if let alertState = onSave(draft) {
-                            alert = alertState
-                        }
-                    }
-                }
-            }
+        let content = NavigationStack {
+            editorForm
+                .navigationTitle(draft.navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { sheetToolbar }
         }
-        .modifier(RemoteServerEditorPresentationModifier())
-        .presentationDragIndicator(.visible)
         .alert(item: $alert) { alert in
             makeRemoteAlert(for: alert)
         }
         .task {
+            guard horizontalSizeClass != .regular else {
+                return
+            }
+
             guard !Task.isCancelled else {
                 return
             }
@@ -162,8 +56,138 @@ struct RemoteServerEditorSheet: View {
                 draft.portText = String(newValue.defaultPort)
             }
         }
+
+        if appliesSwiftUIPresentationModifiers {
+            content
+                .modifier(RemoteServerEditorPresentationModifier())
+                .presentationDragIndicator(.visible)
+        } else {
+            content
+        }
     }
 
+    private var editorForm: some View {
+        Form {
+            Section("Provider") {
+                Picker("Provider", selection: $draft.providerKind) {
+                    ForEach(RemoteProviderKind.allCases) { providerKind in
+                        Text(providerKind.title)
+                            .tag(providerKind)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section {
+                TextField("Display Name", text: $draft.name)
+                    .focused($isNameFieldFocused)
+
+                TextField("Host", text: $draft.host, prompt: Text("nas.local"))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+
+                TextField("Port", text: $draft.portText)
+                    .keyboardType(.numberPad)
+            } header: {
+                Text("Connection")
+            } footer: {
+                Text(
+                    draft.providerKind == .smb
+                        ? (draft.usesDefaultPort
+                            ? "SMB uses 445."
+                            : "Use a custom port only if needed.")
+                        : (draft.usesDefaultPort
+                            ? "WebDAV uses 443 for HTTPS or 80 for HTTP."
+                            : "Use a custom port only if needed.")
+                )
+            }
+
+            Section {
+                TextField(
+                    draft.providerKind == .smb ? "Share" : "Server Path",
+                    text: $draft.shareName,
+                    prompt: Text(draft.providerKind == .smb ? "Comics" : "/remote.php/dav/files/you/Comics")
+                )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                TextField(
+                    "Base Directory",
+                    text: $draft.baseDirectoryPath,
+                    prompt: Text(draft.providerKind == .smb ? "/Manga/Weekly" : "/Weekly")
+                )
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("Location")
+            } footer: {
+                Text(
+                    draft.providerKind == .smb
+                        ? "Leave Base Directory empty to start at the root."
+                        : "Leave Base Directory empty to start at Server Path."
+                )
+            }
+
+            Section {
+                Picker("Authentication", selection: $draft.authenticationMode) {
+                    ForEach(RemoteServerAuthenticationMode.allCases) { mode in
+                        Text(mode.title)
+                            .tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if draft.authenticationMode.requiresUsername {
+                    TextField("Username", text: $draft.username)
+                        .textContentType(.username)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+
+                if draft.authenticationMode.requiresPassword {
+                    SecureField("Password", text: $draft.password)
+                        .textContentType(.password)
+
+                    if draft.hasStoredPassword {
+                        LabeledContent("Saved Password") {
+                            Text(draft.savedPasswordStatusText)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Access")
+            } footer: {
+                if draft.authenticationMode.requiresPassword, draft.hasStoredPassword {
+                    Text("Keeps the current password.")
+                } else if draft.authenticationMode.requiresPassword {
+                    Text("Saved in Keychain.")
+                }
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var sheetToolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("Cancel") {
+                dismiss()
+            }
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+            Button(draft.actionTitle) {
+                handleSave()
+            }
+        }
+    }
+
+    private func handleSave() {
+        if let alertState = onSave(draft) {
+            alert = alertState
+        }
+    }
 }
 
 private struct RemoteServerEditorPresentationModifier: ViewModifier {

@@ -5,25 +5,22 @@ struct BrowseHomeView: View {
 
     let dependencies: AppDependencies
 
-    @StateObject private var viewModel: RemoteServerListViewModel
-    @State private var editorDraft: RemoteServerEditorDraft?
+    @ObservedObject private var viewModel: RemoteServerListViewModel
+    @Binding private var editorDraft: RemoteServerEditorDraft?
     @State private var pendingDeletionProfile: RemoteServerProfile?
     @State private var navigationRequest: BrowseHomeNavigationRequest?
     @State private var splitSelection: BrowseHomeSplitSelection?
     @State private var splitSyncTask: Task<Void, Never>?
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
 
-    init(dependencies: AppDependencies) {
+    init(
+        dependencies: AppDependencies,
+        viewModel: RemoteServerListViewModel,
+        editorDraft: Binding<RemoteServerEditorDraft?>
+    ) {
         self.dependencies = dependencies
-        _viewModel = StateObject(
-            wrappedValue: RemoteServerListViewModel(
-                profileStore: dependencies.remoteServerProfileStore,
-                folderShortcutStore: dependencies.remoteFolderShortcutStore,
-                credentialStore: dependencies.remoteServerCredentialStore,
-                browsingService: dependencies.remoteServerBrowsingService,
-                readingProgressStore: dependencies.remoteReadingProgressStore
-            )
-        )
+        _viewModel = ObservedObject(wrappedValue: viewModel)
+        _editorDraft = editorDraft
     }
 
     var body: some View {
@@ -49,8 +46,12 @@ struct BrowseHomeView: View {
         .onChange(of: quickAccessItems.map(\.id)) { _, _ in
             debounceSplitSync()
         }
-        .sheet(item: $editorDraft) { draft in
-            remoteServerEditor(for: draft)
+        .onChange(of: editorDraft?.id) { oldValue, newValue in
+            guard oldValue != nil, newValue == nil else {
+                return
+            }
+
+            handleEditorDismissal()
         }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
@@ -126,7 +127,7 @@ struct BrowseHomeView: View {
                     BrowseHomeEmptyState(onAddServer: presentCreateServerSheet)
                         .background(Color.surfaceGrouped)
                 } else {
-                    List(selection: $splitSelection) {
+                    List(selection: splitSelectionBinding) {
                         splitServersSection
 
                         if showsQuickAccess {
@@ -173,7 +174,7 @@ struct BrowseHomeView: View {
                 .buttonStyle(.plain)
                 .contextMenu {
                     Button {
-                        editorDraft = viewModel.makeEditDraft(for: profile)
+                        requestEditorPresentation(viewModel.makeEditDraft(for: profile))
                     } label: {
                         Label("Edit", systemImage: "square.and.pencil")
                     }
@@ -188,7 +189,7 @@ struct BrowseHomeView: View {
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
-                        editorDraft = viewModel.makeEditDraft(for: profile)
+                        requestEditorPresentation(viewModel.makeEditDraft(for: profile))
                     } label: {
                         Label("Edit", systemImage: "square.and.pencil")
                     }
@@ -219,7 +220,7 @@ struct BrowseHomeView: View {
                 .tag(BrowseHomeSplitSelection.server(profile.id) as BrowseHomeSplitSelection?)
                 .contextMenu {
                     Button {
-                        editorDraft = viewModel.makeEditDraft(for: profile)
+                        requestEditorPresentation(viewModel.makeEditDraft(for: profile))
                     } label: {
                         Label("Edit", systemImage: "square.and.pencil")
                     }
@@ -329,20 +330,6 @@ struct BrowseHomeView: View {
         }
     }
 
-    private func remoteServerEditor(
-        for draft: RemoteServerEditorDraft
-    ) -> some View {
-        RemoteServerEditorSheet(draft: draft) { updatedDraft in
-            let alertState = viewModel.save(draft: updatedDraft)
-            if alertState == nil {
-                editorDraft = nil
-                synchronizeSplitSelection()
-            }
-            return alertState
-        }
-        .id(draft.id)
-    }
-
     @ViewBuilder
     private func navigationDestination(for request: BrowseHomeNavigationRequest) -> some View {
         switch request {
@@ -366,7 +353,7 @@ struct BrowseHomeView: View {
                 RemoteServerDetailView(
                     profile: profile,
                     dependencies: dependencies,
-                    onRequestEdit: { draft in editorDraft = draft }
+                    onRequestEdit: requestEditorPresentation
                 )
             } else {
                 ContentUnavailableView(
@@ -383,16 +370,34 @@ struct BrowseHomeView: View {
     }
 
     private func presentCreateServerSheet() {
-        // Cancel any pending debounced sync and stabilise the split selection
-        // NOW. If the sync fires mid-presentation it can swap the detail
-        // column view controller, which tears down the sheet on iOS.
+        requestEditorPresentation(viewModel.makeCreateDraft())
+    }
+
+    private func requestEditorPresentation(_ draft: RemoteServerEditorDraft) {
+        // Freeze split-view sync while the system sheet is open so the detail
+        // column does not change underneath the presenter host.
         splitSyncTask?.cancel()
         splitSyncTask = nil
-        synchronizeSplitSelection()
-        editorDraft = viewModel.makeCreateDraft()
+
+        if usesSplitViewLayout {
+            let editorDraftBinding = _editorDraft
+            DispatchQueue.main.async {
+                guard editorDraftBinding.wrappedValue == nil else {
+                    return
+                }
+
+                editorDraftBinding.wrappedValue = draft
+            }
+        } else {
+            editorDraft = draft
+        }
     }
 
     private func debounceSplitSync() {
+        guard editorDraft == nil else {
+            return
+        }
+
         splitSyncTask?.cancel()
         splitSyncTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -407,6 +412,10 @@ struct BrowseHomeView: View {
             return
         }
 
+        guard editorDraft == nil else {
+            return
+        }
+
         let validSelections = Set(
             displayedProfiles.map { BrowseHomeSplitSelection.server($0.id) }
             + quickAccessItems.map(\.splitSelection)
@@ -418,6 +427,23 @@ struct BrowseHomeView: View {
 
         splitSelection = displayedProfiles.first.map { .server($0.id) }
             ?? quickAccessItems.first?.splitSelection
+    }
+
+    private func handleEditorDismissal() {
+        debounceSplitSync()
+    }
+
+    private var splitSelectionBinding: Binding<BrowseHomeSplitSelection?> {
+        Binding(
+            get: { splitSelection },
+            set: { newValue in
+                guard editorDraft == nil else {
+                    return
+                }
+
+                splitSelection = newValue
+            }
+        )
     }
 }
 

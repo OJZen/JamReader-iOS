@@ -8,12 +8,23 @@ struct AppRootView: View {
     @AppStorage(AppNavigationStorageKeys.selectedTab) private var selectedTabRawValue = AppRootTab.library.rawValue
     @State private var importFeedbackDismissTask: Task<Void, Never>?
     @State private var isImportProgressExpanded = true
+    @StateObject private var browseRemoteServerViewModel: RemoteServerListViewModel
+    @State private var browseEditorDraft: RemoteServerEditorDraft?
 
     init(viewModel: LibraryListViewModel, dependencies: AppDependencies) {
         self.viewModel = viewModel
         self.dependencies = dependencies
         _remoteBackgroundImportController = ObservedObject(
             wrappedValue: dependencies.remoteBackgroundImportController
+        )
+        _browseRemoteServerViewModel = StateObject(
+            wrappedValue: RemoteServerListViewModel(
+                profileStore: dependencies.remoteServerProfileStore,
+                folderShortcutStore: dependencies.remoteFolderShortcutStore,
+                credentialStore: dependencies.remoteServerCredentialStore,
+                browsingService: dependencies.remoteServerBrowsingService,
+                readingProgressStore: dependencies.remoteReadingProgressStore
+            )
         )
     }
 
@@ -38,7 +49,11 @@ struct AppRootView: View {
                         }
                         .tag(AppRootTab.library)
 
-                    BrowseHomeView(dependencies: dependencies)
+                    BrowseHomeView(
+                        dependencies: dependencies,
+                        viewModel: browseRemoteServerViewModel,
+                        editorDraft: $browseEditorDraft
+                    )
                         .background(Color.surfaceGrouped.ignoresSafeArea())
                         .tabItem {
                             Label("Browse", systemImage: AppRootTab.browse.systemImage)
@@ -78,6 +93,11 @@ struct AppRootView: View {
         .onDisappear {
             importFeedbackDismissTask?.cancel()
             importFeedbackDismissTask = nil
+        }
+        .background {
+            SystemSheetPresenter(item: $browseEditorDraft) { draft in
+                browseRemoteServerEditor(for: draft)
+            }
         }
         // iPad keyboard shortcuts: Cmd+1/2/3 for tab switching
         .background {
@@ -149,5 +169,21 @@ struct AppRootView: View {
         case .openLibrary(let libraryID, let folderID):
             AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
         }
+    }
+
+    private func browseRemoteServerEditor(
+        for draft: RemoteServerEditorDraft
+    ) -> some View {
+        RemoteServerEditorSheet(
+            draft: draft,
+            appliesSwiftUIPresentationModifiers: false
+        ) { updatedDraft in
+            let alertState = browseRemoteServerViewModel.save(draft: updatedDraft)
+            if alertState == nil {
+                browseEditorDraft = nil
+            }
+            return alertState
+        }
+        .id(draft.id)
     }
 }
