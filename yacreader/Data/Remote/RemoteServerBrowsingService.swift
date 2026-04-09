@@ -12,6 +12,9 @@ enum RemoteServerBrowsingError: LocalizedError {
     case remotePathUnavailable(String)
     case accessDenied(String)
     case connectionFailed(String)
+    case insecureTransportBlocked(String)
+    case certificateNotTrusted(String)
+    case secureConnectionFailed(String)
     case cacheMaintenanceFailed(String)
     case operationFailed(String)
 
@@ -35,6 +38,12 @@ enum RemoteServerBrowsingError: LocalizedError {
             return "Access was denied for \(location)."
         case .connectionFailed(let endpoint):
             return "Could not reach \(endpoint). Check that the server is online and reachable from this device."
+        case .insecureTransportBlocked(let endpoint):
+            return "iOS blocked the insecure HTTP connection to \(endpoint). Use HTTPS for this WebDAV server."
+        case .certificateNotTrusted(let endpoint):
+            return "The TLS certificate presented by \(endpoint) is not trusted by this device."
+        case .secureConnectionFailed(let endpoint):
+            return "A secure connection to \(endpoint) could not be established."
         case .cacheMaintenanceFailed(let reason):
             return reason
         case .operationFailed(let reason):
@@ -992,7 +1001,8 @@ final class RemoteServerBrowsingService {
             switch browsingError {
             case .connectionFailed:
                 return true
-            case .authenticationFailed, .accessDenied, .invalidProfile,
+            case .insecureTransportBlocked, .certificateNotTrusted, .secureConnectionFailed,
+                 .authenticationFailed, .accessDenied, .invalidProfile,
                  .missingCredentials, .unsupportedComicFile,
                  .shareUnavailable, .remotePathUnavailable,
                  .providerIntegrationUnavailable, .cacheMaintenanceFailed,
@@ -2015,17 +2025,50 @@ final class RemoteServerBrowsingService {
         }
 
         if let urlError = error as? URLError {
-            return RemoteServerBrowsingError.connectionFailed(
-                "\(profile.endpointDisplayHost) (\(urlError.localizedDescription))"
+            return normalizedURLTransportError(
+                code: urlError.code,
+                profile: profile,
+                fallbackMessage: urlError.localizedDescription
             )
         }
 
         let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            let urlErrorCode = URLError.Code(rawValue: nsError.code)
+            return normalizedURLTransportError(
+                code: urlErrorCode,
+                profile: profile,
+                fallbackMessage: nsError.localizedDescription
+            )
+        }
+
         if nsError.domain == NSPOSIXErrorDomain {
             return RemoteServerBrowsingError.connectionFailed(profile.endpointDisplayHost)
         }
 
         return RemoteServerBrowsingError.operationFailed(error.userFacingMessage)
+    }
+
+    private func normalizedURLTransportError(
+        code: URLError.Code,
+        profile: RemoteServerProfile,
+        fallbackMessage: String
+    ) -> RemoteServerBrowsingError {
+        switch code {
+        case .appTransportSecurityRequiresSecureConnection:
+            return .insecureTransportBlocked(profile.endpointDisplayHost)
+        case .serverCertificateUntrusted,
+             .serverCertificateHasUnknownRoot,
+             .serverCertificateHasBadDate,
+             .serverCertificateNotYetValid:
+            return .certificateNotTrusted(profile.endpointDisplayHost)
+        case .secureConnectionFailed,
+             .clientCertificateRejected,
+             .clientCertificateRequired:
+            return .secureConnectionFailed(profile.endpointDisplayHost)
+        default:
+            return .connectionFailed("\(profile.endpointDisplayHost) (\(fallbackMessage))")
+        }
     }
 
     private func cachedFallbackMessage(

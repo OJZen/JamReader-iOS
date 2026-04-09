@@ -1079,6 +1079,27 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 message: error.userFacingMessage,
                 recoverySuggestion: "Make sure this device can reach the remote server on the current network. You can still try opening a recently cached comic below."
             )
+        case .insecureTransportBlocked:
+            return RemoteBrowserLoadIssue(
+                kind: .connection,
+                title: "Insecure HTTP Blocked",
+                message: error.userFacingMessage,
+                recoverySuggestion: "This WebDAV server is using HTTP, and iOS blocked the connection. Switch the server to HTTPS or update the app to explicitly allow insecure HTTP for this endpoint."
+            )
+        case .certificateNotTrusted:
+            return RemoteBrowserLoadIssue(
+                kind: .connection,
+                title: "Certificate Not Trusted",
+                message: error.userFacingMessage,
+                recoverySuggestion: "Install a certificate that iOS trusts, provide the full TLS certificate chain, or connect using a hostname covered by the certificate."
+            )
+        case .secureConnectionFailed:
+            return RemoteBrowserLoadIssue(
+                kind: .connection,
+                title: "Secure Connection Failed",
+                message: error.userFacingMessage,
+                recoverySuggestion: "Check the server's TLS setup, certificate chain, and hostname, then try again."
+            )
         case .shareUnavailable:
             return RemoteBrowserLoadIssue(
                 kind: .shareUnavailable,

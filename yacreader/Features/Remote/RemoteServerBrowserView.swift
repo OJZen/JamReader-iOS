@@ -95,6 +95,9 @@ struct RemoteServerBrowserView: View {
             .onChange(of: displayScale) { _, _ in
                 scheduleThumbnailPreheat(immediately: true)
             }
+            .onChange(of: horizontalSizeClass) { _, _ in
+                scheduleThumbnailPreheat(immediately: true)
+            }
             .refreshable {
                 await viewModel.load()
             }
@@ -438,40 +441,46 @@ struct RemoteServerBrowserView: View {
                     )
                 }
             } else {
-                RemoteServerBrowserListUIKitView(
-                    sections: renderedSections,
-                    profile: viewModel.profile,
-                    browsingService: dependencies.remoteServerBrowsingService,
-                    onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
-                    onOpenItem: { item in
-                        if item.canOpenAsComic {
-                            prepareHeroTransition(for: item, fallbackFrame: .zero)
+                GeometryReader { geometry in
+                    RemoteServerBrowserListUIKitView(
+                        sections: renderedSections,
+                        profile: viewModel.profile,
+                        browsingService: dependencies.remoteServerBrowsingService,
+                        layoutContext: browserLayoutContext(for: geometry.size.width),
+                        onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
+                        onOpenItem: { item in
+                            if item.canOpenAsComic {
+                                prepareHeroTransition(for: item, fallbackFrame: .zero)
+                            }
+                            openPrimaryAction(for: item)
+                        },
+                        onShowInfo: { item in
+                            presentedInfoItem = item
+                        },
+                        onOpenOffline: { item in
+                            openOfflineCopy(for: item)
+                        },
+                        onSaveOffline: { item in
+                            saveOfflineAction(
+                                for: item,
+                                availability: viewModel.cacheAvailability(for: item)
+                            )?()
+                        },
+                        onRemoveOffline: { item in
+                            removeOfflineAction(
+                                for: item,
+                                availability: viewModel.cacheAvailability(for: item)
+                            )?()
+                        },
+                        onImport: { item in
+                            importAction(for: item)?()
                         }
-                        openPrimaryAction(for: item)
-                    },
-                    onShowInfo: { item in
-                        presentedInfoItem = item
-                    },
-                    onOpenOffline: { item in
-                        openOfflineCopy(for: item)
-                    },
-                    onSaveOffline: { item in
-                        saveOfflineAction(
-                            for: item,
-                            availability: viewModel.cacheAvailability(for: item)
-                        )?()
-                    },
-                    onRemoveOffline: { item in
-                        removeOfflineAction(
-                            for: item,
-                            availability: viewModel.cacheAvailability(for: item)
-                        )?()
-                    },
-                    onImport: { item in
-                        importAction(for: item)?()
-                    }
-                )
-                .ignoresSafeArea(edges: [.top, .bottom])
+                    )
+                    .id(browserLayoutIdentity(for: geometry.size.width, mode: .list))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea(edges: [.top, .bottom])
+                    .background(Color.surfaceGrouped)
+                }
             }
         }
         .background(Color.surfaceGrouped)
@@ -502,38 +511,44 @@ struct RemoteServerBrowserView: View {
                     )
                 }
             } else {
-                RemoteServerBrowserGridUIKitView(
-                    sections: renderedSections,
-                    profile: viewModel.profile,
-                    browsingService: dependencies.remoteServerBrowsingService,
-                    onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
-                    onOpenItem: { item in
-                        prepareHeroTransition(for: item, fallbackFrame: .zero)
-                        openPrimaryAction(for: item)
-                    },
-                    onShowInfo: { item in
-                        presentedInfoItem = item
-                    },
-                    onOpenOffline: { item in
-                        openOfflineCopy(for: item)
-                    },
-                    onSaveOffline: { item in
-                        saveOfflineAction(
-                            for: item,
-                            availability: viewModel.cacheAvailability(for: item)
-                        )?()
-                    },
-                    onRemoveOffline: { item in
-                        removeOfflineAction(
-                            for: item,
-                            availability: viewModel.cacheAvailability(for: item)
-                        )?()
-                    },
-                    onImport: { item in
-                        importAction(for: item)?()
-                    }
-                )
-                .ignoresSafeArea(edges: [.top, .bottom])
+                GeometryReader { geometry in
+                    RemoteServerBrowserGridUIKitView(
+                        sections: renderedSections,
+                        profile: viewModel.profile,
+                        browsingService: dependencies.remoteServerBrowsingService,
+                        layoutContext: browserLayoutContext(for: geometry.size.width),
+                        onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
+                        onOpenItem: { item in
+                            prepareHeroTransition(for: item, fallbackFrame: .zero)
+                            openPrimaryAction(for: item)
+                        },
+                        onShowInfo: { item in
+                            presentedInfoItem = item
+                        },
+                        onOpenOffline: { item in
+                            openOfflineCopy(for: item)
+                        },
+                        onSaveOffline: { item in
+                            saveOfflineAction(
+                                for: item,
+                                availability: viewModel.cacheAvailability(for: item)
+                            )?()
+                        },
+                        onRemoveOffline: { item in
+                            removeOfflineAction(
+                                for: item,
+                                availability: viewModel.cacheAvailability(for: item)
+                            )?()
+                        },
+                        onImport: { item in
+                            importAction(for: item)?()
+                        }
+                    )
+                    .id(browserLayoutIdentity(for: geometry.size.width, mode: .grid))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .ignoresSafeArea(edges: [.top, .bottom])
+                    .background(Color.surfaceGrouped)
+                }
             }
         }
         .background(Color.surfaceGrouped)
@@ -563,12 +578,20 @@ struct RemoteServerBrowserView: View {
 
     @ViewBuilder
     private func errorRecoveryActions(loadIssue: RemoteBrowserLoadIssue?) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.sm) {
+        VStack(alignment: .center, spacing: Spacing.sm) {
             if let recoverySuggestion = loadIssue?.recoverySuggestion {
-                Label(recoverySuggestion, systemImage: "lightbulb")
-                    .font(AppFont.footnote())
-                    .foregroundStyle(Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: Spacing.xs) {
+                    Image(systemName: "lightbulb")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.textSecondary)
+
+                    Text(recoverySuggestion)
+                        .font(AppFont.footnote())
+                        .foregroundStyle(Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
 
             ViewThatFits(in: .horizontal) {
@@ -578,13 +601,15 @@ struct RemoteServerBrowserView: View {
                     continueReadingButton
                     offlineShelfButton
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
 
-                VStack(alignment: .leading, spacing: Spacing.sm) {
+                VStack(spacing: Spacing.sm) {
                     retryButton
                     manageServersButton(loadIssue: loadIssue)
                     continueReadingButton
                     offlineShelfButton
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
 
             if loadIssue?.prefersPathRecoveryActions == true {
@@ -593,14 +618,17 @@ struct RemoteServerBrowserView: View {
                         upOneLevelButton
                         sessionRootButton
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
 
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                    VStack(spacing: Spacing.sm) {
                         upOneLevelButton
                         sessionRootButton
                     }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var retryButton: some View {
@@ -729,7 +757,7 @@ struct RemoteServerBrowserView: View {
             visibleIDs: visibleIDs,
             items: items
         )
-        let estimatedItemWidth: CGFloat = horizontalSizeClass == .regular ? 292 : 212
+        let estimatedItemWidth = browserLayoutContext(for: UIScreen.main.bounds.width).estimatedGridItemWidth
         let estimatedItemHeight = estimatedItemWidth / AppLayout.coverAspectRatio
         let maxPixelSize = Int(max(estimatedItemWidth, estimatedItemHeight) * max(displayScale, 1))
 
@@ -1377,6 +1405,21 @@ struct RemoteServerBrowserView: View {
         case .openLibrary(let libraryID, let folderID):
             AppNavigationRouter.openLibrary(libraryID, folderID: folderID)
         }
+    }
+
+    private func browserLayoutContext(for containerWidth: CGFloat) -> RemoteServerBrowserLayoutContext {
+        RemoteServerBrowserLayoutContext(
+            containerWidth: containerWidth,
+            horizontalSizeClass: horizontalSizeClass
+        )
+    }
+
+    private func browserLayoutIdentity(
+        for containerWidth: CGFloat,
+        mode: LibraryComicDisplayMode
+    ) -> String {
+        let layoutContext = browserLayoutContext(for: containerWidth)
+        return "\(mode.rawValue)-\(horizontalSizeClass == .regular ? "regular" : "compact")-\(layoutContext.usesWideGridMetrics)-\(layoutContext.usesMediumGridMetrics)-\(Int(containerWidth.rounded(.toNearestOrAwayFromZero)))"
     }
 
     private func presentVisibleOfflineRemovalConfirmation() {

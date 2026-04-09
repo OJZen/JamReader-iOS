@@ -25,10 +25,79 @@ struct RemoteBrowserListRowModel: Equatable, Identifiable {
     var id: String { item.id }
 }
 
+struct RemoteServerBrowserLayoutContext: Equatable {
+    let containerWidth: CGFloat
+    let horizontalSizeClass: UserInterfaceSizeClass?
+
+    private var normalizedWidth: CGFloat {
+        max(containerWidth.rounded(.toNearestOrAwayFromZero), 0)
+    }
+
+    var usesWideGridMetrics: Bool {
+        normalizedWidth >= 700 || (horizontalSizeClass == .regular && normalizedWidth >= 560)
+    }
+
+    var usesMediumGridMetrics: Bool {
+        !usesWideGridMetrics && normalizedWidth >= 430
+    }
+
+    var gridSectionInsets: UIEdgeInsets {
+        let horizontalInset: CGFloat = usesWideGridMetrics ? 16 : 12
+        return UIEdgeInsets(top: 4, left: horizontalInset, bottom: 20, right: horizontalInset)
+    }
+
+    var gridNoticeInsets: UIEdgeInsets {
+        let horizontalInset = gridSectionInsets.left
+        return UIEdgeInsets(top: 0, left: horizontalInset, bottom: 20, right: horizontalInset)
+    }
+
+    var gridLineSpacing: CGFloat {
+        if usesWideGridMetrics {
+            return 16
+        }
+
+        return usesMediumGridMetrics ? 14 : 12
+    }
+
+    var gridInteritemSpacing: CGFloat {
+        if usesWideGridMetrics {
+            return 14
+        }
+
+        return usesMediumGridMetrics ? 12 : 10
+    }
+
+    var gridMinimumItemWidth: CGFloat {
+        if usesWideGridMetrics {
+            return 214
+        }
+
+        return usesMediumGridMetrics ? 184 : 160
+    }
+
+    var gridMaximumItemWidth: CGFloat {
+        if usesWideGridMetrics {
+            return 292
+        }
+
+        return usesMediumGridMetrics ? 248 : 212
+    }
+
+    var estimatedGridItemWidth: CGFloat {
+        min(gridMaximumItemWidth, max(gridMinimumItemWidth, normalizedWidth - (gridSectionInsets.left + gridSectionInsets.right)))
+    }
+
+    static func == (lhs: RemoteServerBrowserLayoutContext, rhs: RemoteServerBrowserLayoutContext) -> Bool {
+        lhs.horizontalSizeClass == rhs.horizontalSizeClass
+            && Int(lhs.normalizedWidth) == Int(rhs.normalizedWidth)
+    }
+}
+
 struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
     let sections: [RemoteBrowserListSectionModel]
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
+    let layoutContext: RemoteServerBrowserLayoutContext
     let onVisibleComicIDsChanged: (Set<String>) -> Void
     let onOpenItem: (RemoteDirectoryItem) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
@@ -42,6 +111,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: sections,
             profile: profile,
             browsingService: browsingService,
+            layoutContext: layoutContext,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -64,6 +134,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: sections,
             profile: profile,
             browsingService: browsingService,
+            layoutContext: layoutContext,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -85,6 +156,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         private var sections: [RemoteBrowserListSectionModel]
         private var profile: RemoteServerProfile
         private var browsingService: RemoteServerBrowsingService
+        private var layoutContext: RemoteServerBrowserLayoutContext
         private var onVisibleComicIDsChanged: (Set<String>) -> Void
         private var onOpenItem: (RemoteDirectoryItem) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
@@ -100,6 +172,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: [RemoteBrowserListSectionModel],
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
+            layoutContext: RemoteServerBrowserLayoutContext,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -111,6 +184,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
+            self.layoutContext = layoutContext
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -128,6 +202,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             sections: [RemoteBrowserListSectionModel],
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
+            layoutContext: RemoteServerBrowserLayoutContext,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -137,9 +212,11 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             onImport: @escaping (RemoteDirectoryItem) -> Void
         ) {
             let updatePlan = Self.makeUpdatePlan(from: self.sections, to: sections)
+            let didChangeLayoutContext = self.layoutContext != layoutContext
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
+            self.layoutContext = layoutContext
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -150,11 +227,17 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
 
             switch updatePlan {
             case .none:
-                break
+                if didChangeLayoutContext {
+                    controller?.refreshLayout()
+                }
             case .fullReload:
                 controller?.markNeedsReload()
             case .reconfigureVisibleRows(let indexPaths):
                 controller?.reconfigureVisibleRows(at: indexPaths)
+            }
+
+            if didChangeLayoutContext {
+                controller?.markNeedsReload()
             }
 
             reportVisibleComicIDsIfNeeded()
@@ -184,7 +267,8 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             cell.configure(
                 row: row,
                 profile: profile,
-                browsingService: browsingService
+                browsingService: browsingService,
+                layoutContext: layoutContext
             )
             return cell
         }
@@ -325,7 +409,8 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             cell.configure(
                 row: sections[indexPath.section].items[indexPath.row],
                 profile: profile,
-                browsingService: browsingService
+                browsingService: browsingService,
+                layoutContext: layoutContext
             )
         }
 
@@ -490,8 +575,21 @@ final class RemoteBrowserListViewController: UIViewController {
         coordinator?.reportVisibleComicIDsIfNeeded()
     }
 
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { _ in
+            self.refreshLayout()
+        })
+    }
+
     func markNeedsReload() {
         needsReload = true
+    }
+
+    func refreshLayout() {
+        tableView.beginUpdates()
+        tableView.endUpdates()
+        tableView.layoutIfNeeded()
     }
 
     func reconfigureVisibleRows(at indexPaths: [IndexPath]) {
@@ -569,7 +667,8 @@ private final class RemoteBrowserListCell: UITableViewCell {
     func configure(
         row: RemoteBrowserListRowModel,
         profile: RemoteServerProfile,
-        browsingService: RemoteServerBrowsingService
+        browsingService: RemoteServerBrowsingService,
+        layoutContext: RemoteServerBrowserLayoutContext
     ) {
         representedItemID = row.item.id
         titleLabel.text = row.item.name

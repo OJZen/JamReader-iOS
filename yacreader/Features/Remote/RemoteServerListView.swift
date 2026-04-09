@@ -58,12 +58,6 @@ struct RemoteServerListView: View {
                                     .padding(.trailing, 8)
                             }
                         }
-                        .contextMenu {
-                            remoteServerActionMenuContent(for: profile)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            remoteServerSwipeActions(for: profile)
-                        }
                     }
                 }
             }
@@ -194,24 +188,6 @@ struct RemoteServerListView: View {
             viewModel.delete(profile)
         } label: {
             Label("Delete Server", systemImage: "trash")
-        }
-    }
-
-    @ViewBuilder
-    private func remoteServerSwipeActions(
-        for profile: RemoteServerProfile
-    ) -> some View {
-        Button {
-            editorDraft = viewModel.makeEditDraft(for: profile)
-        } label: {
-            Label("Edit", systemImage: "square.and.pencil")
-        }
-        .tint(.blue)
-
-        Button(role: .destructive) {
-            viewModel.delete(profile)
-        } label: {
-            Label("Delete", systemImage: "trash")
         }
     }
 
