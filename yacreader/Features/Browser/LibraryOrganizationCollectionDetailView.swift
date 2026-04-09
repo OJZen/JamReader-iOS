@@ -4,6 +4,11 @@ struct LibraryOrganizationCollectionDetailView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
         static let rowAccessoryReservedWidth: CGFloat = 36
+        static let compactGridMinWidth: CGFloat = 165
+        static let compactGridMaxWidth: CGFloat = 220
+        static let regularGridMinWidth: CGFloat = 240
+        static let regularGridMaxWidth: CGFloat = 320
+        static let wideGridMinContainerWidth: CGFloat = 860
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -33,9 +38,11 @@ struct LibraryOrganizationCollectionDetailView: View {
     @State private var isShowingSelectionActionsSheet = false
     @State private var presentedComic: PresentedComic?
     @State private var heroSourceFrame: CGRect = .zero
+    @State private var containerWidth: CGFloat = 0
 
     private var showsPersistentComicActions: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularInlineActionMinWidth)
     }
 
     private var comicAccessoryReservedWidth: CGFloat {
@@ -73,6 +80,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                 contentBody
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -170,8 +178,8 @@ struct LibraryOrganizationCollectionDetailView: View {
             configurePreferredDisplayModeIfNeeded()
             viewModel.load()
         }
-        .onChange(of: horizontalSizeClass) { _, newValue in
-            adaptDisplayMode(to: newValue)
+        .onChange(of: supportsGridDisplay) { _, _ in
+            adaptDisplayModeForCurrentWidth()
         }
         .onChange(of: displayedComics.map(\.id)) { _, visibleComicIDs in
             let visibleIDs = Set(visibleComicIDs)
@@ -652,6 +660,7 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var supportsGridDisplay: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularInlineActionMinWidth)
     }
 
     private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
@@ -1033,16 +1042,24 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private var comicGridColumns: [GridItem] {
-        [
+        let widthRange = usesWideComicGridMetrics
+            ? LayoutMetrics.regularGridMinWidth...LayoutMetrics.regularGridMaxWidth
+            : LayoutMetrics.compactGridMinWidth...LayoutMetrics.compactGridMaxWidth
+        return [
             GridItem(
                 .adaptive(
-                    minimum: horizontalSizeClass == .regular ? 240 : 165,
-                    maximum: horizontalSizeClass == .regular ? 320 : 220
+                    minimum: widthRange.lowerBound,
+                    maximum: widthRange.upperBound
                 ),
                 spacing: 16,
                 alignment: .top
             )
         ]
+    }
+
+    private var usesWideComicGridMetrics: Bool {
+        horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= LayoutMetrics.wideGridMinContainerWidth)
     }
 
     private func configurePreferredDisplayModeIfNeeded() {
@@ -1051,13 +1068,13 @@ struct LibraryOrganizationCollectionDetailView: View {
         }
 
         hasConfiguredPreferredDisplayMode = true
-        displayMode = horizontalSizeClass == .regular ? preferredDisplayMode : .list
+        displayMode = supportsGridDisplay ? preferredDisplayMode : .list
     }
 
-    private func adaptDisplayMode(to sizeClass: UserInterfaceSizeClass?) {
-        if sizeClass == .regular {
+    private func adaptDisplayModeForCurrentWidth() {
+        if supportsGridDisplay {
             displayMode = preferredDisplayMode
-        } else if sizeClass != .regular, displayMode == .grid {
+        } else if displayMode == .grid {
             displayMode = .list
         }
     }

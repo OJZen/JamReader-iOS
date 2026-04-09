@@ -12,6 +12,7 @@ struct RemoteServerListView: View {
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var editorDraft: RemoteServerEditorDraft?
     @State private var navigationRequest: RemoteServerListNavigationRequest?
+    @State private var containerWidth: CGFloat = 0
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -64,6 +65,7 @@ struct RemoteServerListView: View {
         }
         .navigationTitle("Remote Servers")
         .navigationBarTitleDisplayMode(.inline)
+        .readContainerWidth(into: $containerWidth)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -112,6 +114,7 @@ struct RemoteServerListView: View {
 
     private var showsPersistentRowActions: Bool {
         horizontalSizeClass == .regular
+            && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
     private var persistentRowActionReservedWidth: CGFloat {

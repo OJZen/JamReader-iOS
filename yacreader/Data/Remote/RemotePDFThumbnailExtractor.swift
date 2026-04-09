@@ -10,8 +10,39 @@ enum RemotePDFThumbnailExtractionError: Error {
 
 struct RemotePDFThumbnailExtractor {
     let fileReader: any RemoteRandomAccessFileReader
+    private static let extractionQueue = DispatchQueue(
+        label: "YACReader.RemotePDFThumbnailExtractor",
+        qos: .utility
+    )
 
     func extractThumbnail(maxPixelSize: Int) async throws -> UIImage {
+        try await withCheckedThrowingContinuation { continuation in
+            Self.extractionQueue.async {
+                let semaphore = DispatchSemaphore(value: 0)
+                let resultBox = RemotePDFThumbnailResultBox()
+
+                Task(priority: .utility) {
+                    defer {
+                        semaphore.signal()
+                    }
+
+                    do {
+                        let image = try await extractThumbnailCore(maxPixelSize: maxPixelSize)
+                        resultBox.store(.success(image))
+                    } catch {
+                        resultBox.store(.failure(error))
+                    }
+                }
+
+                semaphore.wait()
+                continuation.resume(
+                    with: resultBox.load() ?? .failure(RemotePDFThumbnailExtractionError.truncatedRead)
+                )
+            }
+        }
+    }
+
+    private func extractThumbnailCore(maxPixelSize: Int) async throws -> UIImage {
         let fileSize = try await fileReader.fileSize
         let dataSource = RemotePDFRandomAccessDataSource(
             fileReader: fileReader,
@@ -282,6 +313,19 @@ private final class RemotePDFReadResultBox: @unchecked Sendable {
     }
 
     nonisolated func load() -> Result<Data, Error>? {
+        lock.withLock { _result }
+    }
+}
+
+private final class RemotePDFThumbnailResultBox: @unchecked Sendable {
+    nonisolated private let lock = NSLock()
+    nonisolated(unsafe) private var _result: Result<UIImage, Error>?
+
+    nonisolated func store(_ result: Result<UIImage, Error>) {
+        lock.withLock { _result = result }
+    }
+
+    nonisolated func load() -> Result<UIImage, Error>? {
         lock.withLock { _result }
     }
 }

@@ -144,10 +144,6 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 controller?.reconfigureVisibleItems(at: indexPaths)
             }
 
-            if didChangeLayoutContext {
-                controller?.markNeedsReload()
-            }
-
             reportVisibleComicIDsIfNeeded()
         }
 
@@ -249,7 +245,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             guard sections[section].kind != .notice else {
                 return .zero
             }
-            return CGSize(width: collectionView.bounds.width, height: 40)
+            return CGSize(width: collectionView.bounds.width, height: headerHeight(for: section))
         }
 
         func collectionView(
@@ -290,16 +286,96 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             layoutContext.gridInteritemSpacing
         }
 
+        fileprivate func layoutSection(
+            at sectionIndex: Int,
+            environment: NSCollectionLayoutEnvironment
+        ) -> NSCollectionLayoutSection {
+            let sectionModel = sectionIndex < sections.count ? sections[sectionIndex] : nil
+            let usesNoticeLayout = sectionModel?.kind == .notice
+            let effectiveWidth = environment.container.effectiveContentSize.width
+            let contentInsets = usesNoticeLayout ? layoutContext.gridNoticeInsets : layoutContext.gridSectionInsets
+            let interItemSpacing = layoutContext.gridInteritemSpacing
+            let columns = usesNoticeLayout
+                ? 1
+                : max(layoutContext.gridItemMetrics(for: effectiveWidth).columns, 1)
+
+            let horizontalInset = contentInsets.left + contentInsets.right
+            let availableWidth = max(effectiveWidth - horizontalInset, 1)
+            let totalSpacing = CGFloat(max(columns - 1, 0)) * interItemSpacing
+            let itemWidth = floor((availableWidth - totalSpacing) / CGFloat(columns))
+            let itemHeight = itemWidth / AppLayout.coverAspectRatio + 72
+
+            let itemSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .fractionalHeight(1.0)
+            )
+            let item = NSCollectionLayoutItem(layoutSize: itemSize)
+
+            let groupSize = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1.0),
+                heightDimension: .absolute(itemHeight)
+            )
+            let group = NSCollectionLayoutGroup.horizontal(
+                layoutSize: groupSize,
+                subitem: item,
+                count: columns
+            )
+            group.interItemSpacing = NSCollectionLayoutSpacing.fixed(interItemSpacing)
+
+            let section = NSCollectionLayoutSection(group: group)
+            section.contentInsets = NSDirectionalEdgeInsets(
+                top: contentInsets.top,
+                leading: contentInsets.left,
+                bottom: contentInsets.bottom,
+                trailing: contentInsets.right
+            )
+            section.interGroupSpacing = layoutContext.gridLineSpacing
+
+            var boundaryItems: [NSCollectionLayoutBoundarySupplementaryItem] = []
+
+            if let sectionModel, sectionModel.kind != RemoteBrowserListSectionModel.Kind.notice {
+                let header = NSCollectionLayoutBoundarySupplementaryItem(
+                    layoutSize: NSCollectionLayoutSize(
+                        widthDimension: .fractionalWidth(1.0),
+                        heightDimension: .absolute(headerHeight(for: sectionIndex))
+                    ),
+                    elementKind: UICollectionView.elementKindSectionHeader,
+                    alignment: .top
+                )
+                boundaryItems.append(header)
+            }
+
+            if let footerText = sectionModel?.footerText, !footerText.isEmpty {
+                let footer = NSCollectionLayoutBoundarySupplementaryItem(
+                    layoutSize: NSCollectionLayoutSize(
+                        widthDimension: .fractionalWidth(1.0),
+                        heightDimension: .absolute(24)
+                    ),
+                    elementKind: UICollectionView.elementKindSectionFooter,
+                    alignment: .bottom
+                )
+                boundaryItems.append(footer)
+            }
+
+            section.boundarySupplementaryItems = boundaryItems
+            return section
+        }
+
         private func itemWidth(for collectionView: UICollectionView) -> CGFloat {
-            let horizontalInset = layoutContext.gridSectionInsets.left + layoutContext.gridSectionInsets.right
-            let spacing = layoutContext.gridInteritemSpacing
-            let availableWidth = max(collectionView.bounds.width - horizontalInset, 0)
-            let minimumWidth = layoutContext.gridMinimumItemWidth
-            let maximumWidth = layoutContext.gridMaximumItemWidth
-            let columns = max(Int((availableWidth + spacing) / (minimumWidth + spacing)), 1)
-            let totalSpacing = CGFloat(max(columns - 1, 0)) * spacing
-            let rawWidth = floor((availableWidth - totalSpacing) / CGFloat(columns))
-            return min(maximumWidth, rawWidth)
+            layoutContext.gridItemMetrics(for: collectionView.bounds.width).itemWidth
+        }
+
+        private func headerHeight(for sectionIndex: Int) -> CGFloat {
+            guard sectionIndex < sections.count else {
+                return 34
+            }
+
+            let section = sections[sectionIndex]
+            guard section.kind != .notice else {
+                return 0
+            }
+
+            return (section.metadataText?.isEmpty == false) ? 52 : 34
         }
 
         private func menuElements(for row: RemoteBrowserListRowModel) -> [UIMenuElement] {
@@ -472,10 +548,10 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 final class RemoteBrowserGridViewController: UIViewController {
     weak var coordinator: RemoteServerBrowserGridUIKitView.Coordinator?
     private let navigationBridge = RemoteServerBrowserNativeNavigationBridge()
+    private var lastMeasuredContentWidth: Int = 0
 
     private(set) lazy var collectionView: UICollectionView = {
-        let layout = UICollectionViewFlowLayout()
-        layout.sectionInsetReference = .fromSafeArea
+        let layout = makeCollectionLayout()
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.backgroundColor = .clear
@@ -531,6 +607,7 @@ final class RemoteBrowserGridViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        handleWidthChangeIfNeeded()
         coordinator?.reportVisibleComicIDsIfNeeded()
     }
 
@@ -547,6 +624,7 @@ final class RemoteBrowserGridViewController: UIViewController {
 
     func refreshLayout() {
         collectionView.collectionViewLayout.invalidateLayout()
+        updateVisibleCellLayout()
         collectionView.layoutIfNeeded()
     }
 
@@ -582,6 +660,28 @@ final class RemoteBrowserGridViewController: UIViewController {
         collectionView.layoutIfNeeded()
         coordinator?.reportVisibleComicIDsIfNeeded()
     }
+
+    private func handleWidthChangeIfNeeded() {
+        let measuredWidth = Int(collectionView.bounds.width.rounded(.toNearestOrAwayFromZero))
+        guard measuredWidth > 0, measuredWidth != lastMeasuredContentWidth else {
+            return
+        }
+
+        lastMeasuredContentWidth = measuredWidth
+        refreshLayout()
+    }
+
+    private func makeCollectionLayout() -> UICollectionViewLayout {
+        UICollectionViewCompositionalLayout { [weak self] sectionIndex, environment in
+            self?.coordinator?.layoutSection(at: sectionIndex, environment: environment)
+        }
+    }
+
+    private func updateVisibleCellLayout() {
+        for case let cell as RemoteBrowserGridCell in collectionView.visibleCells {
+            cell.setNeedsLayout()
+        }
+    }
 }
 
 private final class RemoteBrowserGridCell: UICollectionViewCell {
@@ -596,6 +696,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
 
     private let cardView = UIView()
     private let thumbnailImageView = UIImageView()
+    private let thumbnailPlaceholderView = UIView()
+    private let thumbnailPlaceholderImageView = UIImageView()
     private let symbolView = UIView()
     private let symbolImageView = UIImageView()
     private let titleLabel = UILabel()
@@ -625,6 +727,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         representedItemID = nil
         thumbnailImageView.image = nil
         thumbnailImageView.isHidden = true
+        thumbnailPlaceholderView.isHidden = true
         symbolView.isHidden = true
         cacheBadgeView.isHidden = true
         progressTrackView.isHidden = true
@@ -643,7 +746,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         metadataLabel.text = metadataText(for: row)
         imageHeightConstraint?.constant = itemWidth / AppLayout.coverAspectRatio
 
-        if row.item.canOpenAsComic {
+        if row.item.canOpenAsComic, !row.item.isPDFDocument {
             configureComicThumbnail(
                 item: row.item,
                 profile: profile,
@@ -654,10 +757,20 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             symbolView.isHidden = true
             updateCacheBadge(for: row.cacheAvailability)
             updateProgressBar(for: row.readingSession)
+        } else if row.item.canOpenAsComic {
+            thumbnailTask?.cancel()
+            thumbnailTask = nil
+            thumbnailImageView.isHidden = true
+            thumbnailPlaceholderView.isHidden = true
+            symbolView.isHidden = false
+            configureSymbolView(for: row.item)
+            updateCacheBadge(for: row.cacheAvailability)
+            updateProgressBar(for: row.readingSession)
         } else {
             thumbnailTask?.cancel()
             thumbnailTask = nil
             thumbnailImageView.isHidden = true
+            thumbnailPlaceholderView.isHidden = true
             symbolView.isHidden = false
             cacheBadgeView.isHidden = true
             progressTrackView.isHidden = true
@@ -677,10 +790,24 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         cardView.clipsToBounds = true
         contentView.addSubview(cardView)
 
+        thumbnailPlaceholderView.translatesAutoresizingMaskIntoConstraints = false
+        thumbnailPlaceholderView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+        cardView.addSubview(thumbnailPlaceholderView)
+
+        thumbnailPlaceholderImageView.translatesAutoresizingMaskIntoConstraints = false
+        thumbnailPlaceholderImageView.contentMode = .scaleAspectFit
+        thumbnailPlaceholderImageView.tintColor = UIColor.systemBlue.withAlphaComponent(0.85)
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
+        thumbnailPlaceholderImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
+            pointSize: 34,
+            weight: .semibold
+        )
+        thumbnailPlaceholderView.addSubview(thumbnailPlaceholderImageView)
+
         thumbnailImageView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailImageView.contentMode = .scaleAspectFill
         thumbnailImageView.clipsToBounds = true
-        thumbnailImageView.backgroundColor = .tertiarySystemGroupedBackground
+        thumbnailImageView.backgroundColor = .clear
         thumbnailImageView.isHidden = true
         cardView.addSubview(thumbnailImageView)
 
@@ -732,10 +859,18 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
 
+            thumbnailPlaceholderView.topAnchor.constraint(equalTo: cardView.topAnchor),
+            thumbnailPlaceholderView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            thumbnailPlaceholderView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            thumbnailPlaceholderImageView.centerXAnchor.constraint(equalTo: thumbnailPlaceholderView.centerXAnchor),
+            thumbnailPlaceholderImageView.centerYAnchor.constraint(equalTo: thumbnailPlaceholderView.centerYAnchor),
+
             thumbnailImageView.topAnchor.constraint(equalTo: cardView.topAnchor),
             thumbnailImageView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
             thumbnailImageView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
             imageHeightConstraint!,
+
+            thumbnailPlaceholderView.heightAnchor.constraint(equalTo: thumbnailImageView.heightAnchor),
 
             symbolView.topAnchor.constraint(equalTo: cardView.topAnchor),
             symbolView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
@@ -775,6 +910,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         itemWidth: CGFloat
     ) {
         thumbnailImageView.isHidden = false
+        thumbnailPlaceholderView.isHidden = false
         symbolView.isHidden = true
         thumbnailTask?.cancel()
 
@@ -786,8 +922,9 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             browsingService: browsingService,
             maxPixelSize: pixelSize
         )
-        if representedItemID == itemID, let seeded {
+        if representedItemID == itemID {
             thumbnailImageView.image = seeded
+            thumbnailPlaceholderView.isHidden = seeded != nil
         }
 
         thumbnailTask = Task { @MainActor [weak self] in
@@ -804,14 +941,26 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 return
             }
             self.thumbnailImageView.image = image
+            self.thumbnailPlaceholderView.isHidden = image != nil
         }
     }
 
     private func configureSymbolView(for item: RemoteDirectoryItem) {
         let isDirectory = item.isDirectory
-        symbolView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.16)
-        symbolImageView.image = UIImage(systemName: isDirectory ? "folder.fill" : "doc.fill")
-        symbolImageView.tintColor = .systemBlue
+        let isPDF = item.isPDFDocument
+        let tintColor: UIColor = isDirectory ? .systemBlue : (isPDF ? .systemRed : .systemBlue)
+        let systemName: String
+        if isDirectory {
+            systemName = "folder.fill"
+        } else if isPDF {
+            systemName = "doc.text.fill"
+        } else {
+            systemName = "doc.fill"
+        }
+
+        symbolView.backgroundColor = tintColor.withAlphaComponent(0.16)
+        symbolImageView.image = UIImage(systemName: systemName)
+        symbolImageView.tintColor = tintColor
         symbolImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
             pointSize: 34,
             weight: .semibold
@@ -852,6 +1001,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        imageHeightConstraint?.constant = max(contentView.bounds.width, 1) / AppLayout.coverAspectRatio
         if !progressTrackView.isHidden, let constraint = progressWidthConstraint {
             constraint.constant = bounds.width * progressFraction
         }

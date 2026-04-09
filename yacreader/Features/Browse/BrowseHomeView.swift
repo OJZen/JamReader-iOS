@@ -12,6 +12,7 @@ struct BrowseHomeView: View {
     @State private var splitSelection: BrowseHomeSplitSelection?
     @State private var splitSyncTask: Task<Void, Never>?
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var containerWidth: CGFloat = 0
 
     init(
         dependencies: AppDependencies,
@@ -31,6 +32,7 @@ struct BrowseHomeView: View {
                 compactLayout
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .task {
             viewModel.loadIfNeeded()
         }
@@ -38,6 +40,9 @@ struct BrowseHomeView: View {
             debounceSplitSync()
         }
         .onChange(of: horizontalSizeClass) { _, _ in
+            debounceSplitSync()
+        }
+        .onChange(of: containerWidth) { _, _ in
             debounceSplitSync()
         }
         .onChange(of: displayedProfiles.map(\.id)) { _, _ in
@@ -84,6 +89,7 @@ struct BrowseHomeView: View {
 
     private var usesSplitViewLayout: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularNavigationSplitMinWidth)
     }
 
     private var compactLayout: some View {

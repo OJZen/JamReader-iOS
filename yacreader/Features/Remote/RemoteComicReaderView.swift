@@ -518,6 +518,7 @@ struct RemoteComicReaderView: View {
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
+    @State private var containerWidth: CGFloat = 0
 
     init(
         profile: RemoteServerProfile,
@@ -597,6 +598,7 @@ struct RemoteComicReaderView: View {
                 )
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .pullDownToDismiss(
             isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting && !isAnySheetPresented,
             isZoomed: isContentZoomed,
@@ -768,6 +770,7 @@ struct RemoteComicReaderView: View {
 
     private var supportsDoublePageSpread: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularReaderLayoutMinWidth)
     }
 
     private var showsThumbnailShortcut: Bool {

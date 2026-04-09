@@ -4,6 +4,11 @@ struct LibraryOrganizationView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
         static let rowAccessoryReservedWidth: CGFloat = 34
+        static let compactGridMinWidth: CGFloat = 165
+        static let compactGridMaxWidth: CGFloat = 220
+        static let regularGridMinWidth: CGFloat = 240
+        static let regularGridMaxWidth: CGFloat = 320
+        static let wideGridMinContainerWidth: CGFloat = 860
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -19,6 +24,7 @@ struct LibraryOrganizationView: View {
     @State private var editingCollection: LibraryOrganizationCollection?
     @State private var deletingCollection: LibraryOrganizationCollection?
     @State private var navigationCollection: LibraryOrganizationCollection?
+    @State private var containerWidth: CGFloat = 0
 
     init(
         descriptor: LibraryDescriptor,
@@ -50,6 +56,7 @@ struct LibraryOrganizationView: View {
                 contentBody
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -96,8 +103,8 @@ struct LibraryOrganizationView: View {
             configurePreferredDisplayModeIfNeeded()
             viewModel.load()
         }
-        .onChange(of: horizontalSizeClass) { _, newValue in
-            adaptDisplayMode(to: newValue)
+        .onChange(of: supportsGridDisplay) { _, _ in
+            adaptDisplayModeForCurrentWidth()
         }
         .refreshable {
             viewModel.load()
@@ -277,6 +284,7 @@ struct LibraryOrganizationView: View {
 
     private var supportsGridDisplay: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularInlineActionMinWidth)
     }
 
     private var usesCondensedTopBarActions: Bool {
@@ -296,7 +304,15 @@ struct LibraryOrganizationView: View {
     }
 
     private var collectionGridColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 16)]
+        let widthRange = usesWideCollectionGridMetrics
+            ? LayoutMetrics.regularGridMinWidth...LayoutMetrics.regularGridMaxWidth
+            : LayoutMetrics.compactGridMinWidth...LayoutMetrics.compactGridMaxWidth
+        return [GridItem(.adaptive(minimum: widthRange.lowerBound, maximum: widthRange.upperBound), spacing: 16)]
+    }
+
+    private var usesWideCollectionGridMetrics: Bool {
+        horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= LayoutMetrics.wideGridMinContainerWidth)
     }
 
     private func sortedCollections(_ collections: [LibraryOrganizationCollection]) -> [LibraryOrganizationCollection] {
@@ -483,8 +499,8 @@ struct LibraryOrganizationView: View {
         displayMode = supportsGridDisplay ? preferredDisplayMode : .list
     }
 
-    private func adaptDisplayMode(to sizeClass: UserInterfaceSizeClass?) {
-        if sizeClass == .regular {
+    private func adaptDisplayModeForCurrentWidth() {
+        if supportsGridDisplay {
             displayMode = preferredDisplayMode
         } else if displayMode == .grid {
             displayMode = .list

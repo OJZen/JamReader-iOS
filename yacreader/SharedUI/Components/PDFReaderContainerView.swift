@@ -164,7 +164,7 @@ struct PDFReaderContainerView: UIViewRepresentable {
             let tapLocation = gestureRecognizer.location(in: pdfView)
             let viewWidth = max(pdfView.bounds.width, 1)
             let horizontalRatio = tapLocation.x / viewWidth
-            let edgeRatio: CGFloat = pdfView.traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
+            let edgeRatio: CGFloat = viewWidth >= AppLayout.regularReaderLayoutMinWidth ? 0.18 : 0.24
 
             if horizontalRatio < edgeRatio {
                 if goToPreviousPage() {

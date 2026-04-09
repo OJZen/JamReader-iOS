@@ -6,6 +6,11 @@ struct LibraryBrowserView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = Spacing.sm
         static let rowAccessoryReservedWidth: CGFloat = 36
+        static let compactGridMinWidth: CGFloat = 165
+        static let compactGridMaxWidth: CGFloat = 220
+        static let regularGridMinWidth: CGFloat = 240
+        static let regularGridMaxWidth: CGFloat = 320
+        static let wideGridMinContainerWidth: CGFloat = 860
     }
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -35,6 +40,7 @@ struct LibraryBrowserView: View {
     @State private var presentedComic: LibraryComicPresentation?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
+    @State private var containerWidth: CGFloat = 0
 
     init(
         descriptor: LibraryDescriptor,
@@ -70,6 +76,7 @@ struct LibraryBrowserView: View {
 
     private var showsPersistentComicActions: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularInlineActionMinWidth)
     }
 
     private var comicAccessoryReservedWidth: CGFloat {
@@ -127,6 +134,7 @@ struct LibraryBrowserView: View {
 
     private var composedBody: some View {
         rootContent
+        .readContainerWidth(into: $containerWidth)
         .safeAreaInset(edge: .top) {
             if let scanCompletion = viewModel.scanCompletion, viewModel.scanProgress == nil {
                 ScanCompletionBanner(
@@ -297,8 +305,8 @@ struct LibraryBrowserView: View {
                 endSelectionMode()
             }
         }
-        .onChange(of: horizontalSizeClass) { _, newValue in
-            adaptDisplayMode(to: newValue)
+        .onChange(of: supportsGridDisplay) { _, _ in
+            adaptDisplayModeForCurrentWidth()
         }
         .onChange(of: recentWindowRawValue) { _, _ in
             viewModel.setRecentDays(recentWindowOption.dayCount)
@@ -491,6 +499,7 @@ struct LibraryBrowserView: View {
 
     private var supportsGridDisplay: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularInlineActionMinWidth)
     }
 
     private var removingComicConfirmationBinding: Binding<Bool> {
@@ -505,7 +514,7 @@ struct LibraryBrowserView: View {
     }
 
     private var usesCondensedTopBarActions: Bool {
-        horizontalSizeClass != .regular
+        !supportsGridDisplay
     }
 
     private var recentWindowOption: LibraryRecentWindowOption {
@@ -1609,9 +1618,24 @@ struct LibraryBrowserView: View {
     }
 
     private var cardGridColumns: [GridItem] {
-        [
-            GridItem(.adaptive(minimum: 240, maximum: 320), spacing: Spacing.md, alignment: .top)
+        let widthRange = usesWideCardGridMetrics
+            ? LayoutMetrics.regularGridMinWidth...LayoutMetrics.regularGridMaxWidth
+            : LayoutMetrics.compactGridMinWidth...LayoutMetrics.compactGridMaxWidth
+        return [
+            GridItem(
+                .adaptive(
+                    minimum: widthRange.lowerBound,
+                    maximum: widthRange.upperBound
+                ),
+                spacing: Spacing.md,
+                alignment: .top
+            )
         ]
+    }
+
+    private var usesWideCardGridMetrics: Bool {
+        horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= LayoutMetrics.wideGridMinContainerWidth)
     }
 
     @MainActor
@@ -1968,8 +1992,8 @@ struct LibraryBrowserView: View {
         displayMode = supportsGridDisplay ? preferredDisplayMode : .list
     }
 
-    private func adaptDisplayMode(to sizeClass: UserInterfaceSizeClass?) {
-        if sizeClass == .regular {
+    private func adaptDisplayModeForCurrentWidth() {
+        if supportsGridDisplay {
             displayMode = preferredDisplayMode
         } else if displayMode == .grid {
             displayMode = .list

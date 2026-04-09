@@ -55,10 +55,12 @@ private struct ReaderScrubberLayout {
         viewportBounds: CGRect = ReaderViewportResolver.currentBounds,
         userInterfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
     ) -> ReaderScrubberLayout {
-        let baseLayout: ReaderScrubberLayout = horizontalSizeClass == .regular ? .regular : .compact
+        let usesRegularLayout = horizontalSizeClass == .regular
+            && viewportBounds.width >= AppLayout.regularReaderLayoutMinWidth
+        let baseLayout: ReaderScrubberLayout = usesRegularLayout ? .regular : .compact
 
         guard userInterfaceIdiom == .pad,
-              horizontalSizeClass == .regular,
+              usesRegularLayout,
               viewportBounds.height > viewportBounds.width
         else {
             return baseLayout
@@ -350,6 +352,7 @@ struct ReaderBottomBar: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @StateObject private var scrubberCoordinator: ReaderThumbnailScrubberCoordinator
+    @State private var containerWidth: CGFloat = 0
 
     init(
         document: ComicDocument,
@@ -373,7 +376,15 @@ struct ReaderBottomBar: View {
     }
 
     private var scrubberLayout: ReaderScrubberLayout {
-        ReaderScrubberLayout.adaptive(horizontalSizeClass: horizontalSizeClass)
+        ReaderScrubberLayout.adaptive(
+            horizontalSizeClass: horizontalSizeClass,
+            viewportBounds: CGRect(
+                x: 0,
+                y: 0,
+                width: max(containerWidth, 0),
+                height: ReaderViewportResolver.currentBounds.height
+            )
+        )
     }
 
     private var displayedPage: Int {
@@ -422,6 +433,7 @@ struct ReaderBottomBar: View {
             .buttonStyle(.plain)
         }
         .padding(.vertical, ReaderChromeMetrics.barVerticalPadding)
+        .readContainerWidth(into: $containerWidth)
         .overlay(alignment: .top) {
             GeometryReader { proxy in
                 if scrubberCoordinator.isPreviewVisible {

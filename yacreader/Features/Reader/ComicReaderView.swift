@@ -19,6 +19,7 @@ struct ComicReaderView: View {
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
+    @State private var containerWidth: CGFloat = 0
 
     init(
         descriptor: LibraryDescriptor,
@@ -92,6 +93,7 @@ struct ComicReaderView: View {
                 )
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .pullDownToDismiss(
             isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting && !isAnySheetPresented,
             isZoomed: isContentZoomed,
@@ -134,7 +136,7 @@ struct ComicReaderView: View {
         .onChange(of: viewModel.document != nil) { _, _ in
             updateIdleTimerState()
         }
-        .onChange(of: horizontalSizeClass) { _, _ in
+        .onChange(of: supportsDoublePageSpread) { _, _ in
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
             synchronizeReaderSession()
         }
@@ -226,6 +228,7 @@ struct ComicReaderView: View {
 
     private var supportsDoublePageSpread: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularReaderLayoutMinWidth)
     }
 
     private var showsThumbnailShortcut: Bool {

@@ -134,6 +134,9 @@ enum AppLayout {
     static let gridItemMinWidth: CGFloat = 120
     static let gridItemMaxWidth: CGFloat = 180
     static let gridSpacing: CGFloat = Spacing.sm
+    static let regularInlineActionMinWidth: CGFloat = 700
+    static let regularReaderLayoutMinWidth: CGFloat = 700
+    static let regularNavigationSplitMinWidth: CGFloat = 780
 
     static let coverAspectRatio: CGFloat = 2.0 / 3.0
 
@@ -141,6 +144,14 @@ enum AppLayout {
     static let listThumbnailSize: CGFloat = 48
 
     static let bottomBarHeight: CGFloat = 49
+
+    static func usesRegularWidthLayout(
+        horizontalSizeClass: UserInterfaceSizeClass?,
+        containerWidth: CGFloat,
+        minimumWidth: CGFloat = regularInlineActionMinWidth
+    ) -> Bool {
+        horizontalSizeClass == .regular && max(containerWidth, 0) >= minimumWidth
+    }
 }
 
 // MARK: - Haptics
@@ -170,11 +181,27 @@ extension View {
         modifier(AdaptiveSheetWidthModifier(maxWidth: maxWidth))
     }
 
+    func adaptiveFormSheet(
+        _ maxWidth: CGFloat = 720,
+        regularMinWidth: CGFloat = AppLayout.regularInlineActionMinWidth
+    ) -> some View {
+        modifier(
+            AdaptiveFormSheetModifier(
+                maxWidth: maxWidth,
+                regularMinWidth: regularMinWidth
+            )
+        )
+    }
+
     func adaptiveContentWidth(
         _ maxWidth: CGFloat = 1180,
         alignment: Alignment = .leading
     ) -> some View {
         modifier(AdaptiveContentWidthModifier(maxWidth: maxWidth, alignment: alignment))
+    }
+
+    func readContainerWidth(into width: Binding<CGFloat>) -> some View {
+        modifier(ContainerWidthReaderModifier(width: width))
     }
 }
 
@@ -187,6 +214,29 @@ private struct AdaptiveSheetWidthModifier: ViewModifier {
         content.frame(
             maxWidth: horizontalSizeClass == .regular ? maxWidth : .infinity
         )
+    }
+}
+
+private struct AdaptiveFormSheetModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var containerWidth: CGFloat = 0
+
+    let maxWidth: CGFloat
+    let regularMinWidth: CGFloat
+
+    private var usesExpandedSheetLayout: Bool {
+        AppLayout.usesRegularWidthLayout(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth,
+            minimumWidth: regularMinWidth
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .readContainerWidth(into: $containerWidth)
+            .adaptiveSheetWidth(maxWidth)
+            .presentationDetents(usesExpandedSheetLayout ? [.large] : [.medium, .large])
     }
 }
 
@@ -206,6 +256,40 @@ private struct AdaptiveContentWidthModifier: ViewModifier {
                 maxWidth: .infinity,
                 alignment: horizontalSizeClass == .regular ? .center : alignment
             )
+    }
+}
+
+private struct ContainerWidthPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ContainerWidthReaderModifier: ViewModifier {
+    @Binding var width: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ContainerWidthPreferenceKey.self,
+                        value: geometry.size.width
+                    )
+                }
+            }
+            .onPreferenceChange(ContainerWidthPreferenceKey.self) { newWidth in
+                let normalizedWidth = max(newWidth, 0)
+                guard Int(width.rounded(.toNearestOrAwayFromZero))
+                    != Int(normalizedWidth.rounded(.toNearestOrAwayFromZero))
+                else {
+                    return
+                }
+
+                width = normalizedWidth
+            }
     }
 }
 

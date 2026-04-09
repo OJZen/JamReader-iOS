@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct AppRootView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
     @ObservedObject private var remoteBackgroundImportController: RemoteBackgroundImportController
@@ -10,6 +12,7 @@ struct AppRootView: View {
     @State private var isImportProgressExpanded = true
     @StateObject private var browseRemoteServerViewModel: RemoteServerListViewModel
     @State private var browseEditorDraft: RemoteServerEditorDraft?
+    @State private var rootTabBarHeight: CGFloat = AppLayout.bottomBarHeight
 
     init(viewModel: LibraryListViewModel, dependencies: AppDependencies) {
         self.viewModel = viewModel
@@ -41,40 +44,38 @@ struct AppRootView: View {
                 Color.surfaceGrouped
                     .ignoresSafeArea()
 
-                TabView(selection: selectedTab) {
-                    LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
-                        .background(Color.surfaceGrouped.ignoresSafeArea())
-                        .tabItem {
-                            Label("Library", systemImage: AppRootTab.library.systemImage)
-                        }
-                        .tag(AppRootTab.library)
-
-                    BrowseHomeView(
-                        dependencies: dependencies,
-                        viewModel: browseRemoteServerViewModel,
-                        editorDraft: $browseEditorDraft
+                if usesUIKitTabBarRoot {
+                    AppRootTabBarControllerView(
+                        selection: selectedTab,
+                        tabBarHeight: $rootTabBarHeight,
+                        libraryRoot: AnyView(
+                            LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
+                                .background(Color.surfaceGrouped.ignoresSafeArea())
+                        ),
+                        browseRoot: AnyView(
+                            BrowseHomeView(
+                                dependencies: dependencies,
+                                viewModel: browseRemoteServerViewModel,
+                                editorDraft: $browseEditorDraft
+                            )
+                            .background(Color.surfaceGrouped.ignoresSafeArea())
+                        ),
+                        settingsRoot: AnyView(
+                            SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
+                                .background(Color.surfaceGrouped.ignoresSafeArea())
+                        )
                     )
-                        .background(Color.surfaceGrouped.ignoresSafeArea())
-                        .tabItem {
-                            Label("Browse", systemImage: AppRootTab.browse.systemImage)
-                        }
-                        .tag(AppRootTab.browse)
-
-                    SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
-                        .background(Color.surfaceGrouped.ignoresSafeArea())
-                        .tabItem {
-                            Label("Settings", systemImage: AppRootTab.settings.systemImage)
-                        }
-                        .tag(AppRootTab.settings)
+                    .ignoresSafeArea()
+                } else {
+                    appTabView
                 }
-                .background(Color.surfaceGrouped.ignoresSafeArea())
             }
             .overlay(alignment: .bottom) {
                 rootImportOverlay
                     .padding(.horizontal, Spacing.sm)
                     .padding(
                         .bottom,
-                        proxy.safeAreaInsets.bottom + AppLayout.bottomBarHeight - Spacing.xxs
+                        proxy.safeAreaInsets.bottom + effectiveBottomBarHeight - Spacing.xxs
                     )
             }
         }
@@ -112,6 +113,14 @@ struct AppRootView: View {
             .allowsHitTesting(false)
             .opacity(0)
         }
+    }
+
+    private var usesUIKitTabBarRoot: Bool {
+        horizontalSizeClass == .regular
+    }
+
+    private var effectiveBottomBarHeight: CGFloat {
+        usesUIKitTabBarRoot ? rootTabBarHeight : AppLayout.bottomBarHeight
     }
 
     @ViewBuilder
@@ -185,5 +194,35 @@ struct AppRootView: View {
             return alertState
         }
         .id(draft.id)
+    }
+
+    private var appTabView: some View {
+        TabView(selection: selectedTab) {
+            LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
+                .background(Color.surfaceGrouped.ignoresSafeArea())
+                .tabItem {
+                    Label("Library", systemImage: AppRootTab.library.systemImage)
+                }
+                .tag(AppRootTab.library)
+
+            BrowseHomeView(
+                dependencies: dependencies,
+                viewModel: browseRemoteServerViewModel,
+                editorDraft: $browseEditorDraft
+            )
+                .background(Color.surfaceGrouped.ignoresSafeArea())
+                .tabItem {
+                    Label("Browse", systemImage: AppRootTab.browse.systemImage)
+                }
+                .tag(AppRootTab.browse)
+
+            SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
+                .background(Color.surfaceGrouped.ignoresSafeArea())
+                .tabItem {
+                    Label("Settings", systemImage: AppRootTab.settings.systemImage)
+                }
+                .tag(AppRootTab.settings)
+        }
+        .background(Color.surfaceGrouped.ignoresSafeArea())
     }
 }

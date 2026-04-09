@@ -225,7 +225,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             insetForSectionAt section: Int
         ) -> UIEdgeInsets {
             let horizontalInset = max(0, (usableCollectionWidth(for: collectionView) - preferredContentWidth(for: collectionView)) * 0.5)
-            let verticalInset = verticalSectionInset(for: collectionView.traitCollection)
+            let verticalInset = verticalSectionInset(for: collectionView.bounds.width)
             return UIEdgeInsets(
                 top: verticalInset,
                 left: horizontalInset,
@@ -239,7 +239,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             layout collectionViewLayout: UICollectionViewLayout,
             minimumLineSpacingForSectionAt section: Int
         ) -> CGFloat {
-            collectionView.traitCollection.horizontalSizeClass == .regular ? 18 : 10
+            usesRegularReaderMetrics(for: collectionView.bounds.width) ? 18 : 10
         }
 
         func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
@@ -551,7 +551,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         private func handleTap(at location: CGPoint, in collectionView: UICollectionView) {
             let width = max(collectionView.bounds.width, 1)
             let horizontalRatio = location.x / width
-            let edgeRatio = preferredTapEdgeRatio(for: collectionView.traitCollection)
+            let edgeRatio = preferredTapEdgeRatio(for: width)
 
             if horizontalRatio < edgeRatio {
                 onReaderTap(.leading)
@@ -578,8 +578,8 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             scrollToPage(index: targetIndex, animated: true)
         }
 
-        private func preferredTapEdgeRatio(for traitCollection: UITraitCollection) -> CGFloat {
-            traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
+        private func preferredTapEdgeRatio(for width: CGFloat) -> CGFloat {
+            usesRegularReaderMetrics(for: width) ? 0.18 : 0.24
         }
 
         private func preferredDecodeMaxPixelSize() -> Int {
@@ -614,7 +614,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         private func preferredContentWidth(for collectionView: UICollectionView) -> CGFloat {
             let availableWidth = usableCollectionWidth(for: collectionView)
-            guard collectionView.traitCollection.horizontalSizeClass == .regular else {
+            guard usesRegularReaderMetrics(for: collectionView.bounds.width) else {
                 return availableWidth
             }
 
@@ -622,8 +622,12 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             return min(availableWidth, maxReadableWidth)
         }
 
-        private func verticalSectionInset(for traitCollection: UITraitCollection) -> CGFloat {
-            traitCollection.horizontalSizeClass == .regular ? 24 : 12
+        private func verticalSectionInset(for width: CGFloat) -> CGFloat {
+            usesRegularReaderMetrics(for: width) ? 24 : 12
+        }
+
+        private func usesRegularReaderMetrics(for width: CGFloat) -> Bool {
+            max(width, 0) >= AppLayout.regularReaderLayoutMinWidth
         }
 
         private func targetContentOffset(for indexPath: IndexPath, in collectionView: UICollectionView) -> CGPoint? {
@@ -637,7 +641,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 minOffsetY,
                 collectionView.contentSize.height - viewportHeight + collectionView.adjustedContentInset.bottom
             )
-            let preferredOffsetY = attributes.frame.minY - verticalSectionInset(for: collectionView.traitCollection)
+            let preferredOffsetY = attributes.frame.minY - verticalSectionInset(for: collectionView.bounds.width)
             let clampedOffsetY = min(max(preferredOffsetY, minOffsetY), maxOffsetY)
             return CGPoint(x: -collectionView.adjustedContentInset.left, y: clampedOffsetY)
         }

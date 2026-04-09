@@ -22,6 +22,7 @@ struct LibraryHomeView: View {
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var containerWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -31,6 +32,7 @@ struct LibraryHomeView: View {
                 compactLayout
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .fileImporter(
             isPresented: activeImportRouteBinding,
             allowedContentTypes: activeImportContentTypes,
@@ -52,6 +54,10 @@ struct LibraryHomeView: View {
             handlePendingLibraryFocusIfNeeded()
         }
         .onChange(of: viewModel.items) { _, _ in
+            synchronizeSelection()
+            handlePendingLibraryFocusIfNeeded()
+        }
+        .onChange(of: containerWidth) { _, _ in
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
         }
@@ -119,6 +125,7 @@ struct LibraryHomeView: View {
 
     private var usesSplitViewLayout: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularNavigationSplitMinWidth)
     }
 
     private var compactLayout: some View {

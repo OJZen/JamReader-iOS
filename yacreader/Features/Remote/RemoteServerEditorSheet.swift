@@ -9,6 +9,7 @@ struct RemoteServerEditorSheet: View {
 
     @State private var draft: RemoteServerEditorDraft
     @State private var alert: AppAlertState?
+    @State private var containerWidth: CGFloat = 0
     @FocusState private var isNameFieldFocused: Bool
 
     init(
@@ -28,20 +29,21 @@ struct RemoteServerEditorSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { sheetToolbar }
         }
+        .readContainerWidth(into: $containerWidth)
         .alert(item: $alert) { alert in
             makeRemoteAlert(for: alert)
         }
         .task {
-            guard horizontalSizeClass != .regular else {
-                return
-            }
-
             guard !Task.isCancelled else {
                 return
             }
 
             try? await Task.sleep(nanoseconds: 120_000_000)
             guard !Task.isCancelled else {
+                return
+            }
+
+            guard !usesExpandedSheetLayout else {
                 return
             }
 
@@ -59,11 +61,23 @@ struct RemoteServerEditorSheet: View {
 
         if appliesSwiftUIPresentationModifiers {
             content
-                .modifier(RemoteServerEditorPresentationModifier())
+                .modifier(
+                    RemoteServerEditorPresentationModifier(
+                        horizontalSizeClass: horizontalSizeClass,
+                        containerWidth: containerWidth
+                    )
+                )
                 .presentationDragIndicator(.visible)
         } else {
             content
         }
+    }
+
+    private var usesExpandedSheetLayout: Bool {
+        AppLayout.usesRegularWidthLayout(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
     }
 
     private var editorForm: some View {
@@ -191,11 +205,19 @@ struct RemoteServerEditorSheet: View {
 }
 
 private struct RemoteServerEditorPresentationModifier: ViewModifier {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let horizontalSizeClass: UserInterfaceSizeClass?
+    let containerWidth: CGFloat
     @State private var selectedDetent: PresentationDetent = .large
 
+    private var usesExpandedSheetLayout: Bool {
+        AppLayout.usesRegularWidthLayout(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
     func body(content: Content) -> some View {
-        if horizontalSizeClass == .regular {
+        if usesExpandedSheetLayout {
             if #available(iOS 18.0, *) {
                 content.presentationSizing(.page)
             } else {

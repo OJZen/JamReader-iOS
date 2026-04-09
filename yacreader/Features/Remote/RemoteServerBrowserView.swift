@@ -33,13 +33,23 @@ struct RemoteServerBrowserView: View {
     @State private var isDisplaySnapshotRefreshing = false
     @State private var isSectionBuildRefreshing = false
     @State private var presentedInfoItem: RemoteDirectoryItem?
+    @State private var browserContainerWidth: CGFloat = 0
 
     init(
         profile: RemoteServerProfile,
         currentPath: String? = nil,
+        initialDisplayMode: LibraryComicDisplayMode? = nil,
+        initialSortMode: RemoteDirectorySortMode? = nil,
         dependencies: AppDependencies
     ) {
         self.dependencies = dependencies
+        let storedDisplayMode = dependencies.remoteBrowserPreferencesStore.storedDisplayMode(for: profile.id)
+        let resolvedDisplayMode = initialDisplayMode ?? storedDisplayMode ?? .list
+        let resolvedSortMode = initialSortMode ?? dependencies.remoteBrowserPreferencesStore.loadSortMode(for: profile.id)
+        _displayMode = State(initialValue: resolvedDisplayMode)
+        _hasConfiguredDisplayMode = State(initialValue: initialDisplayMode != nil || storedDisplayMode != nil)
+        _sortMode = State(initialValue: resolvedSortMode)
+        _hasConfiguredSortMode = State(initialValue: true)
         _viewModel = StateObject(
             wrappedValue: RemoteServerBrowserViewModel(
                 profile: profile,
@@ -59,6 +69,7 @@ struct RemoteServerBrowserView: View {
 
     private var browserBaseLayer: some View {
         browserContent
+            .readContainerWidth(into: $browserContainerWidth)
             .navigationTitle(viewModel.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { browserToolbar }
@@ -96,6 +107,12 @@ struct RemoteServerBrowserView: View {
                 scheduleThumbnailPreheat(immediately: true)
             }
             .onChange(of: horizontalSizeClass) { _, _ in
+                scheduleThumbnailPreheat(immediately: true)
+            }
+            .onChange(of: browserContainerWidth) { _, newWidth in
+                if !hasConfiguredDisplayMode, newWidth > 0 {
+                    configureDisplayModeIfNeeded()
+                }
                 scheduleThumbnailPreheat(immediately: true)
             }
             .refreshable {
@@ -172,7 +189,9 @@ struct RemoteServerBrowserView: View {
     private func handleBrowserAppear() {
         viewModel.refreshProgressState()
         viewModel.refreshShortcutState()
-        configureDisplayModeIfNeeded()
+        if browserContainerWidth > 0 {
+            configureDisplayModeIfNeeded()
+        }
         configureSortModeIfNeeded()
         scheduleDisplaySnapshotRefresh()
         scheduleThumbnailPreheat(immediately: true)
@@ -409,6 +428,8 @@ struct RemoteServerBrowserView: View {
             RemoteServerBrowserView(
                 profile: viewModel.profile,
                 currentPath: path,
+                initialDisplayMode: displayMode,
+                initialSortMode: sortMode,
                 dependencies: dependencies
             )
         case .comic:
@@ -476,7 +497,6 @@ struct RemoteServerBrowserView: View {
                             importAction(for: item)?()
                         }
                     )
-                    .id(browserLayoutIdentity(for: geometry.size.width, mode: .list))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: [.top, .bottom])
                     .background(Color.surfaceGrouped)
@@ -544,7 +564,6 @@ struct RemoteServerBrowserView: View {
                             importAction(for: item)?()
                         }
                     )
-                    .id(browserLayoutIdentity(for: geometry.size.width, mode: .grid))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: [.top, .bottom])
                     .background(Color.surfaceGrouped)
@@ -729,8 +748,13 @@ struct RemoteServerBrowserView: View {
         hasConfiguredDisplayMode = true
         displayMode = dependencies.remoteBrowserPreferencesStore.loadDisplayMode(
             for: viewModel.profile.id,
-            defaultMode: horizontalSizeClass == .regular ? .grid : .list
+            defaultMode: defaultBrowserDisplayMode
         )
+    }
+
+    private var defaultBrowserDisplayMode: LibraryComicDisplayMode {
+        let layoutContext = browserLayoutContext(for: browserContainerWidth)
+        return layoutContext.usesMediumGridMetrics || layoutContext.usesWideGridMetrics ? .grid : .list
     }
 
     private func configureSortModeIfNeeded() {
@@ -747,7 +771,7 @@ struct RemoteServerBrowserView: View {
     private func scheduleThumbnailPreheat(immediately: Bool = false) {
         cancelThumbnailPreheat()
 
-        let items = displayedComicFiles
+        let items = displayedComicFiles.filter { !$0.isPDFDocument }
         guard displayMode == .grid, !items.isEmpty else {
             return
         }
@@ -757,7 +781,12 @@ struct RemoteServerBrowserView: View {
             visibleIDs: visibleIDs,
             items: items
         )
-        let estimatedItemWidth = browserLayoutContext(for: UIScreen.main.bounds.width).estimatedGridItemWidth
+        let effectiveContainerWidth = browserContainerWidth > 0
+            ? browserContainerWidth
+            : UIScreen.main.bounds.width
+        let estimatedItemWidth = browserLayoutContext(
+            for: effectiveContainerWidth
+        ).estimatedGridItemWidth
         let estimatedItemHeight = estimatedItemWidth / AppLayout.coverAspectRatio
         let maxPixelSize = Int(max(estimatedItemWidth, estimatedItemHeight) * max(displayScale, 1))
 
@@ -1412,14 +1441,6 @@ struct RemoteServerBrowserView: View {
             containerWidth: containerWidth,
             horizontalSizeClass: horizontalSizeClass
         )
-    }
-
-    private func browserLayoutIdentity(
-        for containerWidth: CGFloat,
-        mode: LibraryComicDisplayMode
-    ) -> String {
-        let layoutContext = browserLayoutContext(for: containerWidth)
-        return "\(mode.rawValue)-\(horizontalSizeClass == .regular ? "regular" : "compact")-\(layoutContext.usesWideGridMetrics)-\(layoutContext.usesMediumGridMetrics)-\(Int(containerWidth.rounded(.toNearestOrAwayFromZero)))"
     }
 
     private func presentVisibleOfflineRemovalConfirmation() {

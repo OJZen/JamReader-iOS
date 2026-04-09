@@ -28,6 +28,14 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
     var canOpenAsComic: Bool {
         kind == .comicFile
     }
+
+    nonisolated var fileExtension: String {
+        URL(fileURLWithPath: name).pathExtension.lowercased()
+    }
+
+    nonisolated var isPDFDocument: Bool {
+        fileExtension == "pdf"
+    }
 }
 
 struct RemoteComicFileReference: Identifiable, Hashable {
@@ -42,5 +50,13 @@ struct RemoteComicFileReference: Identifiable, Hashable {
 
     var id: String {
         "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey ?? "legacy")|\(path)"
+    }
+
+    nonisolated var fileExtension: String {
+        URL(fileURLWithPath: fileName).pathExtension.lowercased()
+    }
+
+    nonisolated var isPDFDocument: Bool {
+        fileExtension == "pdf"
     }
 }

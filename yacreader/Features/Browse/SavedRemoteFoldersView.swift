@@ -16,6 +16,7 @@ struct SavedRemoteFoldersView: View {
     @State private var searchText = ""
     @State private var renameEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
     @State private var pendingRemovalEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
+    @State private var containerWidth: CGFloat = 0
 
     init(
         dependencies: AppDependencies,
@@ -70,6 +71,7 @@ struct SavedRemoteFoldersView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .readContainerWidth(into: $containerWidth)
         .background(background)
         .overlay {
             if viewModel.isLoading && viewModel.entries.isEmpty {
@@ -128,6 +130,7 @@ struct SavedRemoteFoldersView: View {
 
     private var showsPersistentItemActions: Bool {
         horizontalSizeClass == .regular
+            && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
     private var itemAccessoryReservedWidth: CGFloat {

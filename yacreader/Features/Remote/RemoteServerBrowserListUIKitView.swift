@@ -26,6 +26,12 @@ struct RemoteBrowserListRowModel: Equatable, Identifiable {
 }
 
 struct RemoteServerBrowserLayoutContext: Equatable {
+    private enum GridDensity {
+        case compact
+        case medium
+        case wide
+    }
+
     let containerWidth: CGFloat
     let horizontalSizeClass: UserInterfaceSizeClass?
 
@@ -33,16 +39,48 @@ struct RemoteServerBrowserLayoutContext: Equatable {
         max(containerWidth.rounded(.toNearestOrAwayFromZero), 0)
     }
 
+    private var gridDensity: GridDensity {
+        if horizontalSizeClass == .regular {
+            if normalizedWidth >= 960 {
+                return .wide
+            }
+
+            if normalizedWidth >= 360 {
+                return .medium
+            }
+
+            return .compact
+        }
+
+        if normalizedWidth >= 760 {
+            return .wide
+        }
+
+        if normalizedWidth >= 460 {
+            return .medium
+        }
+
+        return .compact
+    }
+
     var usesWideGridMetrics: Bool {
-        normalizedWidth >= 700 || (horizontalSizeClass == .regular && normalizedWidth >= 560)
+        gridItemMetrics().columns >= 4
     }
 
     var usesMediumGridMetrics: Bool {
-        !usesWideGridMetrics && normalizedWidth >= 430
+        gridItemMetrics().columns >= 2
     }
 
     var gridSectionInsets: UIEdgeInsets {
-        let horizontalInset: CGFloat = usesWideGridMetrics ? 16 : 12
+        let horizontalInset: CGFloat
+        switch gridDensity {
+        case .wide:
+            horizontalInset = 18
+        case .medium:
+            horizontalInset = 14
+        case .compact:
+            horizontalInset = 10
+        }
         return UIEdgeInsets(top: 4, left: horizontalInset, bottom: 20, right: horizontalInset)
     }
 
@@ -52,39 +90,104 @@ struct RemoteServerBrowserLayoutContext: Equatable {
     }
 
     var gridLineSpacing: CGFloat {
-        if usesWideGridMetrics {
+        switch gridDensity {
+        case .wide:
             return 16
+        case .medium:
+            return 14
+        case .compact:
+            return 12
         }
-
-        return usesMediumGridMetrics ? 14 : 12
     }
 
     var gridInteritemSpacing: CGFloat {
-        if usesWideGridMetrics {
-            return 14
+        switch gridDensity {
+        case .wide:
+            return 16
+        case .medium:
+            return 12
+        case .compact:
+            return 10
         }
-
-        return usesMediumGridMetrics ? 12 : 10
     }
 
-    var gridMinimumItemWidth: CGFloat {
-        if usesWideGridMetrics {
-            return 214
+    private var gridTargetItemWidth: CGFloat {
+        switch gridDensity {
+        case .wide:
+            return 196
+        case .medium:
+            return 178
+        case .compact:
+            return 160
         }
-
-        return usesMediumGridMetrics ? 184 : 160
     }
 
-    var gridMaximumItemWidth: CGFloat {
-        if usesWideGridMetrics {
-            return 292
+    private var minimumGridItemWidth: CGFloat {
+        switch gridDensity {
+        case .wide:
+            return 170
+        case .medium:
+            return 156
+        case .compact:
+            return 140
+        }
+    }
+
+    private func minimumGridColumns(for width: CGFloat) -> Int {
+        if horizontalSizeClass == .regular {
+            if width >= 720 {
+                return 4
+            }
+
+            if width >= 360 {
+                return 2
+            }
+
+            return 1
         }
 
-        return usesMediumGridMetrics ? 248 : 212
+        if width >= 760 {
+            return 4
+        }
+
+        if width >= 560 {
+            return 3
+        }
+
+        if width >= 320 {
+            return 2
+        }
+
+        return 1
+    }
+
+    func gridItemMetrics(for actualContainerWidth: CGFloat? = nil) -> (columns: Int, itemWidth: CGFloat) {
+        let resolvedWidth = max((actualContainerWidth ?? normalizedWidth).rounded(.toNearestOrAwayFromZero), 0)
+        let horizontalInset = gridSectionInsets.left + gridSectionInsets.right
+        let availableWidth = max(resolvedWidth - horizontalInset, 1)
+        let spacing = gridInteritemSpacing
+        let minimumColumns = minimumGridColumns(for: resolvedWidth)
+
+        func itemWidth(for columns: Int) -> CGFloat {
+            let totalSpacing = CGFloat(max(columns - 1, 0)) * spacing
+            return floor((availableWidth - totalSpacing) / CGFloat(columns))
+        }
+
+        var columns = max(
+            minimumColumns,
+            Int((availableWidth + spacing) / (gridTargetItemWidth + spacing)),
+            1
+        )
+
+        while columns > minimumColumns && itemWidth(for: columns) < minimumGridItemWidth {
+            columns -= 1
+        }
+
+        return (columns, max(itemWidth(for: columns), 1))
     }
 
     var estimatedGridItemWidth: CGFloat {
-        min(gridMaximumItemWidth, max(gridMinimumItemWidth, normalizedWidth - (gridSectionInsets.left + gridSectionInsets.right)))
+        gridItemMetrics().itemWidth
     }
 
     static func == (lhs: RemoteServerBrowserLayoutContext, rhs: RemoteServerBrowserLayoutContext) -> Bool {
@@ -234,10 +337,6 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                 controller?.markNeedsReload()
             case .reconfigureVisibleRows(let indexPaths):
                 controller?.reconfigureVisibleRows(at: indexPaths)
-            }
-
-            if didChangeLayoutContext {
-                controller?.markNeedsReload()
             }
 
             reportVisibleComicIDsIfNeeded()
@@ -509,6 +608,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
 final class RemoteBrowserListViewController: UIViewController {
     weak var coordinator: RemoteServerBrowserListUIKitView.Coordinator?
     private let navigationBridge = RemoteServerBrowserNativeNavigationBridge()
+    private var lastMeasuredContentWidth: Int = 0
 
     private(set) lazy var tableView: UITableView = {
         let tableView = UITableView(frame: .zero, style: .plain)
@@ -572,6 +672,7 @@ final class RemoteBrowserListViewController: UIViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        handleWidthChangeIfNeeded()
         coordinator?.reportVisibleComicIDsIfNeeded()
     }
 
@@ -625,6 +726,16 @@ final class RemoteBrowserListViewController: UIViewController {
         tableView.reloadData()
         coordinator?.reportVisibleComicIDsIfNeeded()
     }
+
+    private func handleWidthChangeIfNeeded() {
+        let measuredWidth = Int(tableView.bounds.width.rounded(.toNearestOrAwayFromZero))
+        guard measuredWidth > 0, measuredWidth != lastMeasuredContentWidth else {
+            return
+        }
+
+        lastMeasuredContentWidth = measuredWidth
+        refreshLayout()
+    }
 }
 
 private final class RemoteBrowserListCell: UITableViewCell {
@@ -638,6 +749,8 @@ private final class RemoteBrowserListCell: UITableViewCell {
     private let titleLabel = UILabel()
     private let metadataLabel = UILabel()
     private let thumbnailImageView = UIImageView()
+    private let thumbnailPlaceholderView = UIView()
+    private let thumbnailPlaceholderImageView = UIImageView()
     private let symbolTileView = UIView()
     private let symbolImageView = UIImageView()
     private let cacheDotView = UIView()
@@ -660,6 +773,7 @@ private final class RemoteBrowserListCell: UITableViewCell {
         representedItemID = nil
         thumbnailImageView.image = nil
         thumbnailImageView.isHidden = true
+        thumbnailPlaceholderView.isHidden = true
         symbolTileView.isHidden = true
         cacheDotView.isHidden = true
     }
@@ -674,7 +788,7 @@ private final class RemoteBrowserListCell: UITableViewCell {
         titleLabel.text = row.item.name
         metadataLabel.text = metadataText(for: row)
 
-        if row.item.canOpenAsComic {
+        if row.item.canOpenAsComic, !row.item.isPDFDocument {
             configureComicThumbnail(
                 item: row.item,
                 profile: profile,
@@ -683,10 +797,19 @@ private final class RemoteBrowserListCell: UITableViewCell {
             )
             symbolTileView.isHidden = true
             updateCacheDot(for: row.cacheAvailability)
+        } else if row.item.canOpenAsComic {
+            thumbnailTask?.cancel()
+            thumbnailTask = nil
+            thumbnailImageView.isHidden = true
+            thumbnailPlaceholderView.isHidden = true
+            symbolTileView.isHidden = false
+            configureSymbolTile(for: row.item)
+            updateCacheDot(for: row.cacheAvailability)
         } else {
             thumbnailTask?.cancel()
             thumbnailTask = nil
             thumbnailImageView.isHidden = true
+            thumbnailPlaceholderView.isHidden = true
             symbolTileView.isHidden = false
             cacheDotView.isHidden = true
             configureSymbolTile(for: row.item)
@@ -709,12 +832,29 @@ private final class RemoteBrowserListCell: UITableViewCell {
         let visualContainer = UIView()
         visualContainer.translatesAutoresizingMaskIntoConstraints = false
 
+        thumbnailPlaceholderView.translatesAutoresizingMaskIntoConstraints = false
+        thumbnailPlaceholderView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+        thumbnailPlaceholderView.layer.cornerRadius = 16
+        thumbnailPlaceholderView.layer.cornerCurve = .continuous
+        thumbnailPlaceholderView.isHidden = true
+        visualContainer.addSubview(thumbnailPlaceholderView)
+
+        thumbnailPlaceholderImageView.translatesAutoresizingMaskIntoConstraints = false
+        thumbnailPlaceholderImageView.contentMode = .scaleAspectFit
+        thumbnailPlaceholderImageView.tintColor = UIColor.systemBlue.withAlphaComponent(0.85)
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
+        thumbnailPlaceholderImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
+            pointSize: 22,
+            weight: .semibold
+        )
+        thumbnailPlaceholderView.addSubview(thumbnailPlaceholderImageView)
+
         thumbnailImageView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailImageView.contentMode = .scaleAspectFill
         thumbnailImageView.clipsToBounds = true
         thumbnailImageView.layer.cornerRadius = 16
         thumbnailImageView.layer.cornerCurve = .continuous
-        thumbnailImageView.backgroundColor = .secondarySystemBackground
+        thumbnailImageView.backgroundColor = .clear
         thumbnailImageView.isHidden = true
         visualContainer.addSubview(thumbnailImageView)
 
@@ -769,6 +909,14 @@ private final class RemoteBrowserListCell: UITableViewCell {
             visualContainer.widthAnchor.constraint(equalToConstant: Metrics.coverWidth),
             visualContainer.heightAnchor.constraint(equalToConstant: Metrics.coverHeight),
 
+            thumbnailPlaceholderView.topAnchor.constraint(equalTo: visualContainer.topAnchor),
+            thumbnailPlaceholderView.leadingAnchor.constraint(equalTo: visualContainer.leadingAnchor),
+            thumbnailPlaceholderView.trailingAnchor.constraint(equalTo: visualContainer.trailingAnchor),
+            thumbnailPlaceholderView.bottomAnchor.constraint(equalTo: visualContainer.bottomAnchor),
+
+            thumbnailPlaceholderImageView.centerXAnchor.constraint(equalTo: thumbnailPlaceholderView.centerXAnchor),
+            thumbnailPlaceholderImageView.centerYAnchor.constraint(equalTo: thumbnailPlaceholderView.centerYAnchor),
+
             thumbnailImageView.topAnchor.constraint(equalTo: visualContainer.topAnchor),
             thumbnailImageView.leadingAnchor.constraint(equalTo: visualContainer.leadingAnchor),
             thumbnailImageView.trailingAnchor.constraint(equalTo: visualContainer.trailingAnchor),
@@ -803,6 +951,7 @@ private final class RemoteBrowserListCell: UITableViewCell {
     ) {
         symbolTileView.isHidden = true
         thumbnailImageView.isHidden = false
+        thumbnailPlaceholderView.isHidden = false
         thumbnailTask?.cancel()
 
         let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * UIScreen.main.scale)
@@ -813,8 +962,9 @@ private final class RemoteBrowserListCell: UITableViewCell {
             browsingService: browsingService,
             maxPixelSize: pixelSize
         )
-        if representedItemID == itemID, let seeded {
+        if representedItemID == itemID {
             thumbnailImageView.image = seeded
+            thumbnailPlaceholderView.isHidden = seeded != nil
         }
 
         thumbnailTask = Task { @MainActor [weak self] in
@@ -832,16 +982,28 @@ private final class RemoteBrowserListCell: UITableViewCell {
             }
 
             self.thumbnailImageView.image = image
+            self.thumbnailPlaceholderView.isHidden = image != nil
         }
     }
 
     private func configureSymbolTile(for item: RemoteDirectoryItem) {
         let isDirectory = item.isDirectory
-        symbolTileView.backgroundColor = (isDirectory ? UIColor.systemBlue : UIColor.systemGreen).withAlphaComponent(0.14)
+        let isPDF = item.isPDFDocument
+        let tintColor: UIColor = isDirectory ? .systemBlue : (isPDF ? .systemRed : .systemGreen)
+        let systemName: String
+        if isDirectory {
+            systemName = "folder.fill"
+        } else if isPDF {
+            systemName = "doc.text.fill"
+        } else {
+            systemName = "doc.richtext.fill"
+        }
+
+        symbolTileView.backgroundColor = tintColor.withAlphaComponent(0.14)
         symbolImageView.image = UIImage(
-            systemName: isDirectory ? "folder.fill" : "doc.richtext.fill"
+            systemName: systemName
         )
-        symbolImageView.tintColor = isDirectory ? .systemBlue : .systemGreen
+        symbolImageView.tintColor = tintColor
     }
 
     private func updateCacheDot(for availability: RemoteComicCachedAvailability) {

@@ -11,6 +11,14 @@ final class RemoteBrowserPreferencesStore {
         for serverID: UUID,
         defaultMode: LibraryComicDisplayMode
     ) -> LibraryComicDisplayMode {
+        storedDisplayMode(for: serverID) ?? defaultMode
+    }
+
+    func saveDisplayMode(_ mode: LibraryComicDisplayMode, for serverID: UUID) {
+        userDefaults.set(mode.rawValue, forKey: key(for: serverID, field: "displayMode"))
+    }
+
+    func storedDisplayMode(for serverID: UUID) -> LibraryComicDisplayMode? {
         if let rawValue = userDefaults.string(forKey: key(for: serverID, field: "displayMode")),
            let mode = LibraryComicDisplayMode(rawValue: rawValue) {
             return mode
@@ -21,11 +29,7 @@ final class RemoteBrowserPreferencesStore {
             return legacyMode
         }
 
-        return defaultMode
-    }
-
-    func saveDisplayMode(_ mode: LibraryComicDisplayMode, for serverID: UUID) {
-        userDefaults.set(mode.rawValue, forKey: key(for: serverID, field: "displayMode"))
+        return nil
     }
 
     func loadSortMode(for serverID: UUID) -> RemoteDirectorySortMode {

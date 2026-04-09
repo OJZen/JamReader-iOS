@@ -273,8 +273,7 @@ struct BatchComicOrganizationSheet: View {
                 }
             }
         }
-        .adaptiveSheetWidth(720)
-        .presentationDetents([.medium, .large])
+        .adaptiveFormSheet(720)
         .task {
             viewModel.loadIfNeeded()
         }
@@ -474,8 +473,7 @@ struct BatchComicMetadataSheet: View {
                 }
             }
         }
-        .adaptiveSheetWidth(720)
-        .presentationDetents([.medium, .large])
+        .adaptiveFormSheet(720)
         .interactiveDismissDisabled(viewModel.isSaving)
         .alert(item: $viewModel.alert) { alert in
             Alert(

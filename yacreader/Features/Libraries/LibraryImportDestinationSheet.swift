@@ -315,8 +315,7 @@ struct LibraryImportDestinationSheet: View {
                 )
             }
         }
-        .adaptiveSheetWidth(720)
-        .presentationDetents([.medium, .large])
+        .adaptiveFormSheet(720)
         .presentationDragIndicator(.visible)
     }
 }

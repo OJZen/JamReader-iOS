@@ -1147,7 +1147,8 @@ private final class ComicImageSpreadViewController: UIViewController {
     }
 
     private func preferredTapEdgeRatio() -> CGFloat {
-        traitCollection.horizontalSizeClass == .regular ? 0.18 : 0.24
+        let referenceWidth = max(zoomablePageView.bounds.width, view.bounds.width)
+        return referenceWidth >= AppLayout.regularReaderLayoutMinWidth ? 0.18 : 0.24
     }
 
     private func preferredDecodeMaxPixelSize() -> Int {

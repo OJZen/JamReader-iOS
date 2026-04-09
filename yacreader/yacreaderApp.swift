@@ -13,7 +13,6 @@ struct yacreaderApp: App {
     @StateObject private var libraryListViewModel: LibraryListViewModel
 
     init() {
-
         let dependencies = AppDependencies.makeDefault()
         self.dependencies = dependencies
         _libraryListViewModel = StateObject(

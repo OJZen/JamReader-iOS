@@ -1,6 +1,7 @@
 import Combine
 import CryptoKit
 import ImageIO
+import PDFKit
 import SwiftUI
 import UIKit
 
@@ -897,6 +898,21 @@ private struct RemoteComicThumbnailWorker {
             return nil
         }
 
+        if reference.isPDFDocument {
+            guard let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
+                  let cachedImage = await Self.extractLocalPDFThumbnail(
+                    from: cachedFileURL,
+                    maxPixelSize: maxPixelSize
+                  ) else {
+                return nil
+            }
+
+            if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
+                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+            }
+            return cachedImage
+        }
+
         if prefersLocalCache,
            let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
            let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize) {
@@ -963,6 +979,16 @@ private struct RemoteComicThumbnailWorker {
         return downsampledImage(from: coverImage, maxPixelSize: maxPixelSize)
     }
 
+    nonisolated private static func extractLocalPDFThumbnail(
+        from fileURL: URL,
+        maxPixelSize: Int
+    ) async -> UIImage? {
+        await LocalPDFBrowserThumbnailExtractor.shared.thumbnail(
+            from: fileURL,
+            maxPixelSize: maxPixelSize
+        )
+    }
+
     nonisolated private static func downsampledImage(from image: UIImage, maxPixelSize: Int) -> UIImage {
         let pixelWidth = image.size.width * image.scale
         let pixelHeight = image.size.height * image.scale
@@ -992,5 +1018,39 @@ private struct RemoteComicThumbnailWorker {
         }
 
         return image.pngData()
+    }
+}
+
+private final class LocalPDFBrowserThumbnailExtractor: @unchecked Sendable {
+    static let shared = LocalPDFBrowserThumbnailExtractor()
+
+    private let extractionQueue = DispatchQueue(
+        label: "YACReader.LocalPDFBrowserThumbnailExtractor",
+        qos: .utility
+    )
+
+    nonisolated func thumbnail(from fileURL: URL, maxPixelSize: Int) async -> UIImage? {
+        await withCheckedContinuation { continuation in
+            extractionQueue.async {
+                let image = autoreleasepool { () -> UIImage? in
+                    guard let document = PDFDocument(url: fileURL),
+                          document.pageCount > 0,
+                          let page = document.page(at: 0) else {
+                        return nil
+                    }
+
+                    let clampedPixelSize = max(1, min(maxPixelSize, 512))
+                    let targetSize = CGSize(width: clampedPixelSize, height: clampedPixelSize)
+                    let thumbnail = page.thumbnail(of: targetSize, for: .mediaBox)
+                    guard thumbnail.size.width > 0, thumbnail.size.height > 0 else {
+                        return nil
+                    }
+
+                    return thumbnail
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
     }
 }

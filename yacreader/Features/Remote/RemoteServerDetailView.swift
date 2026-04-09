@@ -23,6 +23,7 @@ struct RemoteServerDetailView: View {
     @State private var presentedRecentSession: RemoteComicReadingSession?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
+    @State private var containerWidth: CGFloat = 0
 
     init(
         profile: RemoteServerProfile,
@@ -52,6 +53,7 @@ struct RemoteServerDetailView: View {
         }
         .navigationTitle(profile.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .readContainerWidth(into: $containerWidth)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -252,6 +254,7 @@ struct RemoteServerDetailView: View {
 
     private var showsPersistentRecentSessionActions: Bool {
         horizontalSizeClass == .regular
+            && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
     private var recentSessionAccessoryReservedWidth: CGFloat {

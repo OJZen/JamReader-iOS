@@ -16,6 +16,7 @@ struct SettingsHomeView: View {
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var containerWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -25,11 +26,13 @@ struct SettingsHomeView: View {
                 compactLayout
             }
         }
+        .readContainerWidth(into: $containerWidth)
         .task { refresh() }
     }
 
     private var usesSplitViewLayout: Bool {
         horizontalSizeClass == .regular
+            && (containerWidth == 0 || containerWidth >= AppLayout.regularNavigationSplitMinWidth)
     }
 
     private var selectedPane: Binding<SettingsHomePane?> {

@@ -91,8 +91,7 @@ struct ReaderQuickMetadataSheet: View {
                 }
             }
         }
-        .adaptiveSheetWidth(700)
-        .presentationDetents([.medium, .large])
+        .adaptiveFormSheet(700)
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(viewModel.isSaving)
         .task {

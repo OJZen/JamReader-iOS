@@ -285,6 +285,7 @@ struct RemoteOfflineShelfView: View {
     @State private var presentedEntry: RemoteOfflineComicEntry?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
+    @State private var containerWidth: CGFloat = 0
 
     init(
         dependencies: AppDependencies,
@@ -358,6 +359,7 @@ struct RemoteOfflineShelfView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .readContainerWidth(into: $containerWidth)
         .background(background)
         .background(readerPresenter)
         .navigationTitle("Offline Shelf")
@@ -656,6 +658,7 @@ struct RemoteOfflineShelfView: View {
 
     private var showsPersistentItemActions: Bool {
         horizontalSizeClass == .regular
+            && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
     private var itemAccessoryReservedWidth: CGFloat {

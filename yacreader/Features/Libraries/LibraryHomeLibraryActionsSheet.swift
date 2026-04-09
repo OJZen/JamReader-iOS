@@ -143,8 +143,7 @@ struct LibraryInfoSheet: View {
             .navigationTitle("Info")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .adaptiveSheetWidth(720)
-        .presentationDetents([.medium, .large])
+        .adaptiveFormSheet(720)
         .presentationDragIndicator(.visible)
     }
 }
