@@ -254,7 +254,7 @@
     "Create tags in Library." : {
 
     },
-    "Creates `library.ydb`, adds the root folder, and scans supported comic files." : {
+    "Builds this library's local index, adds the root folder, and scans supported comic files." : {
 
     },
     "Credits" : {
@@ -746,9 +746,6 @@
 
     },
     "Recent Window" : {
-
-    },
-    "Refresh" : {
 
     },
     "Refresh & Scan" : {

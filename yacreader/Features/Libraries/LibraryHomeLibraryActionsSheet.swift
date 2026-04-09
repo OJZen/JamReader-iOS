@@ -103,19 +103,12 @@ struct LibraryRenameSheet: View {
 struct LibraryInfoSheet: View {
     let item: LibraryListItem
 
-    private var compatibilityPresentation: LibraryCompatibilityPresentation {
-        LibraryCompatibilityPresentation.resolve(
-            descriptor: item.descriptor,
-            accessSnapshot: item.accessSnapshot
-        )
-    }
-
     var body: some View {
         NavigationStack {
             Form {
                 Section("Overview") {
                     LabeledContent("Name", value: item.descriptor.name)
-                    LabeledContent("Storage", value: item.descriptor.storageMode.title)
+                    LabeledContent("Type", value: item.descriptor.kind.title)
                     LabeledContent(
                         "Updated",
                         value: item.descriptor.updatedAt.formatted(date: .abbreviated, time: .shortened)
@@ -124,13 +117,9 @@ struct LibraryInfoSheet: View {
 
                 Section("Access") {
                     LabeledContent("Source", value: item.accessSnapshot.sourceStatus)
-                    LabeledContent("Write", value: item.accessSnapshot.writeStatus)
-
-                    if !item.accessSnapshot.metadataExists {
-                        LabeledContent("Metadata", value: "Missing")
-                    }
-
-                    LabeledContent("Database", value: item.accessSnapshot.database.summaryLine)
+                    LabeledContent("Source Write", value: item.accessSnapshot.writeStatus)
+                    LabeledContent("Local State", value: item.accessSnapshot.database.summaryLine)
+                    LabeledContent("Assets", value: item.accessSnapshot.metadataExists ? "Ready" : "Empty")
                 }
 
                 if let maintenanceRecord = item.maintenanceRecord {
@@ -147,28 +136,8 @@ struct LibraryInfoSheet: View {
                     }
                 }
 
-                if compatibilityPresentation.directImportsTitle != "Allowed"
-                    || compatibilityPresentation.infoDetail != nil
-                    || compatibilityPresentation.badgeTitle != nil {
-                    Section {
-                        LabeledContent("Status", value: compatibilityPresentation.directImportsTitle)
-
-                        if let badgeTitle = compatibilityPresentation.badgeTitle {
-                            LabeledContent("Mode", value: badgeTitle)
-                        }
-                    } header: {
-                        Text("Imports")
-                    } footer: {
-                        if let libraryImportCompatibilityDetail = compatibilityPresentation.infoDetail {
-                            Text(libraryImportCompatibilityDetail)
-                        }
-                    }
-                }
-
                 Section("Files") {
-                    LabeledContent("Source", value: item.descriptor.sourcePath)
-                    LabeledContent("Metadata", value: item.metadataPath)
-                    LabeledContent("Database", value: item.databasePath)
+                    LabeledContent("Source Folder", value: item.descriptor.sourcePath)
                 }
             }
             .navigationTitle("Info")

@@ -113,7 +113,7 @@ struct LibraryBrowserView: View {
                         }
                         .buttonStyle(.borderedProminent)
 
-                        Text("Creates `library.ydb`, adds the root folder, and scans supported comic files.")
+                        Text("Builds this library's local index, adds the root folder, and scans supported comic files.")
                             .font(AppFont.footnote())
                             .foregroundStyle(Color.textSecondary)
                             .multilineTextAlignment(.center)
@@ -1302,8 +1302,8 @@ struct LibraryBrowserView: View {
             scanProgressPanel(scanProgress)
         }
 
-        if let compatibilityPresentation = viewModel.compatibilityPresentation {
-            libraryImportCompatibilityPanel(compatibilityPresentation)
+        if let importNotice = viewModel.libraryImportNotice {
+            libraryImportNoticePanel(importNotice)
         }
     }
 
@@ -1315,7 +1315,7 @@ struct LibraryBrowserView: View {
     private var hasLibraryStatus: Bool {
         maintenanceSummaryLine != nil
             || viewModel.scanProgress != nil
-            || viewModel.compatibilityPresentation != nil
+            || viewModel.libraryImportNotice != nil
     }
 
     private var maintenanceSummaryLine: String? {
@@ -1326,18 +1326,16 @@ struct LibraryBrowserView: View {
         return viewModel.lastInitializationSummary?.summaryLine
     }
 
-    private func libraryImportCompatibilityPanel(
-        _ presentation: LibraryCompatibilityPresentation
-    ) -> some View {
+    private func libraryImportNoticePanel(_ message: String) -> some View {
         Label {
-            Text(presentation.bannerMessage ?? presentation.bannerTitle ?? "Direct imports unavailable.")
+            Text(message)
                 .font(AppFont.footnote())
                 .foregroundStyle(Color.textSecondary)
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         } icon: {
-            Image(systemName: presentation.iconName ?? "externaldrive.badge.exclamationmark")
+            Image(systemName: "lock.fill")
                 .font(AppFont.footnote(.semibold))
-                .foregroundStyle(presentation.tint ?? .orange)
+                .foregroundStyle(.orange)
         }
         .labelStyle(.titleAndIcon)
     }

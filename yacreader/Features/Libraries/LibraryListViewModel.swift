@@ -5,8 +5,6 @@ struct LibraryListItem: Identifiable, Equatable {
     let descriptor: LibraryDescriptor
     let accessSnapshot: LibraryAccessSnapshot
     let maintenanceRecord: LibraryMaintenanceRecord?
-    let metadataPath: String
-    let databasePath: String
 
     var id: UUID {
         descriptor.id
@@ -321,9 +319,7 @@ final class LibraryListViewModel: ObservableObject {
                 LibraryListItem(
                     descriptor: descriptor,
                     accessSnapshot: storageManager.accessSnapshot(for: descriptor, inspector: inspector),
-                    maintenanceRecord: maintenanceStatusStore.loadRecord(for: descriptor.id),
-                    metadataPath: storageManager.metadataRootURL(for: descriptor).path,
-                    databasePath: storageManager.databaseURL(for: descriptor).path
+                    maintenanceRecord: maintenanceStatusStore.loadRecord(for: descriptor.id)
                 )
             }
     }

@@ -1,6 +1,11 @@
 import Foundation
 
 struct AppDependencies {
+    let appLibraryDatabase: AppLibraryDatabase
+    let libraryAssetStore: LibraryAssetStore
+    let libraryCatalogRepository: LibraryCatalogRepository
+    let libraryStateRepository: LibraryStateRepository
+    let libraryIndexingService: LibraryIndexingService
     let libraryDescriptorStore: LibraryDescriptorStore
     let remoteServerProfileStore: RemoteServerProfileStore
     let remoteFolderShortcutStore: RemoteFolderShortcutStore
@@ -27,6 +32,17 @@ struct AppDependencies {
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
 
     static func makeDefault() -> AppDependencies {
+        let appLibraryDatabase = AppLibraryDatabase()
+        let libraryAssetStore = LibraryAssetStore(database: appLibraryDatabase)
+        let libraryCatalogRepository = LibraryCatalogRepository(
+            database: appLibraryDatabase,
+            assetStore: libraryAssetStore
+        )
+        let libraryStateRepository = LibraryStateRepository(database: appLibraryDatabase)
+        let libraryIndexingService = LibraryIndexingService(
+            database: appLibraryDatabase,
+            assetStore: libraryAssetStore
+        )
         let descriptorStore = LibraryDescriptorStore()
         let storageManager = LibraryStorageManager()
         let databaseWriter = LibraryDatabaseWriter()
@@ -45,6 +61,11 @@ struct AppDependencies {
             cachePolicyStore: remoteCachePolicyStore
         )
         return AppDependencies(
+            appLibraryDatabase: appLibraryDatabase,
+            libraryAssetStore: libraryAssetStore,
+            libraryCatalogRepository: libraryCatalogRepository,
+            libraryStateRepository: libraryStateRepository,
+            libraryIndexingService: libraryIndexingService,
             libraryDescriptorStore: descriptorStore,
             remoteServerProfileStore: remoteServerProfileStore,
             remoteFolderShortcutStore: remoteFolderShortcutStore,

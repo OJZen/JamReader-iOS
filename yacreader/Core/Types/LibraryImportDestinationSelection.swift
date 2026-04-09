@@ -51,16 +51,16 @@ struct LibraryImportDestinationOption: Identifiable, Hashable {
     }
 
     enum Status: Hashable {
-        case managed
-        case browseOnly
+        case appManaged
+        case linkedFolder
         case readOnly
 
         var title: String {
             switch self {
-            case .managed:
-                return "Managed"
-            case .browseOnly:
-                return "Browse Only"
+            case .appManaged:
+                return "App Managed"
+            case .linkedFolder:
+                return "Linked Folder"
             case .readOnly:
                 return "Read-Only"
             }

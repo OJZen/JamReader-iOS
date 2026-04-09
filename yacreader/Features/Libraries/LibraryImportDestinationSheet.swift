@@ -2,7 +2,7 @@ import Combine
 import SwiftUI
 
 enum ImportDestinationSheetCopy {
-    static let destinationFooter = "Files are copied into the selected library. Mirrored or read-only libraries stay browse-only."
+    static let destinationFooter = "Files are copied into the selected library. Linked folders must be writable on this device to receive imported comics."
     static let remoteImportNotice = "Remote imports download comics to this device before adding them to a local library."
 }
 
@@ -116,9 +116,9 @@ struct LibraryImportDestinationOptionRow: View {
 private extension LibraryImportDestinationOption.Status {
     var tintColor: Color {
         switch self {
-        case .managed:
-            return .blue
-        case .browseOnly:
+        case .appManaged:
+            return .teal
+        case .linkedFolder:
             return .blue
         case .readOnly:
             return .orange

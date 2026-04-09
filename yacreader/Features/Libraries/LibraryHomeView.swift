@@ -277,7 +277,7 @@ struct LibraryHomeView: View {
 
     private func handlePendingLibraryFocusIfNeeded() {
         guard let libraryID = UUID(uuidString: pendingFocusedLibraryID),
-              let item = compatibleLibraryItem(for: libraryID) else {
+              let item = libraryItem(for: libraryID) else {
             return
         }
 
@@ -296,23 +296,8 @@ struct LibraryHomeView: View {
         pendingFocusedFolderID = ""
     }
 
-    private func compatibleLibraryItem(for libraryID: UUID) -> LibraryListItem? {
-        guard let item = viewModel.items.first(where: { $0.id == libraryID }) else {
-            return nil
-        }
-
-        if let compatibilityIssue = item.accessSnapshot.database.compatibilityIssueDescription {
-            let versionText = item.accessSnapshot.database.version ?? "Unknown"
-            viewModel.alert = AppAlertState(
-                title: "Library Version Not Supported",
-                message: compatibilityIssue + "\n\nDetected DB version: \(versionText)."
-            )
-            pendingFocusedLibraryID = ""
-            pendingFocusedFolderID = ""
-            return nil
-        }
-
-        return item
+    private func libraryItem(for libraryID: UUID) -> LibraryListItem? {
+        viewModel.items.first(where: { $0.id == libraryID })
     }
 
     private func consumeFocusedOverride(for libraryID: UUID) {
@@ -492,7 +477,7 @@ struct LibraryHomeView: View {
     }
 
     private func openLibrary(_ libraryID: UUID) {
-        guard let item = compatibleLibraryItem(for: libraryID) else {
+        guard let item = libraryItem(for: libraryID) else {
             return
         }
 
@@ -558,7 +543,7 @@ private struct LibraryRowView: View {
         HStack(spacing: Spacing.sm) {
             ListIconBadge(
                 systemImage: "books.vertical.fill",
-                tint: item.descriptor.storageMode.tintColor
+                tint: item.kindTint
             )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
@@ -593,7 +578,7 @@ private struct LibrarySidebarRowView: View {
         HStack(spacing: Spacing.sm) {
             ListIconBadge(
                 systemImage: "books.vertical.fill",
-                tint: item.descriptor.storageMode.tintColor
+                tint: item.kindTint
             )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
@@ -681,6 +666,10 @@ private struct LibraryStatusNote {
 }
 
 private extension LibraryListItem {
+    var kindTint: Color {
+        descriptor.kind == .importedComics ? .teal : .blue
+    }
+
     var libraryScaleSummary: String {
         let database = accessSnapshot.database
 
@@ -691,29 +680,25 @@ private extension LibraryListItem {
         }
 
         if accessSnapshot.sourceExists {
-            return "Library database needs initialization."
+            return "Local state has not been indexed yet."
         }
 
         return "Library is currently unavailable on this device."
     }
 
-    func homeMetadataItems(
-        compatibilityPresentation: LibraryCompatibilityPresentation
-    ) -> [InlineMetadataItem] {
+    func homeMetadataItems() -> [InlineMetadataItem] {
         var items = [availabilityMetadataItem]
 
         if accessSnapshot.sourceReadable {
             items.append(writeAccessMetadataItem)
         }
 
-        items.append(storageMetadataItem(compatibilityPresentation: compatibilityPresentation))
+        items.append(storageMetadataItem)
         return items
     }
 
-    func sidebarMetadataItems(
-        compatibilityPresentation: LibraryCompatibilityPresentation
-    ) -> [InlineMetadataItem] {
-        homeMetadataItems(compatibilityPresentation: compatibilityPresentation)
+    func sidebarMetadataItems() -> [InlineMetadataItem] {
+        homeMetadataItems()
     }
 
     private var availabilityMetadataItem: InlineMetadataItem {
@@ -748,27 +733,15 @@ private extension LibraryListItem {
         )
     }
 
-    private func storageMetadataItem(
-        compatibilityPresentation: LibraryCompatibilityPresentation
-    ) -> InlineMetadataItem {
-        if descriptor.storageMode == .mirrored || compatibilityPresentation.badgeTitle == "Desktop Compatible" {
-            return InlineMetadataItem(
-                systemImage: "desktopcomputer",
-                text: "Desktop Compatible",
-                tint: .blue
-            )
-        }
-
+    private var storageMetadataItem: InlineMetadataItem {
         return InlineMetadataItem(
             systemImage: "books.vertical.fill",
-            text: "Local Library",
-            tint: .teal
+            text: descriptor.kind == .importedComics ? "App Managed" : "Linked Folder",
+            tint: kindTint
         )
     }
 
-    func homeRowStatusNote(
-        compatibilityPresentation: LibraryCompatibilityPresentation
-    ) -> LibraryStatusNote? {
+    func homeRowStatusNote() -> LibraryStatusNote? {
         if let error = accessSnapshot.lastError ?? accessSnapshot.database.lastError {
             return LibraryStatusNote(
                 text: error,
@@ -785,34 +758,14 @@ private extension LibraryListItem {
             )
         }
 
-        if let compatibilityNote = compatibilityPresentation.rowHint,
-           let iconName = compatibilityPresentation.iconName {
-            return LibraryStatusNote(
-                text: compatibilityNote,
-                systemImage: iconName,
-                tint: .secondary
-            )
-        }
-
         return nil
     }
 
-    func sidebarStatusNote(
-        compatibilityPresentation: LibraryCompatibilityPresentation
-    ) -> LibraryStatusNote? {
+    func sidebarStatusNote() -> LibraryStatusNote? {
         if let maintenanceRecord {
             return LibraryStatusNote(
                 text: maintenanceRecord.summaryLine,
                 systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                tint: .secondary
-            )
-        }
-
-        if let compatibilityNote = compatibilityPresentation.rowHint,
-           let iconName = compatibilityPresentation.iconName {
-            return LibraryStatusNote(
-                text: compatibilityNote,
-                systemImage: iconName,
                 tint: .secondary
             )
         }

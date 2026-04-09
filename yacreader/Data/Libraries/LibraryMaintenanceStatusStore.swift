@@ -1,25 +1,23 @@
 import Foundation
 
 final class LibraryMaintenanceStatusStore {
-    private let userDefaults: UserDefaults
+    private let repository: LibraryCatalogRepository
 
-    init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+    init(fileManager: FileManager = .default) {
+        let database = AppLibraryDatabase(fileManager: fileManager)
+        let assetStore = LibraryAssetStore(database: database, fileManager: fileManager)
+        self.repository = LibraryCatalogRepository(database: database, assetStore: assetStore)
     }
 
     func loadRecord(for libraryID: UUID) -> LibraryMaintenanceRecord? {
-        userDefaults.decodable(LibraryMaintenanceRecord.self, forKey: storageKey(for: libraryID))
+        try? repository.loadMaintenanceRecord(for: libraryID)
     }
 
     func saveRecord(_ record: LibraryMaintenanceRecord) {
-        userDefaults.setEncodable(record, forKey: storageKey(for: record.libraryID))
+        try? repository.saveMaintenanceRecord(record)
     }
 
     func clearRecord(for libraryID: UUID) {
-        userDefaults.removeObject(forKey: storageKey(for: libraryID))
-    }
-
-    private func storageKey(for libraryID: UUID) -> String {
-        "libraryMaintenanceStatus.\(libraryID.uuidString)"
+        try? repository.clearMaintenanceRecord(for: libraryID)
     }
 }

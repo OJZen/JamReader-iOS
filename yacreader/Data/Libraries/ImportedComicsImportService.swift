@@ -75,17 +75,11 @@ struct ImportedComicsImportProgress {
 final class ImportedComicsImportService {
     enum ImportDestinationValidationError: LocalizedError {
         case destinationLibraryNotWritable(String)
-        case destinationLibraryMirrored(String)
-        case destinationLibraryIncompatible(String)
 
         var errorDescription: String? {
             switch self {
             case .destinationLibraryNotWritable(let libraryName):
                 return "\(libraryName) is currently read-only. Choose a writable local library or Imported Comics instead."
-            case .destinationLibraryMirrored(let libraryName):
-                return "\(libraryName) is mirrored from an external source and is kept compatible for browsing. Import new comics into a writable in-place library instead."
-            case .destinationLibraryIncompatible(let libraryName):
-                return "\(libraryName) uses a library.ydb version that this iOS build cannot safely write to yet."
             }
         }
     }
@@ -254,7 +248,7 @@ final class ImportedComicsImportService {
             LibraryImportDestinationOption(
                 selection: .importedComics,
                 title: importedComicsLibraryName,
-                status: .managed,
+                status: .appManaged,
                 detail: nil,
                 availability: .available
             )
@@ -306,6 +300,10 @@ final class ImportedComicsImportService {
         try databaseBootstrapper.ensureDatabaseExists(
             at: storageManager.databaseURL(for: descriptor)
         )
+        _ = try libraryScanner.rescanLibrary(
+            sourceRootURL: rootURL,
+            databaseURL: storageManager.databaseURL(for: descriptor)
+        )
         maintenanceStatusStore.clearRecord(for: descriptor.id)
     }
 
@@ -340,14 +338,7 @@ final class ImportedComicsImportService {
     }
 
     private func validateImportDestination(_ descriptor: LibraryDescriptor) throws {
-        if descriptor.storageMode == .mirrored {
-            throw ImportDestinationValidationError.destinationLibraryMirrored(descriptor.name)
-        }
-
         let accessSnapshot = sourceAccessSnapshot(for: descriptor)
-        if accessSnapshot.database.exists, !accessSnapshot.database.hasCompatibleSchemaVersion {
-            throw ImportDestinationValidationError.destinationLibraryIncompatible(descriptor.name)
-        }
         guard accessSnapshot.sourceWritable else {
             throw ImportDestinationValidationError.destinationLibraryNotWritable(descriptor.name)
         }
@@ -447,19 +438,10 @@ final class ImportedComicsImportService {
         for descriptor: LibraryDescriptor,
         accessSnapshot: LibraryAccessSnapshot
     ) -> LibraryImportDestinationOption.Availability {
-        if descriptor.storageMode == .mirrored {
-            return .unavailable("Mirrored desktop library. Keep using it for browsing, not direct imports.")
-        }
-
-        if accessSnapshot.database.exists, !accessSnapshot.database.hasCompatibleSchemaVersion {
-            let versionText = accessSnapshot.database.version ?? "Unknown"
-            return .unavailable(
-                "This library uses DB \(versionText). iOS currently writes only to compatible local databases."
-            )
-        }
-
         if !accessSnapshot.sourceWritable {
-            return .unavailable("Currently read-only on this device.")
+            return .unavailable(
+                "This source folder is read-only on this device. Reading and local metadata stay available, but importing files here is disabled."
+            )
         }
 
         return .available
@@ -470,13 +452,13 @@ final class ImportedComicsImportService {
         accessSnapshot: LibraryAccessSnapshot,
         availability: LibraryImportDestinationOption.Availability
     ) -> LibraryImportDestinationOption.Status? {
-        if descriptor.storageMode == .mirrored {
-            return .browseOnly
+        if descriptor.kind == .importedComics {
+            return .appManaged
         }
 
         switch availability {
         case .available:
-            return nil
+            return .linkedFolder
         case .unavailable:
             if !accessSnapshot.sourceWritable {
                 return .readOnly

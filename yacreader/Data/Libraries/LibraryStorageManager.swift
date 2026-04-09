@@ -34,14 +34,21 @@ struct LibraryStorageFootprintSummary: Hashable {
 
 final class LibraryStorageManager {
     private let fileManager: FileManager
+    private let database: AppLibraryDatabase
+    private let assetStore: LibraryAssetStore
 
-    init(fileManager: FileManager = .default) {
+    init(
+        fileManager: FileManager = .default,
+        database: AppLibraryDatabase = AppLibraryDatabase()
+    ) {
         self.fileManager = fileManager
+        self.database = database
+        self.assetStore = LibraryAssetStore(database: database, fileManager: fileManager)
     }
 
     func registerLibrary(at sourceURL: URL, suggestedName: String? = nil) throws -> LibraryDescriptor {
         let standardizedURL = sourceURL.standardizedFileURL
-        let isManagedLocalLibrary = isManagedLocalLibraryURL(standardizedURL)
+        let isManagedURL = isManagedLocalLibraryURL(standardizedURL)
         let scoped = standardizedURL.startAccessingSecurityScopedResource()
         defer {
             if scoped {
@@ -55,7 +62,7 @@ final class LibraryStorageManager {
         }
 
         let bookmarkData: Data
-        if isManagedLocalLibrary {
+        if isManagedURL {
             bookmarkData = Data()
         } else {
             do {
@@ -65,21 +72,17 @@ final class LibraryStorageManager {
             }
         }
 
-        let name = normalizedLibraryName(suggestedName, fallback: values.name ?? standardizedURL.lastPathComponent)
-        let storageMode: LibraryStorageMode = fileManager.isWritableFile(atPath: standardizedURL.path) ? .inPlace : .mirrored
-
         let descriptor = LibraryDescriptor(
             id: UUID(),
-            name: name,
-            sourcePath: standardizedURL.path,
-            sourceBookmarkData: bookmarkData,
-            storageMode: storageMode,
+            kind: isImportedComicsLibraryURL(standardizedURL) ? .importedComics : .linkedFolder,
+            name: normalizedLibraryName(suggestedName, fallback: values.name ?? standardizedURL.lastPathComponent),
+            rootPath: standardizedURL.path,
+            bookmarkData: bookmarkData,
             createdAt: Date(),
             updatedAt: Date()
         )
 
-        try prepareMetadataDirectories(for: descriptor)
-
+        try ensureLibraryMetadataStructure(for: descriptor)
         return descriptor
     }
 
@@ -90,8 +93,8 @@ final class LibraryStorageManager {
     }
 
     func restoreSourceURL(for descriptor: LibraryDescriptor) throws -> URL {
-        if descriptor.sourceBookmarkData.isEmpty || isManagedLocalLibraryPath(descriptor.sourcePath) {
-            let sourceURL = try resolvedManagedLocalSourceURL(for: descriptor)
+        if descriptor.bookmarkData.isEmpty || isManagedLocalLibraryPath(descriptor.rootPath) {
+            let sourceURL = URL(fileURLWithPath: descriptor.rootPath, isDirectory: true).standardizedFileURL
             if !fileManager.fileExists(atPath: sourceURL.path) {
                 try fileManager.createDirectory(at: sourceURL, withIntermediateDirectories: true)
             }
@@ -99,11 +102,12 @@ final class LibraryStorageManager {
         }
 
         var isStale = false
-
         do {
-            return try resolveURL(
-                fromBookmarkData: descriptor.sourceBookmarkData,
-                isStale: &isStale
+            return try URL(
+                resolvingBookmarkData: descriptor.bookmarkData,
+                options: [],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
             ).standardizedFileURL
         } catch {
             throw LibraryStorageError.bookmarkResolutionFailed
@@ -125,33 +129,26 @@ final class LibraryStorageManager {
     }
 
     func metadataRootURL(for descriptor: LibraryDescriptor) -> URL {
-        switch descriptor.storageMode {
-        case .inPlace:
-            return URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
-                .appendingPathComponent(".yacreaderlibrary", isDirectory: true)
-        case .mirrored:
-            return mirroredLibraryRootURL(for: descriptor)
-        }
+        (try? assetStore.rootURL(for: descriptor.id))
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+                .appendingPathComponent(descriptor.id.uuidString, isDirectory: true)
     }
 
     func databaseURL(for descriptor: LibraryDescriptor) -> URL {
-        metadataRootURL(for: descriptor).appendingPathComponent("library.ydb")
+        (try? database.contextualDatabaseURL(for: descriptor.id))
+            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: false)
     }
 
     func coversURL(for descriptor: LibraryDescriptor) -> URL {
-        metadataRootURL(for: descriptor).appendingPathComponent("covers", isDirectory: true)
+        (try? assetStore.coversRootURL(for: descriptor.id))
+            ?? metadataRootURL(for: descriptor).appendingPathComponent("covers", isDirectory: true)
     }
 
     func ensureImportedComicsLibraryRootURL() throws -> URL {
         let importedRootURL = try importedComicsLibraryRootURL(createIfNeeded: true)
-
         if !fileManager.fileExists(atPath: importedRootURL.path) {
-            try fileManager.createDirectory(
-                at: importedRootURL,
-                withIntermediateDirectories: true
-            )
+            try fileManager.createDirectory(at: importedRootURL, withIntermediateDirectories: true)
         }
-
         return importedRootURL
     }
 
@@ -169,15 +166,13 @@ final class LibraryStorageManager {
         do {
             return try withScopedSourceAccess(for: descriptor) { session in
                 let sourceURL = session.sourceURL.standardizedFileURL
-                let metadataURL = metadataRootURL(for: descriptor, sourceURL: sourceURL)
+                let metadataURL = metadataRootURL(for: descriptor)
                 return LibraryAccessSnapshot(
                     sourceExists: fileManager.fileExists(atPath: sourceURL.path),
                     sourceReadable: fileManager.isReadableFile(atPath: sourceURL.path),
                     sourceWritable: fileManager.isWritableFile(atPath: sourceURL.path),
                     metadataExists: fileManager.fileExists(atPath: metadataURL.path),
-                    database: inspector.inspectDatabase(
-                        at: metadataURL.appendingPathComponent("library.ydb")
-                    )
+                    database: inspector.inspectDatabase(at: databaseURL(for: descriptor))
                 )
             }
         } catch {
@@ -186,40 +181,7 @@ final class LibraryStorageManager {
     }
 
     func ensureLibraryMetadataStructure(for descriptor: LibraryDescriptor) throws {
-        try prepareMetadataDirectories(for: descriptor)
-    }
-
-    private func prepareMetadataDirectories(for descriptor: LibraryDescriptor) throws {
-        let metadataRootURL = metadataRootURL(for: descriptor)
-        if !fileManager.fileExists(atPath: metadataRootURL.path) {
-            try fileManager.createDirectory(at: metadataRootURL, withIntermediateDirectories: true)
-        }
-
-        let coversURL = coversURL(for: descriptor)
-        if !fileManager.fileExists(atPath: coversURL.path) {
-            try fileManager.createDirectory(at: coversURL, withIntermediateDirectories: true)
-        }
-
-        let identifierURL = metadataRootURL.appendingPathComponent("id")
-        if !fileManager.fileExists(atPath: identifierURL.path) {
-            try descriptor.id.uuidString.write(to: identifierURL, atomically: true, encoding: .utf8)
-        }
-    }
-
-    private func mirroredLibraryRootURL(for descriptor: LibraryDescriptor) -> URL {
-        let supportURL = try? fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-
-        let rootURL = (supportURL ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true))
-            .appendingPathComponent("YACReader", isDirectory: true)
-            .appendingPathComponent("Libraries", isDirectory: true)
-            .appendingPathComponent(descriptor.id.uuidString, isDirectory: true)
-
-        return rootURL
+        try assetStore.ensureLibraryDirectories(for: descriptor.id)
     }
 
     private func normalizedLibraryName(_ rawName: String?, fallback: String) -> String {
@@ -232,81 +194,33 @@ final class LibraryStorageManager {
         return fallbackTrimmed.isEmpty ? "Untitled Library" : fallbackTrimmed
     }
 
-    private func managedLibrariesRootURL() throws -> URL {
-        try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        .appendingPathComponent("YACReader", isDirectory: true)
-        .standardizedFileURL
-    }
-
     private func importedComicsLibraryRootURL(createIfNeeded: Bool) throws -> URL {
-        try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: createIfNeeded
-        )
-        .appendingPathComponent("YACReader", isDirectory: true)
-        .appendingPathComponent("ImportedComics", isDirectory: true)
-        .standardizedFileURL
+        try database
+            .storageRootURL()
+            .appendingPathComponent("ImportedComics", isDirectory: true)
+            .standardizedFileURL
     }
 
-    private func isManagedLocalLibraryURL(_ url: URL) -> Bool {
-        guard let managedRootURL = try? managedLibrariesRootURL() else {
+    private func isImportedComicsLibraryURL(_ url: URL) -> Bool {
+        guard let importedURL = try? importedComicsLibraryRootURL(createIfNeeded: false) else {
             return false
         }
 
-        return url.standardizedFileURL.path.hasPrefix(managedRootURL.path + "/")
-            || url.standardizedFileURL.path == managedRootURL.path
+        return url.standardizedFileURL.path == importedURL.path
+    }
+
+    private func isManagedLocalLibraryURL(_ url: URL) -> Bool {
+        guard let rootURL = try? database.storageRootURL() else {
+            return false
+        }
+
+        let standardizedPath = url.standardizedFileURL.path
+        let rootPath = rootURL.standardizedFileURL.path
+        return standardizedPath == rootPath || standardizedPath.hasPrefix(rootPath + "/")
     }
 
     private func isManagedLocalLibraryPath(_ path: String) -> Bool {
         isManagedLocalLibraryURL(URL(fileURLWithPath: path, isDirectory: true))
-    }
-
-    private func resolvedManagedLocalSourceURL(for descriptor: LibraryDescriptor) throws -> URL {
-        let managedRootURL = try managedLibrariesRootURL()
-
-        if let relativePath = managedRelativePath(from: descriptor.sourcePath), !relativePath.isEmpty {
-            return managedRootURL
-                .appendingPathComponent(relativePath, isDirectory: true)
-                .standardizedFileURL
-        }
-
-        let lastComponent = URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
-            .standardizedFileURL
-            .lastPathComponent
-
-        if lastComponent == "ImportedComics" {
-            return try ensureImportedComicsLibraryRootURL()
-        }
-
-        if !lastComponent.isEmpty, lastComponent != "/" {
-            return managedRootURL
-                .appendingPathComponent(lastComponent, isDirectory: true)
-                .standardizedFileURL
-        }
-
-        return managedRootURL
-    }
-
-    private func managedRelativePath(from path: String) -> String? {
-        let normalizedComponents = URL(fileURLWithPath: path, isDirectory: true)
-            .standardizedFileURL
-            .pathComponents
-
-        guard let markerIndex = normalizedComponents.lastIndex(of: "YACReader"),
-              markerIndex < normalizedComponents.endIndex - 1
-        else {
-            return nil
-        }
-
-        let relativeComponents = Array(normalizedComponents[(markerIndex + 1)...])
-        return NSString.path(withComponents: relativeComponents)
     }
 
     private func normalizedDescriptor(for descriptor: LibraryDescriptor) throws -> LibraryDescriptor {
@@ -314,33 +228,40 @@ final class LibraryStorageManager {
         var normalizedDescriptor = descriptor
         var didChange = false
 
-        if normalizedDescriptor.sourcePath != resolvedSourceURL.path {
-            normalizedDescriptor.sourcePath = resolvedSourceURL.path
+        if normalizedDescriptor.rootPath != resolvedSourceURL.path {
+            normalizedDescriptor.rootPath = resolvedSourceURL.path
+            didChange = true
+        }
+
+        let normalizedKind: LibraryKind = isImportedComicsLibraryURL(resolvedSourceURL) ? .importedComics : .linkedFolder
+        if normalizedDescriptor.kind != normalizedKind {
+            normalizedDescriptor.kind = normalizedKind
             didChange = true
         }
 
         if isManagedLocalLibraryURL(resolvedSourceURL) {
-            if !normalizedDescriptor.sourceBookmarkData.isEmpty {
-                normalizedDescriptor.sourceBookmarkData = Data()
+            if !normalizedDescriptor.bookmarkData.isEmpty {
+                normalizedDescriptor.bookmarkData = Data()
                 didChange = true
             }
         } else {
-            let scopedAccess = resolvedSourceURL.startAccessingSecurityScopedResource()
+            let scoped = resolvedSourceURL.startAccessingSecurityScopedResource()
             defer {
-                if scopedAccess {
+                if scoped {
                     resolvedSourceURL.stopAccessingSecurityScopedResource()
                 }
             }
 
             let refreshedBookmarkData = try persistentBookmarkData(for: resolvedSourceURL)
-            if normalizedDescriptor.sourceBookmarkData != refreshedBookmarkData {
-                normalizedDescriptor.sourceBookmarkData = refreshedBookmarkData
+            if normalizedDescriptor.bookmarkData != refreshedBookmarkData {
+                normalizedDescriptor.bookmarkData = refreshedBookmarkData
                 didChange = true
             }
         }
 
         if didChange {
             normalizedDescriptor.updatedAt = Date()
+            try ensureLibraryMetadataStructure(for: normalizedDescriptor)
         }
 
         return normalizedDescriptor
@@ -352,27 +273,6 @@ final class LibraryStorageManager {
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
-    }
-
-    private func resolveURL(
-        fromBookmarkData bookmarkData: Data,
-        isStale: inout Bool
-    ) throws -> URL {
-        try URL(
-            resolvingBookmarkData: bookmarkData,
-            options: [],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        )
-    }
-
-    private func metadataRootURL(for descriptor: LibraryDescriptor, sourceURL: URL) -> URL {
-        switch descriptor.storageMode {
-        case .inPlace:
-            return sourceURL.appendingPathComponent(".yacreaderlibrary", isDirectory: true)
-        case .mirrored:
-            return mirroredLibraryRootURL(for: descriptor)
-        }
     }
 
     private func directoryFootprint(at rootURL: URL) -> LibraryStorageFootprintSummary {

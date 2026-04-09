@@ -15,20 +15,17 @@ final class LibraryComicRemovalService {
     private let storageManager: LibraryStorageManager
     private let databaseWriter: LibraryDatabaseWriter
     private let coverLocator: LibraryCoverLocator
-    private let databaseInspector: SQLiteDatabaseInspector
     private let fileManager: FileManager
 
     init(
         storageManager: LibraryStorageManager,
         databaseWriter: LibraryDatabaseWriter,
         coverLocator: LibraryCoverLocator,
-        databaseInspector: SQLiteDatabaseInspector = SQLiteDatabaseInspector(),
         fileManager: FileManager = .default
     ) {
         self.storageManager = storageManager
         self.databaseWriter = databaseWriter
         self.coverLocator = coverLocator
-        self.databaseInspector = databaseInspector
         self.fileManager = fileManager
     }
 
@@ -91,19 +88,10 @@ final class LibraryComicRemovalService {
     private func removalAvailabilityMessage(
         for descriptor: LibraryDescriptor
     ) -> String? {
-        if descriptor.storageMode == .mirrored {
-            return "This library is browse-only on this device, so comics cannot be removed here."
-        }
-
         let accessSnapshot = storageManager.accessSnapshot(
             for: descriptor,
-            inspector: databaseInspector
+            inspector: SQLiteDatabaseInspector()
         )
-
-        if accessSnapshot.database.exists && !accessSnapshot.database.hasCompatibleSchemaVersion {
-            let versionText = accessSnapshot.database.version ?? "Unknown"
-            return "This library uses DB \(versionText), which cannot be modified from this iOS build."
-        }
 
         if !accessSnapshot.sourceWritable {
             return "This library is currently read-only on this device."

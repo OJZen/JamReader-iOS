@@ -105,13 +105,12 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     var canInitializeLibrary: Bool {
-        content == nil && !databaseExists && folderID == 1
+        content == nil && !databaseSummary.exists && folderID == 1
     }
 
     var canRefreshLibrary: Bool {
         folderID == 1
-            && databaseExists
-            && databaseSummary.hasCompatibleSchemaVersion
+            && databaseSummary.exists
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
@@ -119,8 +118,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     var canRefreshCurrentFolder: Bool {
         folderID != 1
             && content != nil
-            && databaseExists
-            && databaseSummary.hasCompatibleSchemaVersion
+            && databaseSummary.exists
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
@@ -131,8 +129,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
     var canImportLibraryComicInfo: Bool {
         folderID == 1
-            && databaseExists
-            && databaseSummary.hasCompatibleSchemaVersion
+            && databaseSummary.exists
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
@@ -140,38 +137,26 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     var canImportCurrentFolderComicInfo: Bool {
         folderID != 1
             && content != nil
-            && databaseExists
-            && databaseSummary.hasCompatibleSchemaVersion
+            && databaseSummary.exists
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
 
     var canImportComicFiles: Bool {
         content != nil
-            && databaseExists
-            && databaseSummary.hasCompatibleSchemaVersion
+            && databaseSummary.exists
             && supportsDirectLibraryImports
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
 
-    var libraryImportCompatibilityNotice: String? {
+    var libraryImportNotice: String? {
         switch importedComicsImportService.importAvailability(for: descriptor) {
         case .available:
             return nil
         case .unavailable(let message):
             return message
         }
-    }
-
-    var compatibilityPresentation: LibraryCompatibilityPresentation? {
-        let availability = importedComicsImportService.importAvailability(for: descriptor)
-        let presentation = LibraryCompatibilityPresentation.resolve(
-            descriptor: descriptor,
-            availability: availability
-        )
-
-        return presentation.bannerTitle == nil ? nil : presentation
     }
 
     var supportsDirectLibraryImports: Bool {
@@ -472,9 +457,9 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
         databaseSummary = databaseInspector.inspectDatabase(at: databaseURL)
 
-        if let compatibilityIssue = databaseSummary.compatibilityIssueDescription {
+        if let issue = databaseSummary.issueDescription {
             content = nil
-            emptyStateMessage = compatibilityIssue
+            emptyStateMessage = issue
             continueReadingComics = []
             recentComics = []
             favoritesComics = []
@@ -754,10 +739,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
     func importComicFiles(from urls: [URL]) {
         guard canImportComicFiles else {
-            if let libraryImportCompatibilityNotice {
+            if let libraryImportNotice {
                 alert = AppAlertState(
                     title: "Import Unavailable",
-                    message: libraryImportCompatibilityNotice
+                    message: libraryImportNotice
                 )
             }
             return
@@ -914,10 +899,6 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         scanCompletionDismissTask?.cancel()
         scanCompletionDismissTask = nil
         scanCompletion = nil
-    }
-
-    private var databaseExists: Bool {
-        FileManager.default.fileExists(atPath: databaseURL.path)
     }
 
     private func importDestinationDirectoryURL() throws -> URL {
