@@ -1,8 +1,23 @@
-# YACReader iOS 迁移计划
+# YACReader iOS 迁移计划（历史归档）
 
-更新时间：2026-03-25
+更新时间：2026-04-09
 
-> 说明：本文件较早版本包含桌面 `library.ydb` / `.yacreaderlibrary` 兼容方案。当前实现已切换为 App 自管的 `AppLibraryV2.sqlite` 与本地资产目录，外部漫画目录不再承载 App 私有数据库、封面缓存或兼容模式语义。以下旧兼容内容仅作为历史记录参考，不再代表当前架构。
+> 状态：自 2026-04-09 起，本文件转为历史归档。当前实现已经完成切换：资料库状态统一存储在 `Application Support/YACReader/AppLibraryV2.sqlite`，封面与派生资源统一存储在 `Application Support/YACReader/LibraryAssets/<libraryID>/`，外部漫画目录只作为内容源，不再承载 `.yacreaderlibrary`、`library.ydb`、桌面兼容模式或镜像模式语义。
+
+当前有效参考文档：
+
+- `docs/yacreader-ios-product-engineering-spec.md`
+- `docs/native-library-static-validation-checklist.md`
+- `docs/yacreader-ios-design-handoff-index.md`
+
+## 0. 当前架构快照
+
+- 资料库模型只保留两类：`Linked Folder` 与 `Imported Comics`。
+- 业务状态、阅读进度、标签、阅读列表、元数据编辑结果全部写入 App 本地数据库。
+- 外部目录只负责提供漫画内容；源目录只读时，仍允许修改本地业务状态，但禁止导入到该目录或物理删除源文件。
+- 扫描与导入会统一忽略 `.yacreaderlibrary` 等历史残留目录，避免再次把旧兼容痕迹纳入库内容。
+
+下文保留的是迁移过程中的历史方案、阶段记录与旧设计取舍，其中会出现旧的桌面兼容术语，仅用于回溯背景，不再代表当前架构。
 
 ## 1. 目标与范围
 
