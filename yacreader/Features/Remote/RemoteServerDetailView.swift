@@ -4,6 +4,7 @@ import UIKit
 private enum RemoteServerDetailLayoutMetrics {
     static let horizontalInset: CGFloat = 12
     static let rowAccessoryReservedWidth: CGFloat = 36
+    static let persistentActionMinWidth: CGFloat = 560
 }
 
 struct RemoteServerDetailView: View {
@@ -132,7 +133,8 @@ struct RemoteServerDetailView: View {
             RemoteComicLoadingView(
                 profile: profile,
                 item: session.directoryItem,
-                dependencies: dependencies
+                dependencies: dependencies,
+                referenceOverride: session.resolvedComicFileReference(for: profile)
             )
         }
     }
@@ -214,7 +216,7 @@ struct RemoteServerDetailView: View {
                                 session: session,
                                 profile: profile,
                                 availability: dependencies.remoteServerBrowsingService.cachedAvailability(
-                                    for: session.comicFileReference
+                                    for: session.resolvedComicFileReference(for: profile)
                                 ),
                                 browsingService: dependencies.remoteServerBrowsingService,
                                 heroSourceID: session.directoryItem.id,
@@ -231,6 +233,12 @@ struct RemoteServerDetailView: View {
                             recentSessionActionMenu(for: session)
                                 .padding(.trailing, 8)
                         }
+                    }
+                    .contextMenu {
+                        recentSessionActionMenuContent(for: session)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        recentSessionSwipeActions(for: session)
                     }
                 }
             }
@@ -254,7 +262,7 @@ struct RemoteServerDetailView: View {
 
     private var showsPersistentRecentSessionActions: Bool {
         horizontalSizeClass == .regular
-            && containerWidth >= AppLayout.regularInlineActionMinWidth
+            && containerWidth >= RemoteServerDetailLayoutMetrics.persistentActionMinWidth
     }
 
     private var recentSessionAccessoryReservedWidth: CGFloat {
@@ -387,20 +395,38 @@ struct RemoteServerDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func recentSessionActionMenuContent(
+        for session: RemoteComicReadingSession
+    ) -> some View {
+        Button(role: .destructive) {
+            deleteRecentSession(session)
+        } label: {
+            Label("Delete History Entry", systemImage: "trash")
+        }
+    }
+
     private func recentSessionActionMenu(
         for session: RemoteComicReadingSession
     ) -> some View {
         Menu {
-            Button(role: .destructive) {
-                deleteRecentSession(session)
-            } label: {
-                Label("Delete History Entry", systemImage: "trash")
-            }
+            recentSessionActionMenuContent(for: session)
         } label: {
             PersistentRowActionButtonLabel()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Manage \(session.displayName)")
+    }
+
+    @ViewBuilder
+    private func recentSessionSwipeActions(
+        for session: RemoteComicReadingSession
+    ) -> some View {
+        Button(role: .destructive) {
+            deleteRecentSession(session)
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     private func deleteRecentSession(_ session: RemoteComicReadingSession) {
