@@ -89,10 +89,11 @@ final class ImportedComicsImportService {
     private let databaseBootstrapper: LibraryDatabaseBootstrapper
     private let libraryScanner: LibraryScanner
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
+    private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let fileManager: FileManager
 
     private let supportedComicFileExtensions: Set<String> = [
-        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"
+        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
     ]
     private let importedComicsLibraryName = "Imported Comics"
 
@@ -102,6 +103,7 @@ final class ImportedComicsImportService {
         databaseBootstrapper: LibraryDatabaseBootstrapper,
         libraryScanner: LibraryScanner,
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
+        directoryImageSequenceInspector: DirectoryImageSequenceInspector = DirectoryImageSequenceInspector(),
         fileManager: FileManager = .default
     ) {
         self.store = store
@@ -109,6 +111,7 @@ final class ImportedComicsImportService {
         self.databaseBootstrapper = databaseBootstrapper
         self.libraryScanner = libraryScanner
         self.maintenanceStatusStore = maintenanceStatusStore
+        self.directoryImageSequenceInspector = directoryImageSequenceInspector
         self.fileManager = fileManager
     }
 
@@ -516,6 +519,26 @@ final class ImportedComicsImportService {
         }
 
         if values.isDirectory == true {
+            if let inspection = try? directoryImageSequenceInspector.inspectComicDirectory(at: sourceURL) {
+                do {
+                    try cancellationCheck?()
+                    try importComicDirectory(
+                        at: sourceURL,
+                        inspection: inspection,
+                        into: destinationDirectoryURL,
+                        importedComicCount: &importedComicCount,
+                        importedDestinationFileURLs: &importedDestinationFileURLs,
+                        failedItemNames: &failedItemNames,
+                        consumeSourceURLs: consumeSourceURLs,
+                        transferTotalCount: transferTotalCount,
+                        progressHandler: progressHandler
+                    )
+                } catch {
+                    failedItemNames.append(sourceURL.lastPathComponent)
+                }
+                return
+            }
+
             guard traverseDirectories else {
                 unsupportedItemNames.append(sourceURL.lastPathComponent)
                 return
@@ -604,9 +627,31 @@ final class ImportedComicsImportService {
         for case let candidateURL as URL in enumerator {
             try cancellationCheck?()
 
+            var shouldSkipDescendants = false
             autoreleasepool {
                 let values = try? candidateURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
                 if values?.isDirectory == true {
+                    if let inspection = try? directoryImageSequenceInspector.inspectComicDirectory(at: candidateURL) {
+                        discoveredAnyComic = true
+                        shouldSkipDescendants = true
+
+                        do {
+                            try cancellationCheck?()
+                            try importComicDirectory(
+                                at: candidateURL,
+                                inspection: inspection,
+                                into: destinationDirectoryURL,
+                                importedComicCount: &importedComicCount,
+                                importedDestinationFileURLs: &importedDestinationFileURLs,
+                                failedItemNames: &failedItemNames,
+                                consumeSourceURLs: consumeSourceURLs,
+                                transferTotalCount: transferTotalCount,
+                                progressHandler: progressHandler
+                            )
+                        } catch {
+                            failedItemNames.append(candidateURL.lastPathComponent)
+                        }
+                    }
                     return
                 }
 
@@ -645,6 +690,10 @@ final class ImportedComicsImportService {
                     failedItemNames.append(candidateURL.lastPathComponent)
                 }
             }
+
+            if shouldSkipDescendants {
+                enumerator.skipDescendants()
+            }
         }
 
         if !discoveredAnyComic {
@@ -679,6 +728,43 @@ final class ImportedComicsImportService {
         return preferredURL
     }
 
+    private func importComicDirectory(
+        at sourceDirectoryURL: URL,
+        inspection: DirectoryImageSequenceInspection,
+        into destinationDirectoryURL: URL,
+        importedComicCount: inout Int,
+        importedDestinationFileURLs: inout [URL],
+        failedItemNames: inout [String],
+        consumeSourceURLs: Set<URL>,
+        transferTotalCount: Int?,
+        progressHandler: ((ImportedComicsImportProgress) -> Void)?
+    ) throws {
+        let destinationPlan = try directoryImportDestinationPlan(
+            for: sourceDirectoryURL,
+            inspection: inspection,
+            in: destinationDirectoryURL
+        )
+        if destinationPlan.requiresTransfer {
+            try transferImportedResource(
+                at: sourceDirectoryURL,
+                to: destinationPlan.destinationURL,
+                consumeSourceURLs: consumeSourceURLs
+            )
+        }
+
+        importedDestinationFileURLs.append(destinationPlan.destinationURL)
+        importedComicCount += 1
+        progressHandler?(
+            ImportedComicsImportProgress(
+                phase: .transferring,
+                completedCount: importedComicCount,
+                totalCount: transferTotalCount,
+                currentItemName: sourceDirectoryURL.lastPathComponent,
+                scanProgress: nil
+            )
+        )
+    }
+
     private func importDestinationPlan(
         for sourceURL: URL,
         in directoryURL: URL
@@ -711,6 +797,50 @@ final class ImportedComicsImportService {
         return (uniqueDestinationURL(for: sourceURL, in: directoryURL).standardizedFileURL, true)
     }
 
+    private func directoryImportDestinationPlan(
+        for sourceDirectoryURL: URL,
+        inspection: DirectoryImageSequenceInspection,
+        in destinationDirectoryURL: URL
+    ) throws -> (destinationURL: URL, requiresTransfer: Bool) {
+        let preferredURL = destinationDirectoryURL
+            .appendingPathComponent(sourceDirectoryURL.lastPathComponent, isDirectory: true)
+            .standardizedFileURL
+
+        if fileManager.fileExists(atPath: preferredURL.path),
+           try directoriesAppearEquivalent(
+            sourceDirectoryURL.standardizedFileURL,
+            sourceInspection: inspection,
+            preferredURL
+           ) {
+            try cleanupEquivalentDuplicateComicDirectories(
+                for: sourceDirectoryURL.standardizedFileURL,
+                sourceInspection: inspection,
+                keeping: preferredURL,
+                in: destinationDirectoryURL.standardizedFileURL
+            )
+            return (preferredURL, false)
+        }
+
+        if let existingEquivalentURL = try existingEquivalentComicDirectory(
+            for: sourceDirectoryURL.standardizedFileURL,
+            sourceInspection: inspection,
+            in: destinationDirectoryURL.standardizedFileURL
+        ) {
+            try cleanupEquivalentDuplicateComicDirectories(
+                for: sourceDirectoryURL.standardizedFileURL,
+                sourceInspection: inspection,
+                keeping: existingEquivalentURL,
+                in: destinationDirectoryURL.standardizedFileURL
+            )
+            return (existingEquivalentURL, false)
+        }
+
+        return (
+            uniqueDestinationURL(for: sourceDirectoryURL, in: destinationDirectoryURL).standardizedFileURL,
+            true
+        )
+    }
+
     private func existingEquivalentDestination(
         for sourceURL: URL,
         in directoryURL: URL
@@ -728,6 +858,35 @@ final class ImportedComicsImportService {
             }
 
             if try filesAppearEquivalent(sourceURL, candidateURL.standardizedFileURL) {
+                return candidateURL.standardizedFileURL
+            }
+        }
+
+        return nil
+    }
+
+    private func existingEquivalentComicDirectory(
+        for sourceDirectoryURL: URL,
+        sourceInspection: DirectoryImageSequenceInspection,
+        in destinationDirectoryURL: URL
+    ) throws -> URL? {
+        let candidates = try fileManager.contentsOfDirectory(
+            at: destinationDirectoryURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        for candidateURL in candidates {
+            let values = try? candidateURL.resourceValues(forKeys: [.isDirectoryKey])
+            guard values?.isDirectory == true else {
+                continue
+            }
+
+            if try directoriesAppearEquivalent(
+                sourceDirectoryURL,
+                sourceInspection: sourceInspection,
+                candidateURL.standardizedFileURL
+            ) {
                 return candidateURL.standardizedFileURL
             }
         }
@@ -759,6 +918,43 @@ final class ImportedComicsImportService {
                     for: sourceURL.lastPathComponent
                   ),
                   try filesAppearEquivalent(canonicalURL, normalizedCandidateURL)
+            else {
+                continue
+            }
+
+            try? fileManager.removeItem(at: normalizedCandidateURL)
+        }
+    }
+
+    private func cleanupEquivalentDuplicateComicDirectories(
+        for sourceDirectoryURL: URL,
+        sourceInspection: DirectoryImageSequenceInspection,
+        keeping canonicalURL: URL,
+        in destinationDirectoryURL: URL
+    ) throws {
+        let candidates = try fileManager.contentsOfDirectory(
+            at: destinationDirectoryURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        for candidateURL in candidates {
+            let normalizedCandidateURL = candidateURL.standardizedFileURL
+            guard normalizedCandidateURL != canonicalURL else {
+                continue
+            }
+
+            let values = try? normalizedCandidateURL.resourceValues(forKeys: [.isDirectoryKey])
+            guard values?.isDirectory == true,
+                  isRetryDuplicateName(
+                    normalizedCandidateURL.lastPathComponent,
+                    for: sourceDirectoryURL.lastPathComponent
+                  ),
+                  try directoriesAppearEquivalent(
+                    sourceDirectoryURL,
+                    sourceInspection: sourceInspection,
+                    normalizedCandidateURL
+                  )
             else {
                 continue
             }
@@ -803,6 +999,23 @@ final class ImportedComicsImportService {
         }
 
         return try importFingerprint(for: lhs) == importFingerprint(for: rhs)
+    }
+
+    private func directoriesAppearEquivalent(
+        _ lhs: URL,
+        sourceInspection: DirectoryImageSequenceInspection,
+        _ rhs: URL
+    ) throws -> Bool {
+        if lhs.standardizedFileURL == rhs.standardizedFileURL {
+            return true
+        }
+
+        guard let rhsInspection = try directoryImageSequenceInspector.inspectComicDirectory(at: rhs) else {
+            return false
+        }
+
+        return try directoryImageSequenceInspector.fingerprint(for: sourceInspection)
+            == directoryImageSequenceInspector.fingerprint(for: rhsInspection)
     }
 
     private func fileSize(for url: URL) throws -> Int64 {

@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 enum DirectoryImageSequenceError: LocalizedError {
@@ -17,46 +18,149 @@ enum DirectoryImageSequenceError: LocalizedError {
     }
 }
 
-final class DirectoryImageSequenceReader {
+struct DirectoryImageSequenceInspection {
+    let directoryURL: URL
+    let pageFiles: [URL]
+    let regularFiles: [URL]
+    let comicInfoURL: URL?
+}
+
+final class DirectoryImageSequenceInspector {
+    private static let auxiliaryFileNames: Set<String> = [
+        "comicinfo.xml",
+        "thumbs.db",
+        "desktop.ini"
+    ]
+
     private let fileManager: FileManager
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
+    func inspectComicDirectory(at directoryURL: URL) throws -> DirectoryImageSequenceInspection? {
+        let contents = try fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .nameKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        var regularFiles: [URL] = []
+
+        for itemURL in contents {
+            let values = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+            if values.isDirectory == true {
+                return nil
+            }
+
+            if values.isRegularFile == true {
+                regularFiles.append(itemURL)
+            }
+        }
+
+        let pageFiles = sortedPageFiles(in: regularFiles)
+        guard !pageFiles.isEmpty else {
+            return nil
+        }
+
+        let relevantRegularFiles = regularFiles.filter { fileURL in
+            !Self.auxiliaryFileNames.contains(fileURL.lastPathComponent.lowercased())
+        }
+        guard !relevantRegularFiles.isEmpty else {
+            return nil
+        }
+
+        let imageDominance = Double(pageFiles.count) / Double(relevantRegularFiles.count)
+        guard imageDominance >= 0.8 else {
+            return nil
+        }
+
+        let comicInfoURL = regularFiles.first(where: {
+            $0.lastPathComponent.caseInsensitiveCompare("ComicInfo.xml") == .orderedSame
+        })
+
+        return DirectoryImageSequenceInspection(
+            directoryURL: directoryURL,
+            pageFiles: pageFiles,
+            regularFiles: regularFiles,
+            comicInfoURL: comicInfoURL
+        )
+    }
+
+    func fingerprint(for inspection: DirectoryImageSequenceInspection) throws -> String {
+        var digest = Insecure.SHA1()
+        var totalSize: Int64 = 0
+
+        let sortedRegularFiles = inspection.regularFiles.sorted {
+            $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+        }
+
+        for fileURL in sortedRegularFiles {
+            let fileSize = Int64((try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            totalSize += fileSize
+            digest.update(data: Data("\(fileURL.lastPathComponent.lowercased()):\(fileSize)\n".utf8))
+        }
+
+        if let firstPageURL = inspection.pageFiles.first {
+            digest.update(data: try fingerprintSample(from: firstPageURL))
+        }
+
+        if let lastPageURL = inspection.pageFiles.last, lastPageURL != inspection.pageFiles.first {
+            digest.update(data: try fingerprintSample(from: lastPageURL))
+        }
+
+        let digestString = digest.finalize().map { String(format: "%02x", $0) }.joined()
+        return "\(digestString)-\(inspection.pageFiles.count)-\(totalSize)"
+    }
+
+    private func sortedPageFiles(in regularFiles: [URL]) -> [URL] {
+        let supportedFiles = regularFiles.filter { url in
+            ComicPageNameSorter.isSupportedImagePath(url.lastPathComponent)
+        }
+        let sortedPageNames = ComicPageNameSorter.sortedPageNames(supportedFiles.map(\.lastPathComponent))
+        let filesByName = Dictionary(uniqueKeysWithValues: supportedFiles.map { ($0.lastPathComponent, $0) })
+        return sortedPageNames.compactMap { filesByName[$0] }
+    }
+
+    private func fingerprintSample(from fileURL: URL, maxBytes: Int = 64 * 1024) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            try? handle.close()
+        }
+        return try handle.read(upToCount: maxBytes) ?? Data()
+    }
+}
+
+final class DirectoryImageSequenceReader {
+    private let fileManager: FileManager
+    private let inspector: DirectoryImageSequenceInspector
+
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        self.inspector = DirectoryImageSequenceInspector(fileManager: fileManager)
+    }
+
     func loadDocument(at directoryURL: URL) throws -> ImageSequenceComicDocument {
-        let contents: [URL]
+        let inspection: DirectoryImageSequenceInspection
         do {
-            contents = try fileManager.contentsOfDirectory(
-                at: directoryURL,
-                includingPropertiesForKeys: [
-                    .isRegularFileKey,
-                    .isHiddenKey,
-                    .nameKey
-                ],
-                options: [.skipsHiddenFiles]
-            )
+            guard let resolvedInspection = try inspector.inspectComicDirectory(at: directoryURL) else {
+                throw DirectoryImageSequenceError.noRenderablePages
+            }
+            inspection = resolvedInspection
+        } catch let error as DirectoryImageSequenceError {
+            throw error
         } catch {
             throw DirectoryImageSequenceError.unreadableDirectory
         }
 
-        let pageFiles = contents
-            .filter { url in
-                let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
-                return values?.isRegularFile == true && ComicPageNameSorter.isSupportedImagePath(url.lastPathComponent)
-            }
-            .sorted { lhs, rhs in
-                lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
-            }
-
-        guard !pageFiles.isEmpty else {
+        guard !inspection.pageFiles.isEmpty else {
             throw DirectoryImageSequenceError.noRenderablePages
         }
 
         return ImageSequenceComicDocument(
             url: directoryURL,
-            pageNames: pageFiles.map(\.lastPathComponent),
-            pageSource: DirectoryImagePageSource(pageFiles: pageFiles)
+            pageNames: inspection.pageFiles.map(\.lastPathComponent),
+            pageSource: DirectoryImagePageSource(pageFiles: inspection.pageFiles)
         )
     }
 }

@@ -30,20 +30,23 @@ final class LibraryIndexingService {
     private let assetStore: LibraryAssetStore
     private let fileManager: FileManager
     private let metadataExtractor: LibraryComicMetadataExtractor
+    private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let supportedExtensions: Set<String> = [
-        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"
+        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
     ]
 
     init(
         database: AppLibraryDatabase,
         assetStore: LibraryAssetStore,
         fileManager: FileManager = .default,
-        metadataExtractor: LibraryComicMetadataExtractor = LibraryComicMetadataExtractor()
+        metadataExtractor: LibraryComicMetadataExtractor = LibraryComicMetadataExtractor(),
+        directoryImageSequenceInspector: DirectoryImageSequenceInspector = DirectoryImageSequenceInspector()
     ) {
         self.database = database
         self.assetStore = assetStore
         self.fileManager = fileManager
         self.metadataExtractor = metadataExtractor
+        self.directoryImageSequenceInspector = directoryImageSequenceInspector
     }
 
     func scanLibrary(
@@ -189,6 +192,41 @@ final class LibraryIndexingService {
             }
 
             if isDirectory {
+                if let inspection = try directoryImageSequenceInspector.inspectComicDirectory(at: standardizedURL) {
+                    let relativePath = makeRelativePath(for: standardizedURL, sourceRootURL: sourceRootURL)
+                    let metadata: ExtractedComicMetadata?
+                    do {
+                        metadata = try metadataExtractor.extractMetadata(for: standardizedURL)
+                    } catch {
+                        metadata = nil
+                    }
+
+                    comics.append(
+                        ScannedComic(
+                            relativePath: relativePath,
+                            parentRelativePath: relativeDirectoryPath(for: relativePath) ?? "",
+                            fileName: standardizedURL.lastPathComponent,
+                            hash: try directoryImageSequenceInspector.fingerprint(for: inspection),
+                            metadata: metadata
+                        )
+                    )
+
+                    processedComicCount += 1
+                    if processedComicCount == 1 || processedComicCount.isMultiple(of: 5) {
+                        progressHandler?(
+                            LibraryScanProgress(
+                                phase: .scanningComics,
+                                currentPath: displayPath(fromRelativePath: relativePath),
+                                processedFolderCount: processedFolderCount,
+                                processedComicCount: processedComicCount
+                            )
+                        )
+                    }
+
+                    enumerator.skipDescendants()
+                    continue
+                }
+
                 let relativePath = makeRelativePath(for: standardizedURL, sourceRootURL: sourceRootURL)
                 let parentRelativePath = relativeDirectoryPath(for: relativePath)
                 folders.append(
@@ -753,6 +791,10 @@ final class LibraryIndexingService {
     }
 
     private func fileFingerprint(for fileURL: URL) throws -> String {
+        if let inspection = try directoryImageSequenceInspector.inspectComicDirectory(at: fileURL) {
+            return try directoryImageSequenceInspector.fingerprint(for: inspection)
+        }
+
         let size = Int64((try fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer {

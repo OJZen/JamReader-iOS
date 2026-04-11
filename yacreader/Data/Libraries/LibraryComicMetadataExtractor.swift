@@ -36,6 +36,7 @@ final class LibraryComicMetadataExtractor {
     private let libArchiveReader: LibArchiveReader
     private let zipArchiveReader: ZIPArchiveReader
     private let tarArchiveReader: TARArchiveReader
+    private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let comicInfoXMLParser: ComicInfoXMLParser
     private let fileManager: FileManager
 
@@ -43,17 +44,24 @@ final class LibraryComicMetadataExtractor {
         libArchiveReader: LibArchiveReader = LibArchiveReader(),
         zipArchiveReader: ZIPArchiveReader = ZIPArchiveReader(),
         tarArchiveReader: TARArchiveReader = TARArchiveReader(),
+        directoryImageSequenceInspector: DirectoryImageSequenceInspector = DirectoryImageSequenceInspector(),
         comicInfoXMLParser: ComicInfoXMLParser = ComicInfoXMLParser(),
         fileManager: FileManager = .default
     ) {
         self.libArchiveReader = libArchiveReader
         self.zipArchiveReader = zipArchiveReader
         self.tarArchiveReader = tarArchiveReader
+        self.directoryImageSequenceInspector = directoryImageSequenceInspector
         self.comicInfoXMLParser = comicInfoXMLParser
         self.fileManager = fileManager
     }
 
     func extractMetadata(for fileURL: URL, coverPage: Int = 1) throws -> ExtractedComicMetadata? {
+        if isDirectory(fileURL),
+           let inspection = try directoryImageSequenceInspector.inspectComicDirectory(at: fileURL) {
+            return try extractDirectoryMetadata(for: inspection, coverPage: coverPage)
+        }
+
         let fileExtension = fileURL.pathExtension.lowercased()
 
         switch fileExtension {
@@ -71,6 +79,8 @@ final class LibraryComicMetadataExtractor {
             return try extractArchiveMetadata(
                 tarArchiveReader.extractMetadata(at: fileURL, coverPage: coverPage)
             )
+        case "epub", "mobi":
+            return try extractEBookMetadata(for: fileURL)
         default:
             return nil
         }
@@ -79,6 +89,12 @@ final class LibraryComicMetadataExtractor {
     /// Lightweight extraction: only page count, no cover image or ComicInfo.xml.
     /// Much faster for initial library import since it avoids decompressing image data.
     func extractPageCountOnly(for fileURL: URL) -> Int? {
+        if isDirectory(fileURL) {
+            if let inspection = try? directoryImageSequenceInspector.inspectComicDirectory(at: fileURL) {
+                return inspection.pageFiles.count
+            }
+        }
+
         let fileExtension = fileURL.pathExtension.lowercased()
         switch fileExtension {
         case "pdf":
@@ -89,9 +105,49 @@ final class LibraryComicMetadataExtractor {
             return try? libArchiveReader.countPages(at: fileURL)
         case "cbt", "tar":
             return try? tarArchiveReader.countPages(at: fileURL)
+        case "epub", "mobi":
+            return 0
         default:
             return nil
         }
+    }
+
+    private func extractEBookMetadata(for fileURL: URL) throws -> ExtractedComicMetadata? {
+        let coverImage = autoreleasepool {
+            EBookDocumentSupport.generateThumbnail(at: fileURL, maxPixelSize: 1400)
+        }
+
+        return ExtractedComicMetadata(
+            pageCount: 0,
+            originalCoverSize: coverImage?.size,
+            coverImage: coverImage,
+            importedComicInfo: nil
+        )
+    }
+
+    private func extractDirectoryMetadata(
+        for inspection: DirectoryImageSequenceInspection,
+        coverPage: Int
+    ) throws -> ExtractedComicMetadata? {
+        guard !inspection.pageFiles.isEmpty else {
+            return nil
+        }
+
+        let coverIndex = min(max(coverPage - 1, 0), inspection.pageFiles.count - 1)
+        let coverData = try Data(contentsOf: inspection.pageFiles[coverIndex], options: [.mappedIfSafe])
+        let coverImage = UIImage(data: coverData)
+        let originalCoverSize = imagePixelSize(from: coverData) ?? coverImage?.size
+        let importedComicInfo = try inspection.comicInfoURL.flatMap { comicInfoURL in
+            let xmlData = try Data(contentsOf: comicInfoURL, options: [.mappedIfSafe])
+            return comicInfoXMLParser.parse(xmlData)
+        }
+
+        return ExtractedComicMetadata(
+            pageCount: inspection.pageFiles.count,
+            originalCoverSize: originalCoverSize,
+            coverImage: coverImage,
+            importedComicInfo: importedComicInfo
+        )
     }
 
     func saveCover(_ image: UIImage, to coverURL: URL) throws {
@@ -180,5 +236,9 @@ final class LibraryComicMetadataExtractor {
         }
 
         return CGSize(width: pixelWidth, height: pixelHeight)
+    }
+
+    private func isDirectory(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
     }
 }
