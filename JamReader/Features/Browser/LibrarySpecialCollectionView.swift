@@ -49,6 +49,17 @@ struct LibrarySpecialCollectionView: View {
         showsPersistentComicActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     init(
         descriptor: LibraryDescriptor,
         kind: LibrarySpecialCollectionKind,
@@ -409,8 +420,17 @@ struct LibrarySpecialCollectionView: View {
                 }
             } else {
                 Section(contentSectionTitle) {
-                    ForEach(displayedComics) { comic in
-                        listComicRow(for: comic)
+                    AdaptiveCardListRows(
+                        displayedComics,
+                        columnCount: adaptiveListColumnCount,
+                        spacing: adaptiveListColumnSpacing,
+                        horizontalInset: LayoutMetrics.horizontalInset
+                    ) { comic in
+                        listComicRow(
+                            for: comic,
+                            appliesListRowInsets: false,
+                            enablesSwipeActions: adaptiveListColumnCount == 1
+                        )
                     }
                 }
             }
@@ -484,9 +504,13 @@ struct LibrarySpecialCollectionView: View {
     }
 
     @ViewBuilder
-    private func listComicRow(for comic: LibraryComic) -> some View {
+    private func listComicRow(
+        for comic: LibraryComic,
+        appliesListRowInsets: Bool = true,
+        enablesSwipeActions: Bool = true
+    ) -> some View {
         if isSelectionMode {
-            Button {
+            let row = Button {
                 toggleSelection(for: comic)
             } label: {
                 InsetListRowCard {
@@ -500,9 +524,14 @@ struct LibrarySpecialCollectionView: View {
                 }
             }
             .buttonStyle(.plain)
-            .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+
+            if appliesListRowInsets {
+                row.insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+            } else {
+                row
+            }
         } else {
-            HeroTapButton { frame in
+            let row = HeroTapButton { frame in
                 presentComic(comic, sourceFrame: frame)
             } label: {
                 InsetListRowCard {
@@ -516,7 +545,6 @@ struct LibrarySpecialCollectionView: View {
                 }
             }
             .buttonStyle(.plain)
-            .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
             .overlay(alignment: .trailing) {
                 if showsPersistentComicActions {
                     persistentComicQuickActionsButton(for: comic)
@@ -526,11 +554,20 @@ struct LibrarySpecialCollectionView: View {
             .contextMenu {
                 comicContextActions(for: comic)
             }
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                comicReadSwipeAction(for: comic)
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                comicTrailingSwipeActions(for: comic)
+
+            if appliesListRowInsets && enablesSwipeActions {
+                row
+                    .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        comicReadSwipeAction(for: comic)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        comicTrailingSwipeActions(for: comic)
+                    }
+            } else if appliesListRowInsets {
+                row.insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+            } else {
+                row
             }
         }
     }

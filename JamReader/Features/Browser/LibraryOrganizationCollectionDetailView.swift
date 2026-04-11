@@ -49,6 +49,17 @@ struct LibraryOrganizationCollectionDetailView: View {
         showsPersistentComicActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     init(
         descriptor: LibraryDescriptor,
         collection: LibraryOrganizationCollection,
@@ -435,8 +446,17 @@ struct LibraryOrganizationCollectionDetailView: View {
                 }
             } else {
                 Section(contentSectionTitle) {
-                    ForEach(displayedComics) { comic in
-                        listComicRow(for: comic)
+                    AdaptiveCardListRows(
+                        displayedComics,
+                        columnCount: adaptiveListColumnCount,
+                        spacing: adaptiveListColumnSpacing,
+                        horizontalInset: LayoutMetrics.horizontalInset
+                    ) { comic in
+                        listComicRow(
+                            for: comic,
+                            appliesListRowInsets: false,
+                            enablesSwipeActions: adaptiveListColumnCount == 1
+                        )
                     }
                 }
             }
@@ -510,9 +530,13 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     @ViewBuilder
-    private func listComicRow(for comic: LibraryComic) -> some View {
+    private func listComicRow(
+        for comic: LibraryComic,
+        appliesListRowInsets: Bool = true,
+        enablesSwipeActions: Bool = true
+    ) -> some View {
         if isSelectionMode {
-            Button {
+            let row = Button {
                 toggleSelection(for: comic)
             } label: {
                 InsetListRowCard {
@@ -525,9 +549,14 @@ struct LibraryOrganizationCollectionDetailView: View {
                 }
             }
             .buttonStyle(.plain)
-            .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+
+            if appliesListRowInsets {
+                row.insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+            } else {
+                row
+            }
         } else {
-            HeroTapButton { frame in
+            let row = HeroTapButton { frame in
                 presentComic(comic, sourceFrame: frame)
             } label: {
                 InsetListRowCard {
@@ -539,7 +568,6 @@ struct LibraryOrganizationCollectionDetailView: View {
                 }
             }
             .buttonStyle(.plain)
-            .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
             .overlay(alignment: .trailing) {
                 if showsPersistentComicActions {
                     persistentComicQuickActionsButton(for: comic)
@@ -549,29 +577,38 @@ struct LibraryOrganizationCollectionDetailView: View {
             .contextMenu {
                 comicContextActions(for: comic)
             }
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                comicReadSwipeAction(for: comic)
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                Button {
-                    quickActionsComic = comic
-                } label: {
-                    Label("Info", systemImage: "info.circle")
-                }
-                .tint(.indigo)
 
-                Button {
-                    editingComic = comic
-                } label: {
-                    Label("Edit", systemImage: "square.and.pencil")
-                }
-                .tint(.blue)
+            if appliesListRowInsets && enablesSwipeActions {
+                row
+                    .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        comicReadSwipeAction(for: comic)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            quickActionsComic = comic
+                        } label: {
+                            Label("Info", systemImage: "info.circle")
+                        }
+                        .tint(.indigo)
 
-                Button(role: .destructive) {
-                    viewModel.remove(comic)
-                } label: {
-                    Label("Remove", systemImage: "minus.circle")
-                }
+                        Button {
+                            editingComic = comic
+                        } label: {
+                            Label("Edit", systemImage: "square.and.pencil")
+                        }
+                        .tint(.blue)
+
+                        Button(role: .destructive) {
+                            viewModel.remove(comic)
+                        } label: {
+                            Label("Remove", systemImage: "minus.circle")
+                        }
+                    }
+            } else if appliesListRowInsets {
+                row.insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+            } else {
+                row
             }
         }
     }

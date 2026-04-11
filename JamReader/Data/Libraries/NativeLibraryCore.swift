@@ -320,6 +320,14 @@ final class LibraryAssetStore {
         try coversRootURL(for: libraryID).appendingPathComponent("\(hash).jpg")
     }
 
+    func plannedCoverURL(assetKey: String, libraryID: UUID) throws -> URL {
+        try coversRootURL(for: libraryID).appendingPathComponent("\(assetKey).jpg")
+    }
+
+    func plannedFolderCoverURL(folderID: Int64, libraryID: UUID) throws -> URL {
+        try folderCoversRootURL(for: libraryID).appendingPathComponent("\(folderID).jpg")
+    }
+
     func ensureLibraryDirectories(for libraryID: UUID) throws {
         let rootURL = try rootURL(for: libraryID)
         let coversURL = try coversRootURL(for: libraryID)
@@ -348,6 +356,26 @@ final class LibraryAssetStore {
 
     func deleteCover(hash: String, libraryID: UUID) {
         guard let coverURL = try? plannedCoverURL(hash: hash, libraryID: libraryID),
+              fileManager.fileExists(atPath: coverURL.path)
+        else {
+            return
+        }
+
+        try? fileManager.removeItem(at: coverURL)
+    }
+
+    func deleteCover(assetKey: String, libraryID: UUID) {
+        guard let coverURL = try? plannedCoverURL(assetKey: assetKey, libraryID: libraryID),
+              fileManager.fileExists(atPath: coverURL.path)
+        else {
+            return
+        }
+
+        try? fileManager.removeItem(at: coverURL)
+    }
+
+    func deleteFolderCover(folderID: Int64, libraryID: UUID) {
+        guard let coverURL = try? plannedFolderCoverURL(folderID: folderID, libraryID: libraryID),
               fileManager.fileExists(atPath: coverURL.path)
         else {
             return

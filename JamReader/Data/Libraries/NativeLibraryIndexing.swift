@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import UIKit
 
 #if canImport(SQLite3)
 import SQLite3
@@ -17,6 +18,7 @@ final class LibraryIndexingService {
         let parentRelativePath: String
         let fileName: String
         let hash: String
+        let coverAssetKey: String
         let metadata: ExtractedComicMetadata?
     }
 
@@ -24,6 +26,21 @@ final class LibraryIndexingService {
         let id: Int64
         let relativePath: String
         let hash: String
+    }
+
+    private struct FolderCoverPlan {
+        let folderID: Int64
+        let coverSources: [FolderCoverSource]
+    }
+
+    private struct FolderCoverSummary {
+        let firstCoverAssetKey: String?
+        let coverSources: [FolderCoverSource]
+    }
+
+    private struct FolderCoverSource: Hashable {
+        let assetKey: String
+        let relativePath: String
     }
 
     private let database: AppLibraryDatabase
@@ -34,6 +51,7 @@ final class LibraryIndexingService {
     private let supportedExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
     ]
+    private let folderCoverRenderSize = CGSize(width: 480, height: 640)
 
     init(
         database: AppLibraryDatabase,
@@ -121,6 +139,7 @@ final class LibraryIndexingService {
 
         try database.ensureInitialized()
         try assetStore.ensureLibraryDirectories(for: libraryID)
+        metadataExtractor.invalidateTransientCaches()
         try cancellationCheck?()
 
         progressHandler?(
@@ -150,6 +169,7 @@ final class LibraryIndexingService {
         return try syncDiscoveredContents(
             discovery,
             libraryID: libraryID,
+            sourceRootURL: sourceRootURL.standardizedFileURL,
             cancellationCheck: cancellationCheck
         )
     }
@@ -207,6 +227,7 @@ final class LibraryIndexingService {
                             parentRelativePath: relativeDirectoryPath(for: relativePath) ?? "",
                             fileName: standardizedURL.lastPathComponent,
                             hash: try directoryImageSequenceInspector.fingerprint(for: inspection),
+                            coverAssetKey: LibraryCoverLocator.coverAssetKey(forRelativePath: relativePath),
                             metadata: metadata
                         )
                     )
@@ -266,6 +287,7 @@ final class LibraryIndexingService {
                     parentRelativePath: relativeDirectoryPath(for: relativePath) ?? "",
                     fileName: standardizedURL.lastPathComponent,
                     hash: try fileFingerprint(for: standardizedURL),
+                    coverAssetKey: LibraryCoverLocator.coverAssetKey(forRelativePath: relativePath),
                     metadata: metadata
                 )
             )
@@ -303,13 +325,15 @@ final class LibraryIndexingService {
     private func syncDiscoveredContents(
         _ discovery: (folders: [ScannedFolder], comics: [ScannedComic]),
         libraryID: UUID,
+        sourceRootURL: URL,
         cancellationCheck: (() throws -> Void)?
     ) throws -> LibraryScanSummary {
         let previousCounts = try currentCounts(for: libraryID)
         let currentFolderPaths = Set(discovery.folders.map(\.relativePath))
-        var currentHashes = Set<String>()
-        var staleHashes = Set<String>()
+        var currentCoverAssetKeys = Set<String>()
+        var staleCoverAssetKeys = Set<String>()
         var reusedComicCount = 0
+        var folderCoverPlans: [FolderCoverPlan] = []
 
         try database.withConnection(readOnly: false) { database in
             try sqliteBeginTransaction(database: database)
@@ -338,7 +362,6 @@ final class LibraryIndexingService {
                     )
                     folderIDsByPath[folder.relativePath] = folderID
                 }
-
                 let existingComicRecords = try loadExistingComicRecords(libraryID: libraryID, database: database)
                 let existingByPath = Dictionary(uniqueKeysWithValues: existingComicRecords.map { ($0.relativePath, $0) })
                 let existingByHash = Dictionary(grouping: existingComicRecords, by: \.hash)
@@ -359,8 +382,10 @@ final class LibraryIndexingService {
                     if let matchedRecord {
                         reusedComicCount += 1
                         consumedComicIDs.insert(matchedRecord.id)
-                        if matchedRecord.hash != comic.hash {
-                            staleHashes.insert(matchedRecord.hash)
+                        if matchedRecord.relativePath != comic.relativePath {
+                            staleCoverAssetKeys.insert(
+                                LibraryCoverLocator.coverAssetKey(forRelativePath: matchedRecord.relativePath)
+                            )
                         }
                         try updateComic(
                             recordID: matchedRecord.id,
@@ -377,15 +402,17 @@ final class LibraryIndexingService {
                         )
                     }
 
-                    currentHashes.insert(comic.hash)
+                    currentCoverAssetKeys.insert(comic.coverAssetKey)
                     if let coverImage = comic.metadata?.coverImage,
-                       let coverURL = try? assetStore.plannedCoverURL(hash: comic.hash, libraryID: libraryID) {
+                       let coverURL = try? assetStore.plannedCoverURL(assetKey: comic.coverAssetKey, libraryID: libraryID) {
                         try metadataExtractor.saveCover(coverImage, to: coverURL)
                     }
                 }
 
                 for record in existingComicRecords where !consumedComicIDs.contains(record.id) {
-                    staleHashes.insert(record.hash)
+                    staleCoverAssetKeys.insert(
+                        LibraryCoverLocator.coverAssetKey(forRelativePath: record.relativePath)
+                    )
                     try deleteComic(id: record.id, database: database)
                 }
 
@@ -405,6 +432,12 @@ final class LibraryIndexingService {
                     folderIDsByPath: folderIDsByPath,
                     database: database
                 )
+                folderCoverPlans = try buildFolderCoverPlans(
+                    folders: discovery.folders,
+                    comics: discovery.comics,
+                    folderIDsByPath: folderIDsByPath,
+                    database: database
+                )
 
                 try sqliteCommitTransaction(database: database)
             } catch {
@@ -413,9 +446,14 @@ final class LibraryIndexingService {
             }
         }
 
-        for hash in staleHashes where !currentHashes.contains(hash) {
-            assetStore.deleteCover(hash: hash, libraryID: libraryID)
+        for coverAssetKey in staleCoverAssetKeys where !currentCoverAssetKeys.contains(coverAssetKey) {
+            assetStore.deleteCover(assetKey: coverAssetKey, libraryID: libraryID)
         }
+        reconcileFolderCovers(
+            folderCoverPlans,
+            libraryID: libraryID,
+            sourceRootURL: sourceRootURL
+        )
 
         return LibraryScanSummary(
             folderCount: max(0, discovery.folders.count - 1),
@@ -689,7 +727,7 @@ final class LibraryIndexingService {
         func firstHash(for relativePath: String) throws -> String? {
             let directComics = comicsByParent[relativePath] ?? []
             let directChildFolders = childFoldersByParent[relativePath] ?? []
-            let firstComicHash = directComics.first?.hash
+            let firstComicHash = directComics.first?.coverAssetKey
             var firstChildHash: String?
             for childFolder in directChildFolders {
                 if let childHash = try firstHash(for: childFolder.relativePath) {
@@ -714,6 +752,82 @@ final class LibraryIndexingService {
         _ = try firstHash(for: "")
     }
 
+    private func buildFolderCoverPlans(
+        folders: [ScannedFolder],
+        comics: [ScannedComic],
+        folderIDsByPath: [String: Int64],
+        database: OpaquePointer
+    ) throws -> [FolderCoverPlan] {
+        _ = database
+
+        var childFoldersByParent: [String: [ScannedFolder]] = [:]
+        for folder in folders where !folder.relativePath.isEmpty {
+            childFoldersByParent[folder.parentRelativePath ?? "", default: []].append(folder)
+        }
+        childFoldersByParent = childFoldersByParent.mapValues { value in
+            value.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
+
+        var comicsByParent: [String: [ScannedComic]] = [:]
+        for comic in comics {
+            comicsByParent[comic.parentRelativePath, default: []].append(comic)
+        }
+        comicsByParent = comicsByParent.mapValues { value in
+            value.sorted { $0.fileName.localizedStandardCompare($1.fileName) == .orderedAscending }
+        }
+
+        var plans: [FolderCoverPlan] = []
+        var memoizedSummaries: [String: FolderCoverSummary] = [:]
+
+        func summary(for relativePath: String) throws -> FolderCoverSummary {
+            if let cachedSummary = memoizedSummaries[relativePath] {
+                return cachedSummary
+            }
+
+            let directComics = comicsByParent[relativePath] ?? []
+            let directChildFolders = childFoldersByParent[relativePath] ?? []
+
+            var descendantSources = directComics.map {
+                FolderCoverSource(assetKey: $0.coverAssetKey, relativePath: $0.relativePath)
+            }
+            var firstHash = directComics.first?.coverAssetKey
+
+            for childFolder in directChildFolders {
+                let childSummary = try summary(for: childFolder.relativePath)
+                if firstHash == nil {
+                    firstHash = childSummary.firstCoverAssetKey
+                }
+                descendantSources.append(contentsOf: childSummary.coverSources)
+                if descendantSources.count >= 4 {
+                    descendantSources = Array(descendantSources.prefix(4))
+                    break
+                }
+            }
+
+            let coverSources = Array(descendantSources.prefix(4))
+
+            if !relativePath.isEmpty,
+               let folderID = folderIDsByPath[relativePath] {
+                try updateFolderPreviewMetadataRow(
+                    folderID: folderID,
+                    previewCoverAssetKeys: coverSources.map(\.assetKey),
+                    database: database
+                )
+
+                if !coverSources.isEmpty {
+                    plans.append(FolderCoverPlan(folderID: folderID, coverSources: coverSources))
+                }
+            }
+
+            let computedSummary = FolderCoverSummary(firstCoverAssetKey: firstHash, coverSources: coverSources)
+            memoizedSummaries[relativePath] = computedSummary
+            return computedSummary
+        }
+
+        _ = try summary(for: "")
+        return plans.sorted { $0.folderID < $1.folderID }
+    }
+
     private func updateFolderMetadataRow(
         folderID: Int64,
         directChildrenCount: Int,
@@ -733,6 +847,228 @@ final class LibraryIndexingService {
         sqliteBindDate(Date(), index: 3, statement: statement)
         sqlite3_bind_int64(statement, 4, folderID)
         try sqliteStepDone(statement, database: database)
+    }
+
+    private func updateFolderPreviewMetadataRow(
+        folderID: Int64,
+        previewCoverAssetKeys: [String],
+        database: OpaquePointer
+    ) throws {
+        let sql = """
+        UPDATE folders
+        SET custom_image = ?, updated_at = ?
+        WHERE id = ?
+        """
+
+        let statement = try sqlitePrepare(sql, database: database)
+        defer { sqlite3_finalize(statement) }
+        sqliteBindOptionalText(
+            previewCoverAssetKeys.isEmpty ? nil : previewCoverAssetKeys.joined(separator: "|"),
+            index: 1,
+            statement: statement
+        )
+        sqliteBindDate(Date(), index: 2, statement: statement)
+        sqlite3_bind_int64(statement, 3, folderID)
+        try sqliteStepDone(statement, database: database)
+    }
+
+    private func reconcileFolderCovers(
+        _ plans: [FolderCoverPlan],
+        libraryID: UUID,
+        sourceRootURL: URL
+    ) {
+        guard (try? assetStore.ensureLibraryDirectories(for: libraryID)) != nil,
+              let folderCoversRootURL = try? assetStore.folderCoversRootURL(for: libraryID)
+        else {
+            return
+        }
+        let desiredFileNames = Set(plans.map { "\($0.folderID).jpg" })
+
+        let existingFileURLs = (try? fileManager.contentsOfDirectory(
+            at: folderCoversRootURL,
+            includingPropertiesForKeys: nil
+        )) ?? []
+
+        for fileURL in existingFileURLs where !desiredFileNames.contains(fileURL.lastPathComponent) {
+            try? fileManager.removeItem(at: fileURL)
+        }
+
+        for plan in plans {
+            guard let coverURL = try? assetStore.plannedFolderCoverURL(folderID: plan.folderID, libraryID: libraryID) else {
+                continue
+            }
+
+            let images = loadFolderCoverImages(
+                sources: plan.coverSources,
+                libraryID: libraryID,
+                sourceRootURL: sourceRootURL
+            )
+
+            guard let image = makeFolderCoverImage(from: images) else {
+                assetStore.deleteFolderCover(folderID: plan.folderID, libraryID: libraryID)
+                continue
+            }
+
+            do {
+                try metadataExtractor.saveCover(image, to: coverURL)
+            } catch {
+                assetStore.deleteFolderCover(folderID: plan.folderID, libraryID: libraryID)
+            }
+        }
+    }
+
+    private func loadFolderCoverImages(
+        sources: [FolderCoverSource],
+        libraryID: UUID,
+        sourceRootURL: URL
+    ) -> [UIImage] {
+        var images: [UIImage] = []
+
+        for source in sources {
+            guard let coverURL = try? assetStore.plannedCoverURL(assetKey: source.assetKey, libraryID: libraryID) else {
+                continue
+            }
+
+            if fileManager.fileExists(atPath: coverURL.path),
+               let image = loadDownsampledImage(
+                    from: coverURL,
+                    maxPixelSize: Int(max(folderCoverRenderSize.width, folderCoverRenderSize.height))
+               ) {
+                images.append(image)
+                continue
+            }
+
+            let sourceFileURL = sourceRootURL.appendingPathComponent(source.relativePath, isDirectory: false)
+            guard let extractedMetadata = try? metadataExtractor.extractMetadata(for: sourceFileURL),
+                  let coverImage = extractedMetadata.coverImage
+            else {
+                continue
+            }
+
+            try? metadataExtractor.saveCover(coverImage, to: coverURL)
+            images.append(coverImage)
+        }
+
+        return images
+    }
+
+    private func makeFolderCoverImage(from images: [UIImage]) -> UIImage? {
+        let limitedImages = Array(images.prefix(4))
+        guard !limitedImages.isEmpty else {
+            return nil
+        }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: folderCoverRenderSize, format: format)
+
+        return renderer.image { context in
+            let bounds = CGRect(origin: .zero, size: folderCoverRenderSize)
+            UIColor(white: 0.1, alpha: 1).setFill()
+            context.fill(bounds)
+
+            for (image, frame) in zip(limitedImages, folderCoverFrames(count: limitedImages.count, in: bounds)) {
+                drawAspectFill(image, in: frame)
+            }
+        }
+    }
+
+    private func folderCoverFrames(count: Int, in bounds: CGRect) -> [CGRect] {
+        let inset: CGFloat = 12
+        let gap: CGFloat = 8
+        let innerBounds = bounds.insetBy(dx: inset, dy: inset)
+
+        switch count {
+        case 1:
+            return [innerBounds]
+        case 2:
+            let cellWidth = (innerBounds.width - gap) / 2
+            return [
+                CGRect(x: innerBounds.minX, y: innerBounds.minY, width: cellWidth, height: innerBounds.height),
+                CGRect(x: innerBounds.minX + cellWidth + gap, y: innerBounds.minY, width: cellWidth, height: innerBounds.height)
+            ]
+        case 3:
+            let largeWidth = innerBounds.width * 0.58
+            let trailingWidth = innerBounds.width - largeWidth - gap
+            let trailingHeight = (innerBounds.height - gap) / 2
+            return [
+                CGRect(x: innerBounds.minX, y: innerBounds.minY, width: largeWidth, height: innerBounds.height),
+                CGRect(x: innerBounds.minX + largeWidth + gap, y: innerBounds.minY, width: trailingWidth, height: trailingHeight),
+                CGRect(x: innerBounds.minX + largeWidth + gap, y: innerBounds.minY + trailingHeight + gap, width: trailingWidth, height: trailingHeight)
+            ]
+        default:
+            let cellWidth = (innerBounds.width - gap) / 2
+            let cellHeight = (innerBounds.height - gap) / 2
+            return [
+                CGRect(x: innerBounds.minX, y: innerBounds.minY, width: cellWidth, height: cellHeight),
+                CGRect(x: innerBounds.minX + cellWidth + gap, y: innerBounds.minY, width: cellWidth, height: cellHeight),
+                CGRect(x: innerBounds.minX, y: innerBounds.minY + cellHeight + gap, width: cellWidth, height: cellHeight),
+                CGRect(x: innerBounds.minX + cellWidth + gap, y: innerBounds.minY + cellHeight + gap, width: cellWidth, height: cellHeight)
+            ]
+        }
+    }
+
+    private func drawAspectFill(_ image: UIImage, in frame: CGRect) {
+        guard image.size.width > 0, image.size.height > 0 else {
+            return
+        }
+
+        let imageAspect = image.size.width / image.size.height
+        let frameAspect = frame.width / max(frame.height, 1)
+
+        let drawRect: CGRect
+        if imageAspect > frameAspect {
+            let scaledWidth = frame.height * imageAspect
+            drawRect = CGRect(
+                x: frame.midX - scaledWidth / 2,
+                y: frame.minY,
+                width: scaledWidth,
+                height: frame.height
+            )
+        } else {
+            let scaledHeight = frame.width / max(imageAspect, 0.0001)
+            drawRect = CGRect(
+                x: frame.minX,
+                y: frame.midY - scaledHeight / 2,
+                width: frame.width,
+                height: scaledHeight
+            )
+        }
+
+        let clippingPath = UIBezierPath(roundedRect: frame, cornerRadius: 18)
+        UIGraphicsGetCurrentContext()?.saveGState()
+        clippingPath.addClip()
+        image.draw(in: drawRect)
+
+        UIColor.white.withAlphaComponent(0.08).setStroke()
+        clippingPath.lineWidth = 1
+        clippingPath.stroke()
+        UIGraphicsGetCurrentContext()?.restoreGState()
+    }
+
+    private func loadDownsampledImage(from url: URL, maxPixelSize: Int) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else {
+            return UIImage(contentsOfFile: url.path)
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize)
+        ]
+
+        if let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            thumbnailOptions as CFDictionary
+        ) {
+            return UIImage(cgImage: thumbnail)
+        }
+
+        return UIImage(contentsOfFile: url.path)
     }
 
     private func count(

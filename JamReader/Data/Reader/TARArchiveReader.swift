@@ -61,6 +61,16 @@ final class TARArchiveReader {
         )
     }
 
+    func extractMetadataSummary(at archiveURL: URL) throws -> (pageCount: Int, embeddedComicInfoData: Data?) {
+        let entries = try TARArchiveParser(archiveURL: archiveURL).parseEntries()
+        let orderedEntries = try orderedPageEntries(from: entries)
+        let embeddedComicInfoData = try preferredEmbeddedComicInfoEntry(in: entries).flatMap {
+            try TARArchiveEntryReader.data(in: archiveURL, for: $0)
+        }
+
+        return (orderedEntries.count, embeddedComicInfoData)
+    }
+
     /// Lightweight: count pages by parsing headers only (no data extraction).
     func countPages(at archiveURL: URL) throws -> Int {
         let entries = try TARArchiveParser(archiveURL: archiveURL).parseEntries()

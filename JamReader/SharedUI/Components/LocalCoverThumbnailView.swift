@@ -65,14 +65,26 @@ struct LocalCoverThumbnailView: View {
         fallbackSource: LocalComicCoverSource?
     ) -> String {
         if let url {
-            return url.path
+            return fileIdentity(for: url, prefix: "url")
         }
 
         if let fallbackSource {
-            return "fallback:\(fallbackSource.fileURL.path)"
+            if let cacheURL = fallbackSource.cacheURL,
+               FileManager.default.fileExists(atPath: cacheURL.path) {
+                return fileIdentity(for: cacheURL, prefix: "fallback-cache")
+            }
+
+            return fileIdentity(for: fallbackSource.fileURL, prefix: "fallback-source")
         }
 
         return "nil"
+    }
+
+    private static func fileIdentity(for url: URL, prefix: String) -> String {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let modificationTime = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+        let fileSize = values?.fileSize ?? 0
+        return "\(prefix):\(url.path)#\(fileSize)#\(Int(modificationTime))"
     }
 }
 

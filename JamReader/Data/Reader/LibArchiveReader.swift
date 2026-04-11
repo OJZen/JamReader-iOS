@@ -49,6 +49,18 @@ final class LibArchiveReader {
         )
     }
 
+    func extractMetadataSummary(at archiveURL: URL) throws -> (pageCount: Int, embeddedComicInfoData: Data?) {
+        let archiveReader = try YRLibArchiveReader(archiveURL: archiveURL)
+        let orderedEntries = try orderedPageEntries(from: archiveReader.entryPaths)
+        let embeddedComicInfoData = try preferredEmbeddedComicInfoEntry(
+            from: archiveReader.entryPaths
+        ).flatMap { entry in
+            try archiveReader.dataForEntry(at: entry.archiveIndex)
+        }
+
+        return (orderedEntries.count, embeddedComicInfoData)
+    }
+
     /// Lightweight: count pages without decompressing any data.
     func countPages(at archiveURL: URL) throws -> Int {
         let archiveReader = try YRLibArchiveReader(archiveURL: archiveURL)

@@ -39,6 +39,11 @@ final class LibraryComicMetadataExtractor {
     private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let comicInfoXMLParser: ComicInfoXMLParser
     private let fileManager: FileManager
+    private let sidecarCoverExtensions: [String] = [
+        "jpg", "jpeg", "png", "webp", "heic", "heif", "tif", "tiff", "bmp", "gif"
+    ]
+    private let sidecarDirectoryIndexLock = NSLock()
+    private var sidecarDirectoryIndex: [URL: [String: [URL]]] = [:]
 
     init(
         libArchiveReader: LibArchiveReader = LibArchiveReader(),
@@ -56,13 +61,35 @@ final class LibraryComicMetadataExtractor {
         self.fileManager = fileManager
     }
 
+    func invalidateTransientCaches() {
+        sidecarDirectoryIndexLock.lock()
+        sidecarDirectoryIndex.removeAll(keepingCapacity: true)
+        sidecarDirectoryIndexLock.unlock()
+    }
+
     func extractMetadata(for fileURL: URL, coverPage: Int = 1) throws -> ExtractedComicMetadata? {
+        let preferredSidecar = try loadPreferredSidecarCover(for: fileURL)
+
         if isDirectory(fileURL),
            let inspection = try directoryImageSequenceInspector.inspectComicDirectory(at: fileURL) {
+            if let preferredSidecar {
+                return try extractDirectoryMetadataSummary(
+                    for: inspection,
+                    preferredSidecar: preferredSidecar
+                )
+            }
+
             return try extractDirectoryMetadata(for: inspection, coverPage: coverPage)
         }
 
         let fileExtension = fileURL.pathExtension.lowercased()
+        if let preferredSidecar {
+            return try extractMetadataPreferringSidecar(
+                for: fileURL,
+                fileExtension: fileExtension,
+                preferredSidecar: preferredSidecar
+            )
+        }
 
         switch fileExtension {
         case "pdf":
@@ -150,6 +177,23 @@ final class LibraryComicMetadataExtractor {
         )
     }
 
+    private func extractDirectoryMetadataSummary(
+        for inspection: DirectoryImageSequenceInspection,
+        preferredSidecar: (image: UIImage, originalSize: CGSize?)
+    ) throws -> ExtractedComicMetadata? {
+        let importedComicInfo = try inspection.comicInfoURL.flatMap { comicInfoURL in
+            let xmlData = try Data(contentsOf: comicInfoURL, options: [.mappedIfSafe])
+            return comicInfoXMLParser.parse(xmlData)
+        }
+
+        return ExtractedComicMetadata(
+            pageCount: inspection.pageFiles.count,
+            originalCoverSize: preferredSidecar.originalSize,
+            coverImage: preferredSidecar.image,
+            importedComicInfo: importedComicInfo
+        )
+    }
+
     func saveCover(_ image: UIImage, to coverURL: URL) throws {
         let parentURL = coverURL.deletingLastPathComponent()
         if !fileManager.fileExists(atPath: parentURL.path) {
@@ -224,6 +268,85 @@ final class LibraryComicMetadataExtractor {
         )
     }
 
+    private func extractMetadataPreferringSidecar(
+        for fileURL: URL,
+        fileExtension: String,
+        preferredSidecar: (image: UIImage, originalSize: CGSize?)
+    ) throws -> ExtractedComicMetadata? {
+        do {
+            switch fileExtension {
+            case "pdf":
+                return try extractPDFMetadataSummary(
+                    for: fileURL,
+                    preferredSidecar: preferredSidecar
+                )
+            case "cbz", "zip":
+                return try extractArchiveMetadataSummary(
+                    zipArchiveReader.extractMetadataSummary(at: fileURL),
+                    preferredSidecar: preferredSidecar
+                )
+            case "cbr", "rar", "cb7", "7z", "arj":
+                return try extractArchiveMetadataSummary(
+                    libArchiveReader.extractMetadataSummary(at: fileURL),
+                    preferredSidecar: preferredSidecar
+                )
+            case "cbt", "tar":
+                return try extractArchiveMetadataSummary(
+                    tarArchiveReader.extractMetadataSummary(at: fileURL),
+                    preferredSidecar: preferredSidecar
+                )
+            case "epub", "mobi":
+                return ExtractedComicMetadata(
+                    pageCount: 0,
+                    originalCoverSize: preferredSidecar.originalSize,
+                    coverImage: preferredSidecar.image,
+                    importedComicInfo: nil
+                )
+            default:
+                return nil
+            }
+        } catch {
+            return ExtractedComicMetadata(
+                pageCount: extractPageCountOnly(for: fileURL) ?? 0,
+                originalCoverSize: preferredSidecar.originalSize,
+                coverImage: preferredSidecar.image,
+                importedComicInfo: nil
+            )
+        }
+    }
+
+    private func extractPDFMetadataSummary(
+        for fileURL: URL,
+        preferredSidecar: (image: UIImage, originalSize: CGSize?)
+    ) throws -> ExtractedComicMetadata? {
+        let document = PDFDocument(url: fileURL)
+        let pageCount = document?.pageCount ?? 0
+
+        return ExtractedComicMetadata(
+            pageCount: pageCount,
+            originalCoverSize: preferredSidecar.originalSize,
+            coverImage: preferredSidecar.image,
+            importedComicInfo: nil
+        )
+    }
+
+    private func extractArchiveMetadataSummary(
+        _ summaryProvider: @autoclosure () throws -> (pageCount: Int, embeddedComicInfoData: Data?),
+        preferredSidecar: (image: UIImage, originalSize: CGSize?)
+    ) throws -> ExtractedComicMetadata? {
+        let summary = try summaryProvider()
+        let importedComicInfo = summary.embeddedComicInfoData.flatMap { xmlData in
+            comicInfoXMLParser.parse(xmlData)
+        }
+
+        return ExtractedComicMetadata(
+            pageCount: summary.pageCount,
+            originalCoverSize: preferredSidecar.originalSize,
+            coverImage: preferredSidecar.image,
+            importedComicInfo: importedComicInfo
+        )
+    }
+
     private func imagePixelSize(from data: Data) -> CGSize? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -236,6 +359,125 @@ final class LibraryComicMetadataExtractor {
         }
 
         return CGSize(width: pixelWidth, height: pixelHeight)
+    }
+
+    private func loadPreferredSidecarCover(
+        for fileURL: URL
+    ) throws -> (image: UIImage, originalSize: CGSize?)? {
+        let fileStem = fileURL.deletingPathExtension().lastPathComponent.lowercased()
+        let matchingCandidates = try sidecarCandidates(
+            forParentDirectory: fileURL.deletingLastPathComponent(),
+            fileStem: fileStem
+        )
+
+        for candidateURL in matchingCandidates {
+            if let sidecar = loadSidecarCover(from: candidateURL) {
+                return sidecar
+            }
+        }
+
+        return nil
+    }
+
+    private func sidecarCandidates(
+        forParentDirectory parentURL: URL,
+        fileStem: String
+    ) throws -> [URL] {
+        let normalizedParentURL = parentURL.standardizedFileURL
+
+        sidecarDirectoryIndexLock.lock()
+        if let cachedCandidates = sidecarDirectoryIndex[normalizedParentURL]?[fileStem] {
+            sidecarDirectoryIndexLock.unlock()
+            return cachedCandidates
+        }
+        sidecarDirectoryIndexLock.unlock()
+
+        let candidates = try fileManager.contentsOfDirectory(
+            at: normalizedParentURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+
+        var groupedCandidates: [String: [URL]] = [:]
+        for candidateURL in candidates {
+            let fileExtension = candidateURL.pathExtension.lowercased()
+            guard sidecarCoverExtensions.contains(fileExtension),
+                  (try? candidateURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+            else {
+                continue
+            }
+
+            let stem = candidateURL.deletingPathExtension().lastPathComponent.lowercased()
+            groupedCandidates[stem, default: []].append(candidateURL)
+        }
+
+        groupedCandidates = groupedCandidates.mapValues { candidates in
+            candidates.sorted { lhs, rhs in
+                let lhsExtension = lhs.pathExtension.lowercased()
+                let rhsExtension = rhs.pathExtension.lowercased()
+                let lhsPriority = sidecarCoverExtensions.firstIndex(of: lhsExtension) ?? sidecarCoverExtensions.count
+                let rhsPriority = sidecarCoverExtensions.firstIndex(of: rhsExtension) ?? sidecarCoverExtensions.count
+                if lhsPriority != rhsPriority {
+                    return lhsPriority < rhsPriority
+                }
+
+                return lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+            }
+        }
+
+        sidecarDirectoryIndexLock.lock()
+        sidecarDirectoryIndex[normalizedParentURL] = groupedCandidates
+        let matchedCandidates = groupedCandidates[fileStem] ?? []
+        sidecarDirectoryIndexLock.unlock()
+
+        return matchedCandidates
+    }
+
+    private func loadSidecarCover(from imageURL: URL) -> (image: UIImage, originalSize: CGSize?)? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+
+        guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, sourceOptions) else {
+            guard let fallbackImage = UIImage(contentsOfFile: imageURL.path) else {
+                return nil
+            }
+
+            return (fallbackImage, fallbackImage.size)
+        }
+
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        let pixelWidth = properties?[kCGImagePropertyPixelWidth] as? CGFloat
+        let pixelHeight = properties?[kCGImagePropertyPixelHeight] as? CGFloat
+        let originalSize: CGSize? = {
+            guard let pixelWidth, let pixelHeight, pixelWidth > 0, pixelHeight > 0 else {
+                return nil
+            }
+
+            return CGSize(width: pixelWidth, height: pixelHeight)
+        }()
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1600
+        ]
+
+        if let cgImage = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            thumbnailOptions as CFDictionary
+        ) {
+            return (
+                image: UIImage(cgImage: cgImage),
+                originalSize: originalSize ?? CGSize(width: cgImage.width, height: cgImage.height)
+            )
+        }
+
+        guard let fallbackImage = UIImage(contentsOfFile: imageURL.path) else {
+            return nil
+        }
+
+        return (fallbackImage, originalSize ?? fallbackImage.size)
     }
 
     private func isDirectory(_ url: URL) -> Bool {

@@ -874,6 +874,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         coverLocator.coverURL(for: folder, metadataRootURL: metadataRootURL)
     }
 
+    func previewCoverURLs(for folder: LibraryFolder) -> [URL] {
+        coverLocator.previewCoverURLs(for: folder, metadataRootURL: metadataRootURL)
+    }
+
     func coverURL(for comic: LibraryComic) -> URL? {
         coverLocator.coverURL(for: comic, metadataRootURL: metadataRootURL)
     }

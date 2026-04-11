@@ -75,14 +75,15 @@ struct ScanCompletionBanner: View {
 struct LibraryFolderRow: View {
     let folder: LibraryFolder
     let coverURL: URL?
+    let previewCoverURLs: [URL]
 
     var body: some View {
         LibraryBrowserListRowShell {
             EmptyView()
         } thumbnail: {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "folder.fill",
+            LibraryFolderThumbnailView(
+                previewCoverURLs: previewCoverURLs,
+                fallbackCoverURL: coverURL,
                 width: 44,
                 height: 62
             )
@@ -347,12 +348,13 @@ private struct ContinueReadingPlayBadge: View {
 struct LibraryFolderCard: View {
     let folder: LibraryFolder
     let coverURL: URL?
+    let previewCoverURLs: [URL]
 
     var body: some View {
         LibraryBrowserContentCard(minHeight: 250) {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                placeholderSystemName: "folder.fill",
+            LibraryFolderThumbnailView(
+                previewCoverURLs: previewCoverURLs,
+                fallbackCoverURL: coverURL,
                 width: 96,
                 height: 120
             )
@@ -375,6 +377,122 @@ struct LibraryFolderCard: View {
                 }
             }
         }
+    }
+}
+
+private struct LibraryFolderThumbnailView: View {
+    let previewCoverURLs: [URL]
+    let fallbackCoverURL: URL?
+    let width: CGFloat
+    let height: CGFloat
+
+    private let outerCornerRadius: CGFloat = 12
+    private let inset: CGFloat = 4
+    private let gap: CGFloat = 4
+
+    var body: some View {
+        let covers = Array(previewCoverURLs.prefix(4))
+
+        Group {
+            if covers.isEmpty {
+                LocalCoverThumbnailView(
+                    url: fallbackCoverURL,
+                    placeholderSystemName: "folder.fill",
+                    width: width,
+                    height: height
+                )
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
+                        .fill(Color(.secondarySystemBackground))
+
+                    folderCoverLayout(for: covers)
+                        .padding(inset)
+                }
+                .frame(width: width, height: height)
+                .clipShape(RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: outerCornerRadius, style: .continuous)
+                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func folderCoverLayout(for covers: [URL]) -> some View {
+        switch covers.count {
+        case 1:
+            coverCell(url: covers[0], width: width - (inset * 2), height: height - (inset * 2))
+        case 2:
+            HStack(spacing: gap) {
+                ForEach(covers.indices, id: \.self) { index in
+                    coverCell(
+                        url: covers[index],
+                        width: twoColumnCellWidth,
+                        height: height - (inset * 2)
+                    )
+                }
+            }
+        case 3:
+            HStack(spacing: gap) {
+                coverCell(
+                    url: covers[0],
+                    width: threeCoverLeadWidth,
+                    height: height - (inset * 2)
+                )
+
+                VStack(spacing: gap) {
+                    coverCell(url: covers[1], width: threeCoverTrailingWidth, height: twoRowCellHeight)
+                    coverCell(url: covers[2], width: threeCoverTrailingWidth, height: twoRowCellHeight)
+                }
+            }
+        default:
+            VStack(spacing: gap) {
+                HStack(spacing: gap) {
+                    coverCell(url: covers[0], width: twoColumnCellWidth, height: twoRowCellHeight)
+                    coverCell(url: covers[1], width: twoColumnCellWidth, height: twoRowCellHeight)
+                }
+
+                HStack(spacing: gap) {
+                    coverCell(url: covers[2], width: twoColumnCellWidth, height: twoRowCellHeight)
+                    coverCell(url: covers[3], width: twoColumnCellWidth, height: twoRowCellHeight)
+                }
+            }
+        }
+    }
+
+    private func coverCell(url: URL, width: CGFloat, height: CGFloat) -> some View {
+        LocalCoverThumbnailView(
+            url: url,
+            placeholderSystemName: "book.closed.fill",
+            width: width,
+            height: height
+        )
+    }
+
+    private var innerWidth: CGFloat {
+        width - (inset * 2)
+    }
+
+    private var innerHeight: CGFloat {
+        height - (inset * 2)
+    }
+
+    private var twoColumnCellWidth: CGFloat {
+        max(0, (innerWidth - gap) / 2)
+    }
+
+    private var twoRowCellHeight: CGFloat {
+        max(0, (innerHeight - gap) / 2)
+    }
+
+    private var threeCoverLeadWidth: CGFloat {
+        max(0, innerWidth * 0.58)
+    }
+
+    private var threeCoverTrailingWidth: CGFloat {
+        max(0, innerWidth - threeCoverLeadWidth - gap)
     }
 }
 

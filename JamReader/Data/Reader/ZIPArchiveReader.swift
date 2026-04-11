@@ -113,6 +113,28 @@ final class ZIPArchiveReader {
         }
     }
 
+    func extractMetadataSummary(at archiveURL: URL) throws -> (pageCount: Int, embeddedComicInfoData: Data?) {
+        do {
+            let entries = try ZIPArchiveParser(archiveURL: archiveURL).parseEntries()
+            let orderedEntries = try orderedPageEntries(from: entries)
+            let embeddedComicInfoData = try preferredEmbeddedComicInfoEntry(in: entries).flatMap {
+                try ZIPArchiveEntryReader.data(in: archiveURL, for: $0)
+            }
+
+            return (orderedEntries.count, embeddedComicInfoData)
+        } catch {
+            guard shouldFallbackToLibArchive(for: error) else {
+                throw error
+            }
+
+            do {
+                return try fallbackReader.extractMetadataSummary(at: archiveURL)
+            } catch {
+                throw error
+            }
+        }
+    }
+
     /// Lightweight: count pages by reading only the central directory (no decompression).
     func countPages(at archiveURL: URL) throws -> Int {
         let entries = try ZIPArchiveParser(archiveURL: archiveURL).parseEntries()

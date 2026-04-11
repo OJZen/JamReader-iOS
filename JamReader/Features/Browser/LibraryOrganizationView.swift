@@ -26,6 +26,17 @@ struct LibraryOrganizationView: View {
     @State private var navigationCollection: LibraryOrganizationCollection?
     @State private var containerWidth: CGFloat = 0
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     init(
         descriptor: LibraryDescriptor,
         sectionKind: LibraryOrganizationSectionKind,
@@ -173,7 +184,12 @@ struct LibraryOrganizationView: View {
                 }
             } else {
                 Section(contentSectionTitle) {
-                    ForEach(displayedCollections) { collection in
+                    AdaptiveCardListRows(
+                        displayedCollections,
+                        columnCount: adaptiveListColumnCount,
+                        spacing: adaptiveListColumnSpacing,
+                        horizontalInset: LayoutMetrics.horizontalInset
+                    ) { collection in
                         Button {
                             navigationCollection = collection
                         } label: {
@@ -192,7 +208,6 @@ struct LibraryOrganizationView: View {
                             )
                             .padding(.trailing, 8)
                         }
-                        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                     }
                 }
             }

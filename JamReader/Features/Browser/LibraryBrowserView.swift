@@ -83,6 +83,17 @@ struct LibraryBrowserView: View {
         showsPersistentComicActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     @ViewBuilder
     private var rootContent: some View {
         Group {
@@ -1055,7 +1066,12 @@ struct LibraryBrowserView: View {
     private var browseByListSection: some View {
         if !browseByShortcutItems.isEmpty {
             Section("Browse By") {
-                ForEach(browseByShortcutItems) { item in
+                AdaptiveCardListRows(
+                    browseByShortcutItems,
+                    columnCount: adaptiveListColumnCount,
+                    spacing: adaptiveListColumnSpacing,
+                    horizontalInset: LayoutMetrics.horizontalInset
+                ) { item in
                     NavigationLink {
                         item.destination
                     } label: {
@@ -1064,7 +1080,6 @@ struct LibraryBrowserView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                 }
             }
         }
@@ -1094,8 +1109,18 @@ struct LibraryBrowserView: View {
 
         if !comics.isEmpty {
             Section {
-                ForEach(comics) { comic in
-                    previewListNavigationLink(for: kind, comic: comic)
+                AdaptiveCardListRows(
+                    comics,
+                    columnCount: adaptiveListColumnCount,
+                    spacing: adaptiveListColumnSpacing,
+                    horizontalInset: LayoutMetrics.horizontalInset
+                ) { comic in
+                    previewListNavigationLink(
+                        for: kind,
+                        comic: comic,
+                        appliesListRowInsets: false,
+                        enablesSwipeActions: adaptiveListColumnCount == 1
+                    )
                 }
             } header: {
                 collectionPreviewHeader(for: kind)
@@ -1177,13 +1202,17 @@ struct LibraryBrowserView: View {
 
     private func previewListNavigationLink(
         for kind: LibrarySpecialCollectionKind,
-        comic: LibraryComic
+        comic: LibraryComic,
+        appliesListRowInsets: Bool = true,
+        enablesSwipeActions: Bool = true
     ) -> some View {
         interactiveComicListNavigationLink(
             comic: comic,
             context: previewNavigationContext(for: kind),
             heroSourceID: previewHeroSourceID(for: kind, comic: comic),
             showsPersistentActions: kind != .reading,
+            appliesListRowInsets: appliesListRowInsets,
+            enablesSwipeActions: enablesSwipeActions,
             label: {
                 previewListRow(
                     for: kind,
@@ -1353,8 +1382,13 @@ struct LibraryBrowserView: View {
     private func foldersSection(_ folders: [LibraryFolder]) -> some View {
         if !folders.isEmpty {
             Section {
-                ForEach(folders) { folder in
-                    folderListNavigationLink(for: folder)
+                AdaptiveCardListRows(
+                    folders,
+                    columnCount: adaptiveListColumnCount,
+                    spacing: adaptiveListColumnSpacing,
+                    horizontalInset: LayoutMetrics.horizontalInset
+                ) { folder in
+                    folderListNavigationLink(for: folder, appliesListRowInsets: false)
                 }
             } header: {
                 sectionHeaderLabel("Folders", count: folders.count)
@@ -1379,7 +1413,12 @@ struct LibraryBrowserView: View {
     private func comicsSection(_ content: LibraryFolderContent, displayedComics: [LibraryComic]) -> some View {
         if !displayedComics.isEmpty {
             Section {
-                ForEach(displayedComics) { comic in
+                AdaptiveCardListRows(
+                    displayedComics,
+                    columnCount: adaptiveListColumnCount,
+                    spacing: adaptiveListColumnSpacing,
+                    horizontalInset: LayoutMetrics.horizontalInset
+                ) { comic in
                     if isSelectionMode {
                         Button {
                             toggleSelection(for: comic)
@@ -1396,25 +1435,26 @@ struct LibraryBrowserView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
                     } else {
                         interactiveComicListNavigationLink(
-                                comic: comic,
-                                context: ReaderNavigationContext(
-                                    title: content.folder.displayName,
-                                    comics: displayedComics
-                                ),
-                                label: {
-                                    LibraryComicRow(
-                                        comic: comic,
-                                        coverURL: viewModel.coverURL(for: comic),
-                                        coverSource: viewModel.coverSource(for: comic),
-                                        heroSourceID: viewModel.heroSourceID(for: comic),
-                                        trailingAccessoryReservedWidth: comicAccessoryReservedWidth
-                                    )
-                                    .equatable()
-                                }
-                            )
+                            comic: comic,
+                            context: ReaderNavigationContext(
+                                title: content.folder.displayName,
+                                comics: displayedComics
+                            ),
+                            appliesListRowInsets: false,
+                            enablesSwipeActions: adaptiveListColumnCount == 1,
+                            label: {
+                                LibraryComicRow(
+                                    comic: comic,
+                                    coverURL: viewModel.coverURL(for: comic),
+                                    coverSource: viewModel.coverSource(for: comic),
+                                    heroSourceID: viewModel.heroSourceID(for: comic),
+                                    trailingAccessoryReservedWidth: comicAccessoryReservedWidth
+                                )
+                                .equatable()
+                            }
+                        )
                     }
                 }
             } header: {
@@ -1515,23 +1555,40 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private func folderListNavigationLink(for folder: LibraryFolder) -> some View {
-        NavigationLink {
+    @ViewBuilder
+    private func folderListNavigationLink(
+        for folder: LibraryFolder,
+        appliesListRowInsets: Bool = true
+    ) -> some View {
+        let row = NavigationLink {
             folderDestination(for: folder)
         } label: {
             InsetListRowCard {
-                LibraryFolderRow(folder: folder, coverURL: viewModel.coverURL(for: folder))
+                LibraryFolderRow(
+                    folder: folder,
+                    coverURL: viewModel.coverURL(for: folder),
+                    previewCoverURLs: viewModel.previewCoverURLs(for: folder)
+                )
             }
         }
         .buttonStyle(.plain)
-        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+
+        if appliesListRowInsets {
+            row.insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+        } else {
+            row
+        }
     }
 
     private func folderGridNavigationLink(for folder: LibraryFolder) -> some View {
         NavigationLink {
             folderDestination(for: folder)
         } label: {
-            LibraryFolderCard(folder: folder, coverURL: viewModel.coverURL(for: folder))
+            LibraryFolderCard(
+                folder: folder,
+                coverURL: viewModel.coverURL(for: folder),
+                previewCoverURLs: viewModel.previewCoverURLs(for: folder)
+            )
         }
         .buttonStyle(.plain)
     }
@@ -1549,16 +1606,19 @@ struct LibraryBrowserView: View {
         )
     }
 
+    @ViewBuilder
     private func interactiveComicListNavigationLink<Label: View>(
         comic: LibraryComic,
         context: ReaderNavigationContext,
         heroSourceID: String? = nil,
         showsPersistentActions: Bool = true,
+        appliesListRowInsets: Bool = true,
+        enablesSwipeActions: Bool = true,
         @ViewBuilder label: () -> Label
     ) -> some View {
         let rowLabel = label()
 
-        return HeroTapButton { frame in
+        let row = HeroTapButton { frame in
             presentComic(
                 comic,
                 context: context,
@@ -1571,7 +1631,6 @@ struct LibraryBrowserView: View {
             }
         }
         .buttonStyle(.plain)
-        .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
         .overlay(alignment: .trailing) {
             if showsPersistentComicActions && showsPersistentActions {
                 persistentComicQuickActionsButton(for: comic)
@@ -1581,11 +1640,19 @@ struct LibraryBrowserView: View {
         .contextMenu {
             comicContextActions(for: comic)
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            comicReadSwipeAction(for: comic)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            comicTrailingSwipeActions(for: comic)
+        if appliesListRowInsets && enablesSwipeActions {
+            row
+                .insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+                .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                    comicReadSwipeAction(for: comic)
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    comicTrailingSwipeActions(for: comic)
+                }
+        } else if appliesListRowInsets {
+            row.insetCardListRow(horizontalInset: LayoutMetrics.horizontalInset)
+        } else {
+            row
         }
     }
 
@@ -2059,8 +2126,13 @@ struct LibraryBrowserView: View {
 
                     if !results.folders.isEmpty {
                         Section {
-                            ForEach(results.folders) { folder in
-                                folderListNavigationLink(for: folder)
+                            AdaptiveCardListRows(
+                                results.folders,
+                                columnCount: adaptiveListColumnCount,
+                                spacing: adaptiveListColumnSpacing,
+                                horizontalInset: LayoutMetrics.horizontalInset
+                            ) { folder in
+                                folderListNavigationLink(for: folder, appliesListRowInsets: false)
                             }
                         } header: {
                             sectionHeaderLabel("Matching Folders", count: results.folders.count)
@@ -2069,13 +2141,20 @@ struct LibraryBrowserView: View {
 
                     if !displayedSearchComics.isEmpty {
                         Section {
-                            ForEach(displayedSearchComics) { comic in
+                            AdaptiveCardListRows(
+                                displayedSearchComics,
+                                columnCount: adaptiveListColumnCount,
+                                spacing: adaptiveListColumnSpacing,
+                                horizontalInset: LayoutMetrics.horizontalInset
+                            ) { comic in
                                 interactiveComicListNavigationLink(
                                     comic: comic,
                                     context: ReaderNavigationContext(
                                         title: "Search",
                                         comics: displayedSearchComics
                                     ),
+                                    appliesListRowInsets: false,
+                                    enablesSwipeActions: adaptiveListColumnCount == 1,
                                     label: {
                                         LibraryComicRow(
                                             comic: comic,

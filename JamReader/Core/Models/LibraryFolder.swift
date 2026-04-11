@@ -14,6 +14,19 @@ struct LibraryFolder: Identifiable, Hashable {
     let addedAt: Date?
     let updatedAt: Date?
 
+    var previewCoverAssetKeys: [String] {
+        guard let customImage,
+              !customImage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return []
+        }
+
+        return customImage
+            .split(separator: "|")
+            .map { String($0) }
+            .filter { !$0.isEmpty }
+    }
+
     var displayName: String {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedName.isEmpty {
