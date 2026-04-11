@@ -93,6 +93,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     private var lastInteractionBeganUptimeNanoseconds: UInt64?
     private var lastSuccessfulPageTurnUptimeNanoseconds: UInt64?
     private var animatedTransitionTargetSpreadIndex: Int?
+    private var isViewportTransitionInFlight = false
 
     init(
         document: ImageSequenceComicDocument,
@@ -183,11 +184,30 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             flowLayout.itemSize = viewportSize
             flowLayout.invalidateLayout()
             collectionView.collectionViewLayout.invalidateLayout()
-            collectionView.layoutIfNeeded()
-            prepareAndScrollToCurrentSpreadIfNeeded(animated: false)
+            UIView.performWithoutAnimation {
+                collectionView.layoutIfNeeded()
+                prepareAndScrollToCurrentSpreadIfNeeded(animated: false)
+            }
         } else if pendingScrollSpreadIndex != nil {
             prepareAndScrollToCurrentSpreadIfNeeded(animated: false)
         }
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        isViewportTransitionInFlight = true
+        coordinator.animate(alongsideTransition: { _ in
+            self.flowLayout.itemSize = size
+            self.flowLayout.invalidateLayout()
+            self.collectionView.collectionViewLayout.invalidateLayout()
+            UIView.performWithoutAnimation {
+                self.collectionView.layoutIfNeeded()
+                self.prepareAndScrollToCurrentSpreadIfNeeded(animated: false)
+            }
+        }, completion: { _ in
+            self.isViewportTransitionInFlight = false
+            self.finalizeVisibleSpread()
+        })
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -384,8 +404,19 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         pendingScrollSpreadIndex = nil
-        let indexPath = IndexPath(item: spreadIndex, section: 0)
-        collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: animated)
+        let pageWidth = collectionView.bounds.width
+        let maxOffsetX = max(collectionView.contentSize.width - pageWidth, 0)
+        let targetOffsetX = min(max(CGFloat(spreadIndex) * pageWidth, 0), maxOffsetX)
+        let targetOffset = CGPoint(x: targetOffsetX, y: collectionView.contentOffset.y)
+
+        if animated && !isViewportTransitionInFlight {
+            collectionView.setContentOffset(targetOffset, animated: true)
+        } else {
+            UIView.performWithoutAnimation {
+                collectionView.setContentOffset(targetOffset, animated: false)
+                collectionView.layoutIfNeeded()
+            }
+        }
 
         if !animated {
             collectionView.layoutIfNeeded()

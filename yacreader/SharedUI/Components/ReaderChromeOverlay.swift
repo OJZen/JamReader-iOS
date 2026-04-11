@@ -16,7 +16,7 @@ private enum ReaderChromeMetrics {
     static let floatingPreviewMaxWidth: CGFloat = 420
 }
 
-/// Encapsulates all scrubber size values so they can scale with the device's size class.
+/// Encapsulates scrubber size values so they can scale with the available reader viewport.
 private struct ReaderScrubberLayout {
     let thumbnailWidth: CGFloat
     let thumbnailHeight: CGFloat
@@ -30,6 +30,7 @@ private struct ReaderScrubberLayout {
     let maxScale: CGFloat
     let minScale: CGFloat
     let maxLift: CGFloat
+    let maxNeighborSpread: CGFloat
 
     var itemStride: CGFloat { itemWidth + itemSpacing }
 
@@ -46,32 +47,43 @@ private struct ReaderScrubberLayout {
             focusDistance: focusDistance * scale,
             maxScale: maxScale,
             minScale: minScale,
-            maxLift: maxLift * scale
+            maxLift: maxLift * scale,
+            maxNeighborSpread: maxNeighborSpread * scale
         )
     }
 
     static func adaptive(
         horizontalSizeClass: UserInterfaceSizeClass?,
-        viewportBounds: CGRect = ReaderViewportResolver.currentBounds,
+        viewportSize: CGSize = ReaderViewportResolver.currentBounds.size,
         userInterfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
     ) -> ReaderScrubberLayout {
+        if userInterfaceIdiom == .pad {
+            let minimumHeight: CGFloat = 700
+            let maximumHeight: CGFloat = 1_366
+            let minimumScale: CGFloat = 1.24
+            let maximumScale: CGFloat = 1.58
+            let clampedHeight = min(max(viewportSize.height, minimumHeight), maximumHeight)
+            let progress = (clampedHeight - minimumHeight) / (maximumHeight - minimumHeight)
+            let scale = minimumScale + (progress * (maximumScale - minimumScale))
+
+            return ReaderScrubberLayout.regular.scaled(by: scale)
+        }
+
         let usesRegularLayout = horizontalSizeClass == .regular
-            && viewportBounds.width >= AppLayout.regularReaderLayoutMinWidth
+            && viewportSize.width >= AppLayout.regularReaderLayoutMinWidth
         let baseLayout: ReaderScrubberLayout = usesRegularLayout ? .regular : .compact
 
-        guard userInterfaceIdiom == .pad,
-              usesRegularLayout,
-              viewportBounds.height > viewportBounds.width
-        else {
+        guard viewportSize.height > 0 else {
             return baseLayout
         }
 
-        let minimumPortraitHeight: CGFloat = 1_024
-        let maximumPortraitHeight: CGFloat = 1_366
-        let maximumScaleIncrease: CGFloat = 0.18
-        let clampedHeight = min(max(viewportBounds.height, minimumPortraitHeight), maximumPortraitHeight)
-        let progress = (clampedHeight - minimumPortraitHeight) / (maximumPortraitHeight - minimumPortraitHeight)
-        let scale = 1 + (progress * maximumScaleIncrease)
+        let minimumHeight: CGFloat = usesRegularLayout ? 820 : 680
+        let maximumHeight: CGFloat = 1_024
+        let minimumScale: CGFloat = usesRegularLayout ? 1.0 : 0.98
+        let maximumScale: CGFloat = usesRegularLayout ? 1.08 : 1.02
+        let clampedHeight = min(max(viewportSize.height, minimumHeight), maximumHeight)
+        let progress = (clampedHeight - minimumHeight) / (maximumHeight - minimumHeight)
+        let scale = minimumScale + (progress * (maximumScale - minimumScale))
 
         return baseLayout.scaled(by: scale)
     }
@@ -89,7 +101,8 @@ private struct ReaderScrubberLayout {
         focusDistance: 150,
         maxScale: 1.34,
         minScale: 0.78,
-        maxLift: 7
+        maxLift: 11,
+        maxNeighborSpread: 6
     )
 
     /// iPad / regular horizontal size class — ~1.35× larger so thumbnails are easier to tap.
@@ -101,11 +114,12 @@ private struct ReaderScrubberLayout {
         frameHeight: 132,
         topInset: 24,
         bottomInset: 6,
-        itemSpacing: 5,
-        focusDistance: 200,
-        maxScale: 1.34,
-        minScale: 0.78,
-        maxLift: 9
+        itemSpacing: 3,
+        focusDistance: 260,
+        maxScale: 1.22,
+        minScale: 0.88,
+        maxLift: 17,
+        maxNeighborSpread: 10
     )
 }
 
@@ -116,7 +130,7 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
     let isChromeHidden: Bool
     @ViewBuilder let content: () -> Content
     @ViewBuilder let topBar: () -> TopBar
-    @ViewBuilder let bottomBar: () -> BottomBar
+    @ViewBuilder let bottomBar: (_ viewportSize: CGSize) -> BottomBar
     @ViewBuilder let statusOverlay: () -> StatusOverlay
     @ViewBuilder let modalOverlay: () -> ModalOverlay
 
@@ -135,7 +149,7 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
                 ) {
                     topBar()
                 } bottomBar: {
-                    bottomBar()
+                    bottomBar(proxy.size)
                 }
                 .allowsHitTesting(!isInteractionLocked)
 
@@ -346,6 +360,7 @@ struct ReaderBottomBar: View {
     let document: ComicDocument
     let currentPage: Int
     let pageCount: Int
+    let viewportHeight: CGFloat
     let onPageSelected: (Int) -> Void
     let onPageIndicatorTapped: () -> Void
     let onScrubberInteractionChanged: (Bool) -> Void
@@ -358,6 +373,7 @@ struct ReaderBottomBar: View {
         document: ComicDocument,
         currentPage: Int,
         pageCount: Int,
+        viewportHeight: CGFloat,
         onPageSelected: @escaping (Int) -> Void,
         onPageIndicatorTapped: @escaping () -> Void,
         onScrubberInteractionChanged: @escaping (Bool) -> Void = { _ in }
@@ -365,6 +381,7 @@ struct ReaderBottomBar: View {
         self.document = document
         self.currentPage = currentPage
         self.pageCount = pageCount
+        self.viewportHeight = viewportHeight
         self.onPageSelected = onPageSelected
         self.onPageIndicatorTapped = onPageIndicatorTapped
         self.onScrubberInteractionChanged = onScrubberInteractionChanged
@@ -378,11 +395,9 @@ struct ReaderBottomBar: View {
     private var scrubberLayout: ReaderScrubberLayout {
         ReaderScrubberLayout.adaptive(
             horizontalSizeClass: horizontalSizeClass,
-            viewportBounds: CGRect(
-                x: 0,
-                y: 0,
+            viewportSize: CGSize(
                 width: max(containerWidth, 0),
-                height: ReaderViewportResolver.currentBounds.height
+                height: max(viewportHeight, 0)
             )
         )
     }
@@ -511,9 +526,15 @@ struct ReaderBottomBar: View {
     }
 
     private func floatingPreviewOffsetY(bottomBarFrame: CGRect, previewCardHeight: CGFloat) -> CGFloat {
-        let viewportMidY = ReaderViewportResolver.currentBounds.midY
+        let viewportBounds = ReaderViewportResolver.currentBounds
+        let viewportMidY = viewportBounds.midY
         let previewHalfHeight = previewCardHeight / 2
-        return viewportMidY - bottomBarFrame.minY - previewHalfHeight
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let upwardBias = min(
+            max(viewportBounds.height * (isPad ? 0.09 : 0.06), isPad ? 56 : 28),
+            isPad ? 120 : 72
+        )
+        return viewportMidY - bottomBarFrame.minY - previewHalfHeight - upwardBias
     }
 }
 
@@ -658,12 +679,23 @@ private struct ReaderThumbnailScrubberItem: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let distance = abs(proxy.frame(in: .named(coordinateSpaceName)).midX - viewportWidth / 2)
-            let normalizedDistance = min(distance / layout.focusDistance, 1)
+            let signedDistance = proxy.frame(in: .named(coordinateSpaceName)).midX - viewportWidth / 2
+            let clampedSignedProgress = max(min(signedDistance / layout.focusDistance, 1), -1)
+            let normalizedDistance = abs(clampedSignedProgress)
+            let focusProgress = 1 - normalizedDistance
             let scale = layout.maxScale
                 - ((layout.maxScale - layout.minScale) * normalizedDistance)
             let opacity = 1 - (normalizedDistance * 0.28)
-            let lift = (1 - normalizedDistance) * layout.maxLift
+            let shoulderLift = focusProgress * focusProgress * 0.45
+            let centerLift = focusProgress * focusProgress * focusProgress * focusProgress * 0.75
+            let lift = (shoulderLift + centerLift) * layout.maxLift
+            // Use a continuous bell-shaped offset so nearby thumbnails get
+            // extra breathing room, while the centered item stays anchored
+            // and never "snaps" when crossing the midpoint.
+            let lateralOffset = clampedSignedProgress
+                * focusProgress
+                * 4
+                * layout.maxNeighborSpread
 
             VStack(spacing: 0) {
                 ReaderPageThumbnailView(
@@ -689,7 +721,7 @@ private struct ReaderThumbnailScrubberItem: View {
             )
             .scaleEffect(scale, anchor: .bottom)
             .opacity(opacity)
-            .offset(y: -lift)
+            .offset(x: lateralOffset, y: -lift)
             .shadow(
                 color: .black.opacity(isFocused ? 0.34 : 0.18),
                 radius: isFocused ? 10 : 5,
@@ -849,15 +881,15 @@ private final class ReaderThumbnailScrubberCoordinator: ObservableObject {
     }
 
     func updateNearestPageIndex(_ pageIndex: Int) {
+        guard isInteracting else {
+            return
+        }
+
         guard focusedPageIndex != pageIndex else {
             return
         }
 
         focusedPageIndex = pageIndex
-
-        guard isInteracting else {
-            return
-        }
 
         guard !isTouchActive else {
             return

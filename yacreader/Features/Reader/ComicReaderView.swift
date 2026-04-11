@@ -78,8 +78,8 @@ struct ComicReaderView: View {
             }
         } topBar: {
             readerTopBar
-        } bottomBar: {
-            readerBottomBar
+        } bottomBar: { viewportSize in
+            readerBottomBar(viewportHeight: viewportSize.height)
         } statusOverlay: {
             EmptyView()
         } modalOverlay: {
@@ -399,7 +399,7 @@ struct ComicReaderView: View {
     }
 
     @ViewBuilder
-    private var readerBottomBar: some View {
+    private func readerBottomBar(viewportHeight: CGFloat) -> some View {
         if let document = viewModel.document,
            let currentPage = viewModel.currentPageNumber,
            let pageCount = viewModel.pageCount {
@@ -407,6 +407,7 @@ struct ComicReaderView: View {
                 document: document,
                 currentPage: currentPage,
                 pageCount: pageCount,
+                viewportHeight: viewportHeight,
                 onPageSelected: { pageNumber in
                     viewModel.goToPage(number: pageNumber)
                     readerSession.apply(.goToPage(pageNumber - 1))

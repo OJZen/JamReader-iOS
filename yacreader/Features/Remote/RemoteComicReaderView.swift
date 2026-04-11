@@ -583,8 +583,8 @@ struct RemoteComicReaderView: View {
             }
         } topBar: {
             readerTopBar
-        } bottomBar: {
-            readerBottomBar
+        } bottomBar: { viewportSize in
+            readerBottomBar(viewportHeight: viewportSize.height)
         } statusOverlay: {
             readerStatusOverlay
         } modalOverlay: {
@@ -840,7 +840,7 @@ struct RemoteComicReaderView: View {
     }
 
     @ViewBuilder
-    private var readerBottomBar: some View {
+    private func readerBottomBar(viewportHeight: CGFloat) -> some View {
         if let document,
            let currentPage = currentPageNumber,
            let pageCount = document.pageCount {
@@ -848,6 +848,7 @@ struct RemoteComicReaderView: View {
                 document: document,
                 currentPage: currentPage,
                 pageCount: pageCount,
+                viewportHeight: viewportHeight,
                 onPageSelected: { pageNumber in
                     updateVisiblePage(to: pageNumber - 1)
                 },
