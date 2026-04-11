@@ -75,6 +75,34 @@ final class ComicDocumentLoader {
             return .imageSequence(try libArchiveReader.loadDocument(at: fileURL))
         case "cbt", "tar":
             return .imageSequence(try tarArchiveReader.loadDocument(at: fileURL))
+        case "epub":
+            return .ebook(
+                EBookComicDocument(
+                    url: fileURL,
+                    fileExtension: `extension`,
+                    readerKind: .epubJS,
+                    documentID: EBookDocumentSupport.documentIdentifier(for: fileURL)
+                )
+            )
+        case "mobi":
+            if EBookDocumentSupport.canPreviewDocument(at: fileURL) {
+                return .ebook(
+                    EBookComicDocument(
+                        url: fileURL,
+                        fileExtension: `extension`,
+                        readerKind: .quickLook,
+                        documentID: EBookDocumentSupport.documentIdentifier(for: fileURL)
+                    )
+                )
+            }
+
+            return .unsupported(
+                UnsupportedComicDocument(
+                    url: fileURL,
+                    fileExtension: `extension`,
+                    reason: EBookDocumentSupport.unsupportedReason(for: fileURL)
+                )
+            )
         default:
             return .unsupported(
                 UnsupportedComicDocument(

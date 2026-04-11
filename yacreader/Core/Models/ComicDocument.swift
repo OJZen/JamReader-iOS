@@ -1,9 +1,15 @@
 import Foundation
 import PDFKit
 
+enum EBookReaderKind: Equatable {
+    case quickLook
+    case epubJS
+}
+
 enum ComicDocument {
     case pdf(PDFComicDocument)
     case imageSequence(ImageSequenceComicDocument)
+    case ebook(EBookComicDocument)
     case unsupported(UnsupportedComicDocument)
 
     var pageCount: Int? {
@@ -12,6 +18,8 @@ enum ComicDocument {
             return document.pageCount
         case .imageSequence(let document):
             return document.pageCount
+        case .ebook:
+            return nil
         case .unsupported:
             return nil
         }
@@ -22,6 +30,8 @@ enum ComicDocument {
         case .pdf(let document):
             return document.url
         case .imageSequence(let document):
+            return document.url
+        case .ebook(let document):
             return document.url
         case .unsupported(let document):
             return document.url
@@ -36,6 +46,13 @@ struct PDFComicDocument {
     var pageCount: Int {
         pdfDocument.pageCount
     }
+}
+
+struct EBookComicDocument {
+    let url: URL
+    let fileExtension: String
+    let readerKind: EBookReaderKind
+    let documentID: String
 }
 
 protocol ComicPageDataSource: AnyObject, Sendable {

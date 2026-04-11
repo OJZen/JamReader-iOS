@@ -217,6 +217,8 @@ struct ReaderPageThumbnailView: View {
         switch document {
         case .pdf:
             return "doc.richtext"
+        case .ebook:
+            return "book.closed"
         case .imageSequence:
             return "photo"
         case .unsupported:
@@ -350,7 +352,7 @@ final class ReaderPageThumbnailLoader: ObservableObject {
             } else if requestDidChange || !phase.isImage {
                 phase = .loading
             }
-        case .pdf, .unsupported:
+        case .pdf, .ebook, .unsupported:
             if requestDidChange || !phase.isImage {
                 phase = .loading
             }
@@ -364,6 +366,11 @@ final class ReaderPageThumbnailLoader: ObservableObject {
                 image = PDFThumbnailStore.shared.image(
                     for: pdf,
                     pageIndex: pageIndex,
+                    maxPixelSize: maxPixelSize
+                )
+            case .ebook(let ebook):
+                image = await LocalEBookThumbnailExtractor.shared.thumbnail(
+                    from: ebook.url,
                     maxPixelSize: maxPixelSize
                 )
             case .imageSequence(let imageSequence):

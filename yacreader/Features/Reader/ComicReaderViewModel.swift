@@ -82,11 +82,12 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     }
 
     var supportsRotationControls: Bool {
-        guard document != nil else {
+        switch document {
+        case .pdf?, .imageSequence?:
+            return effectiveReaderLayout.pagingMode != .verticalContinuous
+        case .ebook?, .unsupported?, nil:
             return false
         }
-
-        return effectiveReaderLayout.pagingMode != .verticalContinuous
     }
 
     var effectiveReaderLayout: ReaderDisplayLayout {
@@ -403,14 +404,14 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     }
 
     private func persistProgress(force: Bool = false) {
-        guard let pageCount = document?.pageCount else {
+        guard let document else {
+            return
+        }
+        if case .unsupported = document {
             return
         }
 
-        let requestedSnapshot = ReaderProgressFactory.snapshot(
-            pageIndex: currentPageIndex,
-            pageCount: pageCount
-        )
+        let requestedSnapshot = progressSnapshot(for: document)
         if !force, lastPersistedProgressSnapshot == requestedSnapshot {
             return
         }
@@ -418,7 +419,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         pendingProgressPersistenceTask?.cancel()
 
         if force {
-            writeProgress(for: requestedSnapshot, pageCount: pageCount)
+            writeProgress(for: requestedSnapshot, document: document)
             return
         }
 
@@ -429,22 +430,19 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 return
             }
 
-            self?.writeProgress(for: requestedSnapshot, pageCount: pageCount)
+            self?.writeProgress(for: requestedSnapshot, document: document)
         }
     }
 
     private func writeProgress(
         for snapshot: ReaderProgressPersistenceSnapshot,
-        pageCount: Int
+        document: ComicDocument
     ) {
         guard lastPersistedProgressSnapshot != snapshot else {
             return
         }
 
-        let progress = ReaderProgressFactory.progress(
-            forPageIndex: snapshot.pageIndex,
-            pageCount: pageCount
-        )
+        let progress = readingProgress(for: snapshot, document: document)
 
         do {
             try databaseWriter.updateReadingProgress(
@@ -456,6 +454,33 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             publishComicUpdate(comic.updatingReadingProgress(progress))
         } catch {
             alert = AppAlertState(title: "Failed to Save Progress", message: error.userFacingMessage)
+        }
+    }
+
+    private func progressSnapshot(for document: ComicDocument) -> ReaderProgressPersistenceSnapshot {
+        let snapshotPageCount = max(document.pageCount ?? 1, 1)
+        return ReaderProgressFactory.snapshot(
+            pageIndex: currentPageIndex,
+            pageCount: snapshotPageCount
+        )
+    }
+
+    private func readingProgress(
+        for snapshot: ReaderProgressPersistenceSnapshot,
+        document: ComicDocument
+    ) -> ComicReadingProgress {
+        switch document {
+        case .ebook:
+            return ReaderProgressFactory.nonPaginatedProgress(
+                currentPosition: max(snapshot.pageIndex + 1, 1)
+            )
+        case .pdf, .imageSequence:
+            return ReaderProgressFactory.progress(
+                forPageIndex: snapshot.pageIndex,
+                pageCount: max(document.pageCount ?? 1, 1)
+            )
+        case .unsupported:
+            return ReaderProgressFactory.nonPaginatedProgress()
         }
     }
 

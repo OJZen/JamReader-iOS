@@ -61,6 +61,8 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
             .background(Color.black.ignoresSafeArea())
         case .imageSequence(let imageSequence):
             readerImageSequenceContent(for: imageSequence)
+        case .ebook(let ebook):
+            readerEBookContent(for: ebook)
         case .unsupported(let unsupportedDocument):
             unsupportedContent(unsupportedDocument)
         }
@@ -87,6 +89,23 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap,
                 onZoomStateChanged: onZoomStateChanged
+            )
+            .ignoresSafeArea()
+            .background(Color.black.ignoresSafeArea())
+        }
+    }
+
+    @ViewBuilder
+    private func readerEBookContent(for document: EBookComicDocument) -> some View {
+        switch document.readerKind {
+        case .quickLook:
+            QuickLookDocumentReaderView(fileURL: document.url)
+                .ignoresSafeArea()
+                .background(Color.black.ignoresSafeArea())
+        case .epubJS:
+            EPUBReaderContainerView(
+                document: document,
+                onReaderTap: onReaderTap
             )
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())

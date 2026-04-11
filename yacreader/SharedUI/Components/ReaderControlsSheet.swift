@@ -15,6 +15,7 @@ struct ReaderControlsSheet: View {
             }
 
             ReaderNavigationControlsSection(
+                supportsPageNavigation: capabilities.supportsPageNavigation,
                 pageIndicatorText: pageState.pageIndicatorText,
                 currentPageNumber: pageState.currentPageNumber,
                 pageCount: pageState.pageCount,
@@ -23,6 +24,7 @@ struct ReaderControlsSheet: View {
             )
 
             ReaderReadingStatusControlsSection(
+                supportsBookmarks: capabilities.supportsBookmarks,
                 currentPageIsBookmarked: pageState.currentPageIsBookmarked,
                 isFavorite: metadata?.isFavorite,
                 isRead: metadata?.isRead,
@@ -63,6 +65,7 @@ struct ReaderControlsSheet: View {
             )
 
             ReaderBookmarksControlsSection(
+                supportsBookmarks: capabilities.supportsBookmarks,
                 bookmarkItems: pageState.bookmarkItems,
                 onGoToBookmark: actions.onGoToBookmark
             )

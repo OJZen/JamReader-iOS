@@ -115,6 +115,8 @@ final class ReaderSessionController: ObservableObject {
         switch state.descriptor.kind {
         case .pdf:
             return .pdf
+        case .ebook:
+            return .ebook
         case .imagePaged, .imageContinuous:
             return layout.pagingMode == .verticalContinuous ? .imageContinuous : .imagePaged
         }

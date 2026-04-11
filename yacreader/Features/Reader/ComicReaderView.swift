@@ -288,7 +288,9 @@ struct ComicReaderView: View {
             capabilities: ReaderControlsCapabilities(
                 supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
                 supportsDoublePageSpread: supportsDoublePageSpread,
-                supportsRotationControls: viewModel.supportsRotationControls
+                supportsRotationControls: viewModel.supportsRotationControls,
+                supportsPageNavigation: viewModel.pageCount != nil,
+                supportsBookmarks: viewModel.pageCount != nil
             ),
             actions: ReaderControlsActions(
                 onDone: { isShowingReaderControls = false },

@@ -68,4 +68,17 @@ enum ReaderProgressFactory {
             lastTimeOpened: lastOpenedAt
         )
     }
+
+    static func nonPaginatedProgress(
+        currentPosition: Int = 1,
+        lastOpenedAt: Date = Date()
+    ) -> ComicReadingProgress {
+        ComicReadingProgress(
+            currentPage: max(currentPosition, 1),
+            pageCount: nil,
+            hasBeenOpened: true,
+            read: false,
+            lastTimeOpened: lastOpenedAt
+        )
+    }
 }

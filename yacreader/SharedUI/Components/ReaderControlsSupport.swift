@@ -26,6 +26,8 @@ struct ReaderControlsCapabilities {
     let supportsImageLayoutControls: Bool
     let supportsDoublePageSpread: Bool
     let supportsRotationControls: Bool
+    let supportsPageNavigation: Bool
+    let supportsBookmarks: Bool
 }
 
 /// Optional library metadata for the reader controls sheet.
@@ -235,11 +237,12 @@ struct ReaderViewControlsSection: View {
 // MARK: - Bookmarks Section
 
 struct ReaderBookmarksControlsSection: View {
+    let supportsBookmarks: Bool
     let bookmarkItems: [ReaderBookmarkItem]
     let onGoToBookmark: (Int) -> Void
 
     var body: some View {
-        if !bookmarkItems.isEmpty {
+        if supportsBookmarks, !bookmarkItems.isEmpty {
             Section("Bookmarks") {
                 ForEach(bookmarkItems) { bookmark in
                     Button {
@@ -256,22 +259,27 @@ struct ReaderBookmarksControlsSection: View {
 // MARK: - Navigation Section (kept for external callers)
 
 struct ReaderNavigationControlsSection: View {
+    let supportsPageNavigation: Bool
     let onOpenThumbnails: () -> Void
 
     init(
+        supportsPageNavigation: Bool,
         pageIndicatorText _: String?,
         currentPageNumber _: Int?,
         pageCount _: Int?,
         onOpenThumbnails: @escaping () -> Void,
         onGoToPageNumber _: @escaping (Int) -> Void
     ) {
+        self.supportsPageNavigation = supportsPageNavigation
         self.onOpenThumbnails = onOpenThumbnails
     }
 
     var body: some View {
-        Section("Pages") {
-            Button(action: onOpenThumbnails) {
-                Label("Browse Thumbnails", systemImage: "square.grid.3x2")
+        if supportsPageNavigation {
+            Section("Pages") {
+                Button(action: onOpenThumbnails) {
+                    Label("Browse Thumbnails", systemImage: "square.grid.3x2")
+                }
             }
         }
     }
@@ -280,6 +288,7 @@ struct ReaderNavigationControlsSection: View {
 // MARK: - Reading Status Section
 
 struct ReaderReadingStatusControlsSection: View {
+    let supportsBookmarks: Bool
     let currentPageIsBookmarked: Bool
     let isFavorite: Bool?
     let isRead: Bool?
@@ -301,41 +310,52 @@ struct ReaderReadingStatusControlsSection: View {
     }
 
     var body: some View {
-        Section("Reading Status") {
-            if let onToggleFavorite, let isFavorite {
-                Button(action: onToggleFavorite) {
-                    Label(
-                        isFavorite ? "Remove Favorite" : "Add Favorite",
-                        systemImage: isFavorite ? "star.slash" : "star"
-                    )
+        if hasActions {
+            Section("Reading Status") {
+                if let onToggleFavorite, let isFavorite {
+                    Button(action: onToggleFavorite) {
+                        Label(
+                            isFavorite ? "Remove Favorite" : "Add Favorite",
+                            systemImage: isFavorite ? "star.slash" : "star"
+                        )
+                    }
                 }
-            }
 
-            if let onToggleReadStatus, let isRead {
-                Button(action: onToggleReadStatus) {
-                    Label(
-                        isRead ? "Mark Unread" : "Mark Read",
-                        systemImage: isRead ? "arrow.uturn.backward.circle" : "checkmark.circle"
-                    )
+                if let onToggleReadStatus, let isRead {
+                    Button(action: onToggleReadStatus) {
+                        Label(
+                            isRead ? "Mark Unread" : "Mark Read",
+                            systemImage: isRead ? "arrow.uturn.backward.circle" : "checkmark.circle"
+                        )
+                    }
                 }
-            }
 
-            Button(action: onToggleBookmark) {
-                Label(
-                    currentPageIsBookmarked ? "Remove Bookmark" : "Add Bookmark",
-                    systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
-                )
-            }
+                if supportsBookmarks {
+                    Button(action: onToggleBookmark) {
+                        Label(
+                            currentPageIsBookmarked ? "Remove Bookmark" : "Add Bookmark",
+                            systemImage: currentPageIsBookmarked ? "bookmark.slash" : "bookmark"
+                        )
+                    }
+                }
 
-            if let ratingBinding {
-                Picker("Rating", selection: ratingBinding) {
-                    Text("Unrated").tag(0)
-                    ForEach(1...5, id: \.self) { value in
-                        Text(value == 1 ? "1 Star" : "\(value) Stars").tag(value)
+                if let ratingBinding {
+                    Picker("Rating", selection: ratingBinding) {
+                        Text("Unrated").tag(0)
+                        ForEach(1...5, id: \.self) { value in
+                            Text(value == 1 ? "1 Star" : "\(value) Stars").tag(value)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private var hasActions: Bool {
+        (onToggleFavorite != nil && isFavorite != nil)
+            || (onToggleReadStatus != nil && isRead != nil)
+            || supportsBookmarks
+            || ratingBinding != nil
     }
 }
 
