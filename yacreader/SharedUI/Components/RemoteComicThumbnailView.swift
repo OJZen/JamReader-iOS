@@ -898,12 +898,27 @@ private struct RemoteComicThumbnailWorker {
             return nil
         }
 
+        let isEBookDocument = EBookDocumentSupport.supportsFileExtension(reference.fileExtension)
+
         if reference.isPDFDocument {
             guard let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
                   let cachedImage = await Self.extractLocalPDFThumbnail(
                     from: cachedFileURL,
                     maxPixelSize: maxPixelSize
                   ) else {
+                return nil
+            }
+
+            if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
+                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+            }
+            return cachedImage
+        }
+
+        if isEBookDocument {
+            guard let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
+                  let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize)
+            else {
                 return nil
             }
 

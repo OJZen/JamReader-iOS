@@ -150,6 +150,23 @@ final class RemoteWebDAVClient {
         try fileManager.moveItem(at: temporaryURL, to: destinationURL)
     }
 
+    func downloadData(
+        from fileURL: URL,
+        authorizationHeader: String?
+    ) async throws -> Data {
+        var request = URLRequest(url: fileURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 60
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        if let authorizationHeader {
+            request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
+        _ = try validatedHTTPResponse(response, allowedStatusCodes: [200, 206])
+        return data
+    }
+
     func authorizationHeader(username: String?, password: String?) -> String? {
         guard let username, let password else {
             return nil

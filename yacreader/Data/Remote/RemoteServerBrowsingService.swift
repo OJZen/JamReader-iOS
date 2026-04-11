@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import ImageIO
 import UIKit
 
 enum RemoteServerBrowsingError: LocalizedError {
@@ -25,7 +26,7 @@ enum RemoteServerBrowsingError: LocalizedError {
         case .providerIntegrationUnavailable(let providerKind):
             return "\(providerKind.title) browsing is planned but not wired into a live network client yet."
         case .unsupportedComicFile(let fileName):
-            return "\(fileName) is not a supported remote comic file."
+            return "\(fileName) is not a supported remote comic."
         case .missingCredentials(let reason):
             return reason
         case .authenticationFailed(let serverName):
@@ -136,12 +137,38 @@ struct RemoteComicCachedAvailability: Hashable {
     }
 }
 
+private struct RemoteListedDirectoryEntry {
+    let name: String
+    let fullPath: String
+    let isDirectory: Bool
+    let fileSize: Int64?
+    let modifiedAt: Date?
+}
+
+private struct RemoteImageComicDirectoryInspection {
+    let pageEntries: [RemoteListedDirectoryEntry]
+    let regularEntries: [RemoteListedDirectoryEntry]
+
+    var pageCount: Int {
+        pageEntries.count
+    }
+
+    var coverEntry: RemoteListedDirectoryEntry? {
+        pageEntries.first
+    }
+}
+
 final class RemoteServerBrowsingService {
     private static let resumableDownloadChunkSize: UInt32 = 256 * 1024
     private static let downloadProgressReportingStep: Double = 0.01
     private static let batchDownloadWorkerLimit = 3
+    private static let imageComicAuxiliaryFileNames: Set<String> = [
+        "comicinfo.xml",
+        "thumbs.db",
+        "desktop.ini"
+    ]
     private let supportedComicFileExtensions: Set<String> = [
-        "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf"
+        "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf", "arj", "epub", "mobi"
     ]
     private let credentialStore: RemoteServerCredentialStore
     private let cachePolicyStore: RemoteCachePolicyStore
@@ -279,21 +306,35 @@ final class RemoteServerBrowsingService {
                 let shareRelativePath = smbRelativePath(forDisplayPath: requestedPath)
                 let entries = try await client.listDirectory(path: shareRelativePath)
 
-                return entries.compactMap { entry in
+                var items: [RemoteDirectoryItem] = []
+                items.reserveCapacity(entries.count)
+
+                for entry in entries {
                     guard !isSkippableDirectoryEntry(entry.name) else {
-                        return nil
+                        continue
                     }
 
                     let fullPath = appendPathComponent(entry.name, to: requestedPath)
-                    return classifyDirectoryEntry(
-                        named: entry.name,
-                        fullPath: fullPath,
-                        isDirectory: entry.isDirectory,
-                        in: profile,
-                        fileSize: Int64(clamping: entry.size),
-                        modifiedAt: entry.lastWriteTime
+                    let inspection = entry.isDirectory
+                        ? try? await inspectSMBImageComicDirectory(
+                            with: client,
+                            directoryPath: fullPath
+                        )
+                        : nil
+                    items.append(
+                        classifyDirectoryEntry(
+                            named: entry.name,
+                            fullPath: fullPath,
+                            isDirectory: entry.isDirectory,
+                            in: profile,
+                            fileSize: Int64(clamping: entry.size),
+                            modifiedAt: entry.lastWriteTime,
+                            imageComicInspection: inspection
+                        )
                     )
                 }
+
+                return items
             }
         case .webdav:
             let directoryURL = try webDAVURL(
@@ -308,24 +349,39 @@ final class RemoteServerBrowsingService {
                 authorizationHeader: authorizationHeader
             )
 
-            return entries.compactMap { entry in
+            var items: [RemoteDirectoryItem] = []
+            items.reserveCapacity(entries.count)
+
+            for entry in entries {
                 guard let fullPath = displayPath(
                     forWebDAVEntryURL: entry.url,
                     collectionRootPath: collectionRootPath
                 ),
                 fullPath != requestedPath else {
-                    return nil
+                    continue
                 }
 
-                return classifyDirectoryEntry(
-                    named: entry.name,
-                    fullPath: fullPath,
-                    isDirectory: entry.isDirectory,
-                    in: profile,
-                    fileSize: entry.fileSize,
-                    modifiedAt: entry.modifiedAt
+                let inspection = entry.isDirectory
+                    ? try? await inspectWebDAVImageComicDirectory(
+                        for: profile,
+                        directoryPath: fullPath
+                    )
+                    : nil
+
+                items.append(
+                    classifyDirectoryEntry(
+                        named: entry.name,
+                        fullPath: fullPath,
+                        isDirectory: entry.isDirectory,
+                        in: profile,
+                        fileSize: entry.fileSize,
+                        modifiedAt: entry.modifiedAt,
+                        imageComicInspection: inspection
+                    )
                 )
             }
+
+            return items
         }
     }
 
@@ -397,7 +453,8 @@ final class RemoteServerBrowsingService {
                         for: profile,
                         reference: reference,
                         forceRefresh: forceRefresh,
-                        trimCacheAfterDownload: trimCacheAfterDownload
+                        trimCacheAfterDownload: trimCacheAfterDownload,
+                        progressHandler: progressHandler
                     ) { temporaryDownloadURL, resumeOffset in
                         let reader = client.fileReader(
                             path: smbRelativePath(forDisplayPath: reference.path)
@@ -417,7 +474,8 @@ final class RemoteServerBrowsingService {
                 for: profile,
                 reference: reference,
                 forceRefresh: forceRefresh,
-                trimCacheAfterDownload: trimCacheAfterDownload
+                trimCacheAfterDownload: trimCacheAfterDownload,
+                progressHandler: progressHandler
             ) { temporaryDownloadURL, resumeOffset in
                 let fileURL = try webDAVURL(
                     for: profile,
@@ -488,7 +546,10 @@ final class RemoteServerBrowsingService {
                                 for: profile,
                                 reference: reference,
                                 forceRefresh: forceRefresh,
-                                trimCacheAfterDownload: trimCacheAfterDownload
+                                trimCacheAfterDownload: trimCacheAfterDownload,
+                                progressHandler: { fraction in
+                                    progressHandler(reference, fraction)
+                                }
                             ) { temporaryDownloadURL, resumeOffset in
                                 let reader = client.fileReader(
                                     path: self.smbRelativePath(forDisplayPath: reference.path)
@@ -532,7 +593,10 @@ final class RemoteServerBrowsingService {
                         for: profile,
                         reference: reference,
                         forceRefresh: forceRefresh,
-                        trimCacheAfterDownload: trimCacheAfterDownload
+                        trimCacheAfterDownload: trimCacheAfterDownload,
+                        progressHandler: { fraction in
+                            progressHandler(reference, fraction)
+                        }
                     ) { temporaryDownloadURL, resumeOffset in
                         let fileURL = try self.webDAVURL(
                             for: profile,
@@ -604,29 +668,11 @@ final class RemoteServerBrowsingService {
             return .empty
         }
 
-        guard let enumerator = fileManager.enumerator(
-            at: cacheURL,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return .empty
+        let resources = enumerateCachedComicResources(in: cacheURL)
+        let totalBytes = resources.reduce(into: Int64.zero) { partialResult, resource in
+            partialResult += resource.size
         }
-
-        var fileCount = 0
-        var totalBytes: Int64 = 0
-
-        for case let fileURL as URL in enumerator {
-            let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-            guard resourceValues?.isRegularFile == true,
-                  !isCacheAuxiliaryFile(fileURL) else {
-                continue
-            }
-
-            fileCount += 1
-            totalBytes += Int64(resourceValues?.fileSize ?? 0)
-        }
-
-        let summary = RemoteComicCacheSummary(fileCount: fileCount, totalBytes: totalBytes)
+        let summary = RemoteComicCacheSummary(fileCount: resources.count, totalBytes: totalBytes)
         storeCachedSummary(summary, forRootPath: cacheRootPath)
         return summary
     }
@@ -728,7 +774,7 @@ final class RemoteServerBrowsingService {
             return RemoteComicCachedAvailability(kind: .current)
         }
 
-        if anyCachedFileURL(for: reference) != nil {
+        if anyCompatibleCachedFileURL(for: reference) != nil {
             return RemoteComicCachedAvailability(kind: .stale)
         }
 
@@ -736,7 +782,7 @@ final class RemoteServerBrowsingService {
     }
 
     func cachedFileURLIfAvailable(for reference: RemoteComicFileReference) -> URL? {
-        currentCachedFileURL(for: reference) ?? anyCachedFileURL(for: reference)
+        currentCachedFileURL(for: reference) ?? anyCompatibleCachedFileURL(for: reference)
     }
 
     func plannedCachedFileURL(for reference: RemoteComicFileReference) -> URL {
@@ -744,6 +790,10 @@ final class RemoteServerBrowsingService {
     }
 
     func supportsStreamingOpen(for reference: RemoteComicFileReference) -> Bool {
+        guard reference.contentKind == .file else {
+            return false
+        }
+
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
         switch fileExtension {
         case "cbz", "zip":
@@ -803,6 +853,14 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         maxPixelSize: Int
     ) async -> UIImage? {
+        if reference.isImageDirectoryComic {
+            return await fetchDirectImageDirectoryThumbnail(
+                for: profile,
+                reference: reference,
+                maxPixelSize: maxPixelSize
+            )
+        }
+
         await thumbnailSemaphore.wait(priority: .utility)
         defer { Task { await thumbnailSemaphore.signal() } }
 
@@ -859,16 +917,19 @@ final class RemoteServerBrowsingService {
         }
     }
 
-    func classifyDirectoryEntry(
+    private func classifyDirectoryEntry(
         named name: String,
         fullPath: String,
         isDirectory: Bool,
         in profile: RemoteServerProfile,
         fileSize: Int64? = nil,
-        modifiedAt: Date? = nil
+        modifiedAt: Date? = nil,
+        imageComicInspection: RemoteImageComicDirectoryInspection? = nil
     ) -> RemoteDirectoryItem {
         let kind: RemoteDirectoryItemKind
-        if isDirectory {
+        if imageComicInspection != nil {
+            kind = .comicDirectory
+        } else if isDirectory {
             kind = .directory
         } else if supportsComicFile(named: name) {
             kind = .comicFile
@@ -884,8 +945,10 @@ final class RemoteServerBrowsingService {
             path: fullPath,
             name: name,
             kind: kind,
-            fileSize: fileSize,
-            modifiedAt: modifiedAt
+            fileSize: imageComicInspection == nil ? fileSize : nil,
+            modifiedAt: modifiedAt,
+            pageCountHint: imageComicInspection?.pageCount,
+            coverPath: imageComicInspection?.coverEntry?.fullPath
         )
     }
 
@@ -904,13 +967,221 @@ final class RemoteServerBrowsingService {
             path: item.path,
             fileName: item.name,
             fileSize: item.fileSize,
-            modifiedAt: item.modifiedAt
+            modifiedAt: item.modifiedAt,
+            contentKind: item.isComicDirectory ? .imageDirectory : .file,
+            pageCountHint: item.pageCountHint,
+            coverPath: item.coverPath
         )
     }
 
     func supportsComicFile(named fileName: String) -> Bool {
         let fileExtension = URL(fileURLWithPath: fileName).pathExtension.lowercased()
         return supportedComicFileExtensions.contains(fileExtension)
+    }
+
+    private func inspectSMBImageComicDirectory(
+        with client: SMBClient,
+        directoryPath: String
+    ) async throws -> RemoteImageComicDirectoryInspection? {
+        let entries = try await client.listDirectory(path: smbRelativePath(forDisplayPath: directoryPath))
+        let listedEntries = entries.compactMap { entry -> RemoteListedDirectoryEntry? in
+            guard !isSkippableDirectoryEntry(entry.name) else {
+                return nil
+            }
+
+            return RemoteListedDirectoryEntry(
+                name: entry.name,
+                fullPath: appendPathComponent(entry.name, to: directoryPath),
+                isDirectory: entry.isDirectory,
+                fileSize: Int64(clamping: entry.size),
+                modifiedAt: entry.lastWriteTime
+            )
+        }
+        return inspectImageComicDirectory(from: listedEntries)
+    }
+
+    private func inspectWebDAVImageComicDirectory(
+        for profile: RemoteServerProfile,
+        directoryPath: String
+    ) async throws -> RemoteImageComicDirectoryInspection? {
+        let directoryURL = try webDAVURL(
+            for: profile,
+            displayPath: directoryPath,
+            isDirectory: true
+        )
+        let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
+        let collectionRootPath = profile.webDAVBaseURL?.path ?? "/"
+        let entries = try await webDAVClient.listDirectory(
+            at: directoryURL,
+            authorizationHeader: authorizationHeader
+        )
+
+        let listedEntries = entries.compactMap { entry -> RemoteListedDirectoryEntry? in
+            guard let fullPath = displayPath(
+                forWebDAVEntryURL: entry.url,
+                collectionRootPath: collectionRootPath
+            ),
+            fullPath != normalizeDisplayPath(directoryPath) else {
+                return nil
+            }
+
+            return RemoteListedDirectoryEntry(
+                name: entry.name,
+                fullPath: fullPath,
+                isDirectory: entry.isDirectory,
+                fileSize: entry.fileSize,
+                modifiedAt: entry.modifiedAt
+            )
+        }
+
+        return inspectImageComicDirectory(from: listedEntries)
+    }
+
+    private func inspectImageComicDirectory(
+        from entries: [RemoteListedDirectoryEntry]
+    ) -> RemoteImageComicDirectoryInspection? {
+        let relevantEntries = entries.filter { !isSkippableImageComicEntry($0.name) }
+        guard !relevantEntries.isEmpty,
+              !relevantEntries.contains(where: \.isDirectory) else {
+            return nil
+        }
+
+        let regularEntries = relevantEntries.filter { !$0.isDirectory }
+        let pageEntries = regularEntries.filter { entry in
+            ComicPageNameSorter.isSupportedImagePath(entry.name)
+        }
+        guard !pageEntries.isEmpty else {
+            return nil
+        }
+
+        let relevantRegularEntries = regularEntries.filter { entry in
+            !Self.imageComicAuxiliaryFileNames.contains(entry.name.lowercased())
+        }
+        guard !relevantRegularEntries.isEmpty else {
+            return nil
+        }
+
+        let imageDominance = Double(pageEntries.count) / Double(relevantRegularEntries.count)
+        guard imageDominance >= 0.8 else {
+            return nil
+        }
+
+        let sortedPageNames = ComicPageNameSorter.sortedPageNames(pageEntries.map(\.name))
+        let pageEntriesByName = Dictionary(uniqueKeysWithValues: pageEntries.map { ($0.name, $0) })
+        let sortedPageEntries = sortedPageNames.compactMap { pageEntriesByName[$0] }
+        guard !sortedPageEntries.isEmpty else {
+            return nil
+        }
+
+        return RemoteImageComicDirectoryInspection(
+            pageEntries: sortedPageEntries,
+            regularEntries: regularEntries
+        )
+    }
+
+    private func isSkippableImageComicEntry(_ name: String) -> Bool {
+        isSkippableDirectoryEntry(name) || name.hasPrefix(".")
+    }
+
+    private func fetchDirectImageDirectoryThumbnail(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference,
+        maxPixelSize: Int
+    ) async -> UIImage? {
+        await thumbnailSemaphore.wait(priority: .utility)
+        defer { Task { await thumbnailSemaphore.signal() } }
+
+        let coverPath = await resolvedImageDirectoryCoverPath(for: profile, reference: reference)
+        guard let coverPath,
+              let imageData = await fetchRemoteImageData(
+                for: profile,
+                displayPath: coverPath
+              ) else {
+            return nil
+        }
+
+        return makeImageThumbnail(from: imageData, maxPixelSize: maxPixelSize)
+    }
+
+    private func resolvedImageDirectoryCoverPath(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference
+    ) async -> String? {
+        if let coverPath = reference.coverPath, !coverPath.isEmpty {
+            return coverPath
+        }
+
+        switch profile.providerKind {
+        case .smb:
+            return try? await withThumbnailSMBClient(for: profile) { client in
+                try await self.inspectSMBImageComicDirectory(
+                    with: client,
+                    directoryPath: reference.path
+                )?.coverEntry?.fullPath
+            }
+        case .webdav:
+            return try? await inspectWebDAVImageComicDirectory(
+                for: profile,
+                directoryPath: reference.path
+            )?.coverEntry?.fullPath
+        }
+    }
+
+    private func fetchRemoteImageData(
+        for profile: RemoteServerProfile,
+        displayPath: String
+    ) async -> Data? {
+        switch profile.providerKind {
+        case .smb:
+            return try? await withThumbnailSMBClient(for: profile) { client in
+                let reader = client.fileReader(path: smbRelativePath(forDisplayPath: displayPath))
+                do {
+                    let data = try await reader.download()
+                    try? await reader.close()
+                    return data
+                } catch {
+                    try? await reader.close()
+                    throw error
+                }
+            }
+        case .webdav:
+            guard let fileURL = try? webDAVURL(
+                for: profile,
+                displayPath: displayPath,
+                isDirectory: false
+            ),
+            let authorizationHeader = try? resolvedAuthorizationHeader(for: profile) else {
+                return nil
+            }
+            return try? await webDAVClient.downloadData(
+                from: fileURL,
+                authorizationHeader: authorizationHeader
+            )
+        }
+    }
+
+    private func makeImageThumbnail(from data: Data, maxPixelSize: Int) -> UIImage? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let imageSource = CGImageSourceCreateWithData(data as CFData, options) else {
+            return UIImage(data: data)
+        }
+
+        let thumbnailOptions: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
+            imageSource,
+            0,
+            thumbnailOptions as CFDictionary
+        ) else {
+            return UIImage(data: data)
+        }
+
+        return UIImage(cgImage: cgImage)
     }
 
     private func withConnectedSMBClient<T>(
@@ -1025,59 +1296,33 @@ final class RemoteServerBrowsingService {
         progressHandler: @escaping @Sendable (Int, String?) -> Void
     ) async throws -> [RemoteDirectoryItem] {
         try Task.checkCancellation()
-        let shareRelativePath = smbRelativePath(forDisplayPath: displayPath)
-
-        let entries: [File]
-        do {
-            entries = try await client.listDirectory(path: shareRelativePath)
-        } catch {
-            throw normalizeBrowsingError(
-                error,
-                profile: profile,
-                remotePath: displayPath.isEmpty ? profile.connectionDisplayPath : displayPath
-            )
-        }
-
-        var comicFiles: [RemoteDirectoryItem] = []
+        let entries = try await listDirectory(for: profile, path: displayPath)
+        var comicItems: [RemoteDirectoryItem] = []
 
         for entry in entries {
             try Task.checkCancellation()
-            guard !isSkippableDirectoryEntry(entry.name) else {
-                continue
-            }
-
-            let fullPath = appendPathComponent(entry.name, to: displayPath)
             if entry.isDirectory {
                 let nestedComicFiles = try await recursivelyListComicFiles(
                     with: client,
                     for: profile,
-                    displayPath: fullPath,
+                    displayPath: entry.path,
                     progressState: progressState,
                     progressHandler: progressHandler
                 )
-                comicFiles.append(contentsOf: nestedComicFiles)
+                comicItems.append(contentsOf: nestedComicFiles)
                 continue
             }
 
-            guard supportsComicFile(named: entry.name) else {
+            guard entry.canOpenAsComic else {
                 continue
             }
 
             progressState.discoveredComicCount += 1
-            progressHandler(progressState.discoveredComicCount, fullPath)
-            comicFiles.append(
-                classifyDirectoryEntry(
-                    named: entry.name,
-                    fullPath: fullPath,
-                    isDirectory: false,
-                    in: profile,
-                    fileSize: Int64(clamping: entry.size),
-                    modifiedAt: entry.lastWriteTime
-                )
-            )
+            progressHandler(progressState.discoveredComicCount, entry.path)
+            comicItems.append(entry)
         }
 
-        return comicFiles
+        return comicItems
     }
 
     private func recursivelyListComicFiles(
@@ -1085,52 +1330,8 @@ final class RemoteServerBrowsingService {
         directoryPath: String
     ) async throws -> [RemoteDirectoryItem] {
         try Task.checkCancellation()
-        let requestedPath = normalizeDisplayPath(directoryPath)
-        let directoryURL = try webDAVURL(
-            for: profile,
-            displayPath: requestedPath,
-            isDirectory: true
-        )
-        let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
-        let collectionRootPath = profile.webDAVBaseURL?.path ?? "/"
-
-        do {
-            let entries = try await webDAVClient.listDirectoryRecursively(
-                at: directoryURL,
-                authorizationHeader: authorizationHeader
-            )
-
-            return entries.compactMap { entry in
-                guard let fullPath = displayPath(
-                    forWebDAVEntryURL: entry.url,
-                    collectionRootPath: collectionRootPath
-                ),
-                fullPath != requestedPath,
-                supportsComicFile(named: entry.name),
-                !entry.isDirectory else {
-                    return nil
-                }
-
-                return classifyDirectoryEntry(
-                    named: entry.name,
-                    fullPath: fullPath,
-                    isDirectory: false,
-                    in: profile,
-                    fileSize: entry.fileSize,
-                    modifiedAt: entry.modifiedAt
-                )
-            }
-        } catch let error as RemoteWebDAVClientError {
-            switch error {
-            case .authenticationFailed, .remotePathUnavailable, .connectionFailed:
-                throw normalizeBrowsingError(error, profile: profile, remotePath: directoryPath)
-            case .accessDenied, .invalidResponse, .unsupportedResponse:
-                break
-            }
-        }
-
         let entries = try await listDirectory(for: profile, path: directoryPath)
-        var comicFiles: [RemoteDirectoryItem] = []
+        var comicItems: [RemoteDirectoryItem] = []
 
         for entry in entries {
             try Task.checkCancellation()
@@ -1139,7 +1340,7 @@ final class RemoteServerBrowsingService {
                     forWebDAVProfile: profile,
                     directoryPath: entry.path
                 )
-                comicFiles.append(contentsOf: nestedComicFiles)
+                comicItems.append(contentsOf: nestedComicFiles)
                 continue
             }
 
@@ -1147,10 +1348,10 @@ final class RemoteServerBrowsingService {
                 continue
             }
 
-            comicFiles.append(entry)
+            comicItems.append(entry)
         }
 
-        return comicFiles
+        return comicItems
     }
 
     private func resolvedCredentials(
@@ -1317,7 +1518,10 @@ final class RemoteServerBrowsingService {
             .filter { $0 != ".." && $0 != "." && !$0.isEmpty }
 
         if components.isEmpty {
-            return destinationURL.appendingPathComponent(reference.fileName, isDirectory: false)
+            return destinationURL.appendingPathComponent(
+                reference.fileName,
+                isDirectory: reference.isImageDirectoryComic
+            )
         }
 
         for component in components.dropLast() {
@@ -1326,7 +1530,7 @@ final class RemoteServerBrowsingService {
 
         return destinationURL.appendingPathComponent(
             components.last ?? reference.fileName,
-            isDirectory: false
+            isDirectory: reference.isImageDirectoryComic
         )
     }
 
@@ -1393,8 +1597,19 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         forceRefresh: Bool,
         trimCacheAfterDownload: Bool,
+        progressHandler: @escaping @Sendable (Double) -> Void,
         downloader: (URL, UInt64) async throws -> Void
     ) async throws -> RemoteComicDownloadResult {
+        if reference.isImageDirectoryComic {
+            return try await downloadImageDirectoryComicCore(
+                for: profile,
+                reference: reference,
+                forceRefresh: forceRefresh,
+                trimCacheAfterDownload: trimCacheAfterDownload,
+                progressHandler: progressHandler
+            )
+        }
+
         let destinationURL = cachedFileURL(for: reference)
         if !forceRefresh,
            let currentCachedFileURL = currentCachedFileURL(for: reference) {
@@ -1446,6 +1661,184 @@ final class RemoteServerBrowsingService {
                 remotePath: reference.path
             )
         }
+    }
+
+    private func downloadImageDirectoryComicCore(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference,
+        forceRefresh: Bool,
+        trimCacheAfterDownload: Bool,
+        progressHandler: @escaping @Sendable (Double) -> Void
+    ) async throws -> RemoteComicDownloadResult {
+        let destinationURL = cachedFileURL(for: reference)
+        if !forceRefresh,
+           let currentCachedFileURL = currentCachedFileURL(for: reference) {
+            touchCachedFile(at: currentCachedFileURL)
+            return RemoteComicDownloadResult(localFileURL: currentCachedFileURL, source: .cachedCurrent)
+        }
+
+        let temporaryDirectoryURL = temporaryDownloadURL(for: destinationURL)
+
+        do {
+            if fileManager.fileExists(atPath: temporaryDirectoryURL.path) {
+                try fileManager.removeItem(at: temporaryDirectoryURL)
+            }
+
+            try fileManager.createDirectory(
+                at: temporaryDirectoryURL,
+                withIntermediateDirectories: true
+            )
+
+            let inspection = try await imageDirectoryInspection(
+                for: profile,
+                reference: reference
+            )
+
+            let totalUnits = max(inspection.regularEntries.count, 1)
+            var completedUnits = 0
+            progressHandler(0)
+
+            for entry in inspection.regularEntries {
+                let completedUnitsBeforeDownload = completedUnits
+                let localURL = temporaryDirectoryURL.appendingPathComponent(
+                    entry.name,
+                    isDirectory: false
+                )
+                try await downloadRemoteRegularFile(
+                    for: profile,
+                    remotePath: entry.fullPath,
+                    to: localURL
+                ) { fraction in
+                    let normalizedFraction = min(max(fraction, 0), 1)
+                    let aggregateProgress = (Double(completedUnitsBeforeDownload) + normalizedFraction) / Double(totalUnits)
+                    progressHandler(aggregateProgress)
+                }
+                completedUnits += 1
+                progressHandler(Double(completedUnits) / Double(totalUnits))
+            }
+
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+            try fileManager.moveItem(at: temporaryDirectoryURL, to: destinationURL)
+
+            let cachedBytes = try totalFileBytes(in: destinationURL)
+            try? storeCachedMetadata(
+                for: reference,
+                at: destinationURL,
+                cachedByteCount: cachedBytes
+            )
+            touchCachedFile(at: destinationURL)
+            if trimCacheAfterDownload {
+                try? trimCacheIfNeeded()
+            }
+            invalidateCachedSummaries()
+            progressHandler(1.0)
+
+            return RemoteComicDownloadResult(localFileURL: destinationURL, source: .downloaded)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if fileManager.fileExists(atPath: temporaryDirectoryURL.path) {
+                try? fileManager.removeItem(at: temporaryDirectoryURL)
+            }
+
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                touchCachedFile(at: destinationURL)
+                return RemoteComicDownloadResult(
+                    localFileURL: destinationURL,
+                    source: .cachedFallback(cachedFallbackMessage(for: error, profile: profile))
+                )
+            }
+
+            throw normalizeBrowsingError(
+                error,
+                profile: profile,
+                remotePath: reference.path
+            )
+        }
+    }
+
+    private func imageDirectoryInspection(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference
+    ) async throws -> RemoteImageComicDirectoryInspection {
+        switch profile.providerKind {
+        case .smb:
+            return try await withConnectedSMBClient(for: profile, priority: .utility) { client in
+                guard let inspection = try await self.inspectSMBImageComicDirectory(
+                    with: client,
+                    directoryPath: reference.path
+                ) else {
+                    throw RemoteServerBrowsingError.unsupportedComicFile(reference.fileName)
+                }
+                return inspection
+            }
+        case .webdav:
+            guard let inspection = try await inspectWebDAVImageComicDirectory(
+                for: profile,
+                directoryPath: reference.path
+            ) else {
+                throw RemoteServerBrowsingError.unsupportedComicFile(reference.fileName)
+            }
+            return inspection
+        }
+    }
+
+    private func downloadRemoteRegularFile(
+        for profile: RemoteServerProfile,
+        remotePath: String,
+        to localURL: URL,
+        progressHandler: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        switch profile.providerKind {
+        case .smb:
+            try await withConnectedSMBClient(for: profile, priority: .utility) { client in
+                let reader = client.fileReader(path: smbRelativePath(forDisplayPath: remotePath))
+                do {
+                    try await reader.download(to: localURL, overwrite: true) { progress in
+                        progressHandler(progress)
+                    }
+                    try? await reader.close()
+                } catch {
+                    try? await reader.close()
+                    throw error
+                }
+            }
+        case .webdav:
+            let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
+            let fileURL = try webDAVURL(
+                for: profile,
+                displayPath: remotePath,
+                isDirectory: false
+            )
+            try await webDAVClient.download(
+                from: fileURL,
+                authorizationHeader: authorizationHeader,
+                to: localURL
+            )
+            progressHandler(1.0)
+        }
+    }
+
+    private func totalFileBytes(in directoryURL: URL) throws -> Int64 {
+        guard let enumerator = fileManager.enumerator(
+            at: directoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+
+        var totalBytes: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            guard values?.isRegularFile == true else {
+                continue
+            }
+            totalBytes += Int64(values?.fileSize ?? 0)
+        }
+        return totalBytes
     }
 
     private func batchDownloadOutcome(
@@ -1526,6 +1919,10 @@ final class RemoteServerBrowsingService {
         }
 
         if let metadata = loadCachedMetadata(at: fileURL) {
+            if metadata.contentKind != reference.contentKind {
+                return false
+            }
+
             if let referenceCacheScopeKey = reference.cacheScopeKey {
                 if let metadataCacheScopeKey = metadata.cacheScopeKey,
                    metadataCacheScopeKey != referenceCacheScopeKey {
@@ -1549,6 +1946,10 @@ final class RemoteServerBrowsingService {
             }
         }
 
+        if reference.isImageDirectoryComic {
+            return false
+        }
+
         guard let expectedFileSize = reference.fileSize else {
             return true
         }
@@ -1565,10 +1966,35 @@ final class RemoteServerBrowsingService {
         }
     }
 
-    private func anyCachedFileURL(for reference: RemoteComicFileReference) -> URL? {
+    private func anyCompatibleCachedFileURL(for reference: RemoteComicFileReference) -> URL? {
         cachedFileCandidateURLs(for: reference).first { candidateURL in
-            fileManager.fileExists(atPath: candidateURL.path)
+            isCompatibleCachedComic(at: candidateURL, reference: reference)
         }
+    }
+
+    private func isCompatibleCachedComic(
+        at fileURL: URL,
+        reference: RemoteComicFileReference
+    ) -> Bool {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return false
+        }
+
+        if let metadata = loadCachedMetadata(at: fileURL) {
+            guard metadata.contentKind == reference.contentKind else {
+                return false
+            }
+
+            if let referenceCacheScopeKey = reference.cacheScopeKey,
+               let metadataCacheScopeKey = metadata.cacheScopeKey,
+               metadataCacheScopeKey != referenceCacheScopeKey {
+                return false
+            }
+
+            return true
+        }
+
+        return !reference.isImageDirectoryComic
     }
 
     private func cacheRootURL(for profile: RemoteServerProfile?) -> URL {
@@ -1650,12 +2076,15 @@ final class RemoteServerBrowsingService {
 
     private func storeCachedMetadata(
         for reference: RemoteComicFileReference,
-        at fileURL: URL
+        at fileURL: URL,
+        cachedByteCount: Int64? = nil
     ) throws {
         let metadata = CachedRemoteComicMetadata(
             cacheScopeKey: reference.cacheScopeKey,
             fileSize: reference.fileSize,
-            modifiedAt: reference.modifiedAt
+            modifiedAt: reference.modifiedAt,
+            contentKind: reference.contentKind,
+            cachedByteCount: cachedByteCount
         )
         let data = try JSONEncoder().encode(metadata)
         try data.write(to: cachedMetadataURL(for: fileURL), options: .atomic)
@@ -1700,52 +2129,22 @@ final class RemoteServerBrowsingService {
 
         let cachePolicy = cachePolicyStore.loadPolicy()
 
-        guard let enumerator = fileManager.enumerator(
-            at: remoteComicCacheRootURL,
-            includingPropertiesForKeys: [
-                .isRegularFileKey,
-                .fileSizeKey,
-                .contentModificationDateKey
-            ],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return
+        let cachedResources = enumerateCachedComicResources(in: remoteComicCacheRootURL)
+        let totalBytes = cachedResources.reduce(into: Int64.zero) { partialResult, resource in
+            partialResult += resource.size
         }
 
-        var cachedFiles: [CachedComicFileRecord] = []
-        var totalBytes: Int64 = 0
-
-        for case let fileURL as URL in enumerator {
-            let values = try? fileURL.resourceValues(
-                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
-            )
-            guard values?.isRegularFile == true,
-                  !isCacheAuxiliaryFile(fileURL) else {
-                continue
-            }
-
-            let size = Int64(values?.fileSize ?? 0)
-            totalBytes += size
-            cachedFiles.append(
-                CachedComicFileRecord(
-                    url: fileURL,
-                    size: size,
-                    lastAccessDate: values?.contentModificationDate ?? .distantPast
-                )
-            )
-        }
-
-        guard cachedFiles.count > cachePolicy.maximumCachedComicFileCount
+        guard cachedResources.count > cachePolicy.maximumCachedComicFileCount
                 || totalBytes > cachePolicy.maximumTotalCacheBytes
         else {
             return
         }
 
-        let evictionCandidates = cachedFiles.sorted { lhs, rhs in
+        let evictionCandidates = cachedResources.sorted { lhs, rhs in
             lhs.lastAccessDate < rhs.lastAccessDate
         }
 
-        var remainingFileCount = cachedFiles.count
+        var remainingFileCount = cachedResources.count
         var remainingBytes = totalBytes
 
         for candidate in evictionCandidates {
@@ -1756,8 +2155,12 @@ final class RemoteServerBrowsingService {
             }
 
             do {
-                try fileManager.removeItem(at: candidate.url)
-                try? removeCachedMetadata(for: candidate.url)
+                try fileManager.removeItem(at: candidate.resourceURL)
+                try? removeCachedMetadata(for: candidate.resourceURL)
+                try? removeEmptyParentDirectories(
+                    from: candidate.resourceURL.deletingLastPathComponent(),
+                    stoppingAt: remoteComicCacheRootURL
+                )
                 remainingFileCount -= 1
                 remainingBytes -= candidate.size
             } catch {
@@ -1812,7 +2215,9 @@ final class RemoteServerBrowsingService {
         let metadata = CachedRemoteComicMetadata(
             cacheScopeKey: reference.cacheScopeKey,
             fileSize: reference.fileSize,
-            modifiedAt: reference.modifiedAt
+            modifiedAt: reference.modifiedAt,
+            contentKind: reference.contentKind,
+            cachedByteCount: nil
         )
         let data = try JSONEncoder().encode(metadata)
         try data.write(to: partialDownloadMetadataURL(for: temporaryDownloadURL), options: .atomic)
@@ -1868,6 +2273,10 @@ final class RemoteServerBrowsingService {
         _ metadata: CachedRemoteComicMetadata,
         reference: RemoteComicFileReference
     ) -> Bool {
+        if metadata.contentKind != reference.contentKind {
+            return false
+        }
+
         if let referenceCacheScopeKey = reference.cacheScopeKey,
            let metadataCacheScopeKey = metadata.cacheScopeKey,
            metadataCacheScopeKey != referenceCacheScopeKey {
@@ -1894,6 +2303,58 @@ final class RemoteServerBrowsingService {
         }
 
         return metadata.fileSize == nil && metadata.modifiedAt == nil
+    }
+
+    private func enumerateCachedComicResources(in rootURL: URL) -> [CachedComicResourceRecord] {
+        guard let enumerator = fileManager.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .contentModificationDateKey
+            ],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var resources: [CachedComicResourceRecord] = []
+        resources.reserveCapacity(128)
+
+        for case let candidateURL as URL in enumerator {
+            let values = try? candidateURL.resourceValues(forKeys: [.isRegularFileKey])
+            guard values?.isRegularFile == true,
+                  isCachedMetadataSidecar(candidateURL) else {
+                continue
+            }
+
+            let resourceURL = candidateURL.deletingPathExtension()
+            guard fileManager.fileExists(atPath: resourceURL.path) else {
+                continue
+            }
+
+            let metadata = (try? Data(contentsOf: candidateURL))
+                .flatMap { try? JSONDecoder().decode(CachedRemoteComicMetadata.self, from: $0) }
+            let size = metadata?.cachedByteCount ?? cachedResourceByteCount(at: resourceURL)
+            let resourceValues = try? resourceURL.resourceValues(forKeys: [.contentModificationDateKey])
+
+            resources.append(
+                CachedComicResourceRecord(
+                    resourceURL: resourceURL,
+                    size: size,
+                    lastAccessDate: resourceValues?.contentModificationDate ?? .distantPast
+                )
+            )
+        }
+
+        return resources
+    }
+
+    private func cachedResourceByteCount(at resourceURL: URL) -> Int64 {
+        let values = try? resourceURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
+        if values?.isDirectory == true {
+            return (try? totalFileBytes(in: resourceURL)) ?? 0
+        }
+        return Int64(values?.fileSize ?? 0)
     }
 
     private func downloadRemoteFile(
@@ -2085,8 +2546,8 @@ final class RemoteServerBrowsingService {
     }
 }
 
-private struct CachedComicFileRecord {
-    let url: URL
+private struct CachedComicResourceRecord {
+    let resourceURL: URL
     let size: Int64
     let lastAccessDate: Date
 }
@@ -2099,4 +2560,37 @@ private struct CachedRemoteComicMetadata: Codable {
     let cacheScopeKey: String?
     let fileSize: Int64?
     let modifiedAt: Date?
+    let contentKind: RemoteComicReferenceKind
+    let cachedByteCount: Int64?
+
+    private enum CodingKeys: String, CodingKey {
+        case cacheScopeKey
+        case fileSize
+        case modifiedAt
+        case contentKind
+        case cachedByteCount
+    }
+
+    init(
+        cacheScopeKey: String?,
+        fileSize: Int64?,
+        modifiedAt: Date?,
+        contentKind: RemoteComicReferenceKind,
+        cachedByteCount: Int64?
+    ) {
+        self.cacheScopeKey = cacheScopeKey
+        self.fileSize = fileSize
+        self.modifiedAt = modifiedAt
+        self.contentKind = contentKind
+        self.cachedByteCount = cachedByteCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cacheScopeKey = try container.decodeIfPresent(String.self, forKey: .cacheScopeKey)
+        fileSize = try container.decodeIfPresent(Int64.self, forKey: .fileSize)
+        modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt)
+        contentKind = try container.decodeIfPresent(RemoteComicReferenceKind.self, forKey: .contentKind) ?? .file
+        cachedByteCount = try container.decodeIfPresent(Int64.self, forKey: .cachedByteCount)
+    }
 }

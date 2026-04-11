@@ -3,7 +3,13 @@ import Foundation
 enum RemoteDirectoryItemKind: String, Hashable {
     case directory
     case comicFile
+    case comicDirectory
     case unsupportedFile
+}
+
+enum RemoteComicReferenceKind: String, Codable, Hashable {
+    case file
+    case imageDirectory
 }
 
 struct RemoteDirectoryItem: Identifiable, Hashable {
@@ -16,17 +22,34 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
     let kind: RemoteDirectoryItemKind
     let fileSize: Int64?
     let modifiedAt: Date?
+    let pageCountHint: Int?
+    let coverPath: String?
 
-    var id: String {
+    nonisolated var id: String {
         "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey)|\(path)"
     }
 
-    var isDirectory: Bool {
+    nonisolated var isDirectory: Bool {
         kind == .directory
     }
 
-    var canOpenAsComic: Bool {
-        kind == .comicFile
+    nonisolated var isComicDirectory: Bool {
+        kind == .comicDirectory
+    }
+
+    nonisolated var canOpenAsComic: Bool {
+        kind == .comicFile || kind == .comicDirectory
+    }
+
+    nonisolated var comicReferenceKind: RemoteComicReferenceKind? {
+        switch kind {
+        case .comicFile:
+            return .file
+        case .comicDirectory:
+            return .imageDirectory
+        case .directory, .unsupportedFile:
+            return nil
+        }
     }
 
     nonisolated var fileExtension: String {
@@ -34,7 +57,7 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
     }
 
     nonisolated var isPDFDocument: Bool {
-        fileExtension == "pdf"
+        !isComicDirectory && fileExtension == "pdf"
     }
 }
 
@@ -47,9 +70,16 @@ struct RemoteComicFileReference: Identifiable, Hashable {
     let fileName: String
     let fileSize: Int64?
     let modifiedAt: Date?
+    let contentKind: RemoteComicReferenceKind
+    let pageCountHint: Int?
+    let coverPath: String?
 
-    var id: String {
-        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey ?? "legacy")|\(path)"
+    nonisolated var id: String {
+        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey ?? "legacy")|\(contentKind.rawValue)|\(path)"
+    }
+
+    nonisolated var isImageDirectoryComic: Bool {
+        contentKind == .imageDirectory
     }
 
     nonisolated var fileExtension: String {
@@ -57,6 +87,6 @@ struct RemoteComicFileReference: Identifiable, Hashable {
     }
 
     nonisolated var isPDFDocument: Bool {
-        fileExtension == "pdf"
+        contentKind == .file && fileExtension == "pdf"
     }
 }

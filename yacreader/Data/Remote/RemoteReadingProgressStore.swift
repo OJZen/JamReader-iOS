@@ -59,6 +59,7 @@ final class RemoteReadingProgressStore {
             cacheScopeKey: reference.cacheScopeKey ?? profile.remoteCacheScopeKey,
             path: reference.path,
             fileName: reference.fileName,
+            contentKind: reference.contentKind,
             pageCount: progress.pageCount,
             currentPage: progress.currentPage,
             hasBeenOpened: progress.hasBeenOpened,

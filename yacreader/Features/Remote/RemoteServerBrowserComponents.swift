@@ -107,6 +107,16 @@ struct RemoteDirectoryItemListRow: View {
             return items
         }
 
+        if item.isComicDirectory {
+            items.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "photo.on.rectangle",
+                    text: item.pageCountHint.map { "\($0) pages" } ?? "Image folder comic",
+                    tint: .secondary
+                )
+            )
+        }
+
         if let readingSession {
             items.append(
                 RemoteInlineMetadataItem(
@@ -142,8 +152,8 @@ struct RemoteDirectoryItemListRow: View {
         } else {
             items.append(
                 RemoteInlineMetadataItem(
-                    systemImage: item.canOpenAsComic ? "book.closed" : "doc",
-                    text: item.canOpenAsComic ? "Comic file" : "Remote file",
+                    systemImage: item.isComicDirectory ? "photo.on.rectangle" : (item.canOpenAsComic ? "book.closed" : "doc"),
+                    text: item.isComicDirectory ? "Image folder comic" : (item.canOpenAsComic ? "Comic file" : "Remote file"),
                     tint: .secondary
                 )
             )
@@ -395,6 +405,16 @@ private struct RemoteDirectoryItemPresentation {
         let supportingText: String
         let supportingSystemImage: String
 
+        if item.isComicDirectory, let pageCountHint = item.pageCountHint {
+            metadataItems.append(
+                RemoteInlineMetadataItem(
+                    systemImage: "photo.on.rectangle",
+                    text: "\(pageCountHint) pages",
+                    tint: .secondary
+                )
+            )
+        }
+
         if let readingSession {
             metadataItems.append(
                 RemoteInlineMetadataItem(
@@ -440,8 +460,10 @@ private struct RemoteDirectoryItemPresentation {
         if overviewSegments.isEmpty {
             if item.isDirectory {
                 supportingText = "Browse this folder"
+            } else if item.isComicDirectory {
+                supportingText = item.pageCountHint.map { "\($0) image pages" } ?? "Image folder comic"
             } else if item.canOpenAsComic {
-                supportingText = "Open comic file"
+                supportingText = "Open comic"
             } else {
                 supportingText = "Remote file"
             }
@@ -452,6 +474,8 @@ private struct RemoteDirectoryItemPresentation {
 
         if item.isDirectory {
             supportingSystemImage = "folder.fill"
+        } else if item.isComicDirectory {
+            supportingSystemImage = "photo.on.rectangle.fill"
         } else if item.canOpenAsComic {
             supportingSystemImage = "book.closed.fill"
         } else {

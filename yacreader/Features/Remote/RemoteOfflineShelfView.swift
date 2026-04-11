@@ -168,7 +168,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         await activeOperation {
             let result = try await remoteServerBrowsingService.downloadComicFile(
                 for: entry.profile,
-                reference: entry.session.comicFileReference,
+                reference: entry.session.resolvedComicFileReference(for: entry.profile),
                 forceRefresh: true
             )
             try rebuildEntries(forceRefresh: true)
@@ -186,7 +186,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         feedback = nil
 
         do {
-            try remoteServerBrowsingService.clearCachedComic(for: entry.session.comicFileReference)
+            try remoteServerBrowsingService.clearCachedComic(
+                for: entry.session.resolvedComicFileReference(for: entry.profile)
+            )
             try rebuildEntries(forceRefresh: true)
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Removed",
@@ -498,7 +500,8 @@ struct RemoteOfflineShelfView: View {
                 profile: entry.profile,
                 item: entry.session.directoryItem,
                 dependencies: dependencies,
-                openMode: .preferLocalCache
+                openMode: .preferLocalCache,
+                referenceOverride: entry.session.resolvedComicFileReference(for: entry.profile)
             )
         }
     }

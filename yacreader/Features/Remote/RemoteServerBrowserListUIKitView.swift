@@ -450,6 +450,15 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                     }
                 )
 
+                actions.append(
+                    UIAction(
+                        title: "Import",
+                        image: UIImage(systemName: "square.and.arrow.down")
+                    ) { [weak self] _ in
+                        self?.onImport(row.item)
+                    }
+                )
+
                 if row.cacheAvailability.hasLocalCopy {
                     actions.append(
                         UIAction(
@@ -1034,7 +1043,13 @@ private final class RemoteBrowserListCell: UITableViewCell {
         }
 
         var parts: [String] = []
-        if let fileSize = row.item.fileSize {
+        if row.item.isComicDirectory {
+            if let pageCountHint = row.item.pageCountHint {
+                parts.append("\(pageCountHint) pages")
+            } else {
+                parts.append("Image folder comic")
+            }
+        } else if let fileSize = row.item.fileSize {
             parts.append(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
         } else {
             parts.append(row.item.canOpenAsComic ? "Comic file" : "Remote file")

@@ -276,7 +276,8 @@ struct RemoteServerBrowserView: View {
                 profile: viewModel.profile,
                 item: open.item,
                 dependencies: dependencies,
-                openMode: open.mode
+                openMode: open.mode,
+                referenceOverride: open.referenceOverride
             )
         }
     }
@@ -679,8 +680,7 @@ struct RemoteServerBrowserView: View {
            let loadIssue = viewModel.loadIssue,
            loadIssue.allowsOfflineRecovery {
             HeroTapButton { frame in
-                prepareHeroTransition(for: recoverySession.directoryItem, fallbackFrame: frame)
-                openPrimaryAction(for: recoverySession.directoryItem)
+                openRecoverySession(recoverySession, fallbackFrame: frame)
             } label: {
                 Label("Open Last Comic", systemImage: "book.closed")
             }
@@ -1200,7 +1200,7 @@ struct RemoteServerBrowserView: View {
             sections.append(
                 RemoteBrowserListSectionModel(
                     kind: .comics,
-                    title: trimmedSearchText.isEmpty ? "Comic Files" : "Matching Comics",
+                    title: trimmedSearchText.isEmpty ? "Comics" : "Matching Comics",
                     metadataText: comicMetadata.isEmpty ? nil : comicMetadata,
                     footerText: nil,
                     items: snapshot.comicFiles.map {
@@ -1282,6 +1282,19 @@ struct RemoteServerBrowserView: View {
         }
     }
 
+    private func openRecoverySession(
+        _ session: RemoteComicReadingSession,
+        fallbackFrame: CGRect
+    ) {
+        let item = matchingBrowserItem(for: session) ?? session.directoryItem
+        prepareHeroTransition(for: item, fallbackFrame: fallbackFrame)
+        presentedComicItem = RemoteComicOpenItem(
+            item: item,
+            mode: .automatic,
+            referenceOverride: session.resolvedComicFileReference(for: viewModel.profile)
+        )
+    }
+
     private func openOfflineCopy(for item: RemoteDirectoryItem) {
         guard item.canOpenAsComic else {
             return
@@ -1300,6 +1313,16 @@ struct RemoteServerBrowserView: View {
             for: item,
             browsingService: dependencies.remoteServerBrowsingService
         )
+    }
+
+    private func matchingBrowserItem(for session: RemoteComicReadingSession) -> RemoteDirectoryItem? {
+        viewModel.items.first { item in
+            item.serverID == session.serverID
+                && item.providerKind == session.providerKind
+                && item.shareName == session.shareName
+                && item.path == session.path
+                && item.comicReferenceKind == session.contentKind
+        }
     }
 
     private func browserInfoSheet(for item: RemoteDirectoryItem) -> some View {
@@ -1612,11 +1635,18 @@ struct RemoteComicOpenItem: Identifiable {
     let id: String
     let item: RemoteDirectoryItem
     let mode: RemoteComicOpenMode
+    let referenceOverride: RemoteComicFileReference?
 
-    init(item: RemoteDirectoryItem, mode: RemoteComicOpenMode) {
+    init(
+        item: RemoteDirectoryItem,
+        mode: RemoteComicOpenMode,
+        referenceOverride: RemoteComicFileReference? = nil
+    ) {
         self.item = item
         self.mode = mode
-        self.id = "\(item.id):\(mode == .automatic ? "auto" : "offline")"
+        self.referenceOverride = referenceOverride
+        let referenceID = referenceOverride?.id ?? item.id
+        self.id = "\(referenceID):\(mode == .automatic ? "auto" : "offline")"
     }
 }
 
@@ -1756,7 +1786,7 @@ struct RemoteBrowserDisplaySnapshot: Equatable {
                 using: sortMode
             ),
             comicFiles: sortItems(
-                filteredItems.filter { $0.kind == .comicFile },
+                filteredItems.filter { $0.canOpenAsComic },
                 using: sortMode
             ),
             unsupportedFileCount: filteredItems.reduce(into: 0) { count, item in

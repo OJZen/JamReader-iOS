@@ -64,13 +64,15 @@ struct RemoteComicLoadingView: View {
         profile: RemoteServerProfile,
         item: RemoteDirectoryItem,
         dependencies: AppDependencies,
-        openMode: RemoteComicOpenMode = .automatic
+        openMode: RemoteComicOpenMode = .automatic,
+        referenceOverride: RemoteComicFileReference? = nil
     ) {
         self.profile = profile
         self.item = item
         self.dependencies = dependencies
         self.openMode = openMode
-        self.reference = try? dependencies.remoteServerBrowsingService.makeComicFileReference(from: item)
+        self.reference = referenceOverride
+            ?? (try? dependencies.remoteServerBrowsingService.makeComicFileReference(from: item))
     }
 
     var body: some View {
@@ -714,7 +716,9 @@ struct RemoteComicReaderView: View {
                 capabilities: ReaderControlsCapabilities(
                     supportsImageLayoutControls: supportsImageLayoutControls,
                     supportsDoublePageSpread: supportsDoublePageSpread,
-                    supportsRotationControls: supportsRotationControls
+                    supportsRotationControls: supportsRotationControls,
+                    supportsPageNavigation: document?.pageCount != nil,
+                    supportsBookmarks: document?.pageCount != nil
                 ),
                 actions: ReaderControlsActions(
                     onDone: { isShowingReaderControls = false },
@@ -798,11 +802,12 @@ struct RemoteComicReaderView: View {
     }
 
     private var supportsRotationControls: Bool {
-        guard document != nil else {
+        switch document {
+        case .pdf?, .imageSequence?:
+            return effectiveReaderLayout.pagingMode != .verticalContinuous
+        case .ebook?, .unsupported?, nil:
             return false
         }
-
-        return effectiveReaderLayout.pagingMode != .verticalContinuous
     }
 
     private var currentPageIsBookmarked: Bool {
@@ -1237,15 +1242,14 @@ struct RemoteComicReaderView: View {
     }
 
     private func persistProgress(force: Bool = false) {
-        guard let pageCount = document?.pageCount else {
+        guard let document else {
+            return
+        }
+        if case .unsupported = document {
             return
         }
 
-        let requestedSnapshot = ReaderProgressFactory.snapshot(
-            pageIndex: currentPageIndex,
-            pageCount: pageCount,
-            bookmarkPageIndices: bookmarkPageIndices
-        )
+        let requestedSnapshot = progressSnapshot(for: document)
         if !force, lastPersistedProgressSnapshot == requestedSnapshot {
             return
         }
@@ -1253,7 +1257,7 @@ struct RemoteComicReaderView: View {
         pendingProgressPersistenceTask?.cancel()
 
         if force {
-            writeProgress(for: requestedSnapshot, pageCount: pageCount)
+            writeProgress(for: requestedSnapshot, document: document)
             return
         }
 
@@ -1265,23 +1269,20 @@ struct RemoteComicReaderView: View {
             }
 
             await MainActor.run {
-                writeProgress(for: requestedSnapshot, pageCount: pageCount)
+                writeProgress(for: requestedSnapshot, document: document)
             }
         }
     }
 
     private func writeProgress(
         for snapshot: ReaderProgressPersistenceSnapshot,
-        pageCount: Int
+        document: ComicDocument
     ) {
         guard lastPersistedProgressSnapshot != snapshot else {
             return
         }
 
-        let progress = ReaderProgressFactory.progress(
-            forPageIndex: snapshot.pageIndex,
-            pageCount: pageCount
-        )
+        let progress = readingProgress(for: snapshot, document: document)
 
         do {
             try dependencies.remoteReadingProgressStore.saveProgress(
@@ -1296,6 +1297,34 @@ struct RemoteComicReaderView: View {
                 title: "Failed to Save Remote Progress",
                 message: error.userFacingMessage
             )
+        }
+    }
+
+    private func progressSnapshot(for document: ComicDocument) -> ReaderProgressPersistenceSnapshot {
+        let snapshotPageCount = max(document.pageCount ?? 1, 1)
+        return ReaderProgressFactory.snapshot(
+            pageIndex: currentPageIndex,
+            pageCount: snapshotPageCount,
+            bookmarkPageIndices: bookmarkPageIndices
+        )
+    }
+
+    private func readingProgress(
+        for snapshot: ReaderProgressPersistenceSnapshot,
+        document: ComicDocument
+    ) -> ComicReadingProgress {
+        switch document {
+        case .ebook:
+            return ReaderProgressFactory.nonPaginatedProgress(
+                currentPosition: max(snapshot.pageIndex + 1, 1)
+            )
+        case .pdf, .imageSequence:
+            return ReaderProgressFactory.progress(
+                forPageIndex: snapshot.pageIndex,
+                pageCount: max(document.pageCount ?? 1, 1)
+            )
+        case .unsupported:
+            return ReaderProgressFactory.nonPaginatedProgress()
         }
     }
 

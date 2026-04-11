@@ -189,7 +189,11 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     var offlineRecoverySessions: [RemoteComicReadingSession] {
-        recentSessions.filter { browsingService.cachedAvailability(for: $0.comicFileReference).hasLocalCopy }
+        recentSessions.filter {
+            browsingService.cachedAvailability(
+                for: $0.resolvedComicFileReference(for: profile)
+            ).hasLocalCopy
+        }
     }
 
     var recoverySession: RemoteComicReadingSession? {
@@ -314,13 +318,15 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             DispatchQueue.global(qos: .utility).async {
                 let sessions = (try? readingProgressStore.loadSessions()) ?? []
                 let recentSessions = sessions.filter { $0.matches(profile: profile) }
-                let sessionsByPath = sessions.reduce(into: [String: RemoteComicReadingSession]()) { result, session in
+                let sessionsByContentPath = sessions.reduce(into: [String: RemoteComicReadingSession]()) { result, session in
                     guard session.matches(profile: profile),
-                          result.index(forKey: session.path) == nil else {
+                          result.index(
+                            forKey: "\(session.contentKind.rawValue)|\(session.path)"
+                          ) == nil else {
                         return
                     }
 
-                    result[session.path] = session
+                    result["\(session.contentKind.rawValue)|\(session.path)"] = session
                 }
 
                 var progressByItemID: [String: RemoteComicReadingSession] = [:]
@@ -332,7 +338,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         continue
                     }
 
-                    if let session = sessionsByPath[reference.path] {
+                    if let session = sessionsByContentPath["\(reference.contentKind.rawValue)|\(reference.path)"] {
                         progressByItemID[item.id] = session
                     }
 
@@ -355,7 +361,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             DispatchQueue.global(qos: .userInitiated).async {
                 let sortedItems = items.sorted { lhs, rhs in
                     if lhs.kind != rhs.kind {
-                        return lhs.kind == .directory
+                        return browserSortRank(for: lhs.kind) < browserSortRank(for: rhs.kind)
                     }
 
                     return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
@@ -363,6 +369,17 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
                 continuation.resume(returning: sortedItems)
             }
+        }
+    }
+
+    nonisolated private static func browserSortRank(for kind: RemoteDirectoryItemKind) -> Int {
+        switch kind {
+        case .directory:
+            return 0
+        case .comicFile, .comicDirectory:
+            return 1
+        case .unsupportedFile:
+            return 2
         }
     }
 
@@ -429,7 +446,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         guard item.canOpenAsComic else {
             alert = AppAlertState(
                 title: "Import Unavailable",
-                message: "Only supported remote comic files can be imported."
+                message: "Only supported remote comics can be imported."
             )
             return
         }
@@ -549,8 +566,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 alert = AppAlertState(
                     title: "Nothing to Import",
                     message: scope == .includeSubfolders
-                        ? "No supported comic files were found in \(item.name) or its subfolders."
-                        : "No supported comic files were found directly inside \(item.name)."
+                        ? "No supported remote comics were found in \(item.name) or its subfolders."
+                        : "No supported remote comics were found directly inside \(item.name)."
                 )
                 return
             }
@@ -582,7 +599,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         guard canImportCurrentFolderRecursively else {
             alert = AppAlertState(
                 title: "Nothing to Import",
-                message: "There are no supported comic files in this remote folder or its subfolders yet."
+                message: "There are no supported remote comics in this remote folder or its subfolders yet."
             )
             return
         }
@@ -621,8 +638,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 alert = AppAlertState(
                     title: "Nothing to Import",
                     message: scope == .includeSubfolders
-                        ? "No supported comic files were found in this remote folder or its subfolders."
-                        : "No supported comic files were found directly inside this remote folder."
+                        ? "No supported remote comics were found in this remote folder or its subfolders."
+                        : "No supported remote comics were found directly inside this remote folder."
                 )
                 return
             }
@@ -655,7 +672,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         guard !visibleComics.isEmpty else {
             alert = AppAlertState(
                 title: "Nothing to Import",
-                message: "There are no visible supported comic files in the current browser results."
+                message: "There are no visible supported remote comics in the current browser results."
             )
             return
         }
@@ -678,7 +695,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         guard item.canOpenAsComic else {
             alert = AppAlertState(
                 title: "Offline Save Unavailable",
-                message: "Only supported remote comic files can be saved for offline reading."
+                message: "Only supported remote comics can be saved for offline reading."
             )
             return
         }
@@ -741,7 +758,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         guard !comics.isEmpty else {
             alert = AppAlertState(
                 title: "Nothing to Save",
-                message: "There are no supported remote comic files in the current results yet."
+                message: "There are no supported remote comics in the current results yet."
             )
             return
         }

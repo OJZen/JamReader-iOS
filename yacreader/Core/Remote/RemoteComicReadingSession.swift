@@ -8,6 +8,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     let cacheScopeKey: String?
     let path: String
     let fileName: String
+    let contentKind: RemoteComicReferenceKind
     let pageCount: Int?
     let currentPage: Int
     let hasBeenOpened: Bool
@@ -25,6 +26,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         cacheScopeKey: String? = nil,
         path: String,
         fileName: String,
+        contentKind: RemoteComicReferenceKind = .file,
         pageCount: Int?,
         currentPage: Int,
         hasBeenOpened: Bool,
@@ -41,6 +43,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         self.cacheScopeKey = cacheScopeKey
         self.path = path
         self.fileName = fileName
+        self.contentKind = contentKind
         self.pageCount = pageCount
         self.currentPage = currentPage
         self.hasBeenOpened = hasBeenOpened
@@ -59,6 +62,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         case cacheScopeKey
         case path
         case fileName
+        case contentKind
         case pageCount
         case currentPage
         case hasBeenOpened
@@ -78,6 +82,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         self.cacheScopeKey = try container.decodeIfPresent(String.self, forKey: .cacheScopeKey)
         self.path = try container.decode(String.self, forKey: .path)
         self.fileName = try container.decode(String.self, forKey: .fileName)
+        self.contentKind = try container.decodeIfPresent(RemoteComicReferenceKind.self, forKey: .contentKind) ?? .file
         self.pageCount = try container.decodeIfPresent(Int.self, forKey: .pageCount)
         self.currentPage = try container.decode(Int.self, forKey: .currentPage)
         self.hasBeenOpened = try container.decode(Bool.self, forKey: .hasBeenOpened)
@@ -99,6 +104,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(cacheScopeKey, forKey: .cacheScopeKey)
         try container.encode(path, forKey: .path)
         try container.encode(fileName, forKey: .fileName)
+        try container.encode(contentKind, forKey: .contentKind)
         try container.encodeIfPresent(pageCount, forKey: .pageCount)
         try container.encode(currentPage, forKey: .currentPage)
         try container.encode(hasBeenOpened, forKey: .hasBeenOpened)
@@ -110,7 +116,7 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
     }
 
     var id: String {
-        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey ?? "legacy")|\(path)"
+        "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey ?? "legacy")|\(contentKind.rawValue)|\(path)"
     }
 
     var displayName: String {
@@ -149,9 +155,11 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
             cacheScopeKey: cacheScopeKey ?? "legacy",
             path: path,
             name: fileName,
-            kind: .comicFile,
+            kind: contentKind == .imageDirectory ? .comicDirectory : .comicFile,
             fileSize: fileSize,
-            modifiedAt: modifiedAt
+            modifiedAt: modifiedAt,
+            pageCountHint: pageCount,
+            coverPath: nil
         )
     }
 
@@ -176,7 +184,31 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
             path: path,
             fileName: fileName,
             fileSize: fileSize,
-            modifiedAt: modifiedAt
+            modifiedAt: modifiedAt,
+            contentKind: contentKind,
+            pageCountHint: pageCount,
+            coverPath: nil
+        )
+    }
+
+    func resolvedComicFileReference(for profile: RemoteServerProfile) -> RemoteComicFileReference {
+        guard cacheScopeKey == nil,
+              matches(profile: profile) else {
+            return comicFileReference
+        }
+
+        return RemoteComicFileReference(
+            serverID: serverID,
+            providerKind: providerKind,
+            shareName: shareName,
+            cacheScopeKey: profile.remoteCacheScopeKey,
+            path: path,
+            fileName: fileName,
+            fileSize: fileSize,
+            modifiedAt: modifiedAt,
+            contentKind: contentKind,
+            pageCountHint: pageCount,
+            coverPath: nil
         )
     }
 
@@ -200,11 +232,16 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
         guard serverID == reference.serverID,
               providerKind == reference.providerKind,
               shareName == reference.shareName,
+              contentKind == reference.contentKind,
               path == reference.path else {
             return false
         }
 
         if let referenceCacheScopeKey = reference.cacheScopeKey {
+            guard let cacheScopeKey else {
+                return true
+            }
+
             return cacheScopeKey == referenceCacheScopeKey
         }
 

@@ -174,6 +174,13 @@ struct RemoteComicInfoSheet: View {
                     value: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
                 )
             )
+        } else if let pageCountHint = item.pageCountHint, item.isComicDirectory {
+            rows.append(
+                .init(
+                    title: "Pages",
+                    value: "\(pageCountHint)"
+                )
+            )
         }
 
         if let modifiedAt = item.modifiedAt {
@@ -199,6 +206,10 @@ struct RemoteComicInfoSheet: View {
     }
 
     private var formatDisplayName: String {
+        if item.isComicDirectory {
+            return "Image Folder Comic"
+        }
+
         let ext = URL(fileURLWithPath: item.name).pathExtension.lowercased()
         switch ext {
         case "cbz":
@@ -219,6 +230,10 @@ struct RemoteComicInfoSheet: View {
             return "TAR"
         case "pdf":
             return "PDF"
+        case "epub":
+            return "EPUB"
+        case "mobi":
+            return "MOBI"
         default:
             return ext.isEmpty ? "Comic File" : ext.uppercased()
         }

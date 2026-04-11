@@ -43,10 +43,15 @@ final class RemoteOfflineLibrarySnapshotStore {
         let profilesByID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
 
         let offlineEntries: [RemoteOfflineComicEntry] = sessions.compactMap { session -> RemoteOfflineComicEntry? in
-            let availability = remoteServerBrowsingService.cachedAvailability(for: session.comicFileReference)
-            guard availability.hasLocalCopy,
-                  let profile = profilesByID[session.serverID],
+            guard let profile = profilesByID[session.serverID],
                   session.matches(profile: profile) else {
+                return nil
+            }
+
+            let availability = remoteServerBrowsingService.cachedAvailability(
+                for: session.resolvedComicFileReference(for: profile)
+            )
+            guard availability.hasLocalCopy else {
                 return nil
             }
 
