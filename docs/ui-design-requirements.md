@@ -1,4 +1,4 @@
-# YACReader iOS UI 设计需求文档
+# JamReader iOS UI 设计需求文档
 
 更新时间：2026-04-09
 

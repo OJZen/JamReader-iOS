@@ -4,6 +4,8 @@
 # Xcode
 DerivedData/
 build/
+.xcodebuild/
+.xcodebuild-device/
 *.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/

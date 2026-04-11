@@ -1,29 +1,29 @@
-# YACReader iOS 迁移计划（历史归档）
+# JamReader iOS 迁移计划（历史归档）
 
 更新时间：2026-04-09
 
-> 状态：自 2026-04-09 起，本文件转为历史归档。当前实现已经完成切换：资料库状态统一存储在 `Application Support/YACReader/AppLibraryV2.sqlite`，封面与派生资源统一存储在 `Application Support/YACReader/LibraryAssets/<libraryID>/`，外部漫画目录只作为内容源，不再承载 `.yacreaderlibrary`、`library.ydb`、桌面兼容模式或镜像模式语义。
+> 状态：自 2026-04-09 起，本文件转为历史归档。当前实现已经完成切换：资料库状态统一存储在 `Application Support/JamReader/AppLibraryV2.sqlite`，封面与派生资源统一存储在 `Application Support/JamReader/LibraryAssets/<libraryID>/`，外部漫画目录只作为内容源，不再承载 `.jamreaderlibrary`、`library.ydb`、桌面兼容模式或镜像模式语义。
 
 当前有效参考文档：
 
-- `docs/yacreader-ios-product-engineering-spec.md`
+- `docs/jamreader-ios-product-engineering-spec.md`
 - `docs/native-library-static-validation-checklist.md`
-- `docs/yacreader-ios-design-handoff-index.md`
+- `docs/jamreader-ios-design-handoff-index.md`
 
 ## 0. 当前架构快照
 
 - 资料库模型只保留两类：`Linked Folder` 与 `Imported Comics`。
 - 业务状态、阅读进度、标签、阅读列表、元数据编辑结果全部写入 App 本地数据库。
 - 外部目录只负责提供漫画内容；源目录只读时，仍允许修改本地业务状态，但禁止导入到该目录或物理删除源文件。
-- 扫描与导入会统一忽略 `.yacreaderlibrary` 等历史残留目录，避免再次把旧兼容痕迹纳入库内容。
+- 扫描与导入会统一忽略 `.jamreaderlibrary` 等历史残留目录，避免再次把旧兼容痕迹纳入库内容。
 
 下文保留的是迁移过程中的历史方案、阶段记录与旧设计取舍，其中会出现旧的桌面兼容术语，仅用于回溯背景，不再代表当前架构。
 
 ## 1. 目标与范围
 
-本项目的目标，是在当前 iOS 工程内，用 `SwiftUI + UIKit` 重建并整合桌面版 `YACReader` 与 `YACReaderLibrary` 的核心能力，最终形成一个单体 iOS App：
+本项目的目标，是在当前 iOS 工程内，用 `SwiftUI + UIKit` 重建并整合桌面版 `JamReader` 与 `JamReaderLibrary` 的核心能力，最终形成一个单体 iOS App：
 
-- 不实现 `YACReaderLibraryServer`
+- 不实现 `JamReaderLibraryServer`
 - 不再维持桌面版那种“资料库应用 + 独立阅读器 + 本地 IPC”的拆分模式
 - iOS 端直接把资料库浏览、漫画管理、漫画阅读整合到同一个 App 内
 - 外部目录只作为漫画内容源；资料库索引、阅读进度、元数据、封面缓存全部由 App 本地数据库和资产目录管理
@@ -39,7 +39,7 @@
 
 非目标：
 
-- `YACReaderLibraryServer`
+- `JamReaderLibraryServer`
 - 托盘、菜单栏、桌面快捷键编辑器等桌面专属能力
 - 平台特有的外部命令调用方式，例如桌面版的第三方阅读器命令
 
@@ -135,7 +135,7 @@
 - 已继续收紧移动端资料库管理入口：首页库列表改为更精简的移动端信息层级，低频路径诊断回收到 `Library Info`；同时为首页库列表与组织总览提供更易点按的 `Manage` 胶囊入口，并将组织总览的 compact 顶部操作收敛为 `Plus + More`
 - 已将 `SMB` 远程目录单本浏览推进到真实链路：已 vendoring `SMBClient 0.3.1`，打通 SMB 登录、share 连接、远程目录读取、单本漫画下载缓存，以及“远程目录 -> 下载 -> 轻量阅读壳”的首版可运行链路
 - 已补齐远程阅读状态主链路：远程单本漫画现在会本地持久化阅读进度与最近打开记录，支持从上次页码恢复，并在首页 `Remote Access`、服务器列表与远程目录内展示继续阅读反馈，同时加入断线时的缓存回退、缓存统计与手动清理入口；远程阅读器现已补齐“重新拉取远程副本”“缩略图页浏览”和“直接跳页”
-- 已确认分页图片阅读器存在架构性 viewport / gesture 稳定性问题，后续不再继续在旧容器上叠加补丁，已立项专项重构计划，详见 [reader-gesture-refactor-plan.md](/Volumes/Ju/Projects/ios/yacreader/docs/reader-gesture-refactor-plan.md)
+- 已确认分页图片阅读器存在架构性 viewport / gesture 稳定性问题，后续不再继续在旧容器上叠加补丁，已立项专项重构计划，详见 [reader-gesture-refactor-plan.md](/Volumes/Ju/Projects/ios/JamReader/docs/reader-gesture-refactor-plan.md)
 - 已启动阅读器专项重构的第一批落地：新增 `ReaderKernel` 基础类型与 `ZoomableImagePageView`，并已把分页页内旧 `UIScrollView` 逻辑替换为新页视图，同时移除本地 / 远程阅读器外层那条 `120ms / 520ms` 的历史 viewport 校准补丁，避免首次进入后的补丁式二次跳变
 - 已完成分页图片阅读宿主切换：`ImageSequenceReaderContainerView` 现已改为基于 `UICollectionView` 的横向分页宿主，旧 `UIPageViewController` 主路径已退场，并开始清理相关遗留代码
 - 已开始围绕新分页宿主整理阅读器外层结构：本地与远程阅读器现共用 `ReaderSurface`、`ReaderTopBar` 与状态提示层，明确分离内容层、chrome 层、提示层与跳页弹层，降低后续 UI / 手势迭代的重复改动成本
@@ -188,8 +188,8 @@
 
 | 模块 | 关键路径 | 职责 | iOS 处理策略 |
 | --- | --- | --- | --- |
-| 阅读器 | `YACReader/*` | 独立打开漫画、页面渲染、翻页、缩放、书签、信息条、双页、manga 模式 | UI 全部重写，行为与数据语义迁移 |
-| 资料库 | `YACReaderLibrary/*` | 多资料库管理、文件夹树、封面浏览、搜索、标签、阅读列表、元数据编辑、扫描更新 | 业务与数据结构迁移，UI 改写为 iOS 形态 |
+| 阅读器 | `JamReader/*` | 独立打开漫画、页面渲染、翻页、缩放、书签、信息条、双页、manga 模式 | UI 全部重写，行为与数据语义迁移 |
+| 资料库 | `JamReaderLibrary/*` | 多资料库管理、文件夹树、封面浏览、搜索、标签、阅读列表、元数据编辑、扫描更新 | 业务与数据结构迁移，UI 改写为 iOS 形态 |
 | 公共模型与工具 | `common/*` | `Comic`、`ComicDB`、`Folder`、`Bookmarks`、图像过滤、封面工具、全局路径与设置 | 纯逻辑优先重写为 Swift；必要时桥接 C/C++ |
 | 压缩包读取 | `compressed_archive/*` | 读取 `cbr/cbz/rar/zip/tar/7z/cb7/cbt` | 保留底层能力，改造成 Objective-C++/C bridge |
 | 自定义控件 | `custom_widgets/*` | Qt 桌面 UI 组件 | 不复用，iOS 重新设计 |
@@ -205,19 +205,19 @@
 | `common/comic_db.h/.cpp` | `ComicInfo`、`ComicDB` 数据模型 | `CoreModels`, `LibraryPersistence` |
 | `common/bookmarks.*` | 最近阅读页和最多 3 个书签 | `ReaderState`, `LibraryPersistence` |
 | `common/cover_utils.*` | 封面缩放与写盘 | `ThumbnailPipeline` |
-| `YACReader/render.*` | 页面缓冲、后台渲染、双页拼接、图像滤镜 | `ReaderRenderEngine` |
-| `YACReader/viewer.*` | 阅读器交互、缩放、滚动、放大镜、goto flow | `ReaderViewController`, `ReaderChrome` |
-| `YACReader/mouse_handler.*` | 鼠标热区与拖拽逻辑 | 迁移为手势系统 |
-| `YACReaderLibrary/db/*` | SQLite schema、模型、搜索解析、阅读列表模型 | `LibraryPersistence`, `SearchEngine` |
-| `YACReaderLibrary/db_helper.*` | 资料库核心 CRUD 和进度更新 | `LibraryRepository` |
-| `YACReaderLibrary/library_creator.*` | 建库、更新库、哈希、扫描 | `LibraryScanner` |
-| `YACReaderLibrary/initial_comic_info_extractor.*` | 封面提取、页数统计、嵌入 XML 元数据读取 | `ImportPipeline` |
-| `YACReaderLibrary/xml_info_parser.*` | ComicInfo.xml 元数据解析 | `MetadataImport` |
-| `YACReaderLibrary/comic_files_manager.*` | 拖入文件、复制/移动入库 | `LibraryFileOperations` |
-| `YACReaderLibrary/comic_model.*`, `folder_model.*`, `reading_list_model.*` | 列表数据组织 | `LibraryViewModels` |
-| `YACReaderLibrary/qml/*` | Flow/Grid/Info/FolderContent 视图 | `LibraryUI` 的 SwiftUI/UIKit 重建参考 |
-| `YACReaderLibrary/properties_dialog.*` | 元数据编辑器 | `MetadataEditor` |
-| `YACReaderLibrary/comic_vine/*` | Comic Vine 查询与回填 | `MetadataScraper` |
+| `JamReader/render.*` | 页面缓冲、后台渲染、双页拼接、图像滤镜 | `ReaderRenderEngine` |
+| `JamReader/viewer.*` | 阅读器交互、缩放、滚动、放大镜、goto flow | `ReaderViewController`, `ReaderChrome` |
+| `JamReader/mouse_handler.*` | 鼠标热区与拖拽逻辑 | 迁移为手势系统 |
+| `JamReaderLibrary/db/*` | SQLite schema、模型、搜索解析、阅读列表模型 | `LibraryPersistence`, `SearchEngine` |
+| `JamReaderLibrary/db_helper.*` | 资料库核心 CRUD 和进度更新 | `LibraryRepository` |
+| `JamReaderLibrary/library_creator.*` | 建库、更新库、哈希、扫描 | `LibraryScanner` |
+| `JamReaderLibrary/initial_comic_info_extractor.*` | 封面提取、页数统计、嵌入 XML 元数据读取 | `ImportPipeline` |
+| `JamReaderLibrary/xml_info_parser.*` | ComicInfo.xml 元数据解析 | `MetadataImport` |
+| `JamReaderLibrary/comic_files_manager.*` | 拖入文件、复制/移动入库 | `LibraryFileOperations` |
+| `JamReaderLibrary/comic_model.*`, `folder_model.*`, `reading_list_model.*` | 列表数据组织 | `LibraryViewModels` |
+| `JamReaderLibrary/qml/*` | Flow/Grid/Info/FolderContent 视图 | `LibraryUI` 的 SwiftUI/UIKit 重建参考 |
+| `JamReaderLibrary/properties_dialog.*` | 元数据编辑器 | `MetadataEditor` |
+| `JamReaderLibrary/comic_vine/*` | Comic Vine 查询与回填 | `MetadataScraper` |
 
 ### 3.3 已确认的桌面功能面
 
@@ -265,7 +265,7 @@
 
 - 桌面资料库数据库版本：`DB_VERSION = 9.16.0`
 - 桌面应用版本：`9.16.4`
-- 资料库元数据默认存放在 `<library>/.yacreaderlibrary/`
+- 资料库元数据默认存放在 `<library>/.jamreaderlibrary/`
 - 数据库文件：`library.ydb`
 - 封面目录：`covers/`
 - 资料库 UUID：`id` 文件
@@ -306,8 +306,8 @@ iOS 最大的差异，不是 UI，而是文件访问模型：
 
 1. `In-Place Library`
    - 如果用户选中的资料库目录可写，就继续使用桌面兼容结构：
-   - `<library>/.yacreaderlibrary/library.ydb`
-   - `<library>/.yacreaderlibrary/covers/*`
+   - `<library>/.jamreaderlibrary/library.ydb`
+   - `<library>/.jamreaderlibrary/covers/*`
 
 2. `Mirrored Metadata Library`
    - 如果源目录不可写，App 在 `Application Support` 建立镜像元数据目录
@@ -425,7 +425,7 @@ iOS 上必须把以下问题当成一等公民：
 ### 5.2 推荐目录结构
 
 ```text
-yacreader/
+JamReader/
   App/
   Core/
     Models/
@@ -463,7 +463,7 @@ yacreader/
 
 #### App 层
 
-- `YACReaderApp`
+- `JamReaderApp`
 - 全局导航容器
 - 依赖注入
 - 生命周期事件分发
@@ -591,9 +591,9 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 
 ### 6.1 必须保持兼容的内容
 
-- `.yacreaderlibrary/library.ydb`
-- `.yacreaderlibrary/covers/*.jpg`
-- `.yacreaderlibrary/id`
+- `.jamreaderlibrary/library.ydb`
+- `.jamreaderlibrary/covers/*.jpg`
+- `.jamreaderlibrary/id`
 - `comic_info` 字段语义
 - `folder/comic` 路径语义
 - 漫画哈希规则
@@ -627,7 +627,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 #### 模式 A：原地兼容模式
 
 - 适用于用户给出的目录可写
-- 直接创建或更新 `<root>/.yacreaderlibrary`
+- 直接创建或更新 `<root>/.jamreaderlibrary`
 - 与桌面版互通最好
 
 #### 模式 B：镜像元数据模式
@@ -685,34 +685,34 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 
 | 功能 | 来源 | 优先级 | 目标阶段 | 说明 |
 | --- | --- | --- | --- | --- |
-| 打开已有资料库 | YACReaderLibrary | P0 | M1-M2 | 必须能直接读现有 `.ydb` |
-| 创建资料库 | YACReaderLibrary | P0 | M1 | 建库是核心入口 |
-| 更新/重扫资料库 | YACReaderLibrary | P0 | M4 | 支持全量和当前文件夹 |
-| 文件夹树浏览 | YACReaderLibrary | P0 | M2 | 资料库核心 |
-| 漫画网格浏览 | YACReaderLibrary | P0 | M2 | 资料库核心 |
-| 阅读器单页 | YACReader | P0 | M3 | 核心 |
-| 阅读器双页 | YACReader | P0 | M3 | iPad regular width 保留，iPhone 固定单页 |
-| Manga 右到左 | YACReader | P0 | M3 | 核心 |
-| 页码跳转 | YACReader | P0 | M3 | 高频阅读能力 |
-| 进度、已读、评分、书签 | YACReader + Library | P0 | M3-M4 | 核心 |
-| 收藏/阅读中/最近 | YACReaderLibrary | P0 | M5 | 核心组织能力 |
-| 标签与阅读列表 | YACReaderLibrary | P0 | M5 | 核心组织能力 |
-| 搜索 | YACReaderLibrary | P0 | M5 | 先简单后高级 |
-| 批量元数据编辑 | YACReaderLibrary | P1 | M4 | 重要 |
-| ComicInfo.xml 读取与重扫 | YACReaderLibrary | P1 | M4-M6 | 重要 |
-| 自定义封面/封面页修改 | YACReaderLibrary | P1 | M4 | 重要 |
-| Flow / Info 视图 | YACReaderLibrary | P1 | M2-M5 | 重要但次于 Grid |
-| 漫画复制/移动导入 | YACReaderLibrary | P1 | M4 | iOS 需适配文件权限 |
+| 打开已有资料库 | JamReaderLibrary | P0 | M1-M2 | 必须能直接读现有 `.ydb` |
+| 创建资料库 | JamReaderLibrary | P0 | M1 | 建库是核心入口 |
+| 更新/重扫资料库 | JamReaderLibrary | P0 | M4 | 支持全量和当前文件夹 |
+| 文件夹树浏览 | JamReaderLibrary | P0 | M2 | 资料库核心 |
+| 漫画网格浏览 | JamReaderLibrary | P0 | M2 | 资料库核心 |
+| 阅读器单页 | JamReader | P0 | M3 | 核心 |
+| 阅读器双页 | JamReader | P0 | M3 | iPad regular width 保留，iPhone 固定单页 |
+| Manga 右到左 | JamReader | P0 | M3 | 核心 |
+| 页码跳转 | JamReader | P0 | M3 | 高频阅读能力 |
+| 进度、已读、评分、书签 | JamReader + Library | P0 | M3-M4 | 核心 |
+| 收藏/阅读中/最近 | JamReaderLibrary | P0 | M5 | 核心组织能力 |
+| 标签与阅读列表 | JamReaderLibrary | P0 | M5 | 核心组织能力 |
+| 搜索 | JamReaderLibrary | P0 | M5 | 先简单后高级 |
+| 批量元数据编辑 | JamReaderLibrary | P1 | M4 | 重要 |
+| ComicInfo.xml 读取与重扫 | JamReaderLibrary | P1 | M4-M6 | 重要 |
+| 自定义封面/封面页修改 | JamReaderLibrary | P1 | M4 | 重要 |
+| Flow / Info 视图 | JamReaderLibrary | P1 | M2-M5 | 重要但次于 Grid |
+| 漫画复制/移动导入 | JamReaderLibrary | P1 | M4 | iOS 需适配文件权限 |
 | 顶层 Tab 信息架构（书库 / 浏览 / 设置） | iOS 产品壳 | P0 | M6-M7 | 解决首页过载，明确本地库、远程浏览与系统设置边界 |
 | 本地导入（单本 / 目录） | iOS 核心能力 | P0 | M4-M6 | 可从 Files / 外部目录把漫画导入本地资料库 |
 | 远程服务在线浏览与直接阅读（`SMB / WebDAV`，含目录缩略图） | iOS 增强能力 | P0 | M6 | 连接远程服务器、浏览目录、显示漫画缩略图、按需在线打开，不默认纳入本地资料库扫描 |
 | 远程服务导入到本地资料库（单本 / 目录） | iOS 增强能力 | P0 | M6-M7 | 从远程浏览结果中选择单本或整个目录导入到本地资料库 |
-| 高级搜索语法解析 | YACReaderLibrary | P1 | M5 | 需要完整迁移解析器 |
-| 元数据导入导出 | YACReaderLibrary | P2 | M6 | 可后置 |
-| 资料库打包导入导出 | YACReaderLibrary | P3 | Backlog | 低频且实现成本高 |
-| Comic Vine | YACReaderLibrary | P3 | Backlog | 强依赖网络与 API 稳定性 |
-| 放大镜 | YACReader | P3 | Backlog | 触控设备收益有限 |
-| 自动滚动/Zigzag | YACReader | P3 | Backlog | iOS 使用场景偏弱 |
+| 高级搜索语法解析 | JamReaderLibrary | P1 | M5 | 需要完整迁移解析器 |
+| 元数据导入导出 | JamReaderLibrary | P2 | M6 | 可后置 |
+| 资料库打包导入导出 | JamReaderLibrary | P3 | Backlog | 低频且实现成本高 |
+| Comic Vine | JamReaderLibrary | P3 | Backlog | 强依赖网络与 API 稳定性 |
+| 放大镜 | JamReader | P3 | Backlog | 触控设备收益有限 |
+| 自动滚动/Zigzag | JamReader | P3 | Backlog | iOS 使用场景偏弱 |
 | 快捷键编辑 | 桌面专属 | P3 | 暂缓 | iOS 不优先 |
 | 本地 IPC / 独立阅读器进程 | 桌面专属 | 不做 | 不做 | 合并为单体 App |
 
@@ -820,7 +820,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - `LibraryStorageManager` 已实现，并支持 `in-place / mirrored` 模式判定
 - 已实现资料库描述符持久化、安全书签恢复、长生命周期访问会话
 - 已实现只读 `SQLite` 访问层，可读取 `folder` / `comic` / `comic_info` 核心字段
-- 已实现桌面 `.yacreaderlibrary/library.ydb` 的只读打开
+- 已实现桌面 `.jamreaderlibrary/library.ydb` 的只读打开
 - 已实现桌面兼容 `pseudoHash`
 - 已实现第一版 iOS `Library Browser`，支持：
   - 已注册资料库列表
@@ -848,7 +848,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 - 已建立目录图片序列阅读数据源，可作为后续文件夹漫画支持底座
 - 已实现扫描期 `PDF / CBZ / ZIP / TAR / CBT` 页数统计与封面提取
 - 已实现扫描期 `RAR / CBR / 7Z / CB7 / ARJ` 页数统计与封面提取
-- 已按桌面 `cover_utils` 规则将封面缩放写入 `.yacreaderlibrary/covers/<hash>.jpg`
+- 已按桌面 `cover_utils` 规则将封面缩放写入 `.jamreaderlibrary/covers/<hash>.jpg`
 - 当前工程已通过一次 `xcodebuild` 真机构建验证
 
 当前未完成：
@@ -864,7 +864,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 交付物：
 
 - 能读取已有 `library.ydb`
-- 能在新资料库上创建 `.yacreaderlibrary`
+- 能在新资料库上创建 `.jamreaderlibrary`
 - 能从漫画文件提取页数和封面
 
 验收标准：
@@ -1129,7 +1129,7 @@ Core 层不直接依赖 UI 或底层数据库驱动。
 
 目标：
 
-- 完成 YACReaderLibrary 最重要的组织能力
+- 完成 JamReaderLibrary 最重要的组织能力
 
 任务清单：
 

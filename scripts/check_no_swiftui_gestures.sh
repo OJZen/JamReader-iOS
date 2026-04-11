@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ROOT="/Volumes/Ju/Projects/ios/yacreader"
-TARGET_DIR="$PROJECT_ROOT/yacreader"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+TARGET_DIR="$PROJECT_ROOT/JamReader"
 
 if ! command -v rg >/dev/null 2>&1; then
   echo "[check_no_swiftui_gestures] ripgrep (rg) is required." >&2

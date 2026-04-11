@@ -1,6 +1,6 @@
-# YACReader iOS (SwiftUI + UIKit)
+# JamReader iOS (SwiftUI + UIKit)
 
-An iOS-first port of desktop YACReader + YACReaderLibrary, focused on mobile reading and library management workflows.
+An iOS-first port of JamReader + JamReaderLibrary, focused on mobile reading and library management workflows.
 
 ## Current runnable scope
 
@@ -19,18 +19,18 @@ An iOS-first port of desktop YACReader + YACReaderLibrary, focused on mobile rea
 Open project in Xcode:
 
 ```bash
-open /Volumes/Ju/Projects/ios/yacreader/yacreader.xcodeproj
+open JamReader.xcodeproj
 ```
 
 CLI build (no code signing):
 
 ```bash
 xcodebuild \
-  -project /Volumes/Ju/Projects/ios/yacreader/yacreader.xcodeproj \
-  -scheme yacreader \
+  -project JamReader.xcodeproj \
+  -scheme JamReader \
   -configuration Debug \
   -destination 'generic/platform=iOS' \
-  -derivedDataPath /tmp/yacreader-derived-data \
+  -derivedDataPath /tmp/jamreader-derived-data \
   CODE_SIGNING_ALLOWED=NO \
   build
 ```
@@ -38,7 +38,7 @@ xcodebuild \
 Gesture architecture guard (no SwiftUI gestures; UIKit recognizers only):
 
 ```bash
-/Volumes/Ju/Projects/ios/yacreader/scripts/check_no_swiftui_gestures.sh
+./scripts/check_no_swiftui_gestures.sh
 ```
 
 ## Quick validation checklist
@@ -57,7 +57,7 @@ These files are intentionally ignored by git to keep repository size under contr
 
 ## Notes
 
-- `YACReaderLibraryServer` is intentionally out of scope.
+- `JamReaderLibraryServer` is intentionally out of scope.
 - Design and interaction follow mobile-first behavior, not 1:1 desktop UI parity.
 - Detailed migration progress is tracked in:
   - `docs/ios-migration-plan.md`

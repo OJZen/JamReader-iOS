@@ -24,14 +24,14 @@
 当前阅读器状态横跨多个层级：
 
 - SwiftUI 外层：
-  - [ComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Reader/ComicReaderView.swift)
-  - [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Remote/RemoteComicReaderView.swift)
+  - [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
+  - [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
 - 运行时 ViewModel：
-  - [ComicReaderViewModel.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Reader/ComicReaderViewModel.swift)
+  - [ComicReaderViewModel.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderViewModel.swift)
 - UIKit 容器：
-  - [ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/ImageSequenceReaderContainerView.swift)
-  - [VerticalImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)
-  - [PDFReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/PDFReaderContainerView.swift)
+  - [ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift)
+  - [VerticalImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)
+  - [PDFReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/PDFReaderContainerView.swift)
 
 这导致：
 
@@ -71,8 +71,8 @@
 
 当前本地和远程阅读器都拥有各自一套外层壳：
 
-- [ComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Reader/ComicReaderView.swift)
-- [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Remote/RemoteComicReaderView.swift)
+- [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
+- [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
 
 它们共享了部分底层容器，但运行时控制仍有重复：
 
@@ -130,8 +130,8 @@
 
 文件：
 
-- 精简 [ComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Reader/ComicReaderView.swift)
-- 精简 [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Remote/RemoteComicReaderView.swift)
+- 精简 [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
+- 精简 [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
 
 约束：
 
@@ -143,7 +143,7 @@
 
 新增模块，建议目录：
 
-- `yacreader/ReaderKernel/*`
+- `JamReader/ReaderKernel/*`
 
 核心对象建议：
 
@@ -348,7 +348,7 @@ chrome 需要和内容分离。
 
 建议新增：
 
-- `yacreader/ReaderKernel/`
+- `JamReader/ReaderKernel/`
 
 建议文件：
 
@@ -370,23 +370,23 @@ chrome 需要和内容分离。
 
 保留并逐步收缩：
 
-- [ComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Reader/ComicReaderView.swift)
-- [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Remote/RemoteComicReaderView.swift)
-- [ComicReaderViewModel.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Features/Reader/ComicReaderViewModel.swift)
+- [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
+- [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
+- [ComicReaderViewModel.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderViewModel.swift)
 
 逐步替换：
 
-- [ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/ImageSequenceReaderContainerView.swift)
-- [VerticalImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)
-- [PDFReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/PDFReaderContainerView.swift)
-- [ReaderChromeOverlay.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/ReaderChromeOverlay.swift)
-- [ReaderPageJumpOverlay.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/ReaderPageJumpOverlay.swift)
+- [ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift)
+- [VerticalImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)
+- [PDFReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/PDFReaderContainerView.swift)
+- [ReaderChromeOverlay.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ReaderChromeOverlay.swift)
+- [ReaderPageJumpOverlay.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ReaderPageJumpOverlay.swift)
 
 保留数据层：
 
-- [ComicDocumentLoader.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Data/Reader/ComicDocumentLoader.swift)
-- [ReaderPageCache.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Data/Reader/ReaderPageCache.swift)
-- [ReaderLayoutPreferencesStore.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/Data/Reader/ReaderLayoutPreferencesStore.swift)
+- [ComicDocumentLoader.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Data/Reader/ComicDocumentLoader.swift)
+- [ReaderPageCache.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Data/Reader/ReaderPageCache.swift)
+- [ReaderLayoutPreferencesStore.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Data/Reader/ReaderLayoutPreferencesStore.swift)
 
 ## 6. 分阶段执行计划
 
@@ -470,7 +470,7 @@ chrome 需要和内容分离。
 
 当前状态：
 
-- 已完成主链路切换：[ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/yacreader/yacreader/SharedUI/Components/ImageSequenceReaderContainerView.swift) 现已由横向 `UICollectionView` 分页宿主承载 `ComicImageSpreadViewController`
+- 已完成主链路切换：[ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift) 现已由横向 `UICollectionView` 分页宿主承载 `ComicImageSpreadViewController`
 - 旧 `UIPageViewController` 分页路线已退出主链路，并开始删除遗留代码
 - 当前分页阅读器已通过“首次进入、再次进入、连续翻页、跳页弹窗后恢复”等核心手测
 

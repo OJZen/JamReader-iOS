@@ -7,7 +7,7 @@ Use this checklist after changes to the app-owned library database layer when no
 - Run:
 
 ```bash
-xcodebuild -project yacreader.xcodeproj -scheme yacreader -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath .xcodebuild build
+xcodebuild -project JamReader.xcodeproj -scheme JamReader -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath .xcodebuild build
 ```
 
 - Expect `BUILD SUCCEEDED`.
@@ -17,18 +17,18 @@ xcodebuild -project yacreader.xcodeproj -scheme yacreader -sdk iphonesimulator -
 - Run:
 
 ```bash
-rg -n "library\\.ydb|\\.yacreaderlibrary|storageMode|Desktop Compatible|Browse Only|mirrored" yacreader
+rg -n "library\\.ydb|\\.jamreaderlibrary|storageMode|Desktop Compatible|Browse Only|mirrored" JamReader
 ```
 
 - Expect no runtime compatibility hits.
-- The only acceptable result is the scanner ignore rule for historical `.yacreaderlibrary` residue.
+- Expect no runtime compatibility hits.
 
 ## Library Isolation Sweep
 
 - Run:
 
 ```bash
-rg -n "WHERE id = \\?|DELETE FROM [a-z_]+ WHERE id = \\?|UPDATE [a-z_]+.*WHERE id = \\?" yacreader/Data/Libraries/NativeLibraryState.swift
+rg -n "WHERE id = \\?|DELETE FROM [a-z_]+ WHERE id = \\?|UPDATE [a-z_]+.*WHERE id = \\?" JamReader/Data/Libraries/NativeLibraryState.swift
 ```
 
 - Verify mutating SQL in `NativeLibraryState.swift` is scoped with `library_id`.

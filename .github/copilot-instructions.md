@@ -1,15 +1,15 @@
-# Copilot Instructions — YACReader iOS
+# Copilot Instructions — JamReader iOS
 
 ## Build & Validate
 
 ```bash
 # CLI build (no code signing)
 xcodebuild \
-  -project yacreader.xcodeproj \
-  -scheme yacreader \
+  -project JamReader.xcodeproj \
+  -scheme JamReader \
   -configuration Debug \
   -destination 'generic/platform=iOS' \
-  -derivedDataPath /tmp/yacreader-derived-data \
+  -derivedDataPath /tmp/jamreader-derived-data \
   CODE_SIGNING_ALLOWED=NO \
   build
 
@@ -24,7 +24,7 @@ No automated test suite exists. Validation is manual (see migration plan for han
 
 ## Architecture Overview
 
-Single iOS app (iPhone + iPad) combining desktop YACReader + YACReaderLibrary. SwiftUI shell with UIKit for reader/gesture-heavy surfaces. Three-tab bottom navigation:
+Single iOS app (iPhone + iPad) combining desktop JamReader + JamReaderLibrary. SwiftUI shell with UIKit for reader/gesture-heavy surfaces. Three-tab bottom navigation:
 
 - **书库 (Library)** — local library management, collections, import
 - **浏览 (Browse)** — SMB/WebDAV remote browsing, offline shelf, saved folders
@@ -34,13 +34,13 @@ Single iOS app (iPhone + iPad) combining desktop YACReader + YACReaderLibrary. S
 
 | Layer | Location | Role |
 |-------|----------|------|
-| App | `yacreader/App/` | Entry point, `AppDependencies` DI container, tab routing |
-| Core | `yacreader/Core/` | Pure domain models and types (no UI imports) |
-| Data | `yacreader/Data/` | SQLite, archive readers, scanner, thumbnail pipeline, remote services |
-| ReaderKernel | `yacreader/ReaderKernel/` | `ReaderSessionController`, gesture coordinator, `ZoomableImagePageView` |
-| Features | `yacreader/Features/` | Feature modules: Reader, Libraries, Browser, Browse (remote), Settings |
-| SharedUI | `yacreader/SharedUI/` | Reusable SwiftUI components, UIKit bridges, design tokens |
-| Vendor | `yacreader/Vendor/` | `SWXMLHash 8.1.1` (XML), `SMBClient 0.3.1` (SMB protocol) |
+| App | `JamReader/App/` | Entry point, `AppDependencies` DI container, tab routing |
+| Core | `JamReader/Core/` | Pure domain models and types (no UI imports) |
+| Data | `JamReader/Data/` | SQLite, archive readers, scanner, thumbnail pipeline, remote services |
+| ReaderKernel | `JamReader/ReaderKernel/` | `ReaderSessionController`, gesture coordinator, `ZoomableImagePageView` |
+| Features | `JamReader/Features/` | Feature modules: Reader, Libraries, Browser, Browse (remote), Settings |
+| SharedUI | `JamReader/SharedUI/` | Reusable SwiftUI components, UIKit bridges, design tokens |
+| Vendor | `JamReader/Vendor/` | `SWXMLHash 8.1.1` (XML), `SMBClient 0.3.1` (SMB protocol) |
 
 ### Reader Architecture (4 layers)
 
@@ -54,7 +54,7 @@ Single iOS app (iPhone + iPad) combining desktop YACReader + YACReaderLibrary. S
 - **Database**: Raw SQLite3 C API (not CoreData/GRDB). Schema mirrors desktop `library.ydb` v9.16.0 for full compatibility.
 - **Archive formats**: ZIP/CBZ (custom parser + libarchive fallback), TAR/CBT (custom), RAR/CBR/7Z/CB7/ARJ (libarchive via ObjC++ bridge `YRLibArchiveReader`), PDF (PDFKit). Router: `ComicDocumentLoader`.
 - **Remote**: Vendored `SMBClient` with async/await API. `RemoteServerBrowsingService` abstracts directory listing. Downloads go to local cache, not streamed live.
-- **Thumbnails**: Two-tier cache — memory (NSCache, 48 items / 192 MB) + disk (512 MB LRU in `Caches/YACReader/ReaderPages/`).
+- **Thumbnails**: Two-tier cache — memory (NSCache, 48 items / 192 MB) + disk (512 MB LRU in `Caches/JamReader/ReaderPages/`).
 
 ## Hard Constraints
 
@@ -67,7 +67,7 @@ All gesture handling must use UIKit `UIGestureRecognizer`. The script `scripts/c
 Must read/write desktop `library.ydb` without corruption:
 - Comic hashing: SHA1 of first 512 KB + file size (`pseudoHash`)
 - Cover scaling: 640px wide (landscape), 480px wide (portrait), 960px tall (super-long), JPEG quality 75
-- Two storage modes: **In-place** (`.yacreaderlibrary/` beside source) and **Mirrored** (app sandbox only)
+- Two storage modes: **In-place** (`.jamreaderlibrary/` beside source) and **Mirrored** (app sandbox only)
 
 ### Tab Boundary Isolation
 
@@ -106,4 +106,4 @@ Prefer system frameworks (PDFKit, ImageIO, SQLite3, CryptoKit). Only two vendore
 
 - **iOS 17.6**, iPhone + iPad
 - **Swift 5**, Whole Module Optimization in Release
-- ObjC++ bridging header: `yacreader/Bridging-Header.h` (for `YRLibArchiveReader`)
+- ObjC++ bridging header: `JamReader/Bridging-Header.h` (for `YRLibArchiveReader`)
