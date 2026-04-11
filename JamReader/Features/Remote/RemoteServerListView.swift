@@ -40,25 +40,13 @@ struct RemoteServerListView: View {
                 }
             } else {
                 Section("Servers") {
-                    ForEach(viewModel.profiles) { profile in
-                        Button {
-                            navigationRequest = .detail(profile)
-                        } label: {
-                            RemoteServerRow(
-                                profile: profile,
-                                recentHistoryCount: viewModel.recentSessions(for: profile).count,
-                                savedFolderCount: viewModel.shortcutCount(for: profile),
-                                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
-                                trailingAccessoryReservedWidth: persistentRowActionReservedWidth
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .trailing) {
-                            if showsPersistentRowActions {
-                                persistentActionMenu(for: profile)
-                                    .padding(.trailing, 8)
-                            }
-                        }
+                    AdaptiveCardListRows(
+                        viewModel.profiles,
+                        columnCount: adaptiveListColumnCount,
+                        spacing: adaptiveListColumnSpacing,
+                        appliesListRowStyling: false
+                    ) { profile in
+                        remoteServerRow(for: profile)
                     }
                 }
             }
@@ -117,8 +105,40 @@ struct RemoteServerListView: View {
             && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     private var persistentRowActionReservedWidth: CGFloat {
         showsPersistentRowActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
+    }
+
+    private func remoteServerRow(for profile: RemoteServerProfile) -> some View {
+        Button {
+            navigationRequest = .detail(profile)
+        } label: {
+            RemoteServerRow(
+                profile: profile,
+                recentHistoryCount: viewModel.recentSessions(for: profile).count,
+                savedFolderCount: viewModel.shortcutCount(for: profile),
+                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
+                trailingAccessoryReservedWidth: persistentRowActionReservedWidth
+            )
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .trailing) {
+            if showsPersistentRowActions {
+                persistentActionMenu(for: profile)
+                    .padding(.trailing, 8)
+            }
+        }
     }
 
     private func remoteServerEditor(

@@ -7,7 +7,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     let browsingService: RemoteServerBrowsingService
     let layoutContext: RemoteServerBrowserLayoutContext
     let onVisibleComicIDsChanged: (Set<String>) -> Void
-    let onOpenItem: (RemoteDirectoryItem) -> Void
+    let onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
     let onOpenOffline: (RemoteDirectoryItem) -> Void
     let onSaveOffline: (RemoteDirectoryItem) -> Void
@@ -66,13 +66,14 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         private var browsingService: RemoteServerBrowsingService
         private var layoutContext: RemoteServerBrowserLayoutContext
         private var onVisibleComicIDsChanged: (Set<String>) -> Void
-        private var onOpenItem: (RemoteDirectoryItem) -> Void
+        private var onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
         private var onOpenOffline: (RemoteDirectoryItem) -> Void
         private var onSaveOffline: (RemoteDirectoryItem) -> Void
         private var onRemoveOffline: (RemoteDirectoryItem) -> Void
         private var onImport: (RemoteDirectoryItem) -> Void
         private weak var controller: RemoteBrowserGridViewController?
+        private var pendingContextMenuAction: (() -> Void)?
         private var lastReportedVisibleComicIDs: Set<String> = []
         private var pendingVisibleComicIDReport: DispatchWorkItem?
 
@@ -82,7 +83,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
-            onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
+            onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
             onSaveOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -112,7 +113,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
-            onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
+            onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
             onSaveOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -182,7 +183,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
         func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
             collectionView.deselectItem(at: indexPath, animated: true)
-            onOpenItem(sections[indexPath.section].items[indexPath.item].item)
+            let item = sections[indexPath.section].items[indexPath.item].item
+            let sourceFrame = (collectionView.cellForItem(at: indexPath) as? RemoteBrowserGridCell)?.heroSourceFrame() ?? .zero
+            onOpenItem(item, sourceFrame)
         }
 
         func collectionView(
@@ -198,6 +201,28 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
             return UIContextMenuConfiguration(identifier: row.item.id as NSString, previewProvider: nil) { _ in
                 UIMenu(children: actions)
+            }
+        }
+
+        func collectionView(
+            _ collectionView: UICollectionView,
+            willEndContextMenuInteraction configuration: UIContextMenuConfiguration,
+            animator: UIContextMenuInteractionAnimating?
+        ) {
+            guard let action = pendingContextMenuAction else {
+                return
+            }
+
+            pendingContextMenuAction = nil
+
+            if let animator {
+                animator.addCompletion {
+                    action()
+                }
+            } else {
+                DispatchQueue.main.async {
+                    action()
+                }
             }
         }
 
@@ -387,7 +412,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                         title: "Info",
                         image: UIImage(systemName: "info.circle")
                     ) { [weak self] _ in
-                        self?.onShowInfo(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onShowInfo(row.item)
+                        }
                     }
                 )
 
@@ -396,7 +423,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                         title: "Import",
                         image: UIImage(systemName: "square.and.arrow.down")
                     ) { [weak self] _ in
-                        self?.onImport(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onImport(row.item)
+                        }
                     }
                 )
 
@@ -406,7 +435,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                             title: "Open Offline",
                             image: UIImage(systemName: "arrow.down.circle")
                         ) { [weak self] _ in
-                            self?.onOpenOffline(row.item)
+                            self?.pendingContextMenuAction = { [weak self] in
+                                self?.onOpenOffline(row.item)
+                            }
                         }
                     )
                 }
@@ -420,7 +451,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                                 : "arrow.clockwise.icloud"
                         )
                     ) { [weak self] _ in
-                        self?.onSaveOffline(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onSaveOffline(row.item)
+                        }
                     }
                 )
 
@@ -431,7 +464,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                             image: UIImage(systemName: "trash"),
                             attributes: .destructive
                         ) { [weak self] _ in
-                            self?.onRemoveOffline(row.item)
+                            self?.pendingContextMenuAction = { [weak self] in
+                                self?.onRemoveOffline(row.item)
+                            }
                         }
                     )
                 }
@@ -441,7 +476,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                         title: "Import",
                         image: UIImage(systemName: "square.and.arrow.down")
                     ) { [weak self] _ in
-                        self?.onImport(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onImport(row.item)
+                        }
                     }
                 )
             }
@@ -709,6 +746,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     private let thumbnailPlaceholderImageView = UIImageView()
     private let symbolView = UIView()
     private let symbolImageView = UIImageView()
+    private let titleIconView = UIImageView()
     private let titleLabel = UILabel()
     private let metadataLabel = UILabel()
     private let cacheBadgeView = UIImageView()
@@ -719,6 +757,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     private var progressFraction: CGFloat = 0
     private var thumbnailTask: Task<Void, Never>?
     private var representedItemID: String?
+    private var registeredHeroSourceID: String?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -733,6 +772,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         super.prepareForReuse()
         thumbnailTask?.cancel()
         thumbnailTask = nil
+        unregisterHeroSourceIfNeeded()
         representedItemID = nil
         thumbnailImageView.image = nil
         thumbnailImageView.isHidden = true
@@ -752,10 +792,21 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     ) {
         representedItemID = row.item.id
         titleLabel.text = row.item.name
+        configureTitlePrefix(for: row.item)
         metadataLabel.text = metadataText(for: row)
+        updateHeroSourceRegistration(for: row.item)
         imageHeightConstraint?.constant = itemWidth / AppLayout.coverAspectRatio
 
-        if row.item.canOpenAsComic, !row.item.isPDFDocument {
+        if row.item.isDirectory, !row.item.previewItems.isEmpty {
+            configureDirectoryPreview(
+                item: row.item,
+                profile: profile,
+                browsingService: browsingService,
+                itemWidth: itemWidth
+            )
+            cacheBadgeView.isHidden = true
+            progressTrackView.isHidden = true
+        } else if row.item.canOpenAsComic, !row.item.isPDFDocument {
             configureComicThumbnail(
                 item: row.item,
                 profile: profile,
@@ -784,6 +835,51 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             cacheBadgeView.isHidden = true
             progressTrackView.isHidden = true
             configureSymbolView(for: row.item)
+        }
+    }
+
+    private func configureDirectoryPreview(
+        item: RemoteDirectoryItem,
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService,
+        itemWidth: CGFloat
+    ) {
+        thumbnailImageView.isHidden = false
+        thumbnailPlaceholderView.isHidden = false
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "folder.fill")
+        symbolView.isHidden = true
+        thumbnailTask?.cancel()
+
+        let targetSize = CGSize(
+            width: itemWidth,
+            height: itemWidth / AppLayout.coverAspectRatio
+        )
+        let itemID = item.id
+        let seeded = RemoteDirectoryPreviewSupport.seededCompositeImage(
+            for: item,
+            browsingService: browsingService,
+            targetSize: targetSize,
+            scale: UIScreen.main.scale
+        )
+        if representedItemID == itemID {
+            thumbnailImageView.image = seeded
+            thumbnailPlaceholderView.isHidden = seeded != nil
+        }
+
+        thumbnailTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let image = await RemoteDirectoryPreviewSupport.loadCompositeImage(
+                for: item,
+                profile: profile,
+                browsingService: browsingService,
+                targetSize: targetSize,
+                scale: UIScreen.main.scale
+            )
+            guard !Task.isCancelled, self.representedItemID == itemID else {
+                return
+            }
+            self.thumbnailImageView.image = image
+            self.thumbnailPlaceholderView.isHidden = image != nil
         }
     }
 
@@ -833,6 +929,14 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 2
 
+        titleIconView.translatesAutoresizingMaskIntoConstraints = false
+        titleIconView.contentMode = .scaleAspectFit
+        titleIconView.transform = CGAffineTransform(translationX: 0, y: 1)
+        titleIconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
+            pointSize: 13,
+            weight: .semibold
+        )
+
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = UIFont.preferredFont(forTextStyle: .footnote)
         metadataLabel.textColor = .secondaryLabel
@@ -852,7 +956,13 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         progressFillView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
         progressTrackView.addSubview(progressFillView)
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, metadataLabel])
+        let titleRow = UIStackView(arrangedSubviews: [titleIconView, titleLabel])
+        titleRow.translatesAutoresizingMaskIntoConstraints = false
+        titleRow.axis = .horizontal
+        titleRow.alignment = .top
+        titleRow.spacing = 6
+
+        let textStack = UIStackView(arrangedSubviews: [titleRow, metadataLabel])
         textStack.translatesAutoresizingMaskIntoConstraints = false
         textStack.axis = .vertical
         textStack.alignment = .fill
@@ -903,6 +1013,9 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             progressFillView.topAnchor.constraint(equalTo: progressTrackView.topAnchor),
             progressFillView.bottomAnchor.constraint(equalTo: progressTrackView.bottomAnchor),
             progressWidthConstraint!,
+
+            titleIconView.widthAnchor.constraint(equalToConstant: 15),
+            titleIconView.heightAnchor.constraint(equalToConstant: 15),
 
             textStack.topAnchor.constraint(equalTo: thumbnailImageView.bottomAnchor, constant: Metrics.verticalPadding),
             textStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: Metrics.horizontalPadding),
@@ -955,6 +1068,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     }
 
     private func configureSymbolView(for item: RemoteDirectoryItem) {
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
         let isDirectory = item.isDirectory
         let isPDF = item.isPDFDocument
         let tintColor: UIColor = isDirectory ? .systemBlue : (isPDF ? .systemRed : .systemBlue)
@@ -974,6 +1088,44 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             pointSize: 34,
             weight: .semibold
         )
+    }
+
+    private func configureTitlePrefix(for item: RemoteDirectoryItem) {
+        titleIconView.image = UIImage(systemName: item.titleSystemImageName)
+
+        if item.isDirectory {
+            titleIconView.tintColor = .systemBlue
+        } else if item.canOpenAsComic {
+            titleIconView.tintColor = .systemGreen
+        } else {
+            titleIconView.tintColor = .secondaryLabel
+        }
+    }
+
+    func heroSourceFrame() -> CGRect {
+        thumbnailPlaceholderView.convert(thumbnailPlaceholderView.bounds, to: nil)
+    }
+
+    private func updateHeroSourceRegistration(for item: RemoteDirectoryItem) {
+        if registeredHeroSourceID != item.id {
+            unregisterHeroSourceIfNeeded()
+        }
+
+        guard item.canOpenAsComic else {
+            return
+        }
+
+        HeroSourceRegistry.shared.register(view: thumbnailPlaceholderView, for: item.id)
+        registeredHeroSourceID = item.id
+    }
+
+    private func unregisterHeroSourceIfNeeded() {
+        guard let registeredHeroSourceID else {
+            return
+        }
+
+        HeroSourceRegistry.shared.unregister(view: thumbnailPlaceholderView, for: registeredHeroSourceID)
+        self.registeredHeroSourceID = nil
     }
 
     private func updateCacheBadge(for availability: RemoteComicCachedAvailability) {

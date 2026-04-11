@@ -22,6 +22,7 @@ struct RemoteServerDetailView: View {
     @State private var editorDraft: RemoteServerEditorDraft?
     @State private var navigationRequest: RemoteServerDetailNavigationRequest?
     @State private var presentedRecentSession: RemoteComicReadingSession?
+    @State private var presentedInfoSession: RemoteComicReadingSession?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
     @State private var containerWidth: CGFloat = 0
@@ -117,6 +118,9 @@ struct RemoteServerDetailView: View {
             }
         }
         .background(readerPresenter)
+        .background {
+            SystemSheetPresenter(item: $presentedInfoSession, content: recentSessionInfoSheet)
+        }
     }
 
     @ViewBuilder
@@ -206,40 +210,13 @@ struct RemoteServerDetailView: View {
                 )
                 .padding(.vertical, 24)
             } else {
-                ForEach(recentSessions) { session in
-                    HeroTapButton { frame in
-                        prepareHeroTransition(for: session, fallbackFrame: frame)
-                        presentedRecentSession = session
-                    } label: {
-                        RemoteInsetListRowCard {
-                            RemoteOfflineComicCard(
-                                session: session,
-                                profile: profile,
-                                availability: dependencies.remoteServerBrowsingService.cachedAvailability(
-                                    for: session.resolvedComicFileReference(for: profile)
-                                ),
-                                browsingService: dependencies.remoteServerBrowsingService,
-                                heroSourceID: session.directoryItem.id,
-                                showsNavigationIndicator: false,
-                                showsServerName: false,
-                                trailingAccessoryReservedWidth: recentSessionAccessoryReservedWidth
-                            )
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .insetCardListRow(horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset)
-                    .overlay(alignment: .trailing) {
-                        if showsPersistentRecentSessionActions {
-                            recentSessionActionMenu(for: session)
-                                .padding(.trailing, 8)
-                        }
-                    }
-                    .contextMenu {
-                        recentSessionActionMenuContent(for: session)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        recentSessionSwipeActions(for: session)
-                    }
+                AdaptiveCardListRows(
+                    recentSessions,
+                    columnCount: adaptiveListColumnCount,
+                    spacing: adaptiveListColumnSpacing,
+                    horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset
+                ) { session in
+                    recentSessionRow(for: session)
                 }
             }
         }
@@ -265,6 +242,17 @@ struct RemoteServerDetailView: View {
             && containerWidth >= RemoteServerDetailLayoutMetrics.persistentActionMinWidth
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     private var recentSessionAccessoryReservedWidth: CGFloat {
         showsPersistentRecentSessionActions ? RemoteServerDetailLayoutMetrics.rowAccessoryReservedWidth : 0
     }
@@ -275,6 +263,48 @@ struct RemoteServerDetailView: View {
 
     private var offlineCopyCount: Int {
         viewModel.cacheSummary(for: profile).fileCount
+    }
+
+    @ViewBuilder
+    private func recentSessionRow(for session: RemoteComicReadingSession) -> some View {
+        let baseRow = HeroTapButton { frame in
+            prepareHeroTransition(for: session, fallbackFrame: frame)
+            presentedRecentSession = session
+        } label: {
+            RemoteInsetListRowCard {
+                RemoteOfflineComicCard(
+                    session: session,
+                    profile: profile,
+                    availability: dependencies.remoteServerBrowsingService.cachedAvailability(
+                        for: session.resolvedComicFileReference(for: profile)
+                    ),
+                    browsingService: dependencies.remoteServerBrowsingService,
+                    heroSourceID: session.directoryItem.id,
+                    showsNavigationIndicator: false,
+                    showsServerName: false,
+                    trailingAccessoryReservedWidth: recentSessionAccessoryReservedWidth
+                )
+            }
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .trailing) {
+            if showsPersistentRecentSessionActions {
+                recentSessionActionMenu(for: session)
+                    .padding(.trailing, 8)
+            }
+        }
+        .contextMenu {
+            recentSessionActionMenuContent(for: session)
+        }
+
+        if adaptiveListColumnCount == 1 {
+            baseRow
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    recentSessionSwipeActions(for: session)
+                }
+        } else {
+            baseRow
+        }
     }
 
     private var browserEntryRawPath: String {
@@ -399,6 +429,12 @@ struct RemoteServerDetailView: View {
     private func recentSessionActionMenuContent(
         for session: RemoteComicReadingSession
     ) -> some View {
+        Button {
+            presentInfo(for: session)
+        } label: {
+            Label("Info", systemImage: "info.circle")
+        }
+
         Button(role: .destructive) {
             deleteRecentSession(session)
         } label: {
@@ -432,6 +468,26 @@ struct RemoteServerDetailView: View {
     private func deleteRecentSession(_ session: RemoteComicReadingSession) {
         viewModel.deleteRecentSession(session)
         refreshDetailState(forceReload: true)
+    }
+
+    private func presentInfo(for session: RemoteComicReadingSession) {
+        DispatchQueue.main.async {
+            presentedInfoSession = session
+        }
+    }
+
+    private func recentSessionInfoSheet(
+        for session: RemoteComicReadingSession
+    ) -> some View {
+        RemoteComicInfoSheet(
+            profile: profile,
+            item: session.directoryItem,
+            readingSession: session,
+            cacheAvailability: dependencies.remoteServerBrowsingService.cachedAvailability(
+                for: session.resolvedComicFileReference(for: profile)
+            ),
+            browsingService: dependencies.remoteServerBrowsingService
+        )
     }
 
     private func refreshDetailState(forceReload: Bool = false) {

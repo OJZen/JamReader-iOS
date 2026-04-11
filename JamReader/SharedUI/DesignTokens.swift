@@ -137,6 +137,8 @@ enum AppLayout {
     static let regularInlineActionMinWidth: CGFloat = 700
     static let regularReaderLayoutMinWidth: CGFloat = 700
     static let regularNavigationSplitMinWidth: CGFloat = 780
+    static let regularListTwoColumnMinWidth: CGFloat = 760
+    static let regularListThreeColumnMinWidth: CGFloat = 1080
 
     static let coverAspectRatio: CGFloat = 2.0 / 3.0
 
@@ -151,6 +153,37 @@ enum AppLayout {
         minimumWidth: CGFloat = regularInlineActionMinWidth
     ) -> Bool {
         horizontalSizeClass == .regular && max(containerWidth, 0) >= minimumWidth
+    }
+
+    static func adaptiveListColumnCount(
+        horizontalSizeClass: UserInterfaceSizeClass?,
+        containerWidth: CGFloat
+    ) -> Int {
+        guard horizontalSizeClass == .regular else {
+            return 1
+        }
+
+        let width = max(containerWidth, 0)
+        if width >= regularListThreeColumnMinWidth {
+            return 3
+        }
+
+        if width >= regularListTwoColumnMinWidth {
+            return 2
+        }
+
+        return 1
+    }
+
+    static func adaptiveListColumnSpacing(for columnCount: Int) -> CGFloat {
+        switch columnCount {
+        case 3:
+            return 10
+        case 2:
+            return 12
+        default:
+            return 0
+        }
     }
 }
 

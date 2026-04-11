@@ -36,33 +36,13 @@ struct SavedRemoteFoldersView: View {
             } else {
                 ForEach(displayedSections) { section in
                     Section {
-                        ForEach(section.entries) { entry in
-                            NavigationLink {
-                                RemoteServerBrowserView(
-                                    profile: entry.profile,
-                                    currentPath: entry.shortcut.path,
-                                    dependencies: dependencies
-                                )
-                            } label: {
-                                RemoteSavedFolderCard(
-                                    shortcut: entry.shortcut,
-                                    profile: entry.profile,
-                                    showsNavigationIndicator: false,
-                                    showsServerName: false,
-                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .insetCardListRow(horizontalInset: SavedRemoteFoldersLayoutMetrics.horizontalInset)
-                            .overlay(alignment: .trailing) {
-                                if showsPersistentItemActions {
-                                    savedFolderActionMenu(for: entry)
-                                        .padding(.trailing, 8)
-                                }
-                            }
-                            .contextMenu {
-                                savedFolderActionMenuContent(for: entry)
-                            }
+                        AdaptiveCardListRows(
+                            section.entries,
+                            columnCount: adaptiveListColumnCount,
+                            spacing: adaptiveListColumnSpacing,
+                            horizontalInset: SavedRemoteFoldersLayoutMetrics.horizontalInset
+                        ) { entry in
+                            savedFolderRow(for: entry)
                         }
                     } header: {
                         sectionHeader(for: section)
@@ -133,8 +113,49 @@ struct SavedRemoteFoldersView: View {
             && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     private var itemAccessoryReservedWidth: CGFloat {
         showsPersistentItemActions ? SavedRemoteFoldersLayoutMetrics.rowAccessoryReservedWidth : 0
+    }
+
+    private func savedFolderRow(
+        for entry: SavedRemoteFoldersViewModel.ShortcutEntry
+    ) -> some View {
+        NavigationLink {
+            RemoteServerBrowserView(
+                profile: entry.profile,
+                currentPath: entry.shortcut.path,
+                dependencies: dependencies
+            )
+        } label: {
+            RemoteSavedFolderCard(
+                shortcut: entry.shortcut,
+                profile: entry.profile,
+                showsNavigationIndicator: false,
+                showsServerName: false,
+                trailingAccessoryReservedWidth: itemAccessoryReservedWidth
+            )
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .trailing) {
+            if showsPersistentItemActions {
+                savedFolderActionMenu(for: entry)
+                    .padding(.trailing, 8)
+            }
+        }
+        .contextMenu {
+            savedFolderActionMenuContent(for: entry)
+        }
     }
 
     private var filteredEntries: [SavedRemoteFoldersViewModel.ShortcutEntry] {

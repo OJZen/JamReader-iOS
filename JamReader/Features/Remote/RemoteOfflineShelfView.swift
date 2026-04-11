@@ -325,34 +325,13 @@ struct RemoteOfflineShelfView: View {
             } else {
                 ForEach(displayedSections) { section in
                     Section {
-                        ForEach(section.entries) { entry in
-                            RemoteInsetListRowCard(contentPadding: 12) {
-                                RemoteOfflineComicCard(
-                                    session: entry.session,
-                                    profile: entry.profile,
-                                    availability: entry.availability,
-                                    browsingService: dependencies.remoteServerBrowsingService,
-                                    heroSourceID: entry.session.directoryItem.id,
-                                    showsNavigationIndicator: false,
-                                    showsServerName: false,
-                                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
-                                )
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                prepareHeroTransition(for: entry, fallbackFrame: .zero)
-                                presentedEntry = entry
-                            }
-                            .insetCardListRow(horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset)
-                            .overlay(alignment: .trailing) {
-                                if showsPersistentItemActions {
-                                    offlineShelfItemActionMenu(for: entry)
-                                        .padding(.trailing, 8)
-                                }
-                            }
-                            .contextMenu {
-                                offlineShelfItemActionMenuContent(for: entry)
-                            }
+                        AdaptiveCardListRows(
+                            section.entries,
+                            columnCount: adaptiveListColumnCount,
+                            spacing: adaptiveListColumnSpacing,
+                            horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset
+                        ) { entry in
+                            offlineShelfEntryRow(for: entry)
                         }
                     } header: {
                         sectionHeader(for: section)
@@ -664,6 +643,17 @@ struct RemoteOfflineShelfView: View {
             && containerWidth >= AppLayout.regularInlineActionMinWidth
     }
 
+    private var adaptiveListColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: containerWidth
+        )
+    }
+
+    private var adaptiveListColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
     private var itemAccessoryReservedWidth: CGFloat {
         showsPersistentItemActions ? RemoteOfflineShelfLayoutMetrics.rowAccessoryReservedWidth : 0
     }
@@ -671,6 +661,37 @@ struct RemoteOfflineShelfView: View {
     private var background: some View {
         Color(.systemGroupedBackground)
             .ignoresSafeArea()
+    }
+
+    private func offlineShelfEntryRow(
+        for entry: RemoteOfflineComicEntry
+    ) -> some View {
+        RemoteInsetListRowCard(contentPadding: 12) {
+            RemoteOfflineComicCard(
+                session: entry.session,
+                profile: entry.profile,
+                availability: entry.availability,
+                browsingService: dependencies.remoteServerBrowsingService,
+                heroSourceID: entry.session.directoryItem.id,
+                showsNavigationIndicator: false,
+                showsServerName: false,
+                trailingAccessoryReservedWidth: itemAccessoryReservedWidth
+            )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            prepareHeroTransition(for: entry, fallbackFrame: .zero)
+            presentedEntry = entry
+        }
+        .overlay(alignment: .trailing) {
+            if showsPersistentItemActions {
+                offlineShelfItemActionMenu(for: entry)
+                    .padding(.trailing, 8)
+            }
+        }
+        .contextMenu {
+            offlineShelfItemActionMenuContent(for: entry)
+        }
     }
 
     private func scheduleFeedbackDismissalIfNeeded() {

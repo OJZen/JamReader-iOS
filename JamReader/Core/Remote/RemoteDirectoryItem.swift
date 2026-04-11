@@ -24,6 +24,7 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
     let modifiedAt: Date?
     let pageCountHint: Int?
     let coverPath: String?
+    let previewItems: [RemoteDirectoryItem]
 
     nonisolated var id: String {
         "\(serverID.uuidString)|\(providerKind.rawValue)|\(shareName)|\(cacheScopeKey)|\(path)"
@@ -58,6 +59,18 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
 
     nonisolated var isPDFDocument: Bool {
         !isComicDirectory && fileExtension == "pdf"
+    }
+
+    nonisolated var titleSystemImageName: String {
+        if isDirectory {
+            return "folder.fill"
+        }
+
+        if canOpenAsComic {
+            return "book.closed.fill"
+        }
+
+        return "doc.fill"
     }
 }
 

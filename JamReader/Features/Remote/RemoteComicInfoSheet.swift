@@ -68,10 +68,12 @@ struct RemoteComicInfoSheet: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(3)
+                    .textSelection(.enabled)
 
                 Text(formatDisplayName)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
 
                 VStack(alignment: .leading, spacing: 8) {
                     infoChip(

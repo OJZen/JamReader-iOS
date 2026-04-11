@@ -1,5 +1,203 @@
 import SwiftUI
 
+enum RemoteDirectoryPreviewSupport {
+    static func previewItems(for item: RemoteDirectoryItem) -> [RemoteDirectoryItem] {
+        Array(
+            item.previewItems
+                .filter { !$0.isPDFDocument }
+                .prefix(4)
+        )
+    }
+
+    @MainActor
+    static func prefersLocalCache(
+        for item: RemoteDirectoryItem,
+        browsingService: RemoteServerBrowsingService
+    ) -> Bool {
+        guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+            return false
+        }
+
+        return browsingService.cachedAvailability(for: reference).hasLocalCopy
+    }
+
+    @MainActor
+    static func seededCompositeImage(
+        for item: RemoteDirectoryItem,
+        browsingService: RemoteServerBrowsingService,
+        targetSize: CGSize,
+        scale: CGFloat
+    ) -> UIImage? {
+        let previewItems = previewItems(for: item)
+        guard !previewItems.isEmpty else {
+            return nil
+        }
+
+        let pixelSize = Int(max(targetSize.width, targetSize.height) * max(scale, 1))
+        let images = previewItems.compactMap {
+            RemoteComicThumbnailPipeline.shared.cachedImage(
+                for: $0,
+                browsingService: browsingService,
+                maxPixelSize: pixelSize
+            )
+        }
+        guard !images.isEmpty else {
+            return nil
+        }
+
+        return compositeImage(from: images, size: targetSize)
+    }
+
+    @MainActor
+    static func loadCompositeImage(
+        for item: RemoteDirectoryItem,
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService,
+        targetSize: CGSize,
+        scale: CGFloat
+    ) async -> UIImage? {
+        let previewItems = previewItems(for: item)
+        guard !previewItems.isEmpty else {
+            return nil
+        }
+
+        let pixelSize = Int(max(targetSize.width, targetSize.height) * max(scale, 1))
+        var images: [UIImage] = []
+
+        for previewItem in previewItems {
+            if Task.isCancelled {
+                return nil
+            }
+
+            let pipelineImage = await RemoteComicThumbnailPipeline.shared.image(
+                for: profile,
+                item: previewItem,
+                browsingService: browsingService,
+                prefersLocalCache: prefersLocalCache(
+                    for: previewItem,
+                    browsingService: browsingService
+                ),
+                maxPixelSize: pixelSize,
+                allowsRemoteFetch: true
+            )
+            let image: UIImage?
+            if let pipelineImage {
+                image = pipelineImage
+            } else {
+                image = await directThumbnail(
+                    for: previewItem,
+                    profile: profile,
+                    browsingService: browsingService,
+                    maxPixelSize: pixelSize
+                )
+            }
+
+            if let image {
+                images.append(image)
+            }
+        }
+
+        guard !images.isEmpty else {
+            return nil
+        }
+
+        return compositeImage(from: images, size: targetSize)
+    }
+
+    @MainActor
+    private static func directThumbnail(
+        for item: RemoteDirectoryItem,
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService,
+        maxPixelSize: Int
+    ) async -> UIImage? {
+        guard let reference = try? browsingService.makeComicFileReference(from: item) else {
+            return nil
+        }
+
+        return await browsingService.fetchDirectThumbnail(
+            for: profile,
+            reference: reference,
+            maxPixelSize: maxPixelSize
+        )
+    }
+
+    static func compositeImage(from images: [UIImage], size: CGSize) -> UIImage? {
+        let limitedImages = Array(images.prefix(4))
+        guard !limitedImages.isEmpty, size.width > 0, size.height > 0 else {
+            return nil
+        }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+
+        return renderer.image { context in
+            let bounds = CGRect(origin: .zero, size: size)
+            UIColor(white: 0.1, alpha: 1).setFill()
+            context.fill(bounds)
+
+            for (image, frame) in zip(limitedImages, previewFrames(count: limitedImages.count, in: bounds)) {
+                drawAspectFill(image, in: frame)
+            }
+        }
+    }
+
+    private static func previewFrames(count: Int, in bounds: CGRect) -> [CGRect] {
+        let inset: CGFloat = 4
+        let gap: CGFloat = 4
+        let innerBounds = bounds.insetBy(dx: inset, dy: inset)
+
+        switch count {
+        case 1:
+            return [innerBounds]
+        case 2:
+            let cellWidth = (innerBounds.width - gap) / 2
+            return [
+                CGRect(x: innerBounds.minX, y: innerBounds.minY, width: cellWidth, height: innerBounds.height),
+                CGRect(x: innerBounds.minX + cellWidth + gap, y: innerBounds.minY, width: cellWidth, height: innerBounds.height)
+            ]
+        case 3:
+            let leadWidth = innerBounds.width * 0.58
+            let trailingWidth = innerBounds.width - leadWidth - gap
+            let trailingHeight = (innerBounds.height - gap) / 2
+            return [
+                CGRect(x: innerBounds.minX, y: innerBounds.minY, width: leadWidth, height: innerBounds.height),
+                CGRect(x: innerBounds.minX + leadWidth + gap, y: innerBounds.minY, width: trailingWidth, height: trailingHeight),
+                CGRect(x: innerBounds.minX + leadWidth + gap, y: innerBounds.minY + trailingHeight + gap, width: trailingWidth, height: trailingHeight)
+            ]
+        default:
+            let cellWidth = (innerBounds.width - gap) / 2
+            let cellHeight = (innerBounds.height - gap) / 2
+            return [
+                CGRect(x: innerBounds.minX, y: innerBounds.minY, width: cellWidth, height: cellHeight),
+                CGRect(x: innerBounds.minX + cellWidth + gap, y: innerBounds.minY, width: cellWidth, height: cellHeight),
+                CGRect(x: innerBounds.minX, y: innerBounds.minY + cellHeight + gap, width: cellWidth, height: cellHeight),
+                CGRect(x: innerBounds.minX + cellWidth + gap, y: innerBounds.minY + cellHeight + gap, width: cellWidth, height: cellHeight)
+            ]
+        }
+    }
+
+    private static func drawAspectFill(_ image: UIImage, in rect: CGRect) {
+        guard rect.width > 0, rect.height > 0 else {
+            return
+        }
+
+        let imageSize = image.size
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            return
+        }
+
+        let scale = max(rect.width / imageSize.width, rect.height / imageSize.height)
+        let scaledSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let origin = CGPoint(
+            x: rect.midX - scaledSize.width / 2,
+            y: rect.midY - scaledSize.height / 2
+        )
+        image.draw(in: CGRect(origin: origin, size: scaledSize))
+    }
+}
+
 struct RemoteBrowserContextGlyph: View {
     let isRoot: Bool
 
@@ -67,10 +265,7 @@ struct RemoteDirectoryItemListRow: View {
             leadingVisual
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(item.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
+                titleLine
 
                 RemoteInlineMetadataStrip(
                     items: supportingMetadataItems,
@@ -83,6 +278,32 @@ struct RemoteDirectoryItemListRow: View {
         .padding(.vertical, Spacing.xs)
         .padding(.trailing, trailingAccessoryReservedWidth)
         .contentShape(Rectangle())
+    }
+
+    private var titleLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: item.titleSystemImageName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(titleTint)
+                .offset(y: 1)
+
+            Text(item.name)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+        }
+    }
+
+    private var titleTint: Color {
+        if item.isDirectory {
+            return .blue
+        }
+
+        if item.canOpenAsComic {
+            return .green
+        }
+
+        return .secondary
     }
 
     private var supportingMetadataItems: [RemoteInlineMetadataItem] {
@@ -188,12 +409,22 @@ struct RemoteDirectoryItemListRow: View {
                 cacheStatusDot(size: 8)
             }
         } else {
-            RemoteDirectorySymbolTile(
-                systemImage: item.isDirectory ? "folder.fill" : "doc.richtext.fill",
-                tint: item.isDirectory ? .blue : .green,
-                width: 44,
-                height: 62
-            )
+            if item.isDirectory, !item.previewItems.isEmpty {
+                RemoteDirectoryPreviewThumbnailView(
+                    item: item,
+                    profile: profile,
+                    browsingService: browsingService,
+                    width: 44,
+                    height: 62
+                )
+            } else {
+                RemoteDirectorySymbolTile(
+                    systemImage: item.isDirectory ? "folder.fill" : "doc.richtext.fill",
+                    tint: item.isDirectory ? .blue : .green,
+                    width: 44,
+                    height: 62
+                )
+            }
         }
     }
 
@@ -260,11 +491,7 @@ struct RemoteDirectoryGridCard: View {
                 )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.name)
-                    .font(AppFont.footnote(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                titleLine
 
                 compactStatusLine
             }
@@ -278,6 +505,33 @@ struct RemoteDirectoryGridCard: View {
                 .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
         }
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+    }
+
+    private var titleLine: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: item.titleSystemImageName)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(titleTint)
+                .offset(y: 1)
+
+            Text(item.name)
+                .font(AppFont.footnote(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var titleTint: Color {
+        if item.isDirectory {
+            return .blue
+        }
+
+        if item.canOpenAsComic {
+            return .green
+        }
+
+        return .secondary
     }
 
     @ViewBuilder
@@ -324,16 +578,26 @@ struct RemoteDirectoryGridCard: View {
                     readingProgressBar
                 }
             } else {
-                LinearGradient(
-                    colors: [Color.blue.opacity(0.12), Color.blue.opacity(0.22)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(width: cardWidth, height: imageHeight)
-                .overlay {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: cardWidth * 0.22, weight: .semibold))
-                        .foregroundStyle(.blue.opacity(0.75))
+                if item.isDirectory, !item.previewItems.isEmpty {
+                    RemoteDirectoryPreviewThumbnailView(
+                        item: item,
+                        profile: profile,
+                        browsingService: browsingService,
+                        width: cardWidth,
+                        height: imageHeight
+                    )
+                } else {
+                    LinearGradient(
+                        colors: [Color.blue.opacity(0.12), Color.blue.opacity(0.22)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: cardWidth, height: imageHeight)
+                    .overlay {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: cardWidth * 0.22, weight: .semibold))
+                            .foregroundStyle(.blue.opacity(0.75))
+                    }
                 }
             }
         }
@@ -530,6 +794,92 @@ private struct RemoteDirectorySymbolTile: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(tint.opacity(0.10), lineWidth: 1)
             }
+    }
+}
+
+private struct RemoteDirectoryPreviewThumbnailView: View {
+    let item: RemoteDirectoryItem
+    let profile: RemoteServerProfile
+    let browsingService: RemoteServerBrowsingService
+    let width: CGFloat
+    let height: CGFloat
+
+    private var previewItems: [RemoteDirectoryItem] {
+        RemoteDirectoryPreviewSupport.previewItems(for: item)
+    }
+
+    var body: some View {
+        let previewItems = self.previewItems
+
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+
+            if previewItems.isEmpty {
+                Image(systemName: "folder.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.blue)
+            } else {
+                previewGrid(previewItems)
+                    .padding(4)
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func previewGrid(_ previewItems: [RemoteDirectoryItem]) -> some View {
+        switch previewItems.count {
+        case 1:
+            previewCover(previewItems[0], width: width - 8, height: height - 8)
+        case 2:
+            HStack(spacing: 4) {
+                previewCover(previewItems[0], width: (width - 12) / 2, height: height - 8)
+                previewCover(previewItems[1], width: (width - 12) / 2, height: height - 8)
+            }
+        case 3:
+            HStack(spacing: 4) {
+                previewCover(previewItems[0], width: (width - 12) * 0.58, height: height - 8)
+                VStack(spacing: 4) {
+                    previewCover(previewItems[1], width: (width - 12) * 0.42 - 4, height: (height - 12) / 2)
+                    previewCover(previewItems[2], width: (width - 12) * 0.42 - 4, height: (height - 12) / 2)
+                }
+            }
+        default:
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    previewCover(previewItems[0], width: (width - 12) / 2, height: (height - 12) / 2)
+                    previewCover(previewItems[1], width: (width - 12) / 2, height: (height - 12) / 2)
+                }
+                HStack(spacing: 4) {
+                    previewCover(previewItems[2], width: (width - 12) / 2, height: (height - 12) / 2)
+                    previewCover(previewItems[3], width: (width - 12) / 2, height: (height - 12) / 2)
+                }
+            }
+        }
+    }
+
+    private func previewCover(
+        _ previewItem: RemoteDirectoryItem,
+        width: CGFloat,
+        height: CGFloat
+    ) -> some View {
+        RemoteComicThumbnailView(
+            profile: profile,
+            item: previewItem,
+            browsingService: browsingService,
+            prefersLocalCache: RemoteDirectoryPreviewSupport.prefersLocalCache(
+                for: previewItem,
+                browsingService: browsingService
+            ),
+            width: width,
+            height: height
+        )
     }
 }
 

@@ -13,7 +13,6 @@ struct RemoteServerBrowserView: View {
     @State private var hasConfiguredDisplayMode = false
     @State private var sortMode: RemoteDirectorySortMode = .nameAscending
     @State private var hasConfiguredSortMode = false
-    @State private var searchText = ""
     @State private var importRequest: RemoteBrowserImportRequest?
     @State private var navigationRequest: RemoteBrowserNavigationRequest?
     @State private var presentedComicItem: RemoteComicOpenItem?
@@ -85,9 +84,6 @@ struct RemoteServerBrowserView: View {
             .onChange(of: viewModel.items) { _, _ in
                 handleItemsChanged()
             }
-            .onChange(of: searchText) { _, _ in
-                handleSearchTextChanged()
-            }
             .onChange(of: sortMode) { _, _ in
                 handleSortModeChanged()
             }
@@ -126,11 +122,6 @@ struct RemoteServerBrowserView: View {
 
     private var browserPresentationLayer: some View {
         browserLifecycleLayer
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .automatic),
-                prompt: "Filter this folder"
-            )
             .overlay(alignment: .bottom) {
                 browserBottomOverlay
             }
@@ -144,10 +135,12 @@ struct RemoteServerBrowserView: View {
             } message: {
                 offlineRemovalDialogMessage
             }
-            .sheet(item: $presentedInfoItem, content: browserInfoSheet)
             .sheet(item: $importRequest, content: importSheet)
             .navigationDestination(item: $navigationRequest, destination: navigationDestination)
             .background(readerPresenter)
+            .background {
+                SystemSheetPresenter(item: $presentedInfoItem, content: browserInfoSheet)
+            }
     }
 
     private var pendingOfflineRemovalDialogBinding: Binding<Bool> {
@@ -200,11 +193,6 @@ struct RemoteServerBrowserView: View {
     private func handleItemsChanged() {
         scheduleDisplaySnapshotRefresh()
         scheduleThumbnailPreheat(immediately: true)
-    }
-
-    private func handleSearchTextChanged() {
-        scheduleDisplaySnapshotRefresh()
-        scheduleThumbnailPreheat()
     }
 
     private func handleSortModeChanged() {
@@ -351,7 +339,7 @@ struct RemoteServerBrowserView: View {
                 }
 
                 if hasContextActions {
-                    Section(trimmedSearchText.isEmpty ? "Folder" : "Results") {
+                    Section("Folder") {
                         if !displayedComicFiles.isEmpty {
                             Button {
                                 Task<Void, Never> {
@@ -457,9 +445,9 @@ struct RemoteServerBrowserView: View {
                         .padding(.vertical, Spacing.lg)
                 } else {
                     browserUnavailableContent(
-                        title: "No Matches",
-                        systemImage: "magnifyingglass",
-                        description: noMatchesDescription
+                        title: "No Remote Files",
+                        systemImage: "folder",
+                        description: emptyFolderDescription
                     )
                 }
             } else {
@@ -470,14 +458,14 @@ struct RemoteServerBrowserView: View {
                         browsingService: dependencies.remoteServerBrowsingService,
                         layoutContext: browserLayoutContext(for: geometry.size.width),
                         onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
-                        onOpenItem: { item in
+                        onOpenItem: { item, sourceFrame in
                             if item.canOpenAsComic {
-                                prepareHeroTransition(for: item, fallbackFrame: .zero)
+                                prepareHeroTransition(for: item, fallbackFrame: sourceFrame)
                             }
                             openPrimaryAction(for: item)
                         },
                         onShowInfo: { item in
-                            presentedInfoItem = item
+                            presentInfoSheet(for: item)
                         },
                         onOpenOffline: { item in
                             openOfflineCopy(for: item)
@@ -526,9 +514,9 @@ struct RemoteServerBrowserView: View {
                         .padding(.vertical, Spacing.lg)
                 } else {
                     browserUnavailableContent(
-                        title: "No Matches",
-                        systemImage: "magnifyingglass",
-                        description: noMatchesDescription
+                        title: "No Remote Files",
+                        systemImage: "folder",
+                        description: emptyFolderDescription
                     )
                 }
             } else {
@@ -539,12 +527,14 @@ struct RemoteServerBrowserView: View {
                         browsingService: dependencies.remoteServerBrowsingService,
                         layoutContext: browserLayoutContext(for: geometry.size.width),
                         onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
-                        onOpenItem: { item in
-                            prepareHeroTransition(for: item, fallbackFrame: .zero)
+                        onOpenItem: { item, sourceFrame in
+                            if item.canOpenAsComic {
+                                prepareHeroTransition(for: item, fallbackFrame: sourceFrame)
+                            }
                             openPrimaryAction(for: item)
                         },
                         onShowInfo: { item in
-                            presentedInfoItem = item
+                            presentInfoSheet(for: item)
                         },
                         onOpenOffline: { item in
                             openOfflineCopy(for: item)
@@ -958,10 +948,6 @@ struct RemoteServerBrowserView: View {
         }
     }
 
-    private var trimmedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private var displayedDirectories: [RemoteDirectoryItem] {
         displaySnapshot.directories
     }
@@ -983,15 +969,7 @@ struct RemoteServerBrowserView: View {
     }
 
     private var emptyFolderDescription: String {
-        if trimmedSearchText.isEmpty {
-            return "No folders or supported comics in this location."
-        }
-
-        return noMatchesDescription
-    }
-
-    private var noMatchesDescription: String {
-        "No folders or comics match \"\(trimmedSearchText)\"."
+        "No folders or supported comics in this location."
     }
 
     private func browserUnavailableContent(
@@ -1012,13 +990,11 @@ struct RemoteServerBrowserView: View {
         isDisplaySnapshotRefreshing = true
 
         let items = viewModel.items
-        let searchText = searchText
         let sortMode = sortMode
 
         displaySnapshotRefreshTask = Task.detached(priority: .userInitiated) {
             let nextSnapshot = RemoteBrowserDisplaySnapshot.make(
                 from: items,
-                searchText: searchText,
                 sortMode: sortMode
             )
 
@@ -1048,13 +1024,11 @@ struct RemoteServerBrowserView: View {
         let snapshot = displaySnapshot
         let progressByItemID = viewModel.progressByItemID
         let cacheAvailabilityByItemID = viewModel.cacheAvailabilityByItemID
-        let trimmedSearchText = trimmedSearchText
 
         let buildSections = {
             sectionBuildTask = Task.detached(priority: .userInitiated) {
                 let nextSections = Self.buildUIKitSections(
                     snapshot: snapshot,
-                    trimmedSearchText: trimmedSearchText,
                     progressByItemID: progressByItemID,
                     cacheAvailabilityByItemID: cacheAvailabilityByItemID
                 )
@@ -1144,7 +1118,6 @@ struct RemoteServerBrowserView: View {
 
     nonisolated private static func buildUIKitSections(
         snapshot: RemoteBrowserDisplaySnapshot,
-        trimmedSearchText: String,
         progressByItemID: [String: RemoteComicReadingSession],
         cacheAvailabilityByItemID: [String: RemoteComicCachedAvailability]
     ) -> [RemoteBrowserListSectionModel] {
@@ -1154,7 +1127,7 @@ struct RemoteServerBrowserView: View {
             sections.append(
                 RemoteBrowserListSectionModel(
                     kind: .directories,
-                    title: trimmedSearchText.isEmpty ? "Folders" : "Matching Folders",
+                    title: "Folders",
                     metadataText: Self.metadataText(
                         forCount: snapshot.directories.count,
                         singular: "folder",
@@ -1200,7 +1173,7 @@ struct RemoteServerBrowserView: View {
             sections.append(
                 RemoteBrowserListSectionModel(
                     kind: .comics,
-                    title: trimmedSearchText.isEmpty ? "Comics" : "Matching Comics",
+                    title: "Comics",
                     metadataText: comicMetadata.isEmpty ? nil : comicMetadata,
                     footerText: nil,
                     items: snapshot.comicFiles.map {
@@ -1335,6 +1308,13 @@ struct RemoteServerBrowserView: View {
         )
     }
 
+    private func presentInfoSheet(for item: RemoteDirectoryItem) {
+        // Let the UIKit context menu dismissal finish before presenting SwiftUI sheet content.
+        DispatchQueue.main.async {
+            presentedInfoItem = item
+        }
+    }
+
     private func openOfflineAction(
         for item: RemoteDirectoryItem,
         availability: RemoteComicCachedAvailability
@@ -1396,15 +1376,15 @@ struct RemoteServerBrowserView: View {
     }
 
     private var supportsVisibleResultsImportScope: Bool {
-        !trimmedSearchText.isEmpty && !displayedComicFiles.isEmpty
+        false
     }
 
     private var saveVisibleComicsButtonTitle: String {
-        trimmedSearchText.isEmpty ? "Save Visible Comics" : "Save Results Offline"
+        "Save Visible Comics"
     }
 
     private var removeVisibleOfflineCopiesButtonTitle: String {
-        trimmedSearchText.isEmpty ? "Remove Downloaded Copies" : "Remove Downloaded Result Copies"
+        "Remove Downloaded Copies"
     }
 
     private var importCurrentFolderButtonTitle: String {
@@ -1472,12 +1452,7 @@ struct RemoteServerBrowserView: View {
             return
         }
 
-        let noun: String
-        if trimmedSearchText.isEmpty {
-            noun = items.count == 1 ? "visible comic" : "visible comics"
-        } else {
-            noun = items.count == 1 ? "matching result" : "matching results"
-        }
+        let noun = items.count == 1 ? "visible comic" : "visible comics"
 
         pendingOfflineRemoval = PendingRemoteOfflineRemoval(
             items: items,
@@ -1766,30 +1741,18 @@ struct RemoteBrowserDisplaySnapshot: Equatable {
 
     nonisolated static func make(
         from items: [RemoteDirectoryItem],
-        searchText: String,
         sortMode: RemoteDirectorySortMode
     ) -> RemoteBrowserDisplaySnapshot {
-        let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let filteredItems: [RemoteDirectoryItem]
-
-        if trimmedSearchText.isEmpty {
-            filteredItems = items
-        } else {
-            filteredItems = items.filter { item in
-                item.name.localizedStandardContains(trimmedSearchText)
-            }
-        }
-
         return RemoteBrowserDisplaySnapshot(
             directories: sortItems(
-                filteredItems.filter { $0.kind == .directory },
+                items.filter { $0.kind == .directory },
                 using: sortMode
             ),
             comicFiles: sortItems(
-                filteredItems.filter { $0.canOpenAsComic },
+                items.filter { $0.canOpenAsComic },
                 using: sortMode
             ),
-            unsupportedFileCount: filteredItems.reduce(into: 0) { count, item in
+            unsupportedFileCount: items.reduce(into: 0) { count, item in
                 if item.kind == .unsupportedFile {
                     count += 1
                 }

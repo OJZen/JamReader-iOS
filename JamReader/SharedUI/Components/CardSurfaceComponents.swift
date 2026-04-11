@@ -45,6 +45,96 @@ struct InsetListRowCard<Content: View>: View {
     }
 }
 
+struct AdaptiveCardListRows<Data: RandomAccessCollection, Content: View>: View
+where Data.Element: Identifiable {
+    private let items: [Data.Element]
+    private let columnCount: Int
+    private let spacing: CGFloat
+    private let horizontalInset: CGFloat
+    private let top: CGFloat
+    private let bottom: CGFloat
+    private let appliesListRowStyling: Bool
+    @ViewBuilder private let content: (Data.Element) -> Content
+
+    init(
+        _ data: Data,
+        columnCount: Int,
+        spacing: CGFloat = Spacing.sm,
+        horizontalInset: CGFloat = 0,
+        top: CGFloat = 6,
+        bottom: CGFloat = 6,
+        appliesListRowStyling: Bool = true,
+        @ViewBuilder content: @escaping (Data.Element) -> Content
+    ) {
+        self.items = Array(data)
+        self.columnCount = max(columnCount, 1)
+        self.spacing = spacing
+        self.horizontalInset = horizontalInset
+        self.top = top
+        self.bottom = bottom
+        self.appliesListRowStyling = appliesListRowStyling
+        self.content = content
+    }
+
+    var body: some View {
+        if columnCount <= 1 {
+            ForEach(items) { item in
+                if appliesListRowStyling {
+                    content(item)
+                        .insetCardListRow(
+                            horizontalInset: horizontalInset,
+                            top: top,
+                            bottom: bottom
+                        )
+                } else {
+                    content(item)
+                }
+            }
+        } else {
+            ForEach(Array(groupedItems.enumerated()), id: \.offset) { _, rowItems in
+                let row = HStack(alignment: .top, spacing: spacing) {
+                    ForEach(rowItems) { item in
+                        content(item)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    ForEach(0..<max(0, columnCount - rowItems.count), id: \.self) { _ in
+                        Color.clear
+                            .frame(maxWidth: .infinity, minHeight: 1)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                }
+
+                if appliesListRowStyling {
+                    row.insetCardListRow(
+                        horizontalInset: horizontalInset,
+                        top: top,
+                        bottom: bottom
+                    )
+                } else {
+                    row
+                }
+            }
+        }
+    }
+
+    private var groupedItems: [[Data.Element]] {
+        guard columnCount > 1 else {
+            return items.map { [$0] }
+        }
+
+        var result: [[Data.Element]] = []
+        var index = 0
+        while index < items.count {
+            let endIndex = min(index + columnCount, items.count)
+            result.append(Array(items[index..<endIndex]))
+            index = endIndex
+        }
+        return result
+    }
+}
+
 // MARK: - List Icon Badge
 
 /// Standard iOS-style icon badge for navigation list rows.

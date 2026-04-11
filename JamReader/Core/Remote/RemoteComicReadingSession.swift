@@ -159,7 +159,8 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
             fileSize: fileSize,
             modifiedAt: modifiedAt,
             pageCountHint: pageCount,
-            coverPath: nil
+            coverPath: nil,
+            previewItems: []
         )
     }
 

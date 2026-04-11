@@ -389,6 +389,19 @@ final class RemoteComicThumbnailPipeline {
         return nil
     }
 
+    func hasCachedThumbnail(
+        for item: RemoteDirectoryItem,
+        browsingService: RemoteServerBrowsingService
+    ) -> Bool {
+        guard item.canOpenAsComic,
+              let reference = try? browsingService.makeComicFileReference(from: item)
+        else {
+            return false
+        }
+
+        return hasCachedThumbnail(for: reference)
+    }
+
     func preheat(
         for profile: RemoteServerProfile,
         items: [RemoteDirectoryItem],
@@ -539,6 +552,29 @@ final class RemoteComicThumbnailPipeline {
         let digest = SHA256.hash(data: Data(cacheKey.utf8))
         let fileName = digest.map { String(format: "%02x", $0) }.joined() + ".jpg"
         return thumbnailCacheRootURL.appendingPathComponent(fileName, isDirectory: false)
+    }
+
+    private func hasCachedThumbnail(for reference: RemoteComicFileReference) -> Bool {
+        let qualityCacheKey = Self.itemQualityCacheKey(for: reference) as NSString
+        if highQualityCache.object(forKey: qualityCacheKey) != nil {
+            return true
+        }
+
+        for pixelSize in [160, 256, 384, 512] {
+            let cacheKey = Self.cacheKey(for: reference, maxPixelSize: pixelSize) as NSString
+            if cache.object(forKey: cacheKey) != nil {
+                return true
+            }
+
+            let diskURL = cachedThumbnailURL(
+                forCacheKey: Self.cacheKey(for: reference, maxPixelSize: pixelSize)
+            )
+            if fileManager.fileExists(atPath: diskURL.path) {
+                return true
+            }
+        }
+
+        return false
     }
 }
 

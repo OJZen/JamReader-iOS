@@ -190,6 +190,17 @@ struct RemoteServerBrowserLayoutContext: Equatable {
         gridItemMetrics().itemWidth
     }
 
+    var listColumnCount: Int {
+        AppLayout.adaptiveListColumnCount(
+            horizontalSizeClass: horizontalSizeClass,
+            containerWidth: normalizedWidth
+        )
+    }
+
+    var listColumnSpacing: CGFloat {
+        AppLayout.adaptiveListColumnSpacing(for: listColumnCount)
+    }
+
     static func == (lhs: RemoteServerBrowserLayoutContext, rhs: RemoteServerBrowserLayoutContext) -> Bool {
         lhs.horizontalSizeClass == rhs.horizontalSizeClass
             && Int(lhs.normalizedWidth) == Int(rhs.normalizedWidth)
@@ -202,7 +213,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
     let browsingService: RemoteServerBrowsingService
     let layoutContext: RemoteServerBrowserLayoutContext
     let onVisibleComicIDsChanged: (Set<String>) -> Void
-    let onOpenItem: (RemoteDirectoryItem) -> Void
+    let onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
     let onOpenOffline: (RemoteDirectoryItem) -> Void
     let onSaveOffline: (RemoteDirectoryItem) -> Void
@@ -261,13 +272,14 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         private var browsingService: RemoteServerBrowsingService
         private var layoutContext: RemoteServerBrowserLayoutContext
         private var onVisibleComicIDsChanged: (Set<String>) -> Void
-        private var onOpenItem: (RemoteDirectoryItem) -> Void
+        private var onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
         private var onOpenOffline: (RemoteDirectoryItem) -> Void
         private var onSaveOffline: (RemoteDirectoryItem) -> Void
         private var onRemoveOffline: (RemoteDirectoryItem) -> Void
         private var onImport: (RemoteDirectoryItem) -> Void
         private weak var controller: RemoteBrowserListViewController?
+        private var pendingContextMenuAction: (() -> Void)?
         private var lastReportedVisibleComicIDs: Set<String> = []
         private var pendingVisibleComicIDReport: DispatchWorkItem?
 
@@ -277,7 +289,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
-            onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
+            onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
             onSaveOffline: @escaping (RemoteDirectoryItem) -> Void,
@@ -307,14 +319,21 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
-            onOpenItem: @escaping (RemoteDirectoryItem) -> Void,
+            onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
             onOpenOffline: @escaping (RemoteDirectoryItem) -> Void,
             onSaveOffline: @escaping (RemoteDirectoryItem) -> Void,
             onRemoveOffline: @escaping (RemoteDirectoryItem) -> Void,
             onImport: @escaping (RemoteDirectoryItem) -> Void
         ) {
-            let updatePlan = Self.makeUpdatePlan(from: self.sections, to: sections)
+            let didChangeListColumnCount = self.layoutContext.listColumnCount != layoutContext.listColumnCount
+            let updatePlan = didChangeListColumnCount
+                ? UpdatePlan.fullReload
+                : Self.makeUpdatePlan(
+                    from: self.sections,
+                    to: sections,
+                    groupSize: layoutContext.listColumnCount
+                )
             let didChangeLayoutContext = self.layoutContext != layoutContext
             self.sections = sections
             self.profile = profile
@@ -351,7 +370,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         }
 
         func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-            sections[section].items.count
+            rowGroups(in: section).count
         }
 
         func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -362,19 +381,15 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                 return UITableViewCell()
             }
 
-            let row = sections[indexPath.section].items[indexPath.row]
+            let rows = rowGroup(at: indexPath)
             cell.configure(
-                row: row,
+                rows: rows,
                 profile: profile,
                 browsingService: browsingService,
-                layoutContext: layoutContext
+                layoutContext: layoutContext,
+                onOpenItem: onOpenItem
             )
             return cell
-        }
-
-        func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-            tableView.deselectRow(at: indexPath, animated: true)
-            onOpenItem(sections[indexPath.section].items[indexPath.row].item)
         }
 
         func tableView(
@@ -382,7 +397,20 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             contextMenuConfigurationForRowAt indexPath: IndexPath,
             point: CGPoint
         ) -> UIContextMenuConfiguration? {
-            let row = sections[indexPath.section].items[indexPath.row]
+            let row: RemoteBrowserListRowModel
+            if let cell = tableView.cellForRow(at: indexPath) as? RemoteBrowserListCell {
+                let pointInCell = tableView.convert(point, to: cell)
+                guard let resolvedRow = cell.row(at: pointInCell) else {
+                    return nil
+                }
+                row = resolvedRow
+            } else {
+                guard let fallbackRow = rowGroup(at: indexPath).first else {
+                    return nil
+                }
+                row = fallbackRow
+            }
+
             let actions = menuElements(for: row)
             guard !actions.isEmpty else {
                 return nil
@@ -390,6 +418,28 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
 
             return UIContextMenuConfiguration(identifier: row.item.id as NSString, previewProvider: nil) { _ in
                 UIMenu(children: actions)
+            }
+        }
+
+        func tableView(
+            _ tableView: UITableView,
+            willEndContextMenuInteraction configuration: UIContextMenuConfiguration,
+            animator: UIContextMenuInteractionAnimating?
+        ) {
+            guard let action = pendingContextMenuAction else {
+                return
+            }
+
+            pendingContextMenuAction = nil
+
+            if let animator {
+                animator.addCompletion {
+                    action()
+                }
+            } else {
+                DispatchQueue.main.async {
+                    action()
+                }
             }
         }
 
@@ -446,7 +496,9 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                         title: "Info",
                         image: UIImage(systemName: "info.circle")
                     ) { [weak self] _ in
-                        self?.onShowInfo(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onShowInfo(row.item)
+                        }
                     }
                 )
 
@@ -455,7 +507,9 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                         title: "Import",
                         image: UIImage(systemName: "square.and.arrow.down")
                     ) { [weak self] _ in
-                        self?.onImport(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onImport(row.item)
+                        }
                     }
                 )
 
@@ -465,7 +519,9 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                             title: "Open Offline",
                             image: UIImage(systemName: "arrow.down.circle")
                         ) { [weak self] _ in
-                            self?.onOpenOffline(row.item)
+                            self?.pendingContextMenuAction = { [weak self] in
+                                self?.onOpenOffline(row.item)
+                            }
                         }
                     )
                 }
@@ -479,7 +535,9 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                                 : "arrow.clockwise.icloud"
                         )
                     ) { [weak self] _ in
-                        self?.onSaveOffline(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onSaveOffline(row.item)
+                        }
                     }
                 )
 
@@ -490,7 +548,9 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                             image: UIImage(systemName: "trash"),
                             attributes: .destructive
                         ) { [weak self] _ in
-                            self?.onRemoveOffline(row.item)
+                            self?.pendingContextMenuAction = { [weak self] in
+                                self?.onRemoveOffline(row.item)
+                            }
                         }
                     )
                 }
@@ -500,7 +560,9 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                         title: "Import",
                         image: UIImage(systemName: "square.and.arrow.down")
                     ) { [weak self] _ in
-                        self?.onImport(row.item)
+                        self?.pendingContextMenuAction = { [weak self] in
+                            self?.onImport(row.item)
+                        }
                     }
                 )
             }
@@ -509,16 +571,17 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         }
 
         fileprivate func configureVisibleCell(_ cell: RemoteBrowserListCell, at indexPath: IndexPath) {
-            guard indexPath.section < sections.count,
-                  indexPath.row < sections[indexPath.section].items.count else {
+            let rows = rowGroup(at: indexPath)
+            guard !rows.isEmpty else {
                 return
             }
 
             cell.configure(
-                row: sections[indexPath.section].items[indexPath.row],
+                rows: rows,
                 profile: profile,
                 browsingService: browsingService,
-                layoutContext: layoutContext
+                layoutContext: layoutContext,
+                onOpenItem: onOpenItem
             )
         }
 
@@ -552,14 +615,10 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             pendingVisibleComicIDReport = nil
 
             let visibleIDs = Set(
-                (tableView.indexPathsForVisibleRows ?? []).compactMap { indexPath -> String? in
-                    guard indexPath.section < sections.count,
-                          indexPath.row < sections[indexPath.section].items.count else {
-                        return nil
-                    }
-
-                    let row = sections[indexPath.section].items[indexPath.row]
-                    return row.item.canOpenAsComic ? row.item.id : nil
+                (tableView.indexPathsForVisibleRows ?? []).flatMap { indexPath in
+                    rowGroup(at: indexPath)
+                        .filter { $0.item.canOpenAsComic }
+                        .map(\.item.id)
                 }
             )
 
@@ -573,7 +632,8 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
 
         private static func makeUpdatePlan(
             from oldSections: [RemoteBrowserListSectionModel],
-            to newSections: [RemoteBrowserListSectionModel]
+            to newSections: [RemoteBrowserListSectionModel],
+            groupSize: Int
         ) -> UpdatePlan {
             guard oldSections.count == newSections.count else {
                 return .fullReload
@@ -599,7 +659,12 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                     }
 
                     if oldSection.items[rowIndex] != newSection.items[rowIndex] {
-                        changedIndexPaths.append(IndexPath(row: rowIndex, section: sectionIndex))
+                        changedIndexPaths.append(
+                            IndexPath(
+                                row: rowIndex / max(groupSize, 1),
+                                section: sectionIndex
+                            )
+                        )
                     }
                 }
             }
@@ -608,7 +673,45 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                 return .none
             }
 
-            return .reconfigureVisibleRows(changedIndexPaths)
+            return .reconfigureVisibleRows(Array(Set(changedIndexPaths)))
+        }
+
+        private func rowGroup(at indexPath: IndexPath) -> [RemoteBrowserListRowModel] {
+            let groups = rowGroups(in: indexPath.section)
+            guard indexPath.row >= 0, indexPath.row < groups.count else {
+                return []
+            }
+
+            return groups[indexPath.row]
+        }
+
+        private func rowGroups(in section: Int) -> [[RemoteBrowserListRowModel]] {
+            guard section >= 0, section < sections.count else {
+                return []
+            }
+
+            return Self.chunked(
+                sections[section].items,
+                size: layoutContext.listColumnCount
+            )
+        }
+
+        private static func chunked(
+            _ items: [RemoteBrowserListRowModel],
+            size: Int
+        ) -> [[RemoteBrowserListRowModel]] {
+            guard size > 1 else {
+                return items.map { [$0] }
+            }
+
+            var result: [[RemoteBrowserListRowModel]] = []
+            var index = 0
+            while index < items.count {
+                let endIndex = min(index + size, items.count)
+                result.append(Array(items[index..<endIndex]))
+                index = endIndex
+            }
+            return result
         }
 
     }
@@ -626,6 +729,7 @@ final class RemoteBrowserListViewController: UIViewController {
         tableView.separatorStyle = .none
         tableView.showsVerticalScrollIndicator = true
         tableView.contentInsetAdjustmentBehavior = .automatic
+        tableView.allowsSelection = false
         tableView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 8, right: 0)
         tableView.rowHeight = UITableView.automaticDimension
         tableView.estimatedRowHeight = 110
@@ -749,22 +853,18 @@ final class RemoteBrowserListViewController: UIViewController {
 
 private final class RemoteBrowserListCell: UITableViewCell {
     static let reuseIdentifier = "RemoteBrowserListCell"
+
     private enum Metrics {
-        static let coverWidth: CGFloat = 58
-        static let coverHeight: CGFloat = 87
+        static let horizontalInset: CGFloat = 12
+        static let verticalInset: CGFloat = 6
     }
 
-    private let cardView = UIView()
-    private let titleLabel = UILabel()
-    private let metadataLabel = UILabel()
-    private let thumbnailImageView = UIImageView()
-    private let thumbnailPlaceholderView = UIView()
-    private let thumbnailPlaceholderImageView = UIImageView()
-    private let symbolTileView = UIView()
-    private let symbolImageView = UIImageView()
-    private let cacheDotView = UIView()
-    private var thumbnailTask: Task<Void, Never>?
-    private var representedItemID: String?
+    private let cardViews = [
+        RemoteBrowserListItemCardView(),
+        RemoteBrowserListItemCardView(),
+        RemoteBrowserListItemCardView()
+    ]
+    private let cardsStackView = UIStackView()
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -777,27 +877,155 @@ private final class RemoteBrowserListCell: UITableViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        cardViews.forEach { $0.prepareForReuseCard() }
+    }
+
+    func configure(
+        rows: [RemoteBrowserListRowModel],
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService,
+        layoutContext: RemoteServerBrowserLayoutContext,
+        onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void
+    ) {
+        let visibleCardCount = min(layoutContext.listColumnCount, cardViews.count)
+        cardsStackView.spacing = layoutContext.listColumnSpacing
+
+        for (index, cardView) in cardViews.enumerated() {
+            let shouldParticipateInLayout = index < visibleCardCount
+            cardView.isHidden = !shouldParticipateInLayout
+
+            guard shouldParticipateInLayout else {
+                cardView.prepareForReuseCard()
+                continue
+            }
+
+            let row = index < rows.count ? rows[index] : nil
+            cardView.configure(
+                row: row,
+                profile: profile,
+                browsingService: browsingService
+            ) { [weak cardView] item in
+                onOpenItem(item, cardView?.heroSourceFrame() ?? .zero)
+            }
+        }
+    }
+
+    func row(at point: CGPoint) -> RemoteBrowserListRowModel? {
+        for cardView in cardViews where !cardView.isHidden {
+            let pointInCard = contentView.convert(point, to: cardView)
+            if cardView.bounds.contains(pointInCard),
+               let row = cardView.rowModel {
+                return row
+            }
+        }
+
+        return nil
+    }
+
+    private func buildUI() {
+        backgroundColor = .clear
+        selectionStyle = .none
+        contentView.backgroundColor = .clear
+
+        cardsStackView.translatesAutoresizingMaskIntoConstraints = false
+        cardsStackView.axis = .horizontal
+        cardsStackView.alignment = .fill
+        cardsStackView.distribution = .fillEqually
+        contentView.addSubview(cardsStackView)
+
+        cardViews.forEach { cardsStackView.addArrangedSubview($0) }
+
+        NSLayoutConstraint.activate([
+            cardsStackView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: Metrics.verticalInset),
+            cardsStackView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: Metrics.horizontalInset),
+            cardsStackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -Metrics.horizontalInset),
+            cardsStackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -Metrics.verticalInset)
+        ])
+    }
+}
+
+private final class RemoteBrowserListItemCardView: UIView {
+    fileprivate enum Metrics {
+        static let coverWidth: CGFloat = 58
+        static let coverHeight: CGFloat = 87
+    }
+
+    private let cardView = UIView()
+    private let titleLabel = UILabel()
+    private let titleIconView = UIImageView()
+    private let metadataLabel = UILabel()
+    private let thumbnailImageView = UIImageView()
+    private let thumbnailPlaceholderView = UIView()
+    private let thumbnailPlaceholderImageView = UIImageView()
+    private let symbolTileView = UIView()
+    private let symbolImageView = UIImageView()
+    private let cacheDotView = UIView()
+    private var thumbnailTask: Task<Void, Never>?
+    private var representedItemID: String?
+    private var registeredHeroSourceID: String?
+    private var onOpenItem: ((RemoteDirectoryItem) -> Void)?
+
+    fileprivate private(set) var rowModel: RemoteBrowserListRowModel?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        buildUI()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    fileprivate func prepareForReuseCard() {
         thumbnailTask?.cancel()
         thumbnailTask = nil
+        unregisterHeroSourceIfNeeded()
+        rowModel = nil
         representedItemID = nil
+        onOpenItem = nil
+        titleLabel.text = nil
+        metadataLabel.text = nil
         thumbnailImageView.image = nil
         thumbnailImageView.isHidden = true
         thumbnailPlaceholderView.isHidden = true
         symbolTileView.isHidden = true
         cacheDotView.isHidden = true
+        cardView.alpha = 0
+        isUserInteractionEnabled = false
+        accessibilityElementsHidden = true
     }
 
-    func configure(
-        row: RemoteBrowserListRowModel,
+    fileprivate func configure(
+        row: RemoteBrowserListRowModel?,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
-        layoutContext: RemoteServerBrowserLayoutContext
+        onOpenItem: @escaping (RemoteDirectoryItem) -> Void
     ) {
+        prepareForReuseCard()
+
+        guard let row else {
+            return
+        }
+
+        rowModel = row
+        self.onOpenItem = onOpenItem
         representedItemID = row.item.id
         titleLabel.text = row.item.name
+        configureTitlePrefix(for: row.item)
         metadataLabel.text = metadataText(for: row)
+        updateHeroSourceRegistration(for: row.item)
+        cardView.alpha = 1
+        isUserInteractionEnabled = true
+        accessibilityElementsHidden = false
 
-        if row.item.canOpenAsComic, !row.item.isPDFDocument {
+        if row.item.isDirectory, !row.item.previewItems.isEmpty {
+            configureDirectoryPreview(
+                item: row.item,
+                profile: profile,
+                browsingService: browsingService
+            )
+            cacheDotView.isHidden = true
+        } else if row.item.canOpenAsComic, !row.item.isPDFDocument {
             configureComicThumbnail(
                 item: row.item,
                 profile: profile,
@@ -825,10 +1053,15 @@ private final class RemoteBrowserListCell: UITableViewCell {
         }
     }
 
+    fileprivate func heroSourceFrame() -> CGRect {
+        thumbnailPlaceholderView.convert(thumbnailPlaceholderView.bounds, to: nil)
+    }
+
     private func buildUI() {
-        backgroundColor = .clear
-        selectionStyle = .none
-        contentView.backgroundColor = .clear
+        translatesAutoresizingMaskIntoConstraints = false
+
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        addGestureRecognizer(tapGesture)
 
         cardView.translatesAutoresizingMaskIntoConstraints = false
         cardView.backgroundColor = .secondarySystemGroupedBackground
@@ -836,7 +1069,7 @@ private final class RemoteBrowserListCell: UITableViewCell {
         cardView.layer.cornerCurve = .continuous
         cardView.layer.borderWidth = 1
         cardView.layer.borderColor = UIColor.black.withAlphaComponent(0.04).cgColor
-        contentView.addSubview(cardView)
+        addSubview(cardView)
 
         let visualContainer = UIView()
         visualContainer.translatesAutoresizingMaskIntoConstraints = false
@@ -892,12 +1125,26 @@ private final class RemoteBrowserListCell: UITableViewCell {
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 2
 
+        titleIconView.translatesAutoresizingMaskIntoConstraints = false
+        titleIconView.contentMode = .scaleAspectFit
+        titleIconView.transform = CGAffineTransform(translationX: 0, y: 1)
+        titleIconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
+            pointSize: 14,
+            weight: .semibold
+        )
+
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = .preferredFont(forTextStyle: .footnote)
         metadataLabel.textColor = .secondaryLabel
         metadataLabel.numberOfLines = 1
 
-        let textStack = UIStackView(arrangedSubviews: [titleLabel, metadataLabel])
+        let titleRow = UIStackView(arrangedSubviews: [titleIconView, titleLabel])
+        titleRow.translatesAutoresizingMaskIntoConstraints = false
+        titleRow.axis = .horizontal
+        titleRow.alignment = .top
+        titleRow.spacing = 6
+
+        let textStack = UIStackView(arrangedSubviews: [titleRow, metadataLabel])
         textStack.translatesAutoresizingMaskIntoConstraints = false
         textStack.axis = .vertical
         textStack.alignment = .fill
@@ -907,10 +1154,10 @@ private final class RemoteBrowserListCell: UITableViewCell {
         cardView.addSubview(textStack)
 
         NSLayoutConstraint.activate([
-            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 6),
-            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 12),
-            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -12),
-            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6),
+            cardView.topAnchor.constraint(equalTo: topAnchor),
+            cardView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            cardView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            cardView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             visualContainer.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
             visualContainer.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 10),
@@ -944,12 +1191,69 @@ private final class RemoteBrowserListCell: UITableViewCell {
             cacheDotView.trailingAnchor.constraint(equalTo: visualContainer.trailingAnchor, constant: 2),
             cacheDotView.bottomAnchor.constraint(equalTo: visualContainer.bottomAnchor, constant: 2),
 
+            titleIconView.widthAnchor.constraint(equalToConstant: 16),
+            titleIconView.heightAnchor.constraint(equalToConstant: 16),
+
             textStack.leadingAnchor.constraint(equalTo: visualContainer.trailingAnchor, constant: 14),
             textStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
             textStack.centerYAnchor.constraint(equalTo: visualContainer.centerYAnchor),
             textStack.topAnchor.constraint(greaterThanOrEqualTo: cardView.topAnchor, constant: 12),
             textStack.bottomAnchor.constraint(lessThanOrEqualTo: cardView.bottomAnchor, constant: -12)
         ])
+
+        prepareForReuseCard()
+    }
+
+    @objc
+    private func handleTap() {
+        guard let item = rowModel?.item else {
+            return
+        }
+
+        onOpenItem?(item)
+    }
+
+    private func configureDirectoryPreview(
+        item: RemoteDirectoryItem,
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService
+    ) {
+        symbolTileView.isHidden = true
+        thumbnailImageView.isHidden = false
+        thumbnailPlaceholderView.isHidden = false
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "folder.fill")
+        thumbnailTask?.cancel()
+
+        let targetSize = CGSize(width: Metrics.coverWidth, height: Metrics.coverHeight)
+        let itemID = item.id
+        let seeded = RemoteDirectoryPreviewSupport.seededCompositeImage(
+            for: item,
+            browsingService: browsingService,
+            targetSize: targetSize,
+            scale: UIScreen.main.scale
+        )
+        if representedItemID == itemID {
+            thumbnailImageView.image = seeded
+            thumbnailPlaceholderView.isHidden = seeded != nil
+        }
+
+        thumbnailTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let image = await RemoteDirectoryPreviewSupport.loadCompositeImage(
+                for: item,
+                profile: profile,
+                browsingService: browsingService,
+                targetSize: targetSize,
+                scale: UIScreen.main.scale
+            )
+
+            guard !Task.isCancelled, self.representedItemID == itemID else {
+                return
+            }
+
+            self.thumbnailImageView.image = image
+            self.thumbnailPlaceholderView.isHidden = image != nil
+        }
     }
 
     private func configureComicThumbnail(
@@ -996,6 +1300,7 @@ private final class RemoteBrowserListCell: UITableViewCell {
     }
 
     private func configureSymbolTile(for item: RemoteDirectoryItem) {
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
         let isDirectory = item.isDirectory
         let isPDF = item.isPDFDocument
         let tintColor: UIColor = isDirectory ? .systemBlue : (isPDF ? .systemRed : .systemGreen)
@@ -1009,10 +1314,42 @@ private final class RemoteBrowserListCell: UITableViewCell {
         }
 
         symbolTileView.backgroundColor = tintColor.withAlphaComponent(0.14)
-        symbolImageView.image = UIImage(
-            systemName: systemName
-        )
+        symbolImageView.image = UIImage(systemName: systemName)
         symbolImageView.tintColor = tintColor
+    }
+
+    private func configureTitlePrefix(for item: RemoteDirectoryItem) {
+        titleIconView.image = UIImage(systemName: item.titleSystemImageName)
+
+        if item.isDirectory {
+            titleIconView.tintColor = .systemBlue
+        } else if item.canOpenAsComic {
+            titleIconView.tintColor = .systemGreen
+        } else {
+            titleIconView.tintColor = .secondaryLabel
+        }
+    }
+
+    private func updateHeroSourceRegistration(for item: RemoteDirectoryItem) {
+        if registeredHeroSourceID != item.id {
+            unregisterHeroSourceIfNeeded()
+        }
+
+        guard item.canOpenAsComic else {
+            return
+        }
+
+        HeroSourceRegistry.shared.register(view: thumbnailPlaceholderView, for: item.id)
+        registeredHeroSourceID = item.id
+    }
+
+    private func unregisterHeroSourceIfNeeded() {
+        guard let registeredHeroSourceID else {
+            return
+        }
+
+        HeroSourceRegistry.shared.unregister(view: thumbnailPlaceholderView, for: registeredHeroSourceID)
+        self.registeredHeroSourceID = nil
     }
 
     private func updateCacheDot(for availability: RemoteComicCachedAvailability) {
@@ -1061,7 +1398,6 @@ private final class RemoteBrowserListCell: UITableViewCell {
 
         return parts.joined(separator: " · ")
     }
-
 }
 
 private final class RemoteBrowserListSectionHeaderView: UITableViewHeaderFooterView {
