@@ -201,6 +201,46 @@ struct RemoteServerBrowserLayoutContext: Equatable {
         AppLayout.adaptiveListColumnSpacing(for: listColumnCount)
     }
 
+    var listGridSectionInsets: UIEdgeInsets {
+        let horizontalInset: CGFloat
+        switch listColumnCount {
+        case 3...:
+            horizontalInset = 14
+        case 2:
+            horizontalInset = 16
+        default:
+            horizontalInset = 12
+        }
+
+        return UIEdgeInsets(top: 4, left: horizontalInset, bottom: 20, right: horizontalInset)
+    }
+
+    var listGridNoticeInsets: UIEdgeInsets {
+        let horizontalInset = listGridSectionInsets.left
+        return UIEdgeInsets(top: 0, left: horizontalInset, bottom: 20, right: horizontalInset)
+    }
+
+    var listGridLineSpacing: CGFloat {
+        switch listColumnCount {
+        case 3...:
+            return 12
+        case 2:
+            return 14
+        default:
+            return 12
+        }
+    }
+
+    func listGridItemMetrics(for actualContainerWidth: CGFloat? = nil) -> (columns: Int, itemWidth: CGFloat) {
+        let resolvedWidth = max((actualContainerWidth ?? normalizedWidth).rounded(.toNearestOrAwayFromZero), 0)
+        let columns = max(listColumnCount, 1)
+        let horizontalInset = listGridSectionInsets.left + listGridSectionInsets.right
+        let availableWidth = max(resolvedWidth - horizontalInset, 1)
+        let totalSpacing = CGFloat(max(columns - 1, 0)) * listColumnSpacing
+        let itemWidth = floor((availableWidth - totalSpacing) / CGFloat(columns))
+        return (columns, max(itemWidth, 1))
+    }
+
     static func == (lhs: RemoteServerBrowserLayoutContext, rhs: RemoteServerBrowserLayoutContext) -> Bool {
         lhs.horizontalSizeClass == rhs.horizontalSizeClass
             && Int(lhs.normalizedWidth) == Int(rhs.normalizedWidth)
@@ -944,10 +984,11 @@ private final class RemoteBrowserListCell: UITableViewCell {
     }
 }
 
-private final class RemoteBrowserListItemCardView: UIView {
-    fileprivate enum Metrics {
+final class RemoteBrowserListItemCardView: UIView {
+    enum Metrics {
         static let coverWidth: CGFloat = 58
         static let coverHeight: CGFloat = 87
+        static let preferredHeight: CGFloat = 108
     }
 
     private let cardView = UIView()
@@ -960,12 +1001,14 @@ private final class RemoteBrowserListItemCardView: UIView {
     private let symbolTileView = UIView()
     private let symbolImageView = UIImageView()
     private let cacheDotView = UIView()
+    private lazy var tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
     private var thumbnailTask: Task<Void, Never>?
     private var representedItemID: String?
     private var registeredHeroSourceID: String?
     private var onOpenItem: ((RemoteDirectoryItem) -> Void)?
 
-    fileprivate private(set) var rowModel: RemoteBrowserListRowModel?
+    private(set) var rowModel: RemoteBrowserListRowModel?
+    private var usesEmbeddedTapHandler = true
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -976,13 +1019,15 @@ private final class RemoteBrowserListItemCardView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    fileprivate func prepareForReuseCard() {
+    func prepareForReuseCard() {
         thumbnailTask?.cancel()
         thumbnailTask = nil
         unregisterHeroSourceIfNeeded()
         rowModel = nil
         representedItemID = nil
         onOpenItem = nil
+        usesEmbeddedTapHandler = true
+        tapGesture.isEnabled = true
         titleLabel.text = nil
         metadataLabel.text = nil
         thumbnailImageView.image = nil
@@ -995,10 +1040,11 @@ private final class RemoteBrowserListItemCardView: UIView {
         accessibilityElementsHidden = true
     }
 
-    fileprivate func configure(
+    func configure(
         row: RemoteBrowserListRowModel?,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
+        usesEmbeddedTapHandler: Bool = true,
         onOpenItem: @escaping (RemoteDirectoryItem) -> Void
     ) {
         prepareForReuseCard()
@@ -1008,6 +1054,8 @@ private final class RemoteBrowserListItemCardView: UIView {
         }
 
         rowModel = row
+        self.usesEmbeddedTapHandler = usesEmbeddedTapHandler
+        tapGesture.isEnabled = usesEmbeddedTapHandler
         self.onOpenItem = onOpenItem
         representedItemID = row.item.id
         titleLabel.text = row.item.name
@@ -1053,22 +1101,21 @@ private final class RemoteBrowserListItemCardView: UIView {
         }
     }
 
-    fileprivate func heroSourceFrame() -> CGRect {
+    func heroSourceFrame() -> CGRect {
         thumbnailPlaceholderView.convert(thumbnailPlaceholderView.bounds, to: nil)
     }
 
     private func buildUI() {
         translatesAutoresizingMaskIntoConstraints = false
 
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         addGestureRecognizer(tapGesture)
 
         cardView.translatesAutoresizingMaskIntoConstraints = false
-        cardView.backgroundColor = .secondarySystemGroupedBackground
-        cardView.layer.cornerRadius = 20
+        cardView.backgroundColor = .systemBackground
+        cardView.layer.cornerRadius = 18
         cardView.layer.cornerCurve = .continuous
-        cardView.layer.borderWidth = 1
-        cardView.layer.borderColor = UIColor.black.withAlphaComponent(0.04).cgColor
+        cardView.layer.borderWidth = 0.5
+        cardView.layer.borderColor = UIColor.separator.withAlphaComponent(0.16).cgColor
         addSubview(cardView)
 
         let visualContainer = UIView()
@@ -1206,7 +1253,8 @@ private final class RemoteBrowserListItemCardView: UIView {
 
     @objc
     private func handleTap() {
-        guard let item = rowModel?.item else {
+        guard usesEmbeddedTapHandler,
+              let item = rowModel?.item else {
             return
         }
 
@@ -1375,11 +1423,10 @@ private final class RemoteBrowserListItemCardView: UIView {
             return readingSession.progressText
         }
 
-        if let badgeTitle = row.cacheAvailability.badgeTitle {
-            return badgeTitle
-        }
-
         var parts: [String] = []
+        if let badgeTitle = row.cacheAvailability.badgeTitle {
+            parts.append(badgeTitle)
+        }
         if row.item.isComicDirectory {
             if let pageCountHint = row.item.pageCountHint {
                 parts.append("\(pageCountHint) pages")

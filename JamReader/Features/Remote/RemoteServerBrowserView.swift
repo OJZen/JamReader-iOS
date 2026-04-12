@@ -452,40 +452,82 @@ struct RemoteServerBrowserView: View {
                 }
             } else {
                 GeometryReader { geometry in
-                    RemoteServerBrowserListUIKitView(
-                        sections: renderedSections,
-                        profile: viewModel.profile,
-                        browsingService: dependencies.remoteServerBrowsingService,
-                        layoutContext: browserLayoutContext(for: geometry.size.width),
-                        onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
-                        onOpenItem: { item, sourceFrame in
-                            if item.canOpenAsComic {
-                                prepareHeroTransition(for: item, fallbackFrame: sourceFrame)
-                            }
-                            openPrimaryAction(for: item)
-                        },
-                        onShowInfo: { item in
-                            presentInfoSheet(for: item)
-                        },
-                        onOpenOffline: { item in
-                            openOfflineCopy(for: item)
-                        },
-                        onSaveOffline: { item in
-                            saveOfflineAction(
-                                for: item,
-                                availability: viewModel.cacheAvailability(for: item)
-                            )?()
-                        },
-                        onRemoveOffline: { item in
-                            removeOfflineAction(
-                                for: item,
-                                availability: viewModel.cacheAvailability(for: item)
-                            )?()
-                        },
-                        onImport: { item in
-                            importAction(for: item)?()
+                    let layoutContext = browserLayoutContext(for: geometry.size.width)
+
+                    Group {
+                        if horizontalSizeClass == .regular {
+                            RemoteServerBrowserGridUIKitView(
+                                sections: renderedSections,
+                                profile: viewModel.profile,
+                                browsingService: dependencies.remoteServerBrowsingService,
+                                layoutContext: layoutContext,
+                                presentationStyle: .listGrid,
+                                onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
+                                onOpenItem: { item, sourceFrame in
+                                    if item.canOpenAsComic {
+                                        prepareHeroTransition(for: item, fallbackFrame: sourceFrame)
+                                    }
+                                    openPrimaryAction(for: item)
+                                },
+                                onShowInfo: { item in
+                                    presentInfoSheet(for: item)
+                                },
+                                onOpenOffline: { item in
+                                    openOfflineCopy(for: item)
+                                },
+                                onSaveOffline: { item in
+                                    saveOfflineAction(
+                                        for: item,
+                                        availability: viewModel.cacheAvailability(for: item)
+                                    )?()
+                                },
+                                onRemoveOffline: { item in
+                                    removeOfflineAction(
+                                        for: item,
+                                        availability: viewModel.cacheAvailability(for: item)
+                                    )?()
+                                },
+                                onImport: { item in
+                                    importAction(for: item)?()
+                                }
+                            )
+                        } else {
+                            RemoteServerBrowserListUIKitView(
+                                sections: renderedSections,
+                                profile: viewModel.profile,
+                                browsingService: dependencies.remoteServerBrowsingService,
+                                layoutContext: layoutContext,
+                                onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
+                                onOpenItem: { item, sourceFrame in
+                                    if item.canOpenAsComic {
+                                        prepareHeroTransition(for: item, fallbackFrame: sourceFrame)
+                                    }
+                                    openPrimaryAction(for: item)
+                                },
+                                onShowInfo: { item in
+                                    presentInfoSheet(for: item)
+                                },
+                                onOpenOffline: { item in
+                                    openOfflineCopy(for: item)
+                                },
+                                onSaveOffline: { item in
+                                    saveOfflineAction(
+                                        for: item,
+                                        availability: viewModel.cacheAvailability(for: item)
+                                    )?()
+                                },
+                                onRemoveOffline: { item in
+                                    removeOfflineAction(
+                                        for: item,
+                                        availability: viewModel.cacheAvailability(for: item)
+                                    )?()
+                                },
+                                onImport: { item in
+                                    importAction(for: item)?()
+                                }
+                            )
                         }
-                    )
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .ignoresSafeArea(edges: [.top, .bottom])
                     .background(Color.surfaceGrouped)
@@ -526,6 +568,7 @@ struct RemoteServerBrowserView: View {
                         profile: viewModel.profile,
                         browsingService: dependencies.remoteServerBrowsingService,
                         layoutContext: browserLayoutContext(for: geometry.size.width),
+                        presentationStyle: .grid,
                         onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
                         onOpenItem: { item, sourceFrame in
                             if item.canOpenAsComic {

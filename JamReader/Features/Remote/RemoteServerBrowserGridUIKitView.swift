@@ -1,11 +1,17 @@
 import SwiftUI
 import UIKit
 
+enum RemoteBrowserGridPresentationStyle: Equatable {
+    case grid
+    case listGrid
+}
+
 struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     let sections: [RemoteBrowserListSectionModel]
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
     let layoutContext: RemoteServerBrowserLayoutContext
+    let presentationStyle: RemoteBrowserGridPresentationStyle
     let onVisibleComicIDsChanged: (Set<String>) -> Void
     let onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
@@ -20,6 +26,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             profile: profile,
             browsingService: browsingService,
             layoutContext: layoutContext,
+            presentationStyle: presentationStyle,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -43,6 +50,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             profile: profile,
             browsingService: browsingService,
             layoutContext: layoutContext,
+            presentationStyle: presentationStyle,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -65,6 +73,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         private var profile: RemoteServerProfile
         private var browsingService: RemoteServerBrowsingService
         private var layoutContext: RemoteServerBrowserLayoutContext
+        private var presentationStyle: RemoteBrowserGridPresentationStyle
         private var onVisibleComicIDsChanged: (Set<String>) -> Void
         private var onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
@@ -82,6 +91,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
+            presentationStyle: RemoteBrowserGridPresentationStyle,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -94,6 +104,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             self.profile = profile
             self.browsingService = browsingService
             self.layoutContext = layoutContext
+            self.presentationStyle = presentationStyle
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -112,6 +123,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
+            presentationStyle: RemoteBrowserGridPresentationStyle,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -120,12 +132,16 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             onRemoveOffline: @escaping (RemoteDirectoryItem) -> Void,
             onImport: @escaping (RemoteDirectoryItem) -> Void
         ) {
-            let updatePlan = Self.makeUpdatePlan(from: self.sections, to: sections)
             let didChangeLayoutContext = self.layoutContext != layoutContext
+            let didChangePresentationStyle = self.presentationStyle != presentationStyle
+            let updatePlan = didChangePresentationStyle
+                ? UpdatePlan.fullReload
+                : Self.makeUpdatePlan(from: self.sections, to: sections)
             self.sections = sections
             self.profile = profile
             self.browsingService = browsingService
             self.layoutContext = layoutContext
+            self.presentationStyle = presentationStyle
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -136,7 +152,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
             switch updatePlan {
             case .none:
-                if didChangeLayoutContext {
+                if didChangeLayoutContext || didChangePresentationStyle {
                     controller?.refreshLayout()
                 }
             case .fullReload:
@@ -164,27 +180,50 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             _ collectionView: UICollectionView,
             cellForItemAt indexPath: IndexPath
         ) -> UICollectionViewCell {
-            guard let cell = collectionView.dequeueReusableCell(
-                withReuseIdentifier: RemoteBrowserGridCell.reuseIdentifier,
-                for: indexPath
-            ) as? RemoteBrowserGridCell else {
-                return UICollectionViewCell()
-            }
-
             let row = sections[indexPath.section].items[indexPath.item]
-            cell.configure(
-                row: row,
-                profile: profile,
-                browsingService: browsingService,
-                itemWidth: itemWidth(for: collectionView)
-            )
-            return cell
+            switch presentationStyle {
+            case .grid:
+                guard let cell = collectionView.dequeueReusableCell(
+                    withReuseIdentifier: RemoteBrowserGridCell.reuseIdentifier,
+                    for: indexPath
+                ) as? RemoteBrowserGridCell else {
+                    return UICollectionViewCell()
+                }
+
+                cell.configure(
+                    row: row,
+                    profile: profile,
+                    browsingService: browsingService,
+                    itemWidth: itemWidth(for: collectionView)
+                )
+                return cell
+            case .listGrid:
+                guard let cell = collectionView.dequeueReusableCell(
+                    withReuseIdentifier: RemoteBrowserListGridCell.reuseIdentifier,
+                    for: indexPath
+                ) as? RemoteBrowserListGridCell else {
+                    return UICollectionViewCell()
+                }
+
+                cell.configure(
+                    row: row,
+                    profile: profile,
+                    browsingService: browsingService
+                )
+                return cell
+            }
         }
 
         func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
             collectionView.deselectItem(at: indexPath, animated: true)
             let item = sections[indexPath.section].items[indexPath.item].item
-            let sourceFrame = (collectionView.cellForItem(at: indexPath) as? RemoteBrowserGridCell)?.heroSourceFrame() ?? .zero
+            let sourceFrame: CGRect
+            switch presentationStyle {
+            case .grid:
+                sourceFrame = (collectionView.cellForItem(at: indexPath) as? RemoteBrowserGridCell)?.heroSourceFrame() ?? .zero
+            case .listGrid:
+                sourceFrame = (collectionView.cellForItem(at: indexPath) as? RemoteBrowserListGridCell)?.heroSourceFrame() ?? .zero
+            }
             onOpenItem(item, sourceFrame)
         }
 
@@ -257,9 +296,14 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             sizeForItemAt indexPath: IndexPath
         ) -> CGSize {
             let width = itemWidth(for: collectionView)
-            let imageHeight = width / AppLayout.coverAspectRatio
-            let labelHeight: CGFloat = 72
-            return CGSize(width: width, height: imageHeight + labelHeight)
+            switch presentationStyle {
+            case .grid:
+                let imageHeight = width / AppLayout.coverAspectRatio
+                let labelHeight: CGFloat = 72
+                return CGSize(width: width, height: imageHeight + labelHeight)
+            case .listGrid:
+                return CGSize(width: width, height: RemoteBrowserListItemCardView.Metrics.preferredHeight)
+            }
         }
 
         func collectionView(
@@ -289,10 +333,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             layout collectionViewLayout: UICollectionViewLayout,
             insetForSectionAt section: Int
         ) -> UIEdgeInsets {
-            if sections[section].kind == .notice {
-                return layoutContext.gridNoticeInsets
-            }
-            return layoutContext.gridSectionInsets
+            sectionInsets(for: section)
         }
 
         func collectionView(
@@ -300,7 +341,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             layout collectionViewLayout: UICollectionViewLayout,
             minimumLineSpacingForSectionAt section: Int
         ) -> CGFloat {
-            layoutContext.gridLineSpacing
+            lineSpacing(for: section)
         }
 
         func collectionView(
@@ -308,7 +349,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             layout collectionViewLayout: UICollectionViewLayout,
             minimumInteritemSpacingForSectionAt section: Int
         ) -> CGFloat {
-            layoutContext.gridInteritemSpacing
+            interitemSpacing(for: section)
         }
 
         fileprivate func layoutSection(
@@ -318,17 +359,25 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             let sectionModel = sectionIndex < sections.count ? sections[sectionIndex] : nil
             let usesNoticeLayout = sectionModel?.kind == .notice
             let effectiveWidth = environment.container.effectiveContentSize.width
-            let contentInsets = usesNoticeLayout ? layoutContext.gridNoticeInsets : layoutContext.gridSectionInsets
-            let interItemSpacing = layoutContext.gridInteritemSpacing
+            let contentInsets = usesNoticeLayout == true
+                ? noticeInsets
+                : standardSectionInsets
+            let interItemSpacing = interitemSpacing(for: sectionIndex)
             let columns = usesNoticeLayout
                 ? 1
-                : max(layoutContext.gridItemMetrics(for: effectiveWidth).columns, 1)
+                : max(itemMetrics(for: effectiveWidth).columns, 1)
 
             let horizontalInset = contentInsets.left + contentInsets.right
             let availableWidth = max(effectiveWidth - horizontalInset, 1)
             let totalSpacing = CGFloat(max(columns - 1, 0)) * interItemSpacing
             let itemWidth = floor((availableWidth - totalSpacing) / CGFloat(columns))
-            let itemHeight = itemWidth / AppLayout.coverAspectRatio + 72
+            let itemHeight: CGFloat
+            switch presentationStyle {
+            case .grid:
+                itemHeight = itemWidth / AppLayout.coverAspectRatio + 72
+            case .listGrid:
+                itemHeight = RemoteBrowserListItemCardView.Metrics.preferredHeight
+            }
 
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1.0),
@@ -354,7 +403,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 bottom: contentInsets.bottom,
                 trailing: contentInsets.right
             )
-            section.interGroupSpacing = layoutContext.gridLineSpacing
+            section.interGroupSpacing = lineSpacing(for: sectionIndex)
 
             var boundaryItems: [NSCollectionLayoutBoundarySupplementaryItem] = []
 
@@ -387,7 +436,68 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         }
 
         private func itemWidth(for collectionView: UICollectionView) -> CGFloat {
-            layoutContext.gridItemMetrics(for: collectionView.bounds.width).itemWidth
+            itemMetrics(for: collectionView.bounds.width).itemWidth
+        }
+
+        private var standardSectionInsets: UIEdgeInsets {
+            switch presentationStyle {
+            case .grid:
+                return layoutContext.gridSectionInsets
+            case .listGrid:
+                return layoutContext.listGridSectionInsets
+            }
+        }
+
+        private var noticeInsets: UIEdgeInsets {
+            switch presentationStyle {
+            case .grid:
+                return layoutContext.gridNoticeInsets
+            case .listGrid:
+                return layoutContext.listGridNoticeInsets
+            }
+        }
+
+        private func interitemSpacing(for section: Int) -> CGFloat {
+            if section < sections.count, sections[section].kind == .notice {
+                return 0
+            }
+
+            switch presentationStyle {
+            case .grid:
+                return layoutContext.gridInteritemSpacing
+            case .listGrid:
+                return layoutContext.listColumnSpacing
+            }
+        }
+
+        private func lineSpacing(for section: Int) -> CGFloat {
+            if section < sections.count, sections[section].kind == .notice {
+                return 0
+            }
+
+            switch presentationStyle {
+            case .grid:
+                return layoutContext.gridLineSpacing
+            case .listGrid:
+                return layoutContext.listGridLineSpacing
+            }
+        }
+
+        private func sectionInsets(for section: Int) -> UIEdgeInsets {
+            if section < sections.count, sections[section].kind == .notice {
+                return noticeInsets
+            }
+
+            return standardSectionInsets
+        }
+
+        private func itemMetrics(for collectionWidth: CGFloat) -> (columns: Int, itemWidth: CGFloat) {
+            switch presentationStyle {
+            case .grid:
+                return layoutContext.gridItemMetrics(for: collectionWidth)
+            case .listGrid:
+                return layoutContext.listGridItemMetrics(for: collectionWidth)
+            }
         }
 
         private func headerHeight(for sectionIndex: Int) -> CGFloat {
@@ -500,6 +610,22 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             )
         }
 
+        fileprivate func configureVisibleCell(
+            _ cell: RemoteBrowserListGridCell,
+            at indexPath: IndexPath
+        ) {
+            guard indexPath.section < sections.count,
+                  indexPath.item < sections[indexPath.section].items.count else {
+                return
+            }
+
+            cell.configure(
+                row: sections[indexPath.section].items[indexPath.item],
+                profile: profile,
+                browsingService: browsingService
+            )
+        }
+
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             scheduleVisibleComicIDsReport()
         }
@@ -605,6 +731,7 @@ final class RemoteBrowserGridViewController: UIViewController {
         collectionView.contentInsetAdjustmentBehavior = .automatic
         collectionView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 8, right: 0)
         collectionView.register(RemoteBrowserGridCell.self, forCellWithReuseIdentifier: RemoteBrowserGridCell.reuseIdentifier)
+        collectionView.register(RemoteBrowserListGridCell.self, forCellWithReuseIdentifier: RemoteBrowserListGridCell.reuseIdentifier)
         collectionView.register(
             RemoteBrowserGridSectionHeaderView.self,
             forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader,
@@ -687,11 +814,11 @@ final class RemoteBrowserGridViewController: UIViewController {
 
         UIView.performWithoutAnimation {
             for indexPath in targetIndexPaths {
-                guard let cell = collectionView.cellForItem(at: indexPath) as? RemoteBrowserGridCell else {
-                    continue
+                if let cell = collectionView.cellForItem(at: indexPath) as? RemoteBrowserGridCell {
+                    coordinator.configureVisibleCell(cell, at: indexPath, collectionView: collectionView)
+                } else if let cell = collectionView.cellForItem(at: indexPath) as? RemoteBrowserListGridCell {
+                    coordinator.configureVisibleCell(cell, at: indexPath)
                 }
-
-                coordinator.configureVisibleCell(cell, at: indexPath, collectionView: collectionView)
             }
         }
     }
@@ -727,6 +854,59 @@ final class RemoteBrowserGridViewController: UIViewController {
         for case let cell as RemoteBrowserGridCell in collectionView.visibleCells {
             cell.setNeedsLayout()
         }
+
+        for case let cell as RemoteBrowserListGridCell in collectionView.visibleCells {
+            cell.setNeedsLayout()
+        }
+    }
+}
+
+private final class RemoteBrowserListGridCell: UICollectionViewCell {
+    static let reuseIdentifier = "RemoteBrowserListGridCell"
+
+    private let cardView = RemoteBrowserListItemCardView()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        buildUI()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        cardView.prepareForReuseCard()
+    }
+
+    func configure(
+        row: RemoteBrowserListRowModel,
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService
+    ) {
+        cardView.configure(
+            row: row,
+            profile: profile,
+            browsingService: browsingService,
+            usesEmbeddedTapHandler: false
+        ) { _ in }
+    }
+
+    func heroSourceFrame() -> CGRect {
+        cardView.heroSourceFrame()
+    }
+
+    private func buildUI() {
+        contentView.backgroundColor = .clear
+        contentView.addSubview(cardView)
+
+        NSLayoutConstraint.activate([
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+        ])
     }
 }
 
@@ -1175,10 +1355,10 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         if let readingSession = row.readingSession {
             return readingSession.progressText
         }
-        if let badgeTitle = row.cacheAvailability.badgeTitle {
-            return badgeTitle
-        }
         var parts: [String] = []
+        if let badgeTitle = row.cacheAvailability.badgeTitle {
+            parts.append(badgeTitle)
+        }
         if row.item.isComicDirectory {
             if let pageCountHint = row.item.pageCountHint {
                 parts.append("\(pageCountHint) pages")
