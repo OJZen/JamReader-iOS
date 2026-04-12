@@ -410,8 +410,28 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     private func refreshCacheSummaries() {
+        let allSessions = (try? readingProgressStore.loadSessions()) ?? []
+
         cacheSummaryByServerID = profiles.reduce(into: [:]) { result, profile in
-            result[profile.id] = browsingService.cacheSummary(for: profile)
+            var fileCount = 0
+            var totalBytes: Int64 = 0
+
+            for session in allSessions where session.matches(profile: profile) {
+                let availability = browsingService.cachedAvailability(
+                    for: session.resolvedComicFileReference(for: profile)
+                )
+                guard availability.hasLocalCopy else {
+                    continue
+                }
+
+                fileCount += 1
+                totalBytes += max(session.fileSize ?? 0, 0)
+            }
+
+            result[profile.id] = RemoteComicCacheSummary(
+                fileCount: fileCount,
+                totalBytes: totalBytes
+            )
         }
     }
 }
