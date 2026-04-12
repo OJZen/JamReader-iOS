@@ -5,6 +5,7 @@ import UIKit
 private enum RemoteOfflineShelfLayoutMetrics {
     static let horizontalInset: CGFloat = 12
     static let rowAccessoryReservedWidth: CGFloat = 36
+    static let gridVerticalPadding: CGFloat = 6
 }
 
 private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
@@ -301,49 +302,18 @@ struct RemoteOfflineShelfView: View {
     }
 
     var body: some View {
-        List {
-            if scopedEntries.isEmpty, !viewModel.isLoading {
-                Section {
-                    EmptyStateView(
-                        systemImage: "arrow.down.circle",
-                        title: "No Downloads",
-                        description: focusedProfile == nil
-                            ? "Save comics for offline reading."
-                            : "Save comics from this server."
-                    )
-                    .padding(.vertical, 28)
+        GeometryReader { geometry in
+            content
+                .onAppear {
+                    updateContainerWidth(geometry.size.width)
                 }
-            } else if displayedEntries.isEmpty, !viewModel.isLoading {
-                Section {
-                    EmptyStateView(
-                        systemImage: "magnifyingglass",
-                        title: emptyResultsTitle,
-                        description: emptyResultsDescription
-                    )
-                    .padding(.vertical, 28)
+                .onChange(of: geometry.size.width) { _, newWidth in
+                    updateContainerWidth(newWidth)
                 }
-            } else {
-                ForEach(displayedSections) { section in
-                    Section {
-                        AdaptiveCardListRows(
-                            section.entries,
-                            columnCount: adaptiveListColumnCount,
-                            spacing: adaptiveListColumnSpacing,
-                            horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset
-                        ) { entry in
-                            offlineShelfEntryRow(for: entry)
-                        }
-                    } header: {
-                        sectionHeader(for: section)
-                    }
-                }
-            }
         }
-        .scrollContentBackground(.hidden)
-        .readContainerWidth(into: $containerWidth)
         .background(background)
         .background(readerPresenter)
-        .navigationTitle("Offline Shelf")
+        .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -386,7 +356,7 @@ struct RemoteOfflineShelfView: View {
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .automatic),
-            prompt: "Search shelf"
+            prompt: searchPrompt
         )
         .safeAreaInset(edge: .bottom) {
             if let feedback = viewModel.feedback {
@@ -464,6 +434,100 @@ struct RemoteOfflineShelfView: View {
         }
     }
 
+    private func updateContainerWidth(_ newWidth: CGFloat) {
+        let normalizedWidth = max(newWidth, 0)
+        guard Int(containerWidth.rounded(.toNearestOrAwayFromZero))
+            != Int(normalizedWidth.rounded(.toNearestOrAwayFromZero))
+        else {
+            return
+        }
+
+        containerWidth = normalizedWidth
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if adaptiveListColumnCount > 1 {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 24) {
+                    if scopedEntries.isEmpty, !viewModel.isLoading {
+                        emptyCard(
+                            systemImage: "arrow.down.circle",
+                            title: "No Downloads",
+                            description: focusedProfile == nil
+                                ? "Save comics for offline reading."
+                                : "Save comics from this server."
+                        )
+                    } else if displayedEntries.isEmpty, !viewModel.isLoading {
+                        emptyCard(
+                            systemImage: "magnifyingglass",
+                            title: emptyResultsTitle,
+                            description: emptyResultsDescription
+                        )
+                    } else {
+                        ForEach(displayedSections) { section in
+                            VStack(alignment: .leading, spacing: 10) {
+                                sectionHeader(for: section)
+
+                                LazyVGrid(
+                                    columns: offlineShelfGridColumns,
+                                    alignment: .leading,
+                                    spacing: adaptiveListColumnSpacing
+                                ) {
+                                    ForEach(section.entries) { entry in
+                                        offlineShelfEntryRow(for: entry)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+        } else {
+            List {
+                if scopedEntries.isEmpty, !viewModel.isLoading {
+                    Section {
+                        EmptyStateView(
+                            systemImage: "arrow.down.circle",
+                            title: "No Downloads",
+                            description: focusedProfile == nil
+                                ? "Save comics for offline reading."
+                                : "Save comics from this server."
+                        )
+                        .padding(.vertical, 28)
+                    }
+                } else if displayedEntries.isEmpty, !viewModel.isLoading {
+                    Section {
+                        EmptyStateView(
+                            systemImage: "magnifyingglass",
+                            title: emptyResultsTitle,
+                            description: emptyResultsDescription
+                        )
+                        .padding(.vertical, 28)
+                    }
+                } else {
+                    ForEach(displayedSections) { section in
+                        Section {
+                            ForEach(section.entries) { entry in
+                                offlineShelfEntryRow(for: entry)
+                                    .insetCardListRow(
+                                        horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset,
+                                        top: RemoteOfflineShelfLayoutMetrics.gridVerticalPadding,
+                                        bottom: RemoteOfflineShelfLayoutMetrics.gridVerticalPadding
+                                    )
+                            }
+                        } header: {
+                            sectionHeader(for: section)
+                        }
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+        }
+    }
+
     @ViewBuilder
     private var readerPresenter: some View {
         HeroReaderPresenter(
@@ -530,6 +594,22 @@ struct RemoteOfflineShelfView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var navigationTitleText: String {
+        if let focusedProfile {
+            return "\(focusedProfile.displayTitle) Downloads"
+        }
+
+        return "Offline Shelf"
+    }
+
+    private var searchPrompt: String {
+        if focusedProfile != nil {
+            return "Search this server's downloads"
+        }
+
+        return "Search shelf"
+    }
+
     private var scopedEntries: [RemoteOfflineComicEntry] {
         if let focusedProfile {
             return viewModel.entries.filter { $0.profile.id == focusedProfile.id }
@@ -555,15 +635,28 @@ struct RemoteOfflineShelfView: View {
 
     private var emptyResultsDescription: String {
         if !trimmedSearchText.isEmpty {
+            if let focusedProfile {
+                return "No matches for \"\(trimmedSearchText)\" in \(focusedProfile.displayTitle) downloads."
+            }
+
             return "No matches for \"\(trimmedSearchText)\"."
         }
 
         switch filterMode {
         case .all:
+            if let focusedProfile {
+                return "No downloads from \(focusedProfile.displayTitle) on this device."
+            }
             return "No downloads on this device."
         case .current:
+            if let focusedProfile {
+                return "No current local copies from \(focusedProfile.displayTitle)."
+            }
             return "No current local copies."
         case .stale:
+            if let focusedProfile {
+                return "No older local copies from \(focusedProfile.displayTitle)."
+            }
             return "No older local copies."
         }
     }
@@ -580,6 +673,25 @@ struct RemoteOfflineShelfView: View {
                 Spacer()
                 Image(systemName: "checkmark")
             }
+        }
+    }
+
+    private func emptyCard(
+        systemImage: String,
+        title: String,
+        description: String
+    ) -> some View {
+        InsetCard(
+            cornerRadius: 20,
+            contentPadding: 20,
+            backgroundColor: Color(.secondarySystemBackground)
+        ) {
+            EmptyStateView(
+                systemImage: systemImage,
+                title: title,
+                description: description
+            )
+            .padding(.vertical, 12)
         }
     }
 
@@ -639,8 +751,7 @@ struct RemoteOfflineShelfView: View {
     }
 
     private var showsPersistentItemActions: Bool {
-        horizontalSizeClass == .regular
-            && containerWidth >= AppLayout.regularInlineActionMinWidth
+        adaptiveListColumnCount > 1
     }
 
     private var adaptiveListColumnCount: Int {
@@ -654,6 +765,13 @@ struct RemoteOfflineShelfView: View {
         AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
     }
 
+    private var offlineShelfGridColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: adaptiveListColumnSpacing, alignment: .top),
+            count: adaptiveListColumnCount
+        )
+    }
+
     private var itemAccessoryReservedWidth: CGFloat {
         showsPersistentItemActions ? RemoteOfflineShelfLayoutMetrics.rowAccessoryReservedWidth : 0
     }
@@ -663,10 +781,11 @@ struct RemoteOfflineShelfView: View {
             .ignoresSafeArea()
     }
 
+    @ViewBuilder
     private func offlineShelfEntryRow(
         for entry: RemoteOfflineComicEntry
     ) -> some View {
-        RemoteInsetListRowCard(contentPadding: 12) {
+        let row = RemoteInsetListRowCard(contentPadding: 12) {
             RemoteOfflineComicCard(
                 session: entry.session,
                 profile: entry.profile,
@@ -689,8 +808,13 @@ struct RemoteOfflineShelfView: View {
                     .padding(.trailing, 8)
             }
         }
-        .contextMenu {
-            offlineShelfItemActionMenuContent(for: entry)
+
+        if adaptiveListColumnCount == 1 {
+            row.contextMenu {
+                offlineShelfItemActionMenuContent(for: entry)
+            }
+        } else {
+            row
         }
     }
 

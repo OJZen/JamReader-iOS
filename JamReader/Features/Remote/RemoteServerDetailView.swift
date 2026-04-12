@@ -5,6 +5,7 @@ private enum RemoteServerDetailLayoutMetrics {
     static let horizontalInset: CGFloat = 12
     static let rowAccessoryReservedWidth: CGFloat = 36
     static let persistentActionMinWidth: CGFloat = 560
+    static let gridVerticalPadding: CGFloat = 6
 }
 
 struct RemoteServerDetailView: View {
@@ -48,14 +49,17 @@ struct RemoteServerDetailView: View {
     }
 
     var body: some View {
-        List {
-            connectionSection
-            quickAccessSection
-            recentComicsSection
+        GeometryReader { geometry in
+            content
+                .onAppear {
+                    updateContainerWidth(geometry.size.width)
+                }
+                .onChange(of: geometry.size.width) { _, newWidth in
+                    updateContainerWidth(newWidth)
+                }
         }
         .navigationTitle(profile.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .readContainerWidth(into: $containerWidth)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -124,6 +128,15 @@ struct RemoteServerDetailView: View {
     }
 
     @ViewBuilder
+    private var content: some View {
+        List {
+            connectionSection
+            quickAccessSection
+            recentComicsSection
+        }
+    }
+
+    @ViewBuilder
     private var readerPresenter: some View {
         HeroReaderPresenter(
             item: $presentedRecentSession,
@@ -155,6 +168,17 @@ struct RemoteServerDetailView: View {
             return alertState
         }
         .id(draft.id)
+    }
+
+    private func updateContainerWidth(_ newWidth: CGFloat) {
+        let normalizedWidth = max(newWidth, 0)
+        guard Int(containerWidth.rounded(.toNearestOrAwayFromZero))
+            != Int(normalizedWidth.rounded(.toNearestOrAwayFromZero))
+        else {
+            return
+        }
+
+        containerWidth = normalizedWidth
     }
 
     private var connectionSection: some View {
@@ -210,13 +234,32 @@ struct RemoteServerDetailView: View {
                 )
                 .padding(.vertical, 24)
             } else {
-                AdaptiveCardListRows(
-                    recentSessions,
-                    columnCount: adaptiveListColumnCount,
-                    spacing: adaptiveListColumnSpacing,
-                    horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset
-                ) { session in
-                    recentSessionRow(for: session)
+                if adaptiveListColumnCount == 1 {
+                    ForEach(recentSessions) { session in
+                        recentSessionRow(for: session)
+                            .insetCardListRow(
+                                horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset,
+                                top: RemoteServerDetailLayoutMetrics.gridVerticalPadding,
+                                bottom: RemoteServerDetailLayoutMetrics.gridVerticalPadding
+                            )
+                    }
+                } else {
+                    LazyVGrid(
+                        columns: recentSessionGridColumns,
+                        alignment: .leading,
+                        spacing: adaptiveListColumnSpacing
+                    ) {
+                        ForEach(recentSessions) { session in
+                            recentSessionRow(for: session)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, RemoteServerDetailLayoutMetrics.horizontalInset)
+                    .padding(.vertical, RemoteServerDetailLayoutMetrics.gridVerticalPadding)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 }
             }
         }
@@ -238,8 +281,7 @@ struct RemoteServerDetailView: View {
     }
 
     private var showsPersistentRecentSessionActions: Bool {
-        horizontalSizeClass == .regular
-            && containerWidth >= RemoteServerDetailLayoutMetrics.persistentActionMinWidth
+        adaptiveListColumnCount > 1
     }
 
     private var adaptiveListColumnCount: Int {
@@ -251,6 +293,13 @@ struct RemoteServerDetailView: View {
 
     private var adaptiveListColumnSpacing: CGFloat {
         AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
+    }
+
+    private var recentSessionGridColumns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: adaptiveListColumnSpacing, alignment: .top),
+            count: adaptiveListColumnCount
+        )
     }
 
     private var recentSessionAccessoryReservedWidth: CGFloat {
@@ -293,12 +342,12 @@ struct RemoteServerDetailView: View {
                     .padding(.trailing, 8)
             }
         }
-        .contextMenu {
-            recentSessionActionMenuContent(for: session)
-        }
 
         if adaptiveListColumnCount == 1 {
             baseRow
+                .contextMenu {
+                    recentSessionActionMenuContent(for: session)
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     recentSessionSwipeActions(for: session)
                 }
@@ -352,8 +401,10 @@ struct RemoteServerDetailView: View {
             items.append(
                 RemoteServerDetailShortcutItem(
                     id: "offline-shelf",
-                    title: "Offline Shelf",
-                    subtitle: offlineCopyCount == 1 ? "1 downloaded" : "\(offlineCopyCount) downloaded",
+                    title: "Downloaded Comics",
+                    subtitle: offlineCopyCount == 1
+                        ? "1 downloaded on this server"
+                        : "\(offlineCopyCount) downloaded on this server",
                     systemImage: "arrow.down.circle.fill",
                     tint: .green,
                     navigationRequest: .offlineShelf(profile)
