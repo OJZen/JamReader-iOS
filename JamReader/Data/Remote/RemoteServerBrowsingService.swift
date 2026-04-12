@@ -182,11 +182,14 @@ final class RemoteServerBrowsingService {
     private let remoteComicCacheRootURL: URL
     private let cacheSummaryLock = NSLock()
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
+    private let automaticCacheTaskLock = NSLock()
+    private var automaticCacheTaskCancellers: [String: @Sendable () -> Void] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
     private let thumbnailSMBClientSemaphore = AsyncSemaphore(maxConcurrent: 2)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
     private let smbClientSemaphore = AsyncSemaphore(maxConcurrent: 3)
     private let smbConnectionPool = SMBConnectionPool()
+    private let webDAVRangeSupportStore = RemoteWebDAVRangeSupportStore()
 
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
@@ -491,30 +494,15 @@ final class RemoteServerBrowsingService {
                     displayPath: reference.path,
                     isDirectory: false
                 )
-                let reader = RemoteHTTPRangeFileReader(
-                    url: fileURL,
-                    authorizationHeader: authorizationHeader
-                )
-
-                do {
-                    try await downloadRemoteFile(
-                        using: reader,
-                        to: temporaryDownloadURL,
-                        resumeOffset: resumeOffset,
-                        progressHandler: progressHandler
-                    )
-                } catch RemoteHTTPRangeFileReaderError.rangeRequestsUnsupported {
-                    try? await reader.close()
-                    if resumeOffset > 0 {
-                        try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
-                    }
-                    try await webDAVClient.download(
-                        from: fileURL,
-                        authorizationHeader: authorizationHeader,
-                        to: temporaryDownloadURL
-                    )
-                    progressHandler(1.0)
+                if resumeOffset > 0 {
+                    try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
                 }
+                try await webDAVClient.download(
+                    from: fileURL,
+                    authorizationHeader: authorizationHeader,
+                    to: temporaryDownloadURL
+                )
+                progressHandler(1.0)
             }
         }
     }
@@ -612,32 +600,15 @@ final class RemoteServerBrowsingService {
                             displayPath: reference.path,
                             isDirectory: false
                         )
-                        let reader = RemoteHTTPRangeFileReader(
-                            url: fileURL,
-                            authorizationHeader: authorizationHeader
-                        )
-
-                        do {
-                            try await self.downloadRemoteFile(
-                                using: reader,
-                                to: temporaryDownloadURL,
-                                resumeOffset: resumeOffset,
-                                progressHandler: { fraction in
-                                    progressHandler(reference, fraction)
-                                }
-                            )
-                        } catch RemoteHTTPRangeFileReaderError.rangeRequestsUnsupported {
-                            try? await reader.close()
-                            if resumeOffset > 0 {
-                                try self.resetPartialDownloadArtifacts(at: temporaryDownloadURL)
-                            }
-                            try await self.webDAVClient.download(
-                                from: fileURL,
-                                authorizationHeader: authorizationHeader,
-                                to: temporaryDownloadURL
-                            )
-                            progressHandler(reference, 1.0)
+                        if resumeOffset > 0 {
+                            try self.resetPartialDownloadArtifacts(at: temporaryDownloadURL)
                         }
+                        try await self.webDAVClient.download(
+                            from: fileURL,
+                            authorizationHeader: authorizationHeader,
+                            to: temporaryDownloadURL
+                        )
+                        progressHandler(reference, 1.0)
                     }
                     progressHandler(reference, 1.0)
                     return result
@@ -748,9 +719,10 @@ final class RemoteServerBrowsingService {
     }
 
     func clearCachedComic(for reference: RemoteComicFileReference) throws {
+        cancelAutomaticCacheTask(for: reference)
         var removedAnyCachedFile = false
 
-        for fileURL in cachedFileCandidateURLs(for: reference) {
+        for fileURL in allCachedResourceURLs(for: reference) {
             guard fileManager.fileExists(atPath: fileURL.path) else {
                 try? removeCachedMetadata(for: fileURL)
                 try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
@@ -798,7 +770,14 @@ final class RemoteServerBrowsingService {
         cachedFileURL(for: reference)
     }
 
-    func supportsStreamingOpen(for reference: RemoteComicFileReference) -> Bool {
+    func supportsStreamingOpen(
+        for reference: RemoteComicFileReference,
+        profile: RemoteServerProfile
+    ) async -> Bool {
+        guard reference.providerKind == .smb || reference.providerKind == .webdav else {
+            return false
+        }
+
         guard reference.contentKind == .file else {
             return false
         }
@@ -806,10 +785,24 @@ final class RemoteServerBrowsingService {
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
         switch fileExtension {
         case "cbz", "zip":
+            if profile.providerKind == .webdav {
+                return await webDAVRangeRequestsSupported(for: profile, reference: reference)
+            }
             return true
         default:
             return false
         }
+    }
+
+    func allowsRemoteThumbnailFetch(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference
+    ) async -> Bool {
+        guard profile.providerKind == .webdav else {
+            return true
+        }
+
+        return await webDAVRangeRequestsSupported(for: profile, reference: reference)
     }
 
     func makeStreamingFileReader(
@@ -862,6 +855,11 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         maxPixelSize: Int
     ) async -> UIImage? {
+        if profile.providerKind == .webdav,
+           !(await webDAVRangeRequestsSupported(for: profile, reference: reference)) {
+            return nil
+        }
+
         if reference.isImageDirectoryComic {
             return await fetchDirectImageDirectoryThumbnail(
                 for: profile,
@@ -1556,6 +1554,42 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    private func webDAVRangeRequestsSupported(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference
+    ) async -> Bool {
+        guard profile.providerKind == .webdav else {
+            return true
+        }
+
+        let cacheKey = profile.remoteCacheScopeKey
+        if let cachedValue = await webDAVRangeSupportStore.value(for: cacheKey) {
+            return cachedValue
+        }
+
+        let probePath = reference.isImageDirectoryComic ? reference.coverPath : reference.path
+        guard let probePath,
+              let probeURL = try? webDAVURL(
+                for: profile,
+                displayPath: probePath,
+                isDirectory: false
+              ),
+              let authorizationHeader = try? resolvedAuthorizationHeader(for: profile) else {
+            return true
+        }
+
+        do {
+            let isSupported = try await webDAVClient.supportsRangeRequests(
+                from: probeURL,
+                authorizationHeader: authorizationHeader
+            )
+            await webDAVRangeSupportStore.store(isSupported, for: cacheKey)
+            return isSupported
+        } catch {
+            return true
+        }
+    }
+
     private func makeImageThumbnail(from data: Data, maxPixelSize: Int) -> UIImage? {
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let imageSource = CGImageSourceCreateWithData(data as CFData, options) else {
@@ -1933,12 +1967,26 @@ final class RemoteServerBrowsingService {
     private func cachedFileCandidateURLs(for reference: RemoteComicFileReference) -> [URL] {
         let preferredURL = cachedFileURL(for: reference)
         let legacyURL = legacyCachedFileURL(for: reference)
-
         guard preferredURL.standardizedFileURL.path != legacyURL.standardizedFileURL.path else {
             return [preferredURL]
         }
 
         return [preferredURL, legacyURL]
+    }
+
+    private func allCachedResourceURLs(for reference: RemoteComicFileReference) -> [URL] {
+        var ordered: [URL] = []
+        var seenPaths = Set<String>()
+
+        for candidateURL in cachedFileCandidateURLs(for: reference) + discoveredCachedResourceURLs(for: reference) {
+            let standardizedPath = candidateURL.standardizedFileURL.path
+            guard seenPaths.insert(standardizedPath).inserted else {
+                continue
+            }
+            ordered.append(candidateURL)
+        }
+
+        return ordered
     }
 
     private func legacyCacheRootPathComponents(
@@ -1963,6 +2011,103 @@ final class RemoteServerBrowsingService {
             .map { String(format: "%02x", $0) }
             .joined()
         return ["scope-\(digest)"]
+    }
+
+    func registerAutomaticCacheTask(
+        for reference: RemoteComicFileReference,
+        cancellation: @escaping @Sendable () -> Void
+    ) {
+        automaticCacheTaskLock.lock()
+        automaticCacheTaskCancellers[reference.id] = cancellation
+        automaticCacheTaskLock.unlock()
+    }
+
+    func unregisterAutomaticCacheTask(for reference: RemoteComicFileReference) {
+        automaticCacheTaskLock.lock()
+        automaticCacheTaskCancellers.removeValue(forKey: reference.id)
+        automaticCacheTaskLock.unlock()
+    }
+
+    private func cancelAutomaticCacheTask(for reference: RemoteComicFileReference) {
+        automaticCacheTaskLock.lock()
+        let cancellation = automaticCacheTaskCancellers.removeValue(forKey: reference.id)
+        automaticCacheTaskLock.unlock()
+        cancellation?()
+    }
+
+    private func discoveredCachedResourceURLs(for reference: RemoteComicFileReference) -> [URL] {
+        let serverRootURL = remoteComicCacheRootURL
+            .appendingPathComponent(reference.serverID.uuidString, isDirectory: true)
+        guard fileManager.fileExists(atPath: serverRootURL.path),
+              let enumerator = fileManager.enumerator(
+                at: serverRootURL,
+                includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+                options: [.skipsHiddenFiles]
+              ) else {
+            return []
+        }
+
+        return enumerator.compactMap { item -> URL? in
+            guard let candidateURL = item as? URL else {
+                return nil
+            }
+
+            if isCacheAuxiliaryFile(candidateURL) {
+                return nil
+            }
+
+            let values = try? candidateURL.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+            if reference.isImageDirectoryComic {
+                guard values?.isDirectory == true else {
+                    return nil
+                }
+            } else {
+                guard values?.isRegularFile == true else {
+                    return nil
+                }
+            }
+
+            guard matchesCachedResource(candidateURL, serverRootURL: serverRootURL, reference: reference) else {
+                return nil
+            }
+
+            return candidateURL
+        }
+    }
+
+    private func matchesCachedResource(
+        _ candidateURL: URL,
+        serverRootURL: URL,
+        reference: RemoteComicFileReference
+    ) -> Bool {
+        if let metadata = loadCachedMetadata(at: candidateURL) {
+            guard metadata.contentKind == reference.contentKind else {
+                return false
+            }
+
+            if let metadataPath = metadata.path {
+                return normalizeDisplayPath(metadataPath) == normalizeDisplayPath(reference.path)
+            }
+        }
+
+        let targetComponents = smbRelativePath(forDisplayPath: reference.path)
+            .split(separator: "/")
+            .map(String.init)
+        guard !targetComponents.isEmpty else {
+            return candidateURL.lastPathComponent == reference.fileName
+        }
+
+        let relativePath = candidateURL.standardizedFileURL.path
+            .replacingOccurrences(of: serverRootURL.standardizedFileURL.path + "/", with: "")
+        let candidateComponents = relativePath
+            .split(separator: "/")
+            .map(String.init)
+
+        guard candidateComponents.count >= targetComponents.count else {
+            return false
+        }
+
+        return Array(candidateComponents.suffix(targetComponents.count)) == targetComponents
     }
 
     private func extractDirectThumbnail(
@@ -2477,6 +2622,7 @@ final class RemoteServerBrowsingService {
     ) throws {
         let metadata = CachedRemoteComicMetadata(
             cacheScopeKey: reference.cacheScopeKey,
+            path: reference.path,
             fileSize: reference.fileSize,
             modifiedAt: reference.modifiedAt,
             contentKind: reference.contentKind,
@@ -2610,6 +2756,7 @@ final class RemoteServerBrowsingService {
     ) throws {
         let metadata = CachedRemoteComicMetadata(
             cacheScopeKey: reference.cacheScopeKey,
+            path: reference.path,
             fileSize: reference.fileSize,
             modifiedAt: reference.modifiedAt,
             contentKind: reference.contentKind,
@@ -2952,8 +3099,21 @@ private final class RecursiveListProgressState {
     var discoveredComicCount = 0
 }
 
+private actor RemoteWebDAVRangeSupportStore {
+    private var valuesByScopeKey: [String: Bool] = [:]
+
+    func value(for scopeKey: String) -> Bool? {
+        valuesByScopeKey[scopeKey]
+    }
+
+    func store(_ value: Bool, for scopeKey: String) {
+        valuesByScopeKey[scopeKey] = value
+    }
+}
+
 private struct CachedRemoteComicMetadata: Codable {
     let cacheScopeKey: String?
+    let path: String?
     let fileSize: Int64?
     let modifiedAt: Date?
     let contentKind: RemoteComicReferenceKind
@@ -2961,6 +3121,7 @@ private struct CachedRemoteComicMetadata: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case cacheScopeKey
+        case path
         case fileSize
         case modifiedAt
         case contentKind
@@ -2969,12 +3130,14 @@ private struct CachedRemoteComicMetadata: Codable {
 
     init(
         cacheScopeKey: String?,
+        path: String?,
         fileSize: Int64?,
         modifiedAt: Date?,
         contentKind: RemoteComicReferenceKind,
         cachedByteCount: Int64?
     ) {
         self.cacheScopeKey = cacheScopeKey
+        self.path = path
         self.fileSize = fileSize
         self.modifiedAt = modifiedAt
         self.contentKind = contentKind
@@ -2984,6 +3147,7 @@ private struct CachedRemoteComicMetadata: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         cacheScopeKey = try container.decodeIfPresent(String.self, forKey: .cacheScopeKey)
+        path = try container.decodeIfPresent(String.self, forKey: .path)
         fileSize = try container.decodeIfPresent(Int64.self, forKey: .fileSize)
         modifiedAt = try container.decodeIfPresent(Date.self, forKey: .modifiedAt)
         contentKind = try container.decodeIfPresent(RemoteComicReferenceKind.self, forKey: .contentKind) ?? .file

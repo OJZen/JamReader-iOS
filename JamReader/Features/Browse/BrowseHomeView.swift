@@ -2,6 +2,8 @@ import SwiftUI
 
 struct BrowseHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @AppStorage(AppNavigationStorageKeys.browseHomeSelection) private var storedSelectionRawValue = ""
+    @AppStorage(AppNavigationStorageKeys.browseHomeColumnVisibility) private var storedColumnVisibilityRawValue = StoredBrowseHomeColumnVisibility.automatic.rawValue
 
     let dependencies: AppDependencies
 
@@ -13,6 +15,8 @@ struct BrowseHomeView: View {
     @State private var splitSyncTask: Task<Void, Never>?
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @State private var containerWidth: CGFloat = 0
+    @State private var hasRestoredSplitState = false
+    @State private var hasRestoredCompactNavigation = false
 
     init(
         dependencies: AppDependencies,
@@ -50,6 +54,27 @@ struct BrowseHomeView: View {
         }
         .onChange(of: quickAccessItems.map(\.id)) { _, _ in
             debounceSplitSync()
+        }
+        .onChange(of: splitSelection) { _, newValue in
+            guard usesSplitViewLayout else {
+                return
+            }
+
+            persistSelection(newValue)
+        }
+        .onChange(of: navigationRequest) { oldValue, newValue in
+            guard !usesSplitViewLayout else {
+                return
+            }
+
+            handleCompactNavigationChange(from: oldValue, to: newValue)
+        }
+        .onChange(of: columnVisibility) { _, newValue in
+            guard usesSplitViewLayout else {
+                return
+            }
+
+            storedColumnVisibilityRawValue = StoredBrowseHomeColumnVisibility(newValue).rawValue
         }
         .onChange(of: editorDraft?.id) { oldValue, newValue in
             guard oldValue != nil, newValue == nil else {
@@ -408,8 +433,28 @@ struct BrowseHomeView: View {
         splitSyncTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 50_000_000)
             guard !Task.isCancelled else { return }
-            synchronizeSplitSelection()
+            synchronizeBrowseState()
         }
+    }
+
+    private func synchronizeBrowseState() {
+        if usesSplitViewLayout {
+            hasRestoredCompactNavigation = false
+            restoreSplitStateIfNeeded()
+            synchronizeSplitSelection()
+        } else {
+            hasRestoredSplitState = false
+            restoreCompactNavigationIfNeeded()
+        }
+    }
+
+    private func restoreSplitStateIfNeeded() {
+        guard !hasRestoredSplitState else {
+            return
+        }
+
+        hasRestoredSplitState = true
+        columnVisibility = StoredBrowseHomeColumnVisibility(rawValue: storedColumnVisibilityRawValue)?.value ?? .automatic
     }
 
     private func synchronizeSplitSelection() {
@@ -427,6 +472,12 @@ struct BrowseHomeView: View {
             + quickAccessItems.map(\.splitSelection)
         )
 
+        if let storedSelection = restoredSelection,
+           validSelections.contains(storedSelection) {
+            splitSelection = storedSelection
+            return
+        }
+
         if let splitSelection, validSelections.contains(splitSelection) {
             return
         }
@@ -437,6 +488,62 @@ struct BrowseHomeView: View {
 
     private func handleEditorDismissal() {
         debounceSplitSync()
+    }
+
+    private var restoredSelection: BrowseHomeSplitSelection? {
+        BrowseHomeSplitSelection(storageValue: storedSelectionRawValue)
+    }
+
+    private func restoreCompactNavigationIfNeeded() {
+        guard !hasRestoredCompactNavigation else {
+            return
+        }
+
+        guard navigationRequest == nil else {
+            hasRestoredCompactNavigation = true
+            return
+        }
+
+        guard let restoredSelection else {
+            hasRestoredCompactNavigation = true
+            return
+        }
+
+        guard let request = navigationRequest(for: restoredSelection) else {
+            return
+        }
+
+        hasRestoredCompactNavigation = true
+        navigationRequest = request
+    }
+
+    private func handleCompactNavigationChange(
+        from oldValue: BrowseHomeNavigationRequest?,
+        to newValue: BrowseHomeNavigationRequest?
+    ) {
+        if let newValue {
+            persistSelection(newValue.splitSelection)
+        } else if oldValue != nil {
+            persistSelection(nil)
+        }
+    }
+
+    private func persistSelection(_ selection: BrowseHomeSplitSelection?) {
+        storedSelectionRawValue = selection?.storageValue ?? ""
+    }
+
+    private func navigationRequest(for selection: BrowseHomeSplitSelection) -> BrowseHomeNavigationRequest? {
+        switch selection {
+        case .server(let profileID):
+            guard let profile = displayedProfiles.first(where: { $0.id == profileID }) else {
+                return nil
+            }
+            return .serverDetail(profile)
+        case .savedFolders:
+            return .savedFolders
+        case .offlineShelf:
+            return .offlineShelf
+        }
     }
 
     private var splitSelectionBinding: Binding<BrowseHomeSplitSelection?> {
@@ -476,6 +583,41 @@ private enum BrowseHomeSplitSelection: Hashable {
     case server(UUID)
     case savedFolders
     case offlineShelf
+
+    init?(storageValue: String) {
+        if storageValue == "saved-folders" {
+            self = .savedFolders
+            return
+        }
+
+        if storageValue == "offline-shelf" {
+            self = .offlineShelf
+            return
+        }
+
+        let prefix = "server:"
+        guard storageValue.hasPrefix(prefix) else {
+            return nil
+        }
+
+        let rawIdentifier = String(storageValue.dropFirst(prefix.count))
+        guard let serverID = UUID(uuidString: rawIdentifier) else {
+            return nil
+        }
+
+        self = .server(serverID)
+    }
+
+    var storageValue: String {
+        switch self {
+        case .server(let serverID):
+            return "server:\(serverID.uuidString)"
+        case .savedFolders:
+            return "saved-folders"
+        case .offlineShelf:
+            return "offline-shelf"
+        }
+    }
 }
 
 // MARK: - Supporting Types
@@ -490,6 +632,54 @@ private struct BrowseHomeShortcutItem: Identifiable {
 
     var splitSelection: BrowseHomeSplitSelection {
         switch navigationRequest {
+        case .serverDetail(let profile):
+            return .server(profile.id)
+        case .savedFolders:
+            return .savedFolders
+        case .offlineShelf:
+            return .offlineShelf
+        }
+    }
+}
+
+private enum StoredBrowseHomeColumnVisibility: String {
+    case automatic
+    case all
+    case detailOnly
+    case doubleColumn
+
+    init(_ value: NavigationSplitViewVisibility) {
+        switch value {
+        case .automatic:
+            self = .automatic
+        case .all:
+            self = .all
+        case .detailOnly:
+            self = .detailOnly
+        case .doubleColumn:
+            self = .doubleColumn
+        default:
+            self = .automatic
+        }
+    }
+
+    var value: NavigationSplitViewVisibility {
+        switch self {
+        case .automatic:
+            return .automatic
+        case .all:
+            return .all
+        case .detailOnly:
+            return .detailOnly
+        case .doubleColumn:
+            return .doubleColumn
+        }
+    }
+}
+
+private extension BrowseHomeNavigationRequest {
+    var splitSelection: BrowseHomeSplitSelection {
+        switch self {
         case .serverDetail(let profile):
             return .server(profile.id)
         case .savedFolders:

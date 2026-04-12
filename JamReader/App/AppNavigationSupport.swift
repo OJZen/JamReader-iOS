@@ -22,6 +22,8 @@ enum AppNavigationStorageKeys {
     static let selectedTab = "appRoot.selectedTab"
     static let pendingFocusedLibraryID = "libraryHome.pendingFocusedLibraryID"
     static let pendingFocusedFolderID = "libraryHome.pendingFocusedFolderID"
+    static let browseHomeSelection = "browseHome.selection"
+    static let browseHomeColumnVisibility = "browseHome.columnVisibility"
 }
 
 enum AppNavigationRouter {

@@ -973,7 +973,13 @@ private struct RemoteComicThumbnailWorker {
             return cachedImage
         }
 
-        if allowsRemoteFetch,
+        let remoteFetchAllowedByServer = await browsingService.allowsRemoteThumbnailFetch(
+            for: profile,
+            reference: reference
+        )
+        let canAttemptRemoteFetch = allowsRemoteFetch && remoteFetchAllowedByServer
+
+        if canAttemptRemoteFetch,
            let remoteImage = await browsingService.fetchDirectThumbnail(
                for: profile,
                reference: reference,
@@ -993,7 +999,7 @@ private struct RemoteComicThumbnailWorker {
             return cachedImage
         }
 
-        guard allowsRemoteFetch else {
+        guard canAttemptRemoteFetch else {
             return nil
         }
 

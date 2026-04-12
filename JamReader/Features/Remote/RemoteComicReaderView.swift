@@ -276,23 +276,27 @@ struct RemoteComicLoadingView: View {
 
         if openMode == .preferLocalCache,
            let cachedFileURL = dependencies.remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
-            readerConfiguration = RemoteComicReaderConfiguration(
-                fileURL: cachedFileURL,
-                initialDocument: nil,
-                shouldStartBackgroundDownload: false
-            )
-            let availability = dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
-            switch availability.kind {
-            case .unavailable:
-                accessState = .liveRemoteCopy
-                noticeMessage = nil
-            case .current:
-                accessState = .cachedCurrent
-                noticeMessage = "Opened the downloaded copy saved on this device."
-            case .stale:
-                let message = "Opened an older downloaded copy saved on this device."
-                accessState = .cachedFallback(message)
-                noticeMessage = message
+            do {
+                readerConfiguration = try validatedReaderConfiguration(
+                    fileURL: cachedFileURL,
+                    shouldStartBackgroundDownload: false
+                )
+                let availability = dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
+                switch availability.kind {
+                case .unavailable:
+                    accessState = .liveRemoteCopy
+                    noticeMessage = nil
+                case .current:
+                    accessState = .cachedCurrent
+                    noticeMessage = "Opened the downloaded copy saved on this device."
+                case .stale:
+                    let message = "Opened an older downloaded copy saved on this device."
+                    accessState = .cachedFallback(message)
+                    noticeMessage = message
+                }
+            } catch {
+                try? dependencies.remoteServerBrowsingService.clearCachedComic(for: reference)
+                loadErrorMessage = "The saved offline copy could not be opened. Download it again from the remote server."
             }
             return
         }
@@ -301,17 +305,23 @@ struct RemoteComicLoadingView: View {
             let cachedAvailability = dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
             if cachedAvailability.kind == .current,
                let cachedFileURL = dependencies.remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
-                readerConfiguration = RemoteComicReaderConfiguration(
-                    fileURL: cachedFileURL,
-                    initialDocument: nil,
-                    shouldStartBackgroundDownload: false
-                )
-                accessState = .cachedCurrent
-                noticeMessage = "Opened the downloaded copy saved on this device."
-                return
+                do {
+                    readerConfiguration = try validatedReaderConfiguration(
+                        fileURL: cachedFileURL,
+                        shouldStartBackgroundDownload: false
+                    )
+                    accessState = .cachedCurrent
+                    noticeMessage = "Opened the downloaded copy saved on this device."
+                    return
+                } catch {
+                    try? dependencies.remoteServerBrowsingService.clearCachedComic(for: reference)
+                }
             }
 
-            if dependencies.remoteServerBrowsingService.supportsStreamingOpen(for: reference),
+            if await dependencies.remoteServerBrowsingService.supportsStreamingOpen(
+                for: reference,
+                profile: profile
+            ),
                dependencies.comicDocumentLoader.supportsRemoteStreaming(for: reference.fileName) {
                 loadingMessage = "Preparing Pages…"
                 let documentURL = dependencies.remoteServerBrowsingService.plannedCachedFileURL(for: reference)
@@ -336,9 +346,15 @@ struct RemoteComicLoadingView: View {
                     accessState = .liveRemoteCopy
                     noticeMessage = nil
                     return
+                } catch is CancellationError {
+                    try? await reader.close()
+                    throw CancellationError()
                 } catch {
                     try? await reader.close()
-                    throw error
+                    guard profile.providerKind == .webdav else {
+                        throw error
+                    }
+                    loadingMessage = "Downloading…"
                 }
             }
 
@@ -365,11 +381,15 @@ struct RemoteComicLoadingView: View {
             )
             try Task.checkCancellation()
 
-            readerConfiguration = RemoteComicReaderConfiguration(
-                fileURL: result.localFileURL,
-                initialDocument: nil,
-                shouldStartBackgroundDownload: false
-            )
+            do {
+                readerConfiguration = try validatedReaderConfiguration(
+                    fileURL: result.localFileURL,
+                    shouldStartBackgroundDownload: false
+                )
+            } catch {
+                try? dependencies.remoteServerBrowsingService.clearCachedComic(for: reference)
+                throw error
+            }
             let resolvedAccessState = RemoteComicAccessState(source: result.source)
             accessState = resolvedAccessState
             noticeMessage = resolvedAccessState.transientNoticeMessage
@@ -410,6 +430,17 @@ struct RemoteComicLoadingView: View {
         } else {
             return String(format: "%.0f B/s", bytesPerSecond)
         }
+    }
+
+    private func validatedReaderConfiguration(
+        fileURL: URL,
+        shouldStartBackgroundDownload: Bool
+    ) throws -> RemoteComicReaderConfiguration {
+        RemoteComicReaderConfiguration(
+            fileURL: fileURL,
+            initialDocument: try dependencies.comicDocumentLoader.loadDocument(at: fileURL),
+            shouldStartBackgroundDownload: shouldStartBackgroundDownload
+        )
     }
 }
 
@@ -1178,8 +1209,9 @@ struct RemoteComicReaderView: View {
         }
 
         backgroundDownloadProgress = 0
-        backgroundDownloadTask = Task(priority: .utility) {
+        let task = Task(priority: .utility) {
             defer {
+                dependencies.remoteServerBrowsingService.unregisterAutomaticCacheTask(for: reference)
                 Task { @MainActor in
                     self.backgroundDownloadTask = nil
                 }
@@ -1239,6 +1271,11 @@ struct RemoteComicReaderView: View {
                 }
             }
         }
+        backgroundDownloadTask = task
+        dependencies.remoteServerBrowsingService.registerAutomaticCacheTask(
+            for: reference,
+            cancellation: { task.cancel() }
+        )
     }
 
     private func persistProgress(force: Bool = false) {

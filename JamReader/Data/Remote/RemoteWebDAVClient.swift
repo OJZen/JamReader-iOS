@@ -74,7 +74,8 @@ final class RemoteWebDAVClient {
         authorizationHeader: String?,
         depth: String
     ) async throws -> [RemoteWebDAVDirectoryEntry] {
-        var request = URLRequest(url: ensuredDirectoryURL(directoryURL))
+        let resolvedDirectoryURL = ensuredDirectoryURL(directoryURL)
+        var request = URLRequest(url: resolvedDirectoryURL)
         request.httpMethod = "PROPFIND"
         request.timeoutInterval = 30
         request.httpBody = Self.propfindBody
@@ -99,7 +100,7 @@ final class RemoteWebDAVClient {
 
         return document["multistatus"]["response"].all.compactMap { responseNode in
             guard let hrefText = responseNode["href"].element?.text.trimmingCharacters(in: .whitespacesAndNewlines),
-                  let resolvedURL = URL(string: hrefText, relativeTo: directoryURL)?.absoluteURL else {
+                  let resolvedURL = URL(string: hrefText, relativeTo: resolvedDirectoryURL)?.absoluteURL else {
                 return nil
             }
 
@@ -165,6 +166,40 @@ final class RemoteWebDAVClient {
         let (data, response) = try await session.data(for: request)
         _ = try validatedHTTPResponse(response, allowedStatusCodes: [200, 206])
         return data
+    }
+
+    func supportsRangeRequests(
+        from fileURL: URL,
+        authorizationHeader: String?
+    ) async throws -> Bool {
+        var request = URLRequest(url: fileURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("identity", forHTTPHeaderField: "Accept-Encoding")
+        request.setValue("bytes=0-0", forHTTPHeaderField: "Range")
+        if let authorizationHeader {
+            request.setValue(authorizationHeader, forHTTPHeaderField: "Authorization")
+        }
+
+        let (_, response) = try await session.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw RemoteWebDAVClientError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 206:
+            return true
+        case 200:
+            return false
+        case 401:
+            throw RemoteWebDAVClientError.authenticationFailed
+        case 403:
+            throw RemoteWebDAVClientError.accessDenied
+        case 404:
+            throw RemoteWebDAVClientError.remotePathUnavailable
+        default:
+            throw RemoteWebDAVClientError.unsupportedResponse(httpResponse.statusCode)
+        }
     }
 
     func authorizationHeader(username: String?, password: String?) -> String? {
