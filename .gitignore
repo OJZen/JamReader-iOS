@@ -31,3 +31,4 @@ res/*.cb7
 res/*.cbt
 .cache/
 .cache/
+.omx/

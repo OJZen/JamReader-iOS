@@ -112,6 +112,9 @@
     "Apply" : {
 
     },
+    "Assets" : {
+
+    },
     "Authentication" : {
 
     },
@@ -141,6 +144,9 @@
 
     },
     "Browse Thumbnails" : {
+
+    },
+    "Builds this library's local index, adds the root folder, and scans supported comic files." : {
 
     },
     "Cache Policy" : {
@@ -254,16 +260,10 @@
     "Create tags in Library." : {
 
     },
-    "Builds this library's local index, adds the root folder, and scans supported comic files." : {
-
-    },
     "Credits" : {
 
     },
     "Current" : {
-
-    },
-    "Database" : {
 
     },
     "Default reader layout for each type." : {
@@ -369,9 +369,6 @@
     "Filter comics" : {
 
     },
-    "Filter this folder" : {
-
-    },
     "Fit Mode" : {
 
     },
@@ -433,9 +430,6 @@
 
     },
     "Imported files are removed. The library stays in the app." : {
-
-    },
-    "Imports" : {
 
     },
     "Imprint" : {
@@ -511,6 +505,9 @@
     "Local Libraries" : {
 
     },
+    "Local State" : {
+
+    },
     "Locate" : {
 
     },
@@ -542,9 +539,6 @@
 
     },
     "Mark Unread" : {
-
-    },
-    "Metadata" : {
 
     },
     "Metadata couldn't be loaded. Close and try again." : {
@@ -824,9 +818,6 @@
     "Reset Rotation" : {
 
     },
-    "Results" : {
-
-    },
     "Resume" : {
 
     },
@@ -969,6 +960,12 @@
     "Source" : {
 
     },
+    "Source Folder" : {
+
+    },
+    "Source Write" : {
+
+    },
     "Spread" : {
 
     },
@@ -1067,9 +1064,6 @@
 
     },
     "Working…" : {
-
-    },
-    "Write" : {
 
     },
     "Writer" : {
