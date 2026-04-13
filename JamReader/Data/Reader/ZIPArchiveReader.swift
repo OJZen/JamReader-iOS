@@ -184,6 +184,7 @@ final class ZIPArchiveReader {
         case .unsupportedZIP64,
              .unsupportedMultiDiskArchive,
              .invalidArchive,
+             .noRenderablePages,
              .encryptedEntry,
              .unsupportedCompressionMethod,
              .corruptEntry,
@@ -191,7 +192,6 @@ final class ZIPArchiveReader {
              .inflateFailed:
             return true
         case .unreadableArchive,
-             .noRenderablePages,
              .pageIndexOutOfBounds:
             return false
         }

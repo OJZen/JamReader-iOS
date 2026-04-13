@@ -39,6 +39,11 @@ final class DirectoryImageSequenceInspector {
     }
 
     func inspectComicDirectory(at directoryURL: URL) throws -> DirectoryImageSequenceInspection? {
+        let values = try directoryURL.resourceValues(forKeys: [.isDirectoryKey])
+        guard values.isDirectory == true else {
+            return nil
+        }
+
         let contents = try fileManager.contentsOfDirectory(
             at: directoryURL,
             includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .nameKey],

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os.log
 import UIKit
 
 #if canImport(SQLite3)
@@ -48,6 +49,7 @@ final class LibraryIndexingService {
     private let fileManager: FileManager
     private let metadataExtractor: LibraryComicMetadataExtractor
     private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
+    private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "LibraryIndexing")
     private let supportedExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
     ]
@@ -151,11 +153,30 @@ final class LibraryIndexingService {
             )
         )
 
-        let discovery = try discoverLibraryContents(
-            at: sourceRootURL.standardizedFileURL,
-            cancellationCheck: cancellationCheck,
-            progressHandler: progressHandler
-        )
+        let discovery: (folders: [ScannedFolder], comics: [ScannedComic])
+        do {
+            discovery = try discoverLibraryContents(
+                at: sourceRootURL.standardizedFileURL,
+                cancellationCheck: cancellationCheck,
+                progressHandler: progressHandler
+            )
+        } catch {
+            logger.error(
+                "Library discovery failed for library \(libraryID.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+            )
+            throw error
+        }
+
+        if discovery.comics.isEmpty {
+            let topLevelEntries = ((try? fileManager.contentsOfDirectory(
+                at: sourceRootURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )) ?? []).map(\.lastPathComponent).sorted().joined(separator: ", ")
+            logger.warning(
+                "Library scan discovered zero comics for library \(libraryID.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Top-level entries: \(topLevelEntries, privacy: .public)"
+            )
+        }
 
         progressHandler?(
             LibraryScanProgress(
@@ -166,12 +187,20 @@ final class LibraryIndexingService {
             )
         )
 
-        return try syncDiscoveredContents(
-            discovery,
-            libraryID: libraryID,
-            sourceRootURL: sourceRootURL.standardizedFileURL,
-            cancellationCheck: cancellationCheck
-        )
+        do {
+            let summary = try syncDiscoveredContents(
+                discovery,
+                libraryID: libraryID,
+                sourceRootURL: sourceRootURL.standardizedFileURL,
+                cancellationCheck: cancellationCheck
+            )
+            return summary
+        } catch {
+            logger.error(
+                "Library sync failed for library \(libraryID.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+            )
+            throw error
+        }
     }
 
     private func discoverLibraryContents(
@@ -280,13 +309,22 @@ final class LibraryIndexingService {
             } catch {
                 metadata = nil
             }
+            let hash: String
+            do {
+                hash = try fileFingerprint(for: standardizedURL)
+            } catch {
+                logger.error(
+                    "Failed to fingerprint comic candidate \(standardizedURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                )
+                throw error
+            }
 
             comics.append(
                 ScannedComic(
                     relativePath: relativePath,
                     parentRelativePath: relativeDirectoryPath(for: relativePath) ?? "",
                     fileName: standardizedURL.lastPathComponent,
-                    hash: try fileFingerprint(for: standardizedURL),
+                    hash: hash,
                     coverAssetKey: LibraryCoverLocator.coverAssetKey(forRelativePath: relativePath),
                     metadata: metadata
                 )

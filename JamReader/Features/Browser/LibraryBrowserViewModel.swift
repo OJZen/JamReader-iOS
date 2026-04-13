@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os.log
 import UIKit
 
 @MainActor
@@ -36,6 +37,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private let importedComicsImportService: ImportedComicsImportService
     private let comicRemovalService: LibraryComicRemovalService
     private let databaseInspector = SQLiteDatabaseInspector()
+    private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "LibraryBrowser")
 
     private let metadataRootURL: URL
     private let databaseURL: URL
@@ -44,6 +46,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private var cancellables = Set<AnyCancellable>()
     private var scanCompletionDismissTask: Task<Void, Never>?
     private var hasLoaded = false
+    private var hasAttemptedAutomaticImportRecovery = false
     private let previewCollectionLimit = 6
     nonisolated private static let searchResultLimit = 40
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
@@ -457,6 +460,16 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
         databaseSummary = databaseInspector.inspectDatabase(at: databaseURL)
 
+        if shouldAttemptAutomaticImportRecovery() {
+            hasAttemptedAutomaticImportRecovery = true
+            initializeLibrary()
+            return
+        }
+
+        if databaseSummary.exists {
+            hasAttemptedAutomaticImportRecovery = false
+        }
+
         if let issue = databaseSummary.issueDescription {
             content = nil
             emptyStateMessage = issue
@@ -493,6 +506,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
             folderID = resolvedFolderID
             emptyStateMessage = nil
+            hasAttemptedAutomaticImportRecovery = false
             refreshSpecialCollectionPreviewsIfNeeded()
             refreshSearchIfNeeded()
         } catch let error as LibraryDatabaseReadError {
@@ -514,6 +528,19 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
     }
 
+    private func shouldAttemptAutomaticImportRecovery() -> Bool {
+        guard !databaseSummary.exists,
+              folderID == 1,
+              !hasAttemptedAutomaticImportRecovery,
+              let maintenanceRecord,
+              maintenanceRecord.scope == .importIndex
+        else {
+            return false
+        }
+
+        return Date().timeIntervalSince(maintenanceRecord.scannedAt) <= 600
+    }
+
     func initializeLibrary() {
         guard canInitializeLibrary, !isInitializingLibrary else {
             return
@@ -531,10 +558,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         )
 
         do {
-            if accessSession == nil {
-                accessSession = try storageManager.makeAccessSession(for: descriptor)
-            }
-            let sourceURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+            let sourceURL = try resolvedSourceRootURL()
             let retainedAccessSession = accessSession
             let databaseBootstrapper = self.databaseBootstrapper
             let libraryScanner = self.libraryScanner
@@ -575,6 +599,9 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                             summary: summary
                         )
                     case .failure(let error):
+                        self.logger.error(
+                            "Failed to initialize library \(self.descriptor.id.uuidString, privacy: .public) from \(sourceURL.path, privacy: .public). Database: \(databaseURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                        )
                         self.alert = AppAlertState(
                             title: "Failed to Initialize Library",
                             message: error.userFacingMessage
@@ -607,10 +634,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         )
 
         do {
-            if accessSession == nil {
-                accessSession = try storageManager.makeAccessSession(for: descriptor)
-            }
-            let sourceURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+            let sourceURL = try resolvedSourceRootURL()
             let retainedAccessSession = accessSession
             let libraryScanner = self.libraryScanner
             let databaseURL = self.databaseURL
@@ -649,6 +673,9 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                             summary: summary
                         )
                     case .failure(let error):
+                        self.logger.error(
+                            "Failed to refresh library \(self.descriptor.id.uuidString, privacy: .public) from \(sourceURL.path, privacy: .public). Database: \(databaseURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                        )
                         self.alert = AppAlertState(
                             title: "Failed to Refresh Library",
                             message: error.userFacingMessage
@@ -679,11 +706,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         )
 
         do {
-            if accessSession == nil {
-                accessSession = try storageManager.makeAccessSession(for: descriptor)
-            }
-
-            let sourceURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+            let sourceURL = try resolvedSourceRootURL()
             let retainedAccessSession = accessSession
             let libraryScanner = self.libraryScanner
             let databaseURL = self.databaseURL
@@ -883,8 +906,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     func coverSource(for comic: LibraryComic) -> LocalComicCoverSource? {
-        let sourceRootURL = accessSession?.sourceURL
-            ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+        guard let sourceRootURL = resolvedSourceRootURLIfAvailable() else {
+            return nil
+        }
+
         return LocalComicCoverSource(
             fileURL: resolveComicFileURL(for: comic, sourceRootURL: sourceRootURL),
             cacheURL: coverLocator.plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
@@ -906,11 +931,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     private func importDestinationDirectoryURL() throws -> URL {
-        if accessSession == nil {
-            accessSession = try storageManager.makeAccessSession(for: descriptor)
-        }
-
-        let sourceRootURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+        let sourceRootURL = try resolvedSourceRootURL()
         guard let content else {
             return sourceRootURL
         }
@@ -925,6 +946,22 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
 
         return sourceRootURL.appendingPathComponent(relativePath, isDirectory: true)
+    }
+
+    private func resolvedSourceRootURL() throws -> URL {
+        if accessSession == nil {
+            accessSession = try storageManager.makeAccessSession(for: descriptor)
+        }
+
+        if let sourceURL = accessSession?.sourceURL {
+            return sourceURL
+        }
+
+        return try storageManager.restoreSourceURL(for: descriptor)
+    }
+
+    private func resolvedSourceRootURLIfAvailable() -> URL? {
+        try? resolvedSourceRootURL()
     }
 
     private func resolveComicFileURL(

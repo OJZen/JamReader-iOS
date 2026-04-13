@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os.log
 
 struct ImportedComicsImportResult {
     let importedDestinationID: UUID
@@ -91,6 +92,9 @@ final class ImportedComicsImportService {
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let fileManager: FileManager
+    private let databaseInspector = SQLiteDatabaseInspector()
+    private let databaseReader = LibraryDatabaseReader()
+    private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "ImportedComicsImport")
 
     private let supportedComicFileExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
@@ -135,6 +139,7 @@ final class ImportedComicsImportService {
             for: destinationResolution.descriptor
         )
         let destinationDirectoryURL = destinationAccessSession.sourceURL.standardizedFileURL
+        let destinationDirectoryPath = destinationDirectoryURL.path
 
         var importedComicCount = 0
         var importedDestinationFileURLs: [URL] = []
@@ -187,6 +192,10 @@ final class ImportedComicsImportService {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                let importedFileNames = importedDestinationFileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
+                logger.error(
+                    "Automatic indexing failed for library \(destinationResolution.descriptor.id.uuidString, privacy: .public) at \(destinationDirectoryPath, privacy: .public). Imported files: \(importedFileNames, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                )
                 scanSummary = nil
                 scanErrorMessage = error.userFacingMessage
             }
@@ -354,7 +363,33 @@ final class ImportedComicsImportService {
             .ensureImportedComicsLibraryRootURL()
             .standardizedFileURL
 
-        if let existingDescriptor = descriptors.first(where: { $0.sourcePath == rootURL.path }) {
+        if let existingDescriptorIndex = descriptors.firstIndex(where: {
+            $0.kind == .importedComics || $0.sourcePath == rootURL.path
+        }) {
+            var existingDescriptor = descriptors[existingDescriptorIndex]
+            var didChange = false
+
+            if existingDescriptor.kind != .importedComics {
+                existingDescriptor.kind = .importedComics
+                didChange = true
+            }
+
+            if existingDescriptor.sourcePath != rootURL.path {
+                existingDescriptor.sourcePath = rootURL.path
+                didChange = true
+            }
+
+            if !existingDescriptor.sourceBookmarkData.isEmpty {
+                existingDescriptor.sourceBookmarkData = Data()
+                didChange = true
+            }
+
+            if didChange {
+                existingDescriptor.updatedAt = Date()
+                descriptors[existingDescriptorIndex] = existingDescriptor
+                try store.save(descriptors)
+            }
+
             return (existingDescriptor, false)
         }
 
@@ -387,8 +422,9 @@ final class ImportedComicsImportService {
                         && seenImportedPaths.insert(fileURL.path).inserted
                 }
 
+            let scanSummary: LibraryScanSummary
             if !normalizedImportedFileURLs.isEmpty {
-                return try libraryScanner.appendImportedComics(
+                scanSummary = try libraryScanner.appendImportedComics(
                     sourceRootURL: libraryRootURL,
                     databaseURL: databaseURL,
                     fileURLs: normalizedImportedFileURLs,
@@ -405,23 +441,33 @@ final class ImportedComicsImportService {
                         )
                     }
                 )
+            } else {
+                scanSummary = try libraryScanner.rescanLibrary(
+                    sourceRootURL: libraryRootURL,
+                    databaseURL: databaseURL,
+                    cancellationCheck: cancellationCheck,
+                    progressHandler: { scanProgress in
+                        progressHandler?(
+                            ImportedComicsImportProgress(
+                                phase: .indexing,
+                                completedCount: scanProgress.processedComicCount,
+                                totalCount: nil,
+                                currentItemName: scanProgress.currentPath,
+                                scanProgress: scanProgress
+                            )
+                        )
+                    }
+                )
             }
 
-            return try libraryScanner.rescanLibrary(
+            return try validatedIndexedSummary(
+                initialSummary: scanSummary,
+                descriptor: descriptor,
                 sourceRootURL: libraryRootURL,
                 databaseURL: databaseURL,
-                cancellationCheck: cancellationCheck,
-                progressHandler: { scanProgress in
-                    progressHandler?(
-                        ImportedComicsImportProgress(
-                            phase: .indexing,
-                            completedCount: scanProgress.processedComicCount,
-                            totalCount: nil,
-                            currentItemName: scanProgress.currentPath,
-                            scanProgress: scanProgress
-                        )
-                    )
-                }
+                expectedMinimumComicCount: normalizedImportedFileURLs.isEmpty ? 0 : 1,
+                progressHandler: progressHandler,
+                cancellationCheck: cancellationCheck
             )
         }
         maintenanceStatusStore.saveRecord(
@@ -435,6 +481,81 @@ final class ImportedComicsImportService {
             )
         )
         return summary
+    }
+
+    private func validatedIndexedSummary(
+        initialSummary: LibraryScanSummary,
+        descriptor: LibraryDescriptor,
+        sourceRootURL: URL,
+        databaseURL: URL,
+        expectedMinimumComicCount: Int,
+        progressHandler: ((ImportedComicsImportProgress) -> Void)?,
+        cancellationCheck: (() throws -> Void)?
+    ) throws -> LibraryScanSummary {
+        try cancellationCheck?()
+
+        let currentIndexedComicCount = indexedComicCount(databaseURL: databaseURL)
+        if libraryLoadsSuccessfully(databaseURL: databaseURL)
+            && currentIndexedComicCount >= expectedMinimumComicCount
+        {
+            return initialSummary
+        }
+
+        logger.warning(
+            "Imported comics validation requested recovery for library \(descriptor.id.uuidString, privacy: .public). Expected comics >= \(expectedMinimumComicCount), current indexed comics=\(currentIndexedComicCount), sourceRoot=\(sourceRootURL.path, privacy: .public)"
+        )
+
+        try databaseBootstrapper.ensureDatabaseExists(at: databaseURL)
+        let recoverySummary = try libraryScanner.scanLibrary(
+            sourceRootURL: sourceRootURL,
+            databaseURL: databaseURL,
+            cancellationCheck: cancellationCheck,
+            progressHandler: { scanProgress in
+                progressHandler?(
+                    ImportedComicsImportProgress(
+                        phase: .indexing,
+                        completedCount: scanProgress.processedComicCount,
+                        totalCount: nil,
+                        currentItemName: scanProgress.currentPath,
+                        scanProgress: scanProgress
+                    )
+                )
+            }
+        )
+
+        let recoveredComicCount = indexedComicCount(databaseURL: databaseURL)
+        guard libraryLoadsSuccessfully(databaseURL: databaseURL),
+              recoveredComicCount >= expectedMinimumComicCount
+        else {
+            let summary = databaseInspector.inspectDatabase(at: databaseURL)
+            logger.error(
+                "Imported comics recovery scan did not index expected content for library \(descriptor.id.uuidString, privacy: .public). Summary exists=\(summary.exists) folders=\(summary.folderCount) comics=\(summary.comicCount) sourceRoot=\(sourceRootURL.path, privacy: .public)"
+            )
+            throw NSError(
+                domain: "ImportedComicsImportService",
+                code: 2,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        summary.lastError
+                        ?? "Imported files were copied into \(descriptor.name), but the local library index could not be opened."
+                ]
+            )
+        }
+
+        return recoverySummary
+    }
+
+    private func libraryLoadsSuccessfully(databaseURL: URL) -> Bool {
+        let summary = databaseInspector.inspectDatabase(at: databaseURL)
+        guard summary.exists else {
+            return false
+        }
+
+        return (try? databaseReader.loadFolderContent(databaseURL: databaseURL, folderID: 1)) != nil
+    }
+
+    private func indexedComicCount(databaseURL: URL) -> Int {
+        databaseInspector.inspectDatabase(at: databaseURL).comicCount
     }
 
     private func importAvailability(

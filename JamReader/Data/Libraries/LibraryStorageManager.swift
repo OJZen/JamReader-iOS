@@ -33,6 +33,7 @@ struct LibraryStorageFootprintSummary: Hashable {
 }
 
 final class LibraryStorageManager {
+    private let importedComicsDirectoryName = "ImportedComics"
     private let fileManager: FileManager
     private let database: AppLibraryDatabase
     private let assetStore: LibraryAssetStore
@@ -93,6 +94,10 @@ final class LibraryStorageManager {
     }
 
     func restoreSourceURL(for descriptor: LibraryDescriptor) throws -> URL {
+        if shouldResolveImportedComicsRoot(for: descriptor) {
+            return try importedComicsLibraryRootURL(createIfNeeded: true)
+        }
+
         if descriptor.bookmarkData.isEmpty || isManagedLocalLibraryPath(descriptor.rootPath) {
             let sourceURL = URL(fileURLWithPath: descriptor.rootPath, isDirectory: true).standardizedFileURL
             if !fileManager.fileExists(atPath: sourceURL.path) {
@@ -195,10 +200,16 @@ final class LibraryStorageManager {
     }
 
     private func importedComicsLibraryRootURL(createIfNeeded: Bool) throws -> URL {
-        try database
+        let rootURL = try database
             .storageRootURL()
-            .appendingPathComponent("ImportedComics", isDirectory: true)
+            .appendingPathComponent(importedComicsDirectoryName, isDirectory: true)
             .standardizedFileURL
+
+        if createIfNeeded, !fileManager.fileExists(atPath: rootURL.path) {
+            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        }
+
+        return rootURL
     }
 
     private func isImportedComicsLibraryURL(_ url: URL) -> Bool {
@@ -207,6 +218,19 @@ final class LibraryStorageManager {
         }
 
         return url.standardizedFileURL.path == importedURL.path
+    }
+
+    private func shouldResolveImportedComicsRoot(for descriptor: LibraryDescriptor) -> Bool {
+        if descriptor.kind == .importedComics {
+            return true
+        }
+
+        guard descriptor.bookmarkData.isEmpty else {
+            return false
+        }
+
+        let candidateURL = URL(fileURLWithPath: descriptor.rootPath, isDirectory: true).standardizedFileURL
+        return candidateURL.lastPathComponent == importedComicsDirectoryName
     }
 
     private func isManagedLocalLibraryURL(_ url: URL) -> Bool {

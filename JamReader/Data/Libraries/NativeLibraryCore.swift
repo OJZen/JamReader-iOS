@@ -29,6 +29,7 @@ enum NativeLibraryStorageError: LocalizedError {
 
 final class AppLibraryDatabase {
     private let fileManager: FileManager
+    private let busyTimeoutMilliseconds: Int32 = 5_000
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
@@ -77,6 +78,9 @@ final class AppLibraryDatabase {
     func ensureInitialized() throws {
         #if canImport(SQLite3)
         _ = try withConnection(readOnly: false) { database in
+            sqlite3_busy_timeout(database, busyTimeoutMilliseconds)
+            try sqliteExecute("PRAGMA journal_mode = WAL;", database: database)
+            try sqliteExecute("PRAGMA synchronous = NORMAL;", database: database)
             try sqliteExecute("PRAGMA foreign_keys = ON;", database: database)
             for statement in schemaStatements {
                 try sqliteExecute(statement, database: database)
@@ -120,7 +124,12 @@ final class AppLibraryDatabase {
             sqlite3_close(database)
         }
 
+        sqlite3_busy_timeout(database, busyTimeoutMilliseconds)
         try sqliteExecute("PRAGMA foreign_keys = ON;", database: database)
+        if !readOnly {
+            try sqliteExecute("PRAGMA journal_mode = WAL;", database: database)
+            try sqliteExecute("PRAGMA synchronous = NORMAL;", database: database)
+        }
         return try body(database)
         #else
         throw NativeLibraryStorageError.sqliteUnavailable

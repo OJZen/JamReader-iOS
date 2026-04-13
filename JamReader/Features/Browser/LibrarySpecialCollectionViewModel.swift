@@ -19,6 +19,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
 
     private let databaseURL: URL
     private let metadataRootURL: URL
+    private var accessSession: LibraryAccessSession?
     private var hasLoaded = false
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
 
@@ -270,7 +271,9 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
     }
 
     func coverSource(for comic: LibraryComic) -> LocalComicCoverSource? {
-        let sourceRootURL = URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
+        guard let sourceRootURL = resolvedSourceRootURLIfAvailable() else {
+            return nil
+        }
         return LocalComicCoverSource(
             fileURL: resolveComicFileURL(for: comic, sourceRootURL: sourceRootURL),
             cacheURL: coverLocator.plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
@@ -303,5 +306,17 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
         }
 
         return sourceRootURL.appendingPathComponent(relativePath)
+    }
+
+    private func resolvedSourceRootURLIfAvailable() -> URL? {
+        if accessSession == nil {
+            accessSession = try? storageManager.makeAccessSession(for: descriptor)
+        }
+
+        if let sourceURL = accessSession?.sourceURL {
+            return sourceURL
+        }
+
+        return try? storageManager.restoreSourceURL(for: descriptor)
     }
 }
