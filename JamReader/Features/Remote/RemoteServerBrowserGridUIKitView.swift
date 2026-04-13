@@ -926,6 +926,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     private let thumbnailPlaceholderImageView = UIImageView()
     private let symbolView = UIView()
     private let symbolImageView = UIImageView()
+    private let titleIconContainer = UIView()
     private let titleIconView = UIImageView()
     private let titleLabel = UILabel()
     private let metadataLabel = UILabel()
@@ -971,8 +972,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         itemWidth: CGFloat
     ) {
         representedItemID = row.item.id
-        titleLabel.text = row.item.name
-        configureTitlePrefix(for: row.item)
+        configureTitleText(for: row.item)
         metadataLabel.text = metadataText(for: row)
         updateHeroSourceRegistration(for: row.item)
         imageHeightConstraint?.constant = itemWidth / AppLayout.coverAspectRatio
@@ -1109,13 +1109,16 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 2
 
+        titleIconContainer.translatesAutoresizingMaskIntoConstraints = false
+        titleIconContainer.isHidden = true
+
         titleIconView.translatesAutoresizingMaskIntoConstraints = false
         titleIconView.contentMode = .scaleAspectFit
-        titleIconView.transform = CGAffineTransform(translationX: 0, y: 1)
         titleIconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
             pointSize: 13,
             weight: .semibold
         )
+        titleIconContainer.addSubview(titleIconView)
 
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = UIFont.preferredFont(forTextStyle: .footnote)
@@ -1136,7 +1139,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         progressFillView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
         progressTrackView.addSubview(progressFillView)
 
-        let titleRow = UIStackView(arrangedSubviews: [titleIconView, titleLabel])
+        let titleRow = UIStackView(arrangedSubviews: [titleIconContainer, titleLabel])
         titleRow.translatesAutoresizingMaskIntoConstraints = false
         titleRow.axis = .horizontal
         titleRow.alignment = .top
@@ -1194,8 +1197,12 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             progressFillView.bottomAnchor.constraint(equalTo: progressTrackView.bottomAnchor),
             progressWidthConstraint!,
 
+            titleIconContainer.widthAnchor.constraint(equalToConstant: 15),
+            titleIconContainer.heightAnchor.constraint(equalToConstant: ceil(titleLabel.font.lineHeight)),
             titleIconView.widthAnchor.constraint(equalToConstant: 15),
             titleIconView.heightAnchor.constraint(equalToConstant: 15),
+            titleIconView.centerXAnchor.constraint(equalTo: titleIconContainer.centerXAnchor),
+            titleIconView.centerYAnchor.constraint(equalTo: titleIconContainer.centerYAnchor, constant: 1.5),
 
             textStack.topAnchor.constraint(equalTo: thumbnailImageView.bottomAnchor, constant: Metrics.verticalPadding),
             textStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: Metrics.horizontalPadding),
@@ -1270,16 +1277,48 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         )
     }
 
-    private func configureTitlePrefix(for item: RemoteDirectoryItem) {
-        titleIconView.image = UIImage(systemName: item.titleSystemImageName)
-
+    private func configureTitleText(for item: RemoteDirectoryItem) {
+        let font = titleLabel.font ?? UIFont.preferredFont(forTextStyle: .subheadline).bold()
+        let tintColor: UIColor
         if item.isDirectory {
-            titleIconView.tintColor = .systemBlue
+            tintColor = .systemBlue
         } else if item.canOpenAsComic {
-            titleIconView.tintColor = .systemGreen
+            tintColor = .systemGreen
         } else {
-            titleIconView.tintColor = .secondaryLabel
+            tintColor = .secondaryLabel
         }
+
+        let attributed = NSMutableAttributedString()
+        if let symbolImage = UIImage(
+            systemName: item.titleSystemImageName,
+            withConfiguration: UIImage.SymbolConfiguration(
+                pointSize: font.pointSize - 1,
+                weight: .semibold
+            )
+        )?.withTintColor(tintColor, renderingMode: .alwaysOriginal) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbolImage
+            let symbolSide = font.pointSize - 1
+            attachment.bounds = CGRect(
+                x: 0,
+                y: (font.capHeight - symbolSide) / 2 - 1.5,
+                width: symbolSide,
+                height: symbolSide
+            )
+            attributed.append(NSAttributedString(attachment: attachment))
+            attributed.append(NSAttributedString(string: " "))
+        }
+
+        attributed.append(
+            NSAttributedString(
+                string: item.name,
+                attributes: [
+                    .font: font,
+                    .foregroundColor: UIColor.label
+                ]
+            )
+        )
+        titleLabel.attributedText = attributed
     }
 
     func heroSourceFrame() -> CGRect {
