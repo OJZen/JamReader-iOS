@@ -58,7 +58,8 @@ enum RemoteDirectoryPreviewSupport {
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
         targetSize: CGSize,
-        scale: CGFloat
+        scale: CGFloat,
+        allowsRemoteFetch: Bool = true
     ) async -> UIImage? {
         let previewItems = previewItems(for: item)
         guard !previewItems.isEmpty else {
@@ -82,18 +83,20 @@ enum RemoteDirectoryPreviewSupport {
                     browsingService: browsingService
                 ),
                 maxPixelSize: pixelSize,
-                allowsRemoteFetch: true
+                allowsRemoteFetch: allowsRemoteFetch
             )
             let image: UIImage?
             if let pipelineImage {
                 image = pipelineImage
-            } else {
+            } else if allowsRemoteFetch {
                 image = await directThumbnail(
                     for: previewItem,
                     profile: profile,
                     browsingService: browsingService,
                     maxPixelSize: pixelSize
                 )
+            } else {
+                image = nil
             }
 
             if let image {

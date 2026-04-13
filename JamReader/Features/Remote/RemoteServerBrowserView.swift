@@ -111,6 +111,13 @@ struct RemoteServerBrowserView: View {
                 }
                 scheduleThumbnailPreheat(immediately: true)
             }
+            .onChange(of: presentedComicItem?.id) { _, _ in
+                if presentedComicItem == nil {
+                    scheduleThumbnailPreheat(immediately: true)
+                } else {
+                    cancelThumbnailPreheat()
+                }
+            }
             .refreshable {
                 await viewModel.load()
             }
@@ -464,6 +471,7 @@ struct RemoteServerBrowserView: View {
                                 browsingService: dependencies.remoteServerBrowsingService,
                                 layoutContext: layoutContext,
                                 presentationStyle: .listGrid,
+                                allowsRemoteThumbnailFetch: presentedComicItem == nil,
                                 onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
                                 onOpenItem: { item, sourceFrame in
                                     if item.canOpenAsComic {
@@ -499,6 +507,7 @@ struct RemoteServerBrowserView: View {
                                 profile: viewModel.profile,
                                 browsingService: dependencies.remoteServerBrowsingService,
                                 layoutContext: layoutContext,
+                                allowsRemoteThumbnailFetch: presentedComicItem == nil,
                                 onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
                                 onOpenItem: { item, sourceFrame in
                                     if item.canOpenAsComic {
@@ -571,6 +580,7 @@ struct RemoteServerBrowserView: View {
                         browsingService: dependencies.remoteServerBrowsingService,
                         layoutContext: browserLayoutContext(for: geometry.size.width),
                         presentationStyle: .grid,
+                        allowsRemoteThumbnailFetch: presentedComicItem == nil,
                         onVisibleComicIDsChanged: handleVisibleComicIDsChanged(_:),
                         onOpenItem: { item, sourceFrame in
                             if item.canOpenAsComic {
@@ -885,7 +895,7 @@ struct RemoteServerBrowserView: View {
         plan: ThumbnailPreheatPlan,
         maxPixelSize: Int
     ) async {
-        guard displayMode == .grid, !items.isEmpty else {
+        guard presentedComicItem == nil, displayMode == .grid, !items.isEmpty else {
             return
         }
 

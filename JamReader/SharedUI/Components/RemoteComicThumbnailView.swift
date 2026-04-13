@@ -34,6 +34,7 @@ struct RemoteComicThumbnailView: View {
     let browsingService: RemoteServerBrowsingService
     let placeholderSystemName: String
     let prefersLocalCache: Bool
+    let allowsRemoteFetch: Bool
     let heroSourceID: String?
     let width: CGFloat
     let height: CGFloat
@@ -44,6 +45,7 @@ struct RemoteComicThumbnailView: View {
         browsingService: RemoteServerBrowsingService,
         placeholderSystemName: String = "doc.richtext",
         prefersLocalCache: Bool = false,
+        allowsRemoteFetch: Bool = true,
         heroSourceID: String? = nil,
         width: CGFloat = 74,
         height: CGFloat = 104
@@ -53,6 +55,7 @@ struct RemoteComicThumbnailView: View {
         self.browsingService = browsingService
         self.placeholderSystemName = placeholderSystemName
         self.prefersLocalCache = prefersLocalCache
+        self.allowsRemoteFetch = allowsRemoteFetch
         self.heroSourceID = heroSourceID
         self.width = width
         self.height = height
@@ -72,6 +75,7 @@ struct RemoteComicThumbnailView: View {
                 item: item,
                 browsingService: browsingService,
                 prefersLocalCache: prefersLocalCache,
+                allowsRemoteFetch: allowsRemoteFetch,
                 targetSize: targetSize,
                 scale: scale
             )
@@ -100,6 +104,7 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
         item: RemoteDirectoryItem,
         browsingService: RemoteServerBrowsingService,
         prefersLocalCache: Bool,
+        allowsRemoteFetch: Bool,
         targetSize: CGSize,
         scale: CGFloat
     ) {
@@ -147,7 +152,8 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
                 item: item,
                 browsingService: browsingService,
                 prefersLocalCache: prefersLocalCache,
-                maxPixelSize: normalizedMaxPixelSize
+                maxPixelSize: normalizedMaxPixelSize,
+                allowsRemoteFetch: allowsRemoteFetch
             )
 
             guard let self, !Task.isCancelled, self.requestID == requestID else {
@@ -225,6 +231,7 @@ final class RemoteComicThumbnailPipeline {
         let requestedMaxPixelSize = maxPixelSize
         let maxPixelSize = Self.normalizedPixelSize(for: requestedMaxPixelSize)
         let cacheKey = Self.cacheKey(for: reference, maxPixelSize: maxPixelSize)
+        let requestKey = Self.requestKey(forCacheKey: cacheKey, allowsRemoteFetch: allowsRemoteFetch)
         let nsCacheKey = cacheKey as NSString
 
         if let cachedImage = cache.object(forKey: nsCacheKey) {
@@ -286,7 +293,7 @@ final class RemoteComicThumbnailPipeline {
             return hqImage
         }
 
-        if let inFlightTask = inFlightTasks[cacheKey] {
+        if let inFlightTask = inFlightTasks[requestKey] {
             return await inFlightTask.value
         }
 
@@ -307,9 +314,9 @@ final class RemoteComicThumbnailPipeline {
             }
         }
 
-        inFlightTasks[cacheKey] = task
+        inFlightTasks[requestKey] = task
         let image = await task.value
-        inFlightTasks[cacheKey] = nil
+        inFlightTasks[requestKey] = nil
 
         if let image {
             cache.setObject(
@@ -487,6 +494,10 @@ final class RemoteComicThumbnailPipeline {
     ) -> String {
         let modifiedAt = Int(reference.modifiedAt?.timeIntervalSince1970 ?? 0)
         return "\(reference.id)#\(reference.fileSize ?? 0)#\(modifiedAt)#\(maxPixelSize)"
+    }
+
+    private static func requestKey(forCacheKey cacheKey: String, allowsRemoteFetch: Bool) -> String {
+        "\(cacheKey)#remote:\(allowsRemoteFetch ? 1 : 0)"
     }
 
     // Cache key that identifies an item regardless of requested pixel size.
@@ -1011,30 +1022,7 @@ private struct RemoteComicThumbnailWorker {
             return cachedImage
         }
 
-        guard canAttemptRemoteFetch else {
-            return nil
-        }
-
-        let downloadResult = try? await browsingService.downloadComicFile(
-            for: profile,
-            reference: reference
-        )
-
-        guard let downloadResult else {
-            return nil
-        }
-        guard !Task.isCancelled,
-              let image = await Self.extractThumbnail(
-                from: downloadResult.localFileURL,
-                maxPixelSize: maxPixelSize
-              ) else {
-            return nil
-        }
-
-        if let thumbnailData = Self.encodedThumbnailData(from: image) {
-            try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
-        }
-        return image
+        return nil
     }
 
     nonisolated private static func extractThumbnail(from fileURL: URL, maxPixelSize: Int) async -> UIImage? {

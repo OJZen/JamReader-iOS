@@ -1557,14 +1557,28 @@ final class RemoteServerBrowsingService {
 
         let credentials = try resolvedCredentials(for: profile)
         do {
-            return try await smbConnectionPool.withConnection(
+            let client = SMBClient(
                 host: profile.normalizedHost,
                 port: profile.port,
-                shareName: profile.normalizedShareName,
-                username: credentials.username,
-                password: credentials.password,
-                operation: operation
+                connectTimeout: 20
             )
+            try await client.login(
+                username: credentials.username,
+                password: credentials.password
+            )
+            try await client.connectShare(profile.normalizedShareName)
+
+            defer {
+                Task {
+                    _ = try? await client.disconnectShare()
+                    _ = try? await client.logoff()
+                    await MainActor.run {
+                        client.session.disconnect()
+                    }
+                }
+            }
+
+            return try await operation(client)
         } catch {
             throw normalizeBrowsingError(
                 error,

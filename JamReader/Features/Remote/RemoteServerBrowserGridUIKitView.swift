@@ -12,6 +12,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     let browsingService: RemoteServerBrowsingService
     let layoutContext: RemoteServerBrowserLayoutContext
     let presentationStyle: RemoteBrowserGridPresentationStyle
+    let allowsRemoteThumbnailFetch: Bool
     let onVisibleComicIDsChanged: (Set<String>) -> Void
     let onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
@@ -27,6 +28,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             browsingService: browsingService,
             layoutContext: layoutContext,
             presentationStyle: presentationStyle,
+            allowsRemoteThumbnailFetch: allowsRemoteThumbnailFetch,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -51,6 +53,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             browsingService: browsingService,
             layoutContext: layoutContext,
             presentationStyle: presentationStyle,
+            allowsRemoteThumbnailFetch: allowsRemoteThumbnailFetch,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -74,6 +77,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         private var browsingService: RemoteServerBrowsingService
         private var layoutContext: RemoteServerBrowserLayoutContext
         private var presentationStyle: RemoteBrowserGridPresentationStyle
+        private var allowsRemoteThumbnailFetch: Bool
         private var onVisibleComicIDsChanged: (Set<String>) -> Void
         private var onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
@@ -92,6 +96,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
             presentationStyle: RemoteBrowserGridPresentationStyle,
+            allowsRemoteThumbnailFetch: Bool,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -105,6 +110,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             self.browsingService = browsingService
             self.layoutContext = layoutContext
             self.presentationStyle = presentationStyle
+            self.allowsRemoteThumbnailFetch = allowsRemoteThumbnailFetch
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -124,6 +130,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
             presentationStyle: RemoteBrowserGridPresentationStyle,
+            allowsRemoteThumbnailFetch: Bool,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -134,7 +141,8 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         ) {
             let didChangeLayoutContext = self.layoutContext != layoutContext
             let didChangePresentationStyle = self.presentationStyle != presentationStyle
-            let updatePlan = didChangePresentationStyle
+            let didChangeAllowsRemoteThumbnailFetch = self.allowsRemoteThumbnailFetch != allowsRemoteThumbnailFetch
+            let updatePlan = (didChangePresentationStyle || didChangeAllowsRemoteThumbnailFetch)
                 ? UpdatePlan.fullReload
                 : Self.makeUpdatePlan(from: self.sections, to: sections)
             self.sections = sections
@@ -142,6 +150,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             self.browsingService = browsingService
             self.layoutContext = layoutContext
             self.presentationStyle = presentationStyle
+            self.allowsRemoteThumbnailFetch = allowsRemoteThumbnailFetch
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -194,7 +203,8 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                     row: row,
                     profile: profile,
                     browsingService: browsingService,
-                    itemWidth: itemWidth(for: collectionView)
+                    itemWidth: itemWidth(for: collectionView),
+                    allowsRemoteFetch: allowsRemoteThumbnailFetch
                 )
                 return cell
             case .listGrid:
@@ -208,7 +218,8 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 cell.configure(
                     row: row,
                     profile: profile,
-                    browsingService: browsingService
+                    browsingService: browsingService,
+                    allowsRemoteFetch: allowsRemoteThumbnailFetch
                 )
                 return cell
             }
@@ -606,7 +617,8 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 row: sections[indexPath.section].items[indexPath.item],
                 profile: profile,
                 browsingService: browsingService,
-                itemWidth: itemWidth(for: collectionView)
+                itemWidth: itemWidth(for: collectionView),
+                allowsRemoteFetch: allowsRemoteThumbnailFetch
             )
         }
 
@@ -622,7 +634,8 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             cell.configure(
                 row: sections[indexPath.section].items[indexPath.item],
                 profile: profile,
-                browsingService: browsingService
+                browsingService: browsingService,
+                allowsRemoteFetch: allowsRemoteThumbnailFetch
             )
         }
 
@@ -883,12 +896,14 @@ private final class RemoteBrowserListGridCell: UICollectionViewCell {
     func configure(
         row: RemoteBrowserListRowModel,
         profile: RemoteServerProfile,
-        browsingService: RemoteServerBrowsingService
+        browsingService: RemoteServerBrowsingService,
+        allowsRemoteFetch: Bool
     ) {
         cardView.configure(
             row: row,
             profile: profile,
             browsingService: browsingService,
+            allowsRemoteFetch: allowsRemoteFetch,
             usesEmbeddedTapHandler: false
         ) { _ in }
     }
@@ -969,7 +984,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         row: RemoteBrowserListRowModel,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
-        itemWidth: CGFloat
+        itemWidth: CGFloat,
+        allowsRemoteFetch: Bool
     ) {
         representedItemID = row.item.id
         configureTitleText(for: row.item)
@@ -982,7 +998,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 item: row.item,
                 profile: profile,
                 browsingService: browsingService,
-                itemWidth: itemWidth
+                itemWidth: itemWidth,
+                allowsRemoteFetch: allowsRemoteFetch
             )
             cacheBadgeView.isHidden = true
             progressTrackView.isHidden = true
@@ -992,7 +1009,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 profile: profile,
                 browsingService: browsingService,
                 prefersLocalCache: row.cacheAvailability.hasLocalCopy,
-                itemWidth: itemWidth
+                itemWidth: itemWidth,
+                allowsRemoteFetch: allowsRemoteFetch
             )
             symbolView.isHidden = true
             updateCacheBadge(for: row.cacheAvailability)
@@ -1022,7 +1040,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         item: RemoteDirectoryItem,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
-        itemWidth: CGFloat
+        itemWidth: CGFloat,
+        allowsRemoteFetch: Bool
     ) {
         thumbnailImageView.isHidden = false
         thumbnailPlaceholderView.isHidden = false
@@ -1053,7 +1072,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 profile: profile,
                 browsingService: browsingService,
                 targetSize: targetSize,
-                scale: UIScreen.main.scale
+                scale: UIScreen.main.scale,
+                allowsRemoteFetch: allowsRemoteFetch
             )
             guard !Task.isCancelled, self.representedItemID == itemID else {
                 return
@@ -1216,7 +1236,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
         prefersLocalCache: Bool,
-        itemWidth: CGFloat
+        itemWidth: CGFloat,
+        allowsRemoteFetch: Bool
     ) {
         thumbnailImageView.isHidden = false
         thumbnailPlaceholderView.isHidden = false
@@ -1244,7 +1265,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 browsingService: browsingService,
                 prefersLocalCache: prefersLocalCache,
                 maxPixelSize: pixelSize,
-                allowsRemoteFetch: true
+                allowsRemoteFetch: allowsRemoteFetch
             )
             guard !Task.isCancelled, self.representedItemID == itemID else {
                 return

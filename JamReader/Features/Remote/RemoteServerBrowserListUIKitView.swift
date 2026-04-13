@@ -252,6 +252,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
     let profile: RemoteServerProfile
     let browsingService: RemoteServerBrowsingService
     let layoutContext: RemoteServerBrowserLayoutContext
+    let allowsRemoteThumbnailFetch: Bool
     let onVisibleComicIDsChanged: (Set<String>) -> Void
     let onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
     let onShowInfo: (RemoteDirectoryItem) -> Void
@@ -266,6 +267,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             profile: profile,
             browsingService: browsingService,
             layoutContext: layoutContext,
+            allowsRemoteThumbnailFetch: allowsRemoteThumbnailFetch,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -289,6 +291,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             profile: profile,
             browsingService: browsingService,
             layoutContext: layoutContext,
+            allowsRemoteThumbnailFetch: allowsRemoteThumbnailFetch,
             onVisibleComicIDsChanged: onVisibleComicIDsChanged,
             onOpenItem: onOpenItem,
             onShowInfo: onShowInfo,
@@ -311,6 +314,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         private var profile: RemoteServerProfile
         private var browsingService: RemoteServerBrowsingService
         private var layoutContext: RemoteServerBrowserLayoutContext
+        private var allowsRemoteThumbnailFetch: Bool
         private var onVisibleComicIDsChanged: (Set<String>) -> Void
         private var onOpenItem: (RemoteDirectoryItem, CGRect) -> Void
         private var onShowInfo: (RemoteDirectoryItem) -> Void
@@ -328,6 +332,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
+            allowsRemoteThumbnailFetch: Bool,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -340,6 +345,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             self.profile = profile
             self.browsingService = browsingService
             self.layoutContext = layoutContext
+            self.allowsRemoteThumbnailFetch = allowsRemoteThumbnailFetch
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -358,6 +364,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             profile: RemoteServerProfile,
             browsingService: RemoteServerBrowsingService,
             layoutContext: RemoteServerBrowserLayoutContext,
+            allowsRemoteThumbnailFetch: Bool,
             onVisibleComicIDsChanged: @escaping (Set<String>) -> Void,
             onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void,
             onShowInfo: @escaping (RemoteDirectoryItem) -> Void,
@@ -367,7 +374,8 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             onImport: @escaping (RemoteDirectoryItem) -> Void
         ) {
             let didChangeListColumnCount = self.layoutContext.listColumnCount != layoutContext.listColumnCount
-            let updatePlan = didChangeListColumnCount
+            let didChangeAllowsRemoteThumbnailFetch = self.allowsRemoteThumbnailFetch != allowsRemoteThumbnailFetch
+            let updatePlan = (didChangeListColumnCount || didChangeAllowsRemoteThumbnailFetch)
                 ? UpdatePlan.fullReload
                 : Self.makeUpdatePlan(
                     from: self.sections,
@@ -379,6 +387,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
             self.profile = profile
             self.browsingService = browsingService
             self.layoutContext = layoutContext
+            self.allowsRemoteThumbnailFetch = allowsRemoteThumbnailFetch
             self.onVisibleComicIDsChanged = onVisibleComicIDsChanged
             self.onOpenItem = onOpenItem
             self.onShowInfo = onShowInfo
@@ -427,6 +436,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                 profile: profile,
                 browsingService: browsingService,
                 layoutContext: layoutContext,
+                allowsRemoteFetch: allowsRemoteThumbnailFetch,
                 onOpenItem: onOpenItem
             )
             return cell
@@ -621,6 +631,7 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
                 profile: profile,
                 browsingService: browsingService,
                 layoutContext: layoutContext,
+                allowsRemoteFetch: allowsRemoteThumbnailFetch,
                 onOpenItem: onOpenItem
             )
         }
@@ -925,6 +936,7 @@ private final class RemoteBrowserListCell: UITableViewCell {
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
         layoutContext: RemoteServerBrowserLayoutContext,
+        allowsRemoteFetch: Bool,
         onOpenItem: @escaping (RemoteDirectoryItem, CGRect) -> Void
     ) {
         let visibleCardCount = min(layoutContext.listColumnCount, cardViews.count)
@@ -943,7 +955,8 @@ private final class RemoteBrowserListCell: UITableViewCell {
             cardView.configure(
                 row: row,
                 profile: profile,
-                browsingService: browsingService
+                browsingService: browsingService,
+                allowsRemoteFetch: allowsRemoteFetch
             ) { [weak cardView] item in
                 onOpenItem(item, cardView?.heroSourceFrame() ?? .zero)
             }
@@ -1044,6 +1057,7 @@ final class RemoteBrowserListItemCardView: UIView {
         row: RemoteBrowserListRowModel?,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
+        allowsRemoteFetch: Bool,
         usesEmbeddedTapHandler: Bool = true,
         onOpenItem: @escaping (RemoteDirectoryItem) -> Void
     ) {
@@ -1070,7 +1084,8 @@ final class RemoteBrowserListItemCardView: UIView {
             configureDirectoryPreview(
                 item: row.item,
                 profile: profile,
-                browsingService: browsingService
+                browsingService: browsingService,
+                allowsRemoteFetch: allowsRemoteFetch
             )
             cacheDotView.isHidden = true
         } else if row.item.canOpenAsComic, !row.item.isPDFDocument {
@@ -1078,7 +1093,8 @@ final class RemoteBrowserListItemCardView: UIView {
                 item: row.item,
                 profile: profile,
                 browsingService: browsingService,
-                prefersLocalCache: row.cacheAvailability.hasLocalCopy
+                prefersLocalCache: row.cacheAvailability.hasLocalCopy,
+                allowsRemoteFetch: allowsRemoteFetch
             )
             symbolTileView.isHidden = true
             updateCacheDot(for: row.cacheAvailability)
@@ -1264,7 +1280,8 @@ final class RemoteBrowserListItemCardView: UIView {
     private func configureDirectoryPreview(
         item: RemoteDirectoryItem,
         profile: RemoteServerProfile,
-        browsingService: RemoteServerBrowsingService
+        browsingService: RemoteServerBrowsingService,
+        allowsRemoteFetch: Bool
     ) {
         symbolTileView.isHidden = true
         thumbnailImageView.isHidden = false
@@ -1292,7 +1309,8 @@ final class RemoteBrowserListItemCardView: UIView {
                 profile: profile,
                 browsingService: browsingService,
                 targetSize: targetSize,
-                scale: UIScreen.main.scale
+                scale: UIScreen.main.scale,
+                allowsRemoteFetch: allowsRemoteFetch
             )
 
             guard !Task.isCancelled, self.representedItemID == itemID else {
@@ -1308,7 +1326,8 @@ final class RemoteBrowserListItemCardView: UIView {
         item: RemoteDirectoryItem,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
-        prefersLocalCache: Bool
+        prefersLocalCache: Bool,
+        allowsRemoteFetch: Bool
     ) {
         symbolTileView.isHidden = true
         thumbnailImageView.isHidden = false
@@ -1335,7 +1354,8 @@ final class RemoteBrowserListItemCardView: UIView {
                 item: item,
                 browsingService: browsingService,
                 prefersLocalCache: prefersLocalCache,
-                maxPixelSize: pixelSize
+                maxPixelSize: pixelSize,
+                allowsRemoteFetch: allowsRemoteFetch
             )
 
             guard !Task.isCancelled, self.representedItemID == itemID else {
