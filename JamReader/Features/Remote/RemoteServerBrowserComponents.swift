@@ -45,7 +45,11 @@ enum RemoteDirectoryPreviewSupport {
             return nil
         }
 
-        return compositeImage(from: images, size: targetSize)
+        return compositeImage(
+            from: images,
+            size: targetSize,
+            scale: max(scale, 1)
+        )
     }
 
     @MainActor
@@ -101,7 +105,11 @@ enum RemoteDirectoryPreviewSupport {
             return nil
         }
 
-        return compositeImage(from: images, size: targetSize)
+        return compositeImage(
+            from: images,
+            size: targetSize,
+            scale: max(scale, 1)
+        )
     }
 
     @MainActor
@@ -122,30 +130,35 @@ enum RemoteDirectoryPreviewSupport {
         )
     }
 
-    static func compositeImage(from images: [UIImage], size: CGSize) -> UIImage? {
+    static func compositeImage(
+        from images: [UIImage],
+        size: CGSize,
+        scale: CGFloat
+    ) -> UIImage? {
         let limitedImages = Array(images.prefix(4))
         guard !limitedImages.isEmpty, size.width > 0, size.height > 0 else {
             return nil
         }
 
         let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
+        format.opaque = true
+        format.scale = max(scale, 1)
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
 
         return renderer.image { context in
             let bounds = CGRect(origin: .zero, size: size)
-            UIColor(white: 0.1, alpha: 1).setFill()
+            UIColor.secondarySystemBackground.setFill()
             context.fill(bounds)
 
             for (image, frame) in zip(limitedImages, previewFrames(count: limitedImages.count, in: bounds)) {
-                drawAspectFill(image, in: frame)
+                drawAspectFill(image, in: frame, context: context.cgContext)
             }
         }
     }
 
     private static func previewFrames(count: Int, in bounds: CGRect) -> [CGRect] {
-        let inset: CGFloat = 4
-        let gap: CGFloat = 4
+        let inset: CGFloat = 2
+        let gap: CGFloat = 2
         let innerBounds = bounds.insetBy(dx: inset, dy: inset)
 
         switch count {
@@ -178,7 +191,7 @@ enum RemoteDirectoryPreviewSupport {
         }
     }
 
-    private static func drawAspectFill(_ image: UIImage, in rect: CGRect) {
+    private static func drawAspectFill(_ image: UIImage, in rect: CGRect, context: CGContext) {
         guard rect.width > 0, rect.height > 0 else {
             return
         }
@@ -194,7 +207,10 @@ enum RemoteDirectoryPreviewSupport {
             x: rect.midX - scaledSize.width / 2,
             y: rect.midY - scaledSize.height / 2
         )
+        context.saveGState()
+        context.clip(to: rect)
         image.draw(in: CGRect(origin: origin, size: scaledSize))
+        context.restoreGState()
     }
 }
 

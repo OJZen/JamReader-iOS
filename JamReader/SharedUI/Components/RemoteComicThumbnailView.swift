@@ -281,7 +281,8 @@ final class RemoteComicThumbnailPipeline {
         // while the list is scrolling; the HQ image is already decoded and cheap to
         // scale down at display time.
         let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
-        if let hqImage = highQualityCache.object(forKey: hqKey) {
+        if let hqImage = highQualityCache.object(forKey: hqKey),
+           Self.pixelSize(for: hqImage) >= maxPixelSize {
             return hqImage
         }
 
@@ -382,7 +383,8 @@ final class RemoteComicThumbnailPipeline {
         }
 
         let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
-        if let hqImage = highQualityCache.object(forKey: hqKey) {
+        if let hqImage = highQualityCache.object(forKey: hqKey),
+           Self.pixelSize(for: hqImage) >= maxPixelSize {
             return hqImage
         }
 
@@ -526,6 +528,10 @@ final class RemoteComicThumbnailPipeline {
         return Int(width * height * 4)
     }
 
+    private static func pixelSize(for image: UIImage) -> Int {
+        Int(max(image.size.width, image.size.height) * image.scale)
+    }
+
     private static func encodedThumbnailData(from image: UIImage) -> Data? {
         if let jpegData = image.jpegData(compressionQuality: 0.82) {
             return jpegData
@@ -536,10 +542,10 @@ final class RemoteComicThumbnailPipeline {
 
     private func promoteToTransitionCache(_ image: UIImage, for reference: RemoteComicFileReference) {
         let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
-        let newPixels = Int(max(image.size.width, image.size.height) * image.scale)
+        let newPixels = Self.pixelSize(for: image)
 
         if let existing = highQualityCache.object(forKey: hqKey) {
-            let existingPixels = Int(max(existing.size.width, existing.size.height) * existing.scale)
+            let existingPixels = Self.pixelSize(for: existing)
             guard newPixels > existingPixels else {
                 return
             }
@@ -695,10 +701,11 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         )
         try data.write(to: fileURL, options: .atomic)
         recordTouch(at: fileURL, at: Date())
+        let newSize = DiskUsageScanner.allocatedByteCount(at: fileURL, fileManager: fileManager)
 
         updateSummaryAfterStore(
             previousSize: previousSize,
-            newSize: Int64(data.count)
+            newSize: newSize
         )
     }
 
@@ -718,8 +725,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
             return nil
         }
 
-        let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey])
-        return values?.fileSize.map(Int64.init)
+        return DiskUsageScanner.allocatedByteCount(at: fileURL, fileManager: fileManager)
     }
 
     nonisolated private func updateSummaryAfterStore(previousSize: Int64?, newSize: Int64) {
@@ -849,7 +855,13 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
 
         for case let fileURL as URL in enumerator {
             let values = try? fileURL.resourceValues(
-                forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+                forKeys: [
+                    .isRegularFileKey,
+                    .totalFileAllocatedSizeKey,
+                    .fileAllocatedSizeKey,
+                    .fileSizeKey,
+                    .contentModificationDateKey
+                ]
             )
             guard values?.isRegularFile == true else {
                 continue
@@ -863,7 +875,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
             cachedFiles.append(
                 CachedThumbnailFileRecord(
                     url: fileURL,
-                    size: Int64(values?.fileSize ?? 0),
+                    size: DiskUsageScanner.allocatedByteCount(at: fileURL, fileManager: fileManager),
                     lastAccessDate: max(persistedAccessDate, inMemoryAccessDate)
                 )
             )
