@@ -135,11 +135,13 @@ struct RemoteServerBrowserView: View {
             } message: {
                 offlineRemovalDialogMessage
             }
-            .sheet(item: $importRequest, content: importSheet)
             .navigationDestination(item: $navigationRequest, destination: navigationDestination)
             .background(readerPresenter)
             .background {
-                SystemSheetPresenter(item: $presentedInfoItem, content: browserInfoSheet)
+                Group {
+                    SystemSheetPresenter(item: $presentedInfoItem, content: browserInfoSheet)
+                    SystemSheetPresenter(item: $importRequest, content: importSheet)
+                }
             }
     }
 
@@ -360,7 +362,7 @@ struct RemoteServerBrowserView: View {
 
                         if viewModel.canImportCurrentFolderRecursively {
                             Button {
-                                importRequest = .currentFolder
+                                presentImportSheet(.currentFolder)
                             } label: {
                                 Label(importCurrentFolderButtonTitle, systemImage: "square.and.arrow.down.on.square")
                             }
@@ -1358,6 +1360,13 @@ struct RemoteServerBrowserView: View {
         }
     }
 
+    private func presentImportSheet(_ request: RemoteBrowserImportRequest) {
+        // Match the info-sheet path so UIKit context menu teardown fully settles first.
+        DispatchQueue.main.async {
+            importRequest = request
+        }
+    }
+
     private func openOfflineAction(
         for item: RemoteDirectoryItem,
         availability: RemoteComicCachedAvailability
@@ -1405,7 +1414,7 @@ struct RemoteServerBrowserView: View {
     private func importAction(for item: RemoteDirectoryItem) -> (() -> Void)? {
         if item.isDirectory {
             return {
-                importRequest = .directory(item)
+                presentImportSheet(.directory(item))
             }
         }
 
@@ -1414,7 +1423,7 @@ struct RemoteServerBrowserView: View {
         }
 
         return {
-            importRequest = .comic(item)
+            presentImportSheet(.comic(item))
         }
     }
 

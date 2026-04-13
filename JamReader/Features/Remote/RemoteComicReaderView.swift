@@ -538,7 +538,7 @@ struct RemoteComicReaderView: View {
     @State private var hasLoaded = false
     @State private var isRefreshingRemoteCopy = false
     @State private var isShowingReaderControls = false
-    @State private var isShowingThumbnailBrowser = false
+    @State private var thumbnailBrowserPresentation: RemoteComicReaderThumbnailBrowserPresentation?
     @State private var pendingReaderAction: RemoteReaderSecondaryAction?
     @State private var bookmarkPageIndices: [Int]
     @State private var alert: AppAlertState?
@@ -552,6 +552,7 @@ struct RemoteComicReaderView: View {
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
     @State private var containerWidth: CGFloat = 0
+    @State private var pendingThumbnailBrowserPresentationTask: Task<Void, Never>?
 
     init(
         profile: RemoteServerProfile,
@@ -666,6 +667,7 @@ struct RemoteComicReaderView: View {
         }
         .onDisappear {
             persistProgress(force: true)
+            pendingThumbnailBrowserPresentationTask?.cancel()
             pendingProgressPersistenceTask?.cancel()
             backgroundDownloadTask?.cancel()
             closeResources(for: document)
@@ -713,18 +715,7 @@ struct RemoteComicReaderView: View {
             self.pendingReaderAction = nil
             switch pendingReaderAction {
             case .thumbnails:
-                isShowingThumbnailBrowser = true
-            }
-        }
-        .sheet(isPresented: $isShowingThumbnailBrowser) {
-            if let document {
-                ReaderThumbnailBrowserSheet(
-                    document: document,
-                    currentPageIndex: currentPageIndex
-                ) { pageIndex in
-                    updateVisiblePage(to: pageIndex)
-                    isShowingThumbnailBrowser = false
-                }
+                presentThumbnailBrowser()
             }
         }
         .sheet(isPresented: $isShowingReaderControls) {
@@ -790,6 +781,17 @@ struct RemoteComicReaderView: View {
                 )
             )
         }
+        .background {
+            SystemSheetPresenter(item: $thumbnailBrowserPresentation) { presentation in
+                ReaderThumbnailBrowserSheet(
+                    document: presentation.document,
+                    currentPageIndex: presentation.currentPageIndex
+                ) { pageIndex in
+                    updateVisiblePage(to: pageIndex)
+                    thumbnailBrowserPresentation = nil
+                }
+            }
+        }
         .alert(item: $alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -800,7 +802,7 @@ struct RemoteComicReaderView: View {
     }
 
     private var isAnySheetPresented: Bool {
-        isShowingReaderControls || isShowingThumbnailBrowser
+        isShowingReaderControls || thumbnailBrowserPresentation != nil
     }
 
     private var supportsDoublePageSpread: Bool {
@@ -865,7 +867,7 @@ struct RemoteComicReaderView: View {
             secondaryAccessibilityLabel: "Browse Pages",
             onSecondaryAction: showsThumbnailShortcut ? {
                 readerSession.apply(.setChromeVisible(true))
-                isShowingThumbnailBrowser = true
+                presentThumbnailBrowser()
             } : nil,
             onMenu: {
                 readerSession.apply(.setChromeVisible(true))
@@ -937,6 +939,21 @@ struct RemoteComicReaderView: View {
                     .font(.caption.weight(.semibold))
                     .multilineTextAlignment(.center)
             }
+        }
+    }
+
+    private func presentThumbnailBrowser() {
+        pendingThumbnailBrowserPresentationTask?.cancel()
+        pendingThumbnailBrowserPresentationTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled,
+                  let document else {
+                return
+            }
+            thumbnailBrowserPresentation = RemoteComicReaderThumbnailBrowserPresentation(
+                document: document,
+                currentPageIndex: currentPageIndex
+            )
         }
     }
 
@@ -1494,4 +1511,10 @@ struct RemoteComicReaderView: View {
 
 private enum RemoteReaderSecondaryAction {
     case thumbnails
+}
+
+private struct RemoteComicReaderThumbnailBrowserPresentation: Identifiable {
+    let id = UUID()
+    let document: ComicDocument
+    let currentPageIndex: Int
 }

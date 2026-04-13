@@ -14,12 +14,13 @@ struct ComicReaderView: View {
     @State private var isShowingQuickMetadataSheet = false
     @State private var isShowingOrganizationSheet = false
     @State private var isShowingReaderControls = false
-    @State private var isShowingThumbnailBrowser = false
+    @State private var thumbnailBrowserPresentation: ComicReaderThumbnailBrowserPresentation?
     @State private var pendingReaderAction: ReaderSecondaryAction?
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
     @State private var containerWidth: CGFloat = 0
+    @State private var pendingThumbnailBrowserPresentationTask: Task<Void, Never>?
 
     init(
         descriptor: LibraryDescriptor,
@@ -127,6 +128,7 @@ struct ComicReaderView: View {
             synchronizeReaderSession()
         }
         .onDisappear {
+            pendingThumbnailBrowserPresentationTask?.cancel()
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.persistCurrentProgress()
         }
@@ -154,17 +156,6 @@ struct ComicReaderView: View {
             DispatchQueue.main.async {
                 readerSession.apply(.syncVisiblePage(newValue))
                 ReaderGestureCoordinator.hideChrome(session: readerSession)
-            }
-        }
-        .sheet(isPresented: $isShowingThumbnailBrowser) {
-            if let document = viewModel.document {
-                ReaderThumbnailBrowserSheet(
-                    document: document,
-                    currentPageIndex: readerSession.state.currentPageIndex
-                ) { pageIndex in
-                    updateVisiblePage(to: pageIndex)
-                    isShowingThumbnailBrowser = false
-                }
             }
         }
         .sheet(isPresented: $isShowingReaderControls) {
@@ -195,6 +186,17 @@ struct ComicReaderView: View {
                 dependencies: dependencies
             )
         }
+        .background {
+            SystemSheetPresenter(item: $thumbnailBrowserPresentation) { presentation in
+                ReaderThumbnailBrowserSheet(
+                    document: presentation.document,
+                    currentPageIndex: presentation.currentPageIndex
+                ) { pageIndex in
+                    updateVisiblePage(to: pageIndex)
+                    thumbnailBrowserPresentation = nil
+                }
+            }
+        }
         .alert(item: $viewModel.alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -221,7 +223,7 @@ struct ComicReaderView: View {
             case .organization:
                 isShowingOrganizationSheet = true
             case .thumbnails:
-                isShowingThumbnailBrowser = true
+                presentThumbnailBrowser()
             }
         }
     }
@@ -379,7 +381,7 @@ struct ComicReaderView: View {
     private var isAnySheetPresented: Bool {
         isShowingReaderControls || isShowingMetadataSheet ||
         isShowingQuickMetadataSheet || isShowingOrganizationSheet ||
-        isShowingThumbnailBrowser
+        thumbnailBrowserPresentation != nil
     }
 
     private var readerTopBar: some View {
@@ -390,7 +392,7 @@ struct ComicReaderView: View {
             secondaryAccessibilityLabel: "Browse Pages",
             onSecondaryAction: showsThumbnailShortcut ? {
                 readerSession.setChromeVisible(true)
-                isShowingThumbnailBrowser = true
+                presentThumbnailBrowser()
             } : nil,
             onMenu: {
                 readerSession.setChromeVisible(true)
@@ -433,6 +435,21 @@ struct ComicReaderView: View {
             onLeadingEdge: { viewModel.openPreviousComic() },
             onTrailingEdge: { viewModel.openNextComic() }
         )
+    }
+
+    private func presentThumbnailBrowser() {
+        pendingThumbnailBrowserPresentationTask?.cancel()
+        pendingThumbnailBrowserPresentationTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled,
+                  let document = viewModel.document else {
+                return
+            }
+            thumbnailBrowserPresentation = ComicReaderThumbnailBrowserPresentation(
+                document: document,
+                currentPageIndex: readerSession.state.currentPageIndex
+            )
+        }
     }
 
     private var pageJumpTextBinding: Binding<String> {
@@ -502,4 +519,10 @@ private enum ReaderSecondaryAction {
     case metadata
     case organization
     case thumbnails
+}
+
+private struct ComicReaderThumbnailBrowserPresentation: Identifiable {
+    let id = UUID()
+    let document: ComicDocument
+    let currentPageIndex: Int
 }
