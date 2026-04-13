@@ -90,11 +90,18 @@ struct RemoteComicBatchDownloadOutcome {
 struct RemoteComicCacheSummary: Hashable {
     let fileCount: Int
     let totalBytes: Int64
+    let auxiliaryBytes: Int64
 
-    static let empty = RemoteComicCacheSummary(fileCount: 0, totalBytes: 0)
+    static let empty = RemoteComicCacheSummary(fileCount: 0, totalBytes: 0, auxiliaryBytes: 0)
+
+    init(fileCount: Int, totalBytes: Int64, auxiliaryBytes: Int64 = 0) {
+        self.fileCount = fileCount
+        self.totalBytes = totalBytes
+        self.auxiliaryBytes = max(0, auxiliaryBytes)
+    }
 
     var isEmpty: Bool {
-        fileCount == 0 || totalBytes <= 0
+        totalBytes <= 0
     }
 
     var sizeText: String {
@@ -102,6 +109,18 @@ struct RemoteComicCacheSummary: Hashable {
     }
 
     var summaryText: String {
+        if fileCount <= 0 {
+            return "Cached data · \(sizeText)"
+        }
+
+        if auxiliaryBytes > 0 {
+            if fileCount == 1 {
+                return "1 cached comic + other cache data · \(sizeText)"
+            }
+
+            return "\(fileCount) cached comics + other cache data · \(sizeText)"
+        }
+
         if fileCount == 1 {
             return "1 cached comic · \(sizeText)"
         }
@@ -653,7 +672,8 @@ final class RemoteServerBrowsingService {
                 let summary = cacheSummary(forRootURL: cacheURL)
                 return RemoteComicCacheSummary(
                     fileCount: partial.fileCount + summary.fileCount,
-                    totalBytes: partial.totalBytes + summary.totalBytes
+                    totalBytes: partial.totalBytes + summary.totalBytes,
+                    auxiliaryBytes: partial.auxiliaryBytes + summary.auxiliaryBytes
                 )
             }
         }
@@ -677,10 +697,18 @@ final class RemoteServerBrowsingService {
         }
 
         let resources = enumerateCachedComicResources(in: cacheURL)
-        let totalBytes = resources.reduce(into: Int64.zero) { partialResult, resource in
+        let resourceBytes = resources.reduce(into: Int64.zero) { partialResult, resource in
             partialResult += resource.size
         }
-        let summary = RemoteComicCacheSummary(fileCount: resources.count, totalBytes: totalBytes)
+        let totalBytes = DiskUsageScanner.allocatedByteCount(
+            at: cacheURL,
+            fileManager: fileManager
+        )
+        let summary = RemoteComicCacheSummary(
+            fileCount: resources.count,
+            totalBytes: totalBytes > 0 ? totalBytes : resourceBytes,
+            auxiliaryBytes: max(0, totalBytes - resourceBytes)
+        )
         storeCachedSummary(summary, forRootPath: cacheRootPath)
         return summary
     }
@@ -2136,7 +2164,10 @@ final class RemoteServerBrowsingService {
             }
             try fileManager.moveItem(at: temporaryDirectoryURL, to: destinationURL)
 
-            let cachedBytes = try totalFileBytes(in: destinationURL)
+            let cachedBytes = DiskUsageScanner.allocatedByteCount(
+                at: destinationURL,
+                fileManager: fileManager
+            )
             try? storeCachedMetadata(
                 for: reference,
                 at: destinationURL,
@@ -2236,23 +2267,7 @@ final class RemoteServerBrowsingService {
     }
 
     private func totalFileBytes(in directoryURL: URL) throws -> Int64 {
-        guard let enumerator = fileManager.enumerator(
-            at: directoryURL,
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return 0
-        }
-
-        var totalBytes: Int64 = 0
-        for case let fileURL as URL in enumerator {
-            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
-            guard values?.isRegularFile == true else {
-                continue
-            }
-            totalBytes += Int64(values?.fileSize ?? 0)
-        }
-        return totalBytes
+        DiskUsageScanner.allocatedByteCount(at: directoryURL, fileManager: fileManager)
     }
 
     private func batchDownloadOutcome(
@@ -2766,11 +2781,7 @@ final class RemoteServerBrowsingService {
     }
 
     private func cachedResourceByteCount(at resourceURL: URL) -> Int64 {
-        let values = try? resourceURL.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-        if values?.isDirectory == true {
-            return (try? totalFileBytes(in: resourceURL)) ?? 0
-        }
-        return Int64(values?.fileSize ?? 0)
+        DiskUsageScanner.allocatedByteCount(at: resourceURL, fileManager: fileManager)
     }
 
     private func downloadRemoteFile(

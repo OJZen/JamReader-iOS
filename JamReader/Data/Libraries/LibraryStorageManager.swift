@@ -300,39 +300,10 @@ final class LibraryStorageManager {
     }
 
     private func directoryFootprint(at rootURL: URL) -> LibraryStorageFootprintSummary {
-        let resourceKeys: Set<URLResourceKey> = [
-            .isRegularFileKey,
-            .totalFileAllocatedSizeKey,
-            .fileAllocatedSizeKey,
-            .fileSizeKey
-        ]
-
-        guard let enumerator = fileManager.enumerator(
-            at: rootURL,
-            includingPropertiesForKeys: Array(resourceKeys)
-        ) else {
-            return .empty
-        }
-
-        var fileCount = 0
-        var totalBytes: Int64 = 0
-
-        while let itemURL = enumerator.nextObject() as? URL {
-            guard let resourceValues = try? itemURL.resourceValues(forKeys: resourceKeys),
-                  resourceValues.isRegularFile == true
-            else {
-                continue
-            }
-
-            fileCount += 1
-            totalBytes += Int64(
-                resourceValues.totalFileAllocatedSize
-                    ?? resourceValues.fileAllocatedSize
-                    ?? resourceValues.fileSize
-                    ?? 0
-            )
-        }
-
-        return LibraryStorageFootprintSummary(fileCount: fileCount, totalBytes: totalBytes)
+        let footprint = DiskUsageScanner.footprint(at: rootURL, fileManager: fileManager)
+        return LibraryStorageFootprintSummary(
+            fileCount: footprint.fileCount,
+            totalBytes: footprint.totalBytes
+        )
     }
 }
