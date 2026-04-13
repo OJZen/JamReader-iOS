@@ -137,7 +137,7 @@ struct RemoteComicCachedAvailability: Hashable {
     }
 }
 
-private struct RemoteListedDirectoryEntry {
+private struct RemoteListedDirectoryEntry: Sendable {
     let name: String
     let fullPath: String
     let isDirectory: Bool
@@ -145,7 +145,7 @@ private struct RemoteListedDirectoryEntry {
     let modifiedAt: Date?
 }
 
-private struct RemoteImageComicDirectoryInspection {
+private struct RemoteImageComicDirectoryInspection: Sendable {
     let pageEntries: [RemoteListedDirectoryEntry]
     let regularEntries: [RemoteListedDirectoryEntry]
 
@@ -158,7 +158,7 @@ private struct RemoteImageComicDirectoryInspection {
     }
 }
 
-private struct RemoteDirectoryPresentationInspection {
+private struct RemoteDirectoryPresentationInspection: Sendable {
     let imageComicInspection: RemoteImageComicDirectoryInspection?
     let previewItems: [RemoteDirectoryItem]
 }
@@ -167,6 +167,8 @@ final class RemoteServerBrowsingService {
     private static let resumableDownloadChunkSize: UInt32 = 256 * 1024
     private static let downloadProgressReportingStep: Double = 0.01
     private static let batchDownloadWorkerLimit = 3
+    private static let directoryInspectionTimeout: Duration = .milliseconds(350)
+    private static let maxConsecutiveDirectoryInspectionSkips = 3
     private static let imageComicAuxiliaryFileNames: Set<String> = [
         "comicinfo.xml",
         "thumbs.db",
@@ -316,6 +318,8 @@ final class RemoteServerBrowsingService {
 
                 var items: [RemoteDirectoryItem] = []
                 items.reserveCapacity(entries.count)
+                var consecutiveDirectoryInspectionSkips = 0
+                var canInspectDirectories = true
 
                 for entry in entries {
                     guard !isSkippableDirectoryEntry(entry.name) else {
@@ -323,13 +327,24 @@ final class RemoteServerBrowsingService {
                     }
 
                     let fullPath = appendPathComponent(entry.name, to: requestedPath)
-                    let inspection = entry.isDirectory
-                        ? try? await inspectSMBDirectoryPresentation(
+                    let inspection: RemoteDirectoryPresentationInspection?
+                    if entry.isDirectory, canInspectDirectories {
+                        inspection = try await inspectSMBDirectoryPresentationWithTimeout(
                             with: client,
                             directoryPath: fullPath,
                             profile: profile
                         )
-                        : nil
+                        if inspection == nil {
+                            consecutiveDirectoryInspectionSkips += 1
+                            if consecutiveDirectoryInspectionSkips >= Self.maxConsecutiveDirectoryInspectionSkips {
+                                canInspectDirectories = false
+                            }
+                        } else {
+                            consecutiveDirectoryInspectionSkips = 0
+                        }
+                    } else {
+                        inspection = nil
+                    }
                     items.append(
                         classifyDirectoryEntry(
                             named: entry.name,
@@ -361,6 +376,8 @@ final class RemoteServerBrowsingService {
 
             var items: [RemoteDirectoryItem] = []
             items.reserveCapacity(entries.count)
+            var consecutiveDirectoryInspectionSkips = 0
+            var canInspectDirectories = true
 
             for entry in entries {
                 guard let fullPath = displayPath(
@@ -372,12 +389,23 @@ final class RemoteServerBrowsingService {
                     continue
                 }
 
-                let inspection = entry.isDirectory
-                    ? try? await inspectWebDAVDirectoryPresentation(
+                let inspection: RemoteDirectoryPresentationInspection?
+                if entry.isDirectory, canInspectDirectories {
+                    inspection = try await inspectWebDAVDirectoryPresentationWithTimeout(
                         for: profile,
                         directoryPath: fullPath
                     )
-                    : nil
+                    if inspection == nil {
+                        consecutiveDirectoryInspectionSkips += 1
+                        if consecutiveDirectoryInspectionSkips >= Self.maxConsecutiveDirectoryInspectionSkips {
+                            canInspectDirectories = false
+                        }
+                    } else {
+                        consecutiveDirectoryInspectionSkips = 0
+                    }
+                } else {
+                    inspection = nil
+                }
 
                 items.append(
                     classifyDirectoryEntry(
@@ -1029,10 +1057,23 @@ final class RemoteServerBrowsingService {
             imageComicInspection: nil,
             previewItems: try await buildSMBPreviewItems(
                 from: listedEntries,
-                with: client,
                 profile: profile
             )
         )
+    }
+
+    private func inspectSMBDirectoryPresentationWithTimeout(
+        with client: SMBClient,
+        directoryPath: String,
+        profile: RemoteServerProfile
+    ) async throws -> RemoteDirectoryPresentationInspection? {
+        try await withDirectoryInspectionTimeout { [self] in
+            try await self.inspectSMBDirectoryPresentation(
+                with: client,
+                directoryPath: directoryPath,
+                profile: profile
+            )
+        }
     }
 
     private func inspectWebDAVImageComicDirectory(
@@ -1097,6 +1138,43 @@ final class RemoteServerBrowsingService {
         )
     }
 
+    private func inspectWebDAVDirectoryPresentationWithTimeout(
+        for profile: RemoteServerProfile,
+        directoryPath: String
+    ) async throws -> RemoteDirectoryPresentationInspection? {
+        try await withDirectoryInspectionTimeout { [self] in
+            try await self.inspectWebDAVDirectoryPresentation(
+                for: profile,
+                directoryPath: directoryPath
+            )
+        }
+    }
+
+    private func withDirectoryInspectionTimeout<T: Sendable>(
+        _ operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T? {
+        try await withThrowingTaskGroup(of: T?.self) { group in
+            group.addTask {
+                do {
+                    return try await operation()
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    return nil
+                }
+            }
+
+            group.addTask {
+                try await Task.sleep(for: Self.directoryInspectionTimeout)
+                return nil
+            }
+
+            let result = try await group.next() ?? nil
+            group.cancelAll()
+            return result
+        }
+    }
+
     private func listSMBEntries(
         with client: SMBClient,
         directoryPath: String
@@ -1144,14 +1222,12 @@ final class RemoteServerBrowsingService {
 
     private func buildSMBPreviewItems(
         from entries: [RemoteListedDirectoryEntry],
-        with client: SMBClient,
         profile: RemoteServerProfile
     ) async throws -> [RemoteDirectoryItem] {
         let sortedEntries = entries.sorted {
             $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
         var previewItems: [RemoteDirectoryItem] = []
-        var nestedDirectoryEntries: [RemoteListedDirectoryEntry] = []
 
         for entry in sortedEntries {
             if !entry.isDirectory, supportsDirectoryPreviewComicFile(named: entry.name) {
@@ -1165,51 +1241,7 @@ final class RemoteServerBrowsingService {
                         modifiedAt: entry.modifiedAt
                     )
                 )
-            } else if entry.isDirectory {
-                let inspection = try? await inspectSMBImageComicDirectory(
-                    with: client,
-                    directoryPath: entry.fullPath
-                )
-                if let inspection {
-                    previewItems.append(
-                        classifyDirectoryEntry(
-                            named: entry.name,
-                            fullPath: entry.fullPath,
-                            isDirectory: true,
-                            in: profile,
-                            fileSize: entry.fileSize,
-                            modifiedAt: entry.modifiedAt,
-                            imageComicInspection: inspection
-                        )
-                    )
-                } else {
-                    nestedDirectoryEntries.append(entry)
-                }
             }
-
-            if previewItems.count >= 4 {
-                return Array(previewItems.prefix(4))
-            }
-        }
-
-        guard shouldInspectNestedPreviewItems(previewItems) else {
-            return previewItems
-        }
-
-        for nestedDirectoryEntry in nestedDirectoryEntries {
-            guard let nestedEntries = try? await listSMBEntries(
-                with: client,
-                directoryPath: nestedDirectoryEntry.fullPath
-            ) else {
-                continue
-            }
-
-            let nestedPreviewItems = try await buildSMBImmediatePreviewItems(
-                from: nestedEntries,
-                with: client,
-                profile: profile
-            )
-            previewItems.append(contentsOf: nestedPreviewItems)
 
             if previewItems.count >= 4 {
                 return Array(previewItems.prefix(4))
@@ -1227,7 +1259,6 @@ final class RemoteServerBrowsingService {
             $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
         var previewItems: [RemoteDirectoryItem] = []
-        var nestedDirectoryEntries: [RemoteListedDirectoryEntry] = []
 
         for entry in sortedEntries {
             if !entry.isDirectory, supportsDirectoryPreviewComicFile(named: entry.name) {
@@ -1239,144 +1270,6 @@ final class RemoteServerBrowsingService {
                         in: profile,
                         fileSize: entry.fileSize,
                         modifiedAt: entry.modifiedAt
-                    )
-                )
-            } else if entry.isDirectory {
-                let inspection = try? await inspectWebDAVImageComicDirectory(
-                    for: profile,
-                    directoryPath: entry.fullPath
-                )
-                if let inspection {
-                    previewItems.append(
-                        classifyDirectoryEntry(
-                            named: entry.name,
-                            fullPath: entry.fullPath,
-                            isDirectory: true,
-                            in: profile,
-                            fileSize: entry.fileSize,
-                            modifiedAt: entry.modifiedAt,
-                            imageComicInspection: inspection
-                        )
-                    )
-                } else {
-                    nestedDirectoryEntries.append(entry)
-                }
-            }
-
-            if previewItems.count >= 4 {
-                return Array(previewItems.prefix(4))
-            }
-        }
-
-        guard shouldInspectNestedPreviewItems(previewItems) else {
-            return previewItems
-        }
-
-        for nestedDirectoryEntry in nestedDirectoryEntries {
-            guard let nestedEntries = try? await listWebDAVEntries(
-                for: profile,
-                directoryPath: nestedDirectoryEntry.fullPath
-            ) else {
-                continue
-            }
-
-            let nestedPreviewItems = try await buildWebDAVImmediatePreviewItems(
-                from: nestedEntries,
-                for: profile
-            )
-            previewItems.append(contentsOf: nestedPreviewItems)
-
-            if previewItems.count >= 4 {
-                return Array(previewItems.prefix(4))
-            }
-        }
-
-        return previewItems
-    }
-
-    private func buildSMBImmediatePreviewItems(
-        from entries: [RemoteListedDirectoryEntry],
-        with client: SMBClient,
-        profile: RemoteServerProfile
-    ) async throws -> [RemoteDirectoryItem] {
-        let sortedEntries = entries.sorted {
-            $0.name.localizedStandardCompare($1.name) == .orderedAscending
-        }
-        var previewItems: [RemoteDirectoryItem] = []
-
-        for entry in sortedEntries {
-            if !entry.isDirectory, supportsDirectoryPreviewComicFile(named: entry.name) {
-                previewItems.append(
-                    classifyDirectoryEntry(
-                        named: entry.name,
-                        fullPath: entry.fullPath,
-                        isDirectory: false,
-                        in: profile,
-                        fileSize: entry.fileSize,
-                        modifiedAt: entry.modifiedAt
-                    )
-                )
-            } else if entry.isDirectory,
-                      let inspection = try? await inspectSMBImageComicDirectory(
-                        with: client,
-                        directoryPath: entry.fullPath
-                      ) {
-                previewItems.append(
-                    classifyDirectoryEntry(
-                        named: entry.name,
-                        fullPath: entry.fullPath,
-                        isDirectory: true,
-                        in: profile,
-                        fileSize: entry.fileSize,
-                        modifiedAt: entry.modifiedAt,
-                        imageComicInspection: inspection
-                    )
-                )
-            }
-
-            if previewItems.count >= 4 {
-                return Array(previewItems.prefix(4))
-            }
-        }
-
-        return previewItems
-    }
-
-    private func buildWebDAVImmediatePreviewItems(
-        from entries: [RemoteListedDirectoryEntry],
-        for profile: RemoteServerProfile
-    ) async throws -> [RemoteDirectoryItem] {
-        let sortedEntries = entries.sorted {
-            $0.name.localizedStandardCompare($1.name) == .orderedAscending
-        }
-        var previewItems: [RemoteDirectoryItem] = []
-
-        for entry in sortedEntries {
-            if !entry.isDirectory, supportsDirectoryPreviewComicFile(named: entry.name) {
-                previewItems.append(
-                    classifyDirectoryEntry(
-                        named: entry.name,
-                        fullPath: entry.fullPath,
-                        isDirectory: false,
-                        in: profile,
-                        fileSize: entry.fileSize,
-                        modifiedAt: entry.modifiedAt
-                    )
-                )
-            } else if entry.isDirectory,
-                      let inspection = try? await inspectWebDAVImageComicDirectory(
-                        for: profile,
-                        directoryPath: entry.fullPath
-                      ) {
-                previewItems.append(
-                    classifyDirectoryEntry(
-                        named: entry.name,
-                        fullPath: entry.fullPath,
-                        isDirectory: true,
-                        in: profile,
-                        fileSize: entry.fileSize,
-                        modifiedAt: entry.modifiedAt,
-                        imageComicInspection: inspection
                     )
                 )
             }
@@ -1409,26 +1302,6 @@ final class RemoteServerBrowsingService {
             directoryPath: directoryPath,
             collectionRootPath: collectionRootPath
         )
-    }
-
-    private func shouldInspectNestedPreviewItems(
-        _ previewItems: [RemoteDirectoryItem]
-    ) -> Bool {
-        guard previewItems.count < 4 else {
-            return false
-        }
-
-        for previewItem in previewItems {
-            let hasCachedThumbnail = RemoteComicThumbnailPipeline.shared.hasCachedThumbnail(
-                for: previewItem,
-                browsingService: self
-            )
-            if !hasCachedThumbnail {
-                return false
-            }
-        }
-
-        return true
     }
 
     private func inspectImageComicDirectory(

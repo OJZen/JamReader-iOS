@@ -1047,17 +1047,22 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         let primaryAction: AppAlertAction? = (result.createdLibrary || result.hasImportedAnyComics)
             ? .openLibrary(result.importedDestinationID, 1)
             : nil
+        let hasIndexingWarning = result.importedComicCount > 0
+            && result.scanSummary == nil
+            && result.scanErrorMessage != nil
 
         if result.importedComicCount > 0 {
-            AppHaptics.success()
+            if !hasIndexingWarning {
+                AppHaptics.success()
+            }
             remoteBackgroundImportController.presentFeedback(
                 RemoteBrowserFeedbackState(
-                    title: successTitle,
+                    title: hasIndexingWarning ? "Imported with Indexing Warning" : successTitle,
                     message: importFeedbackMessage(
                         from: result,
                         extraFailedItemNames: extraFailedItemNames
                     ),
-                    kind: .success,
+                    kind: hasIndexingWarning ? .info : .success,
                     primaryAction: primaryAction
                 )
             )

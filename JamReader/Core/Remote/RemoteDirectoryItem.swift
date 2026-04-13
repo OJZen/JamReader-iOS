@@ -1,18 +1,18 @@
 import Foundation
 
-enum RemoteDirectoryItemKind: String, Hashable {
+enum RemoteDirectoryItemKind: String, Hashable, Sendable {
     case directory
     case comicFile
     case comicDirectory
     case unsupportedFile
 }
 
-enum RemoteComicReferenceKind: String, Codable, Hashable {
+enum RemoteComicReferenceKind: String, Codable, Hashable, Sendable {
     case file
     case imageDirectory
 }
 
-struct RemoteDirectoryItem: Identifiable, Hashable {
+struct RemoteDirectoryItem: Identifiable, Hashable, Sendable {
     let serverID: UUID
     let providerKind: RemoteProviderKind
     let shareName: String
@@ -74,7 +74,7 @@ struct RemoteDirectoryItem: Identifiable, Hashable {
     }
 }
 
-struct RemoteComicFileReference: Identifiable, Hashable {
+struct RemoteComicFileReference: Identifiable, Hashable, Sendable {
     let serverID: UUID
     let providerKind: RemoteProviderKind
     let shareName: String
