@@ -23,8 +23,6 @@ struct LibraryBrowserView: View {
     @State private var preferredDisplayMode: LibraryBrowserDisplayMode
     @State private var displayMode: LibraryBrowserDisplayMode
     @State private var hasConfiguredPreferredDisplayMode = false
-    @State private var folderSearchQuery = ""
-    @State private var comicFilter: LibraryComicQuickFilter = .all
     @State private var editingComic: LibraryComic?
     @State private var organizingComic: LibraryComic?
     @State private var quickActionsComic: LibraryComic?
@@ -38,8 +36,6 @@ struct LibraryBrowserView: View {
     @State private var isShowingSelectionActionsSheet = false
     @State private var isShowingComicFileImporter = false
     @State private var presentedComic: LibraryComicPresentation?
-    @State private var heroSourceFrame: CGRect = .zero
-    @State private var heroPreviewImage: UIImage?
     @State private var containerWidth: CGFloat = 0
 
     init(
@@ -181,76 +177,28 @@ struct LibraryBrowserView: View {
             }
 
             if !isSelectionMode {
-                if usesCondensedTopBarActions {
-                    if hasCondensedTopBarActions {
+                if usesCombinedTopBarActionsMenu {
+                    if hasCombinedTopBarActions {
                         ToolbarItem(placement: .topBarTrailing) {
-                            condensedTopBarActionsMenu
+                            combinedTopBarActionsMenu
                         }
                     }
                 } else {
-                    if canImportComicInfo {
+                    if hasLibraryActionMenuItems {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                isShowingComicInfoImportSheet = true
-                            } label: {
-                                Image(systemName: "square.and.arrow.down")
-                            }
-                            .accessibilityLabel("Import ComicInfo")
-                        }
-                    }
-
-                    if canImportComicFiles {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                isShowingComicFileImporter = true
-                            } label: {
-                                Image(systemName: "square.and.arrow.down")
-                            }
-                            .accessibilityLabel("Import Comic Files")
-                        }
-                    }
-
-                    if canAdjustRecentWindow {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Menu {
-                                recentWindowMenuContent
-                            } label: {
-                                Image(systemName: "calendar.badge.clock")
-                            }
-                            .accessibilityLabel("Recent Window")
-                        }
-                    }
-
-                    if canMaintainCurrentContext {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Menu {
-                                currentContextMaintenanceMenuContent
-                            } label: {
-                                Image(systemName: "arrow.clockwise.circle")
-                            }
-                            .accessibilityLabel("Maintenance")
+                            libraryActionsMenu
                         }
                     }
 
                     if canAdjustDisplayMode {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Menu {
-                                displayModeMenuContent
-                            } label: {
-                                Image(systemName: displayMode.systemImageName)
-                            }
-                            .accessibilityLabel("Display Mode")
+                            displayModeToggleButton
                         }
                     }
 
-                    if canSortCurrentComics {
+                    if hasViewControlMenuItems {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Menu {
-                                sortModeMenuContent
-                            } label: {
-                                Image(systemName: "arrow.up.arrow.down.circle")
-                            }
-                            .accessibilityLabel("Sort")
+                            viewControlsMenu
                         }
                     }
                 }
@@ -295,16 +243,6 @@ struct LibraryBrowserView: View {
         }
         .onChange(of: viewModel.hasActiveSearch) { _, hasActiveSearch in
             if hasActiveSearch {
-                endSelectionMode()
-            }
-        }
-        .onChange(of: comicFilter) { _, _ in
-            if isSelectionMode {
-                endSelectionMode()
-            }
-        }
-        .onChange(of: folderSearchQuery) { _, _ in
-            if isSelectionMode {
                 endSelectionMode()
             }
         }
@@ -441,15 +379,7 @@ struct LibraryBrowserView: View {
             allowedContentTypes: [.data],
             allowsMultipleSelection: true
         ) { result in
-            switch result {
-            case .success(let urls):
-                viewModel.importComicFiles(from: urls)
-            case .failure(let error):
-                viewModel.alert = AppAlertState(
-                    title: "Import Failed",
-                    message: error.userFacingMessage
-                )
-            }
+            handleComicFileImport(result)
         }
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -458,25 +388,9 @@ struct LibraryBrowserView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
-        .background(
-            HeroReaderPresenter(
-                item: $presentedComic,
-                sourceFrame: heroSourceFrame,
-                previewImage: heroPreviewImage,
-                onDismiss: {
-                    heroSourceFrame = .zero
-                    heroPreviewImage = nil
-                }
-            ) { presentation in
-                ComicReaderView(
-                    descriptor: viewModel.descriptor,
-                    comic: presentation.comic,
-                    navigationContext: presentation.navigationContext,
-                    onComicUpdated: handleReaderComicUpdate,
-                    dependencies: dependencies
-                )
-            }
-        )
+        .fullScreenCover(item: $presentedComic) { presentation in
+            readerDestination(for: presentation)
+        }
         .onChange(of: quickActionsComic) { _, newValue in
             guard newValue == nil, let pendingQuickAction else {
                 return
@@ -524,7 +438,7 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private var usesCondensedTopBarActions: Bool {
+    private var usesCombinedTopBarActionsMenu: Bool {
         !supportsGridDisplay
     }
 
@@ -548,13 +462,19 @@ struct LibraryBrowserView: View {
         supportsGridDisplay && !viewModel.hasActiveSearch
     }
 
-    private var hasCondensedTopBarActions: Bool {
+    private var hasViewControlMenuItems: Bool {
+        canAdjustRecentWindow
+            || canSortCurrentComics
+    }
+
+    private var hasLibraryActionMenuItems: Bool {
         canImportComicInfo
             || canImportComicFiles
-            || canAdjustRecentWindow
             || canMaintainCurrentContext
-            || canAdjustDisplayMode
-            || canSortCurrentComics
+    }
+
+    private var hasCombinedTopBarActions: Bool {
+        hasViewControlMenuItems || hasLibraryActionMenuItems
     }
 
     private var canSelectComics: Bool {
@@ -571,13 +491,10 @@ struct LibraryBrowserView: View {
 
     private var visibleComics: [LibraryComic] {
         if viewModel.hasActiveSearch {
-            return filteredSortedComics(viewModel.searchResults?.comics ?? [])
+            return sortedComics(viewModel.searchResults?.comics ?? [])
         }
 
-        return filteredSortedComics(
-            viewModel.content?.comics ?? [],
-            localQuery: folderSearchQuery
-        )
+        return sortedComics(viewModel.content?.comics ?? [])
     }
 
     private var selectedComics: [LibraryComic] {
@@ -631,64 +548,113 @@ struct LibraryBrowserView: View {
     }
 
     @ViewBuilder
-    private var condensedTopBarActionsMenu: some View {
+    private var combinedTopBarActionsMenu: some View {
         Menu {
-            if canImportComicInfo {
-                Button {
-                    isShowingComicInfoImportSheet = true
-                } label: {
-                    Label("Import ComicInfo", systemImage: "square.and.arrow.down")
+            if hasViewControlMenuItems {
+                Section("View") {
+                    viewControlsMenuContent
                 }
             }
 
-            if canImportComicFiles {
-                Button {
-                    isShowingComicFileImporter = true
-                } label: {
-                    Label("Import Comic Files", systemImage: "square.and.arrow.down")
-                }
-            }
-
-            if (canImportComicInfo || canImportComicFiles)
-                && (canAdjustRecentWindow || canMaintainCurrentContext || canAdjustDisplayMode || canSortCurrentComics) {
-                Divider()
-            }
-
-            if canAdjustRecentWindow {
-                Menu {
-                    recentWindowMenuContent
-                } label: {
-                    Label("Recent Window", systemImage: "calendar.badge.clock")
-                }
-            }
-
-            if canMaintainCurrentContext {
-                Menu {
-                    currentContextMaintenanceMenuContent
-                } label: {
-                    Label("Refresh & Scan", systemImage: "arrow.clockwise.circle")
-                }
-            }
-
-            if canAdjustDisplayMode {
-                Menu {
-                    displayModeMenuContent
-                } label: {
-                    Label("Display Mode", systemImage: displayMode.systemImageName)
-                }
-            }
-
-            if canSortCurrentComics {
-                Menu {
-                    sortModeMenuContent
-                } label: {
-                    Label("Sort Comics", systemImage: "arrow.up.arrow.down.circle")
+            if hasLibraryActionMenuItems {
+                Section("Library") {
+                    libraryActionsMenuContent
                 }
             }
         } label: {
             Image(systemName: "ellipsis.circle")
         }
         .accessibilityLabel("More Library Actions")
+    }
+
+    @ViewBuilder
+    private var viewControlsMenu: some View {
+        Menu {
+            viewControlsMenuContent
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .accessibilityLabel("View Controls")
+    }
+
+    @ViewBuilder
+    private var libraryActionsMenu: some View {
+        Menu {
+            libraryActionsMenuContent
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .accessibilityLabel("Library Actions")
+    }
+
+    @ViewBuilder
+    private var viewControlsMenuContent: some View {
+        if canAdjustRecentWindow {
+            Menu {
+                recentWindowMenuContent
+            } label: {
+                Label("Recent Window", systemImage: "calendar.badge.clock")
+            }
+        }
+
+        if canSortCurrentComics {
+            Menu {
+                sortModeMenuContent
+            } label: {
+                Label("Sort Comics", systemImage: "arrow.up.arrow.down.circle")
+            }
+        }
+    }
+
+    private var displayModeToggleButton: some View {
+        Button {
+            applyDisplayMode(alternateDisplayMode)
+        } label: {
+            Image(systemName: displayMode.systemImageName)
+        }
+        .accessibilityLabel("Switch to \(alternateDisplayMode.title)")
+    }
+
+    private var alternateDisplayMode: LibraryBrowserDisplayMode {
+        switch displayMode {
+        case .list:
+            return .grid
+        case .grid:
+            return .list
+        }
+    }
+
+    @ViewBuilder
+    private var libraryActionsMenuContent: some View {
+        if canImportComicInfo || canImportComicFiles {
+            Section("Import") {
+                if canImportComicInfo {
+                    Button {
+                        isShowingComicInfoImportSheet = true
+                    } label: {
+                        Label("Import ComicInfo", systemImage: "square.and.arrow.down")
+                    }
+                }
+
+                if canImportComicFiles {
+                    Button {
+                        isShowingComicFileImporter = true
+                    } label: {
+                        Label("Import Comic Files", systemImage: "square.and.arrow.down.on.square")
+                    }
+                }
+            }
+        }
+
+        if canMaintainCurrentContext {
+            Section("Library") {
+                Menu {
+                    currentContextMaintenanceMenuContent
+                } label: {
+                    Label("Refresh & Scan", systemImage: "arrow.clockwise.circle")
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -846,48 +812,6 @@ struct LibraryBrowserView: View {
         comics.sorted(using: comicSortMode)
     }
 
-    private var trimmedFolderSearchQuery: String {
-        folderSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var hasActiveLocalFolderSearch: Bool {
-        !trimmedFolderSearchQuery.isEmpty
-    }
-
-    private var hasActiveLocalFolderFilters: Bool {
-        hasActiveLocalFolderSearch || comicFilter != .all
-    }
-
-    private var comicFilterChipBinding: Binding<LibraryComicQuickFilter?> {
-        Binding(
-            get: { comicFilter == .all ? nil : comicFilter },
-            set: { comicFilter = $0 ?? .all }
-        )
-    }
-
-    private func filteredSubfolders(
-        _ folders: [LibraryFolder],
-        localQuery: String? = nil
-    ) -> [LibraryFolder] {
-        let trimmedQuery = (localQuery ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty else {
-            return folders
-        }
-
-        return folders.filter { $0.matchesSearchQuery(trimmedQuery) }
-    }
-
-    private func filteredSortedComics(
-        _ comics: [LibraryComic],
-        localQuery: String? = nil
-    ) -> [LibraryComic] {
-        let trimmedQuery = (localQuery ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return sortedComics(comics).filter { comic in
-            comicFilter.matches(comic) && (trimmedQuery.isEmpty || comic.matchesSearchQuery(trimmedQuery))
-        }
-    }
-
     @ViewBuilder
     private func comicInfoImportPolicyActions(
         _ action: @escaping (ComicInfoImportPolicy) -> Void
@@ -912,8 +836,8 @@ struct LibraryBrowserView: View {
     }
 
     private func listContentView(_ content: LibraryFolderContent) -> some View {
-        let displayedSubfolders = filteredSubfolders(content.subfolders, localQuery: folderSearchQuery)
-        let displayedComics = filteredSortedComics(content.comics, localQuery: folderSearchQuery)
+        let displayedSubfolders = content.subfolders
+        let displayedComics = sortedComics(content.comics)
 
         return List {
             if hasLibraryStatus {
@@ -924,7 +848,7 @@ struct LibraryBrowserView: View {
                 localControlsListSection(content)
             }
 
-            if content.folder.isRoot && !hasActiveLocalFolderSearch {
+            if content.folder.isRoot {
                 continueReadingListSection
                 browseByListSection
             }
@@ -938,10 +862,6 @@ struct LibraryBrowserView: View {
                     )
                     .padding(.vertical, Spacing.xl)
                 }
-            } else if displayedSubfolders.isEmpty, displayedComics.isEmpty {
-                Section {
-                    filteredContentEmptyStateView(content)
-                }
             } else {
                 foldersSection(displayedSubfolders)
                 comicsSection(content, displayedComics: displayedComics)
@@ -950,8 +870,8 @@ struct LibraryBrowserView: View {
     }
 
     private func gridContentView(_ content: LibraryFolderContent) -> some View {
-        let displayedSubfolders = filteredSubfolders(content.subfolders, localQuery: folderSearchQuery)
-        let displayedComics = filteredSortedComics(content.comics, localQuery: folderSearchQuery)
+        let displayedSubfolders = content.subfolders
+        let displayedComics = sortedComics(content.comics)
 
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: Spacing.xl) {
@@ -963,7 +883,7 @@ struct LibraryBrowserView: View {
                     localControlsGridContent(content)
                 }
 
-                if content.folder.isRoot && !hasActiveLocalFolderSearch {
+                if content.folder.isRoot {
                     continueReadingGridSection
                     browseByGridSection
                 }
@@ -975,9 +895,6 @@ struct LibraryBrowserView: View {
                         description: "This part of the library does not contain subfolders or comics yet."
                     )
                     .padding(.vertical, Spacing.xxxl)
-                } else if displayedSubfolders.isEmpty, displayedComics.isEmpty {
-                    filteredContentEmptyStateView(content)
-                        .padding(.vertical, Spacing.xxxl)
                 } else {
                     folderGridSection(displayedSubfolders)
                     comicGridSection(content, displayedComics: displayedComics)
@@ -1291,15 +1208,7 @@ struct LibraryBrowserView: View {
     }
 
     private func showsLocalFolderControls(for content: LibraryFolderContent) -> Bool {
-        guard !isSelectionMode else {
-            return false
-        }
-
-        if !content.folder.isRoot {
-            return true
-        }
-
-        return !(content.subfolders.isEmpty && content.comics.isEmpty)
+        !isSelectionMode && !content.folder.isRoot
     }
 
     private func localControlsListSection(_ content: LibraryFolderContent) -> some View {
@@ -1606,6 +1515,16 @@ struct LibraryBrowserView: View {
         )
     }
 
+    private func readerDestination(for presentation: LibraryComicPresentation) -> some View {
+        ComicReaderView(
+            descriptor: viewModel.descriptor,
+            comic: presentation.comic,
+            navigationContext: presentation.navigationContext,
+            onComicUpdated: handleReaderComicUpdate,
+            dependencies: dependencies
+        )
+    }
+
     @ViewBuilder
     private func interactiveComicListNavigationLink<Label: View>(
         comic: LibraryComic,
@@ -1705,31 +1624,27 @@ struct LibraryBrowserView: View {
             && (containerWidth == 0 || containerWidth >= LayoutMetrics.wideGridMinContainerWidth)
     }
 
-    @MainActor
-    private func prepareHeroTransition(
-        for comic: LibraryComic,
-        fallbackFrame: CGRect,
-        preferredHeroSourceID: String? = nil
-    ) {
-        let resolvedHeroSourceID = preferredHeroSourceID ?? viewModel.heroSourceID(for: comic)
-        let registeredFrame = HeroSourceRegistry.shared.frame(for: resolvedHeroSourceID)
-        heroSourceFrame = registeredFrame == .zero ? fallbackFrame : registeredFrame
-        heroPreviewImage = LocalCoverTransitionCache.shared.image(for: resolvedHeroSourceID)
-            ?? viewModel.cachedTransitionImage(for: comic)
-    }
-
     private func presentComic(
         _ comic: LibraryComic,
         context: ReaderNavigationContext,
         sourceFrame: CGRect,
         preferredHeroSourceID: String? = nil
     ) {
-        prepareHeroTransition(
-            for: comic,
-            fallbackFrame: sourceFrame,
-            preferredHeroSourceID: preferredHeroSourceID
-        )
+        _ = sourceFrame
+        _ = preferredHeroSourceID
         presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
+    }
+
+    private func handleComicFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            viewModel.importComicFiles(from: urls)
+        case .failure(let error):
+            viewModel.alert = AppAlertState(
+                title: "Import Failed",
+                message: error.userFacingMessage
+            )
+        }
     }
 
     @ViewBuilder
@@ -1931,36 +1846,7 @@ struct LibraryBrowserView: View {
         if isSelectionMode {
             EmptyView()
         } else {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                folderLocationControls(content)
-
-                if !(content.subfolders.isEmpty && content.comics.isEmpty) {
-                    LibraryInlineSearchField(
-                        prompt: content.folder.isRoot ? "Filter library" : "Filter folder",
-                        text: $folderSearchQuery
-                    )
-
-                    if !content.comics.isEmpty {
-                        FilterChipBar(
-                            items: LibraryComicQuickFilter.allCases.filter { $0 != .all },
-                            selection: comicFilterChipBinding,
-                            label: { $0.title }
-                        )
-                    }
-
-                    if hasActiveLocalFolderFilters {
-                        Button {
-                            folderSearchQuery = ""
-                            comicFilter = .all
-                        } label: {
-                            Text("Clear Filters")
-                                .font(AppFont.caption(.semibold))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.appAccent)
-                    }
-                }
-            }
+            folderLocationControls(content)
         }
     }
 
@@ -2007,47 +1893,6 @@ struct LibraryBrowserView: View {
         }
 
         return content.folder.parentID > 0 ? content.folder.parentID : 1
-    }
-
-    private func filteredContentEmptyStateView(_ content: LibraryFolderContent) -> some View {
-        EmptyStateView(
-            systemImage: filteredContentEmptyStateSystemImage,
-            title: filteredContentEmptyStateTitle,
-            description: filteredContentEmptyStateDescription(content)
-        )
-        .padding(.vertical, Spacing.xl)
-    }
-
-    private var filteredContentEmptyStateTitle: String {
-        hasActiveLocalFolderSearch ? "No Matching Items" : "No Matching Comics"
-    }
-
-    private var filteredContentEmptyStateSystemImage: String {
-        hasActiveLocalFolderSearch ? "magnifyingglass" : comicFilter.systemImageName
-    }
-
-    private func filteredContentEmptyStateDescription(_ content: LibraryFolderContent) -> String {
-        let trimmedQuery = trimmedFolderSearchQuery
-        let location = content.folder.isRoot ? "this library section" : content.folder.displayName
-
-        if !trimmedQuery.isEmpty, comicFilter != .all {
-            return "No folders or comics in \(location) match \"\(trimmedQuery)\" while using the current \(comicFilter.title.lowercased()) filter."
-        }
-
-        if !trimmedQuery.isEmpty {
-            return "No folders or comics in \(location) match \"\(trimmedQuery)\"."
-        }
-
-        return "No comics in \(location) match the current \(comicFilter.title.lowercased()) filter."
-    }
-
-    private var filteredComicEmptyStateView: some View {
-        EmptyStateView(
-            systemImage: comicFilter.systemImageName,
-            title: "No Matching Comics",
-            description: "No comics match the current \(comicFilter.title.lowercased()) filter."
-        )
-        .padding(.vertical, Spacing.xl)
     }
 
     private func configurePreferredDisplayModeIfNeeded() {
@@ -2108,7 +1953,7 @@ struct LibraryBrowserView: View {
                     .padding(.vertical, Spacing.md)
                 }
             } else if let results = viewModel.searchResults {
-                let displayedSearchComics = filteredSortedComics(results.comics)
+                let displayedSearchComics = sortedComics(results.comics)
 
                 if results.isEmpty {
                     Section {
@@ -2120,10 +1965,6 @@ struct LibraryBrowserView: View {
                         .padding(.vertical, Spacing.xl)
                     }
                 } else {
-                    if !results.comics.isEmpty {
-                        searchResultsFilterSection(totalComicCount: results.comics.count)
-                    }
-
                     if !results.folders.isEmpty {
                         Section {
                             AdaptiveCardListRows(
@@ -2170,38 +2011,10 @@ struct LibraryBrowserView: View {
                         } header: {
                             sectionHeaderLabel("Matching Comics", count: displayedSearchComics.count)
                         }
-                    } else if results.folders.isEmpty, !results.comics.isEmpty {
-                        Section {
-                            filteredComicEmptyStateView
-                        }
                     }
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private func searchResultsFilterSection(totalComicCount: Int) -> some View {
-        Section {
-            FilterChipBar(
-                items: LibraryComicQuickFilter.allCases.filter { $0 != .all },
-                selection: comicFilterChipBinding,
-                label: { $0.title }
-            )
-        } header: {
-            Text("Filter")
-        } footer: {
-            Text(searchFilterSummaryText(totalCount: totalComicCount))
-        }
-    }
-
-    private func searchFilterSummaryText(totalCount: Int) -> String {
-        guard comicFilter != .all else {
-            return totalCount == 1 ? "1 comic result" : "\(totalCount) comic results"
-        }
-
-        let visibleCount = visibleComics.count
-        return "\(visibleCount) of \(totalCount) comic results in \(comicFilter.title.lowercased())"
     }
 }
 

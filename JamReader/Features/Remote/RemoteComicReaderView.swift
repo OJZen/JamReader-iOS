@@ -552,7 +552,6 @@ struct RemoteComicReaderView: View {
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
     @State private var containerWidth: CGFloat = 0
-    @State private var pendingThumbnailBrowserPresentationTask: Task<Void, Never>?
 
     init(
         profile: RemoteServerProfile,
@@ -667,7 +666,6 @@ struct RemoteComicReaderView: View {
         }
         .onDisappear {
             persistProgress(force: true)
-            pendingThumbnailBrowserPresentationTask?.cancel()
             pendingProgressPersistenceTask?.cancel()
             backgroundDownloadTask?.cancel()
             closeResources(for: document)
@@ -943,18 +941,13 @@ struct RemoteComicReaderView: View {
     }
 
     private func presentThumbnailBrowser() {
-        pendingThumbnailBrowserPresentationTask?.cancel()
-        pendingThumbnailBrowserPresentationTask = Task { @MainActor in
-            await Task.yield()
-            guard !Task.isCancelled,
-                  let document else {
-                return
-            }
-            thumbnailBrowserPresentation = RemoteComicReaderThumbnailBrowserPresentation(
-                document: document,
-                currentPageIndex: currentPageIndex
-            )
+        guard let document else {
+            return
         }
+        thumbnailBrowserPresentation = RemoteComicReaderThumbnailBrowserPresentation(
+            document: document,
+            currentPageIndex: currentPageIndex
+        )
     }
 
     @ViewBuilder

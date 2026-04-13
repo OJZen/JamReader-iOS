@@ -20,7 +20,6 @@ struct ComicReaderView: View {
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
     @State private var containerWidth: CGFloat = 0
-    @State private var pendingThumbnailBrowserPresentationTask: Task<Void, Never>?
 
     init(
         descriptor: LibraryDescriptor,
@@ -128,7 +127,6 @@ struct ComicReaderView: View {
             synchronizeReaderSession()
         }
         .onDisappear {
-            pendingThumbnailBrowserPresentationTask?.cancel()
             UIApplication.shared.isIdleTimerDisabled = false
             viewModel.persistCurrentProgress()
         }
@@ -438,18 +436,13 @@ struct ComicReaderView: View {
     }
 
     private func presentThumbnailBrowser() {
-        pendingThumbnailBrowserPresentationTask?.cancel()
-        pendingThumbnailBrowserPresentationTask = Task { @MainActor in
-            await Task.yield()
-            guard !Task.isCancelled,
-                  let document = viewModel.document else {
-                return
-            }
-            thumbnailBrowserPresentation = ComicReaderThumbnailBrowserPresentation(
-                document: document,
-                currentPageIndex: readerSession.state.currentPageIndex
-            )
+        guard let document = viewModel.document else {
+            return
         }
+        thumbnailBrowserPresentation = ComicReaderThumbnailBrowserPresentation(
+            document: document,
+            currentPageIndex: readerSession.state.currentPageIndex
+        )
     }
 
     private var pageJumpTextBinding: Binding<String> {

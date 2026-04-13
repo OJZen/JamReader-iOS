@@ -22,7 +22,6 @@ struct LibraryOrganizationCollectionDetailView: View {
     @State private var displayMode: LibraryComicDisplayMode
     @State private var hasConfiguredPreferredDisplayMode = false
     @State private var searchQuery = ""
-    @State private var comicFilter: LibraryComicQuickFilter = .all
     @State private var editingCollection: LibraryOrganizationCollection?
     @State private var deletingCollection: LibraryOrganizationCollection?
     @State private var editingComic: LibraryComic?
@@ -37,7 +36,6 @@ struct LibraryOrganizationCollectionDetailView: View {
     @State private var isShowingBatchOrganizationSheet = false
     @State private var isShowingSelectionActionsSheet = false
     @State private var presentedComic: PresentedComic?
-    @State private var heroSourceFrame: CGRect = .zero
     @State private var containerWidth: CGFloat = 0
 
     private var showsPersistentComicActions: Bool {
@@ -203,7 +201,7 @@ struct LibraryOrganizationCollectionDetailView: View {
         .refreshable {
             viewModel.load()
         }
-        .searchable(text: $searchQuery, prompt: "Filter comics")
+        .searchable(text: $searchQuery, prompt: "Search comics")
         .sheet(item: $editingComic) { comic in
             ComicMetadataEditorSheet(
                 descriptor: viewModel.descriptor,
@@ -388,30 +386,20 @@ struct LibraryOrganizationCollectionDetailView: View {
                 endSelectionMode()
             }
         }
-        .onChange(of: comicFilter) { _, _ in
-            if isSelectionMode {
-                endSelectionMode()
-            }
-        }
     }
 
     @ViewBuilder
     private var readerPresenter: some View {
-        HeroReaderPresenter(
-            item: $presentedComic,
-            sourceFrame: heroSourceFrame,
-            onDismiss: {
-                heroSourceFrame = .zero
+        Color.clear
+            .fullScreenCover(item: $presentedComic) { presentation in
+                ComicReaderView(
+                    descriptor: viewModel.descriptor,
+                    comic: presentation.comic,
+                    navigationContext: presentation.navigationContext,
+                    onComicUpdated: handleReaderComicUpdate,
+                    dependencies: dependencies
+                )
             }
-        ) { presentation in
-            ComicReaderView(
-                descriptor: viewModel.descriptor,
-                comic: presentation.comic,
-                navigationContext: presentation.navigationContext,
-                onComicUpdated: handleReaderComicUpdate,
-                dependencies: dependencies
-            )
-        }
     }
 
     @ViewBuilder
@@ -436,10 +424,6 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var listContent: some View {
         List {
-            if showsFilterControls {
-                filterControlsSection
-            }
-
             if displayedComics.isEmpty {
                 Section {
                     emptyStateView
@@ -466,10 +450,6 @@ struct LibraryOrganizationCollectionDetailView: View {
     private var gridContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                if showsFilterControls {
-                    filterControlsContent
-                }
-
                 if displayedComics.isEmpty {
                     emptyStateView
                         .frame(maxWidth: .infinity)
@@ -490,33 +470,6 @@ struct LibraryOrganizationCollectionDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
             .adaptiveContentWidth(1200)
-        }
-    }
-
-    private var filterControlsSection: some View {
-        Section {
-            filterControlsContent
-                .padding(.vertical, Spacing.xxxs)
-                .insetCardListRow(
-                    horizontalInset: LayoutMetrics.horizontalInset,
-                    top: 0,
-                    bottom: 10
-                )
-        }
-    }
-
-    private var filterControlsContent: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            LibraryComicFilterBar(selection: comicFilter) { selectedFilter in
-                comicFilter = selectedFilter
-            }
-
-            if canResetFilters {
-                Button("Clear Filters", action: resetFilters)
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
-            }
         }
     }
 
@@ -701,7 +654,7 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
-        heroSourceFrame = sourceFrame
+        _ = sourceFrame
         presentedComic = PresentedComic(
             comic: comic,
             navigationContext: ReaderNavigationContext(
@@ -713,14 +666,6 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var usesCondensedTopBarActions: Bool {
         !supportsGridDisplay
-    }
-
-    private var showsFilterControls: Bool {
-        !viewModel.comics.isEmpty && !isSelectionMode
-    }
-
-    private var canResetFilters: Bool {
-        hasActiveFilter
     }
 
     private var comicInfoImportTargetComics: [LibraryComic] {
@@ -918,7 +863,7 @@ struct LibraryOrganizationCollectionDetailView: View {
         viewModel.comics
             .sorted(using: comicSortMode)
             .filter { comic in
-                comicFilter.matches(comic) && comic.matchesSearchQuery(searchQuery)
+                comic.matchesSearchQuery(searchQuery)
             }
     }
 
@@ -927,7 +872,7 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private var hasActiveFilter: Bool {
-        comicFilter != .all || !trimmedSearchQuery.isEmpty
+        !trimmedSearchQuery.isEmpty
     }
 
     private var contentSectionTitle: String {
@@ -943,10 +888,6 @@ struct LibraryOrganizationCollectionDetailView: View {
             return "No comics in \(viewModel.collection.displayTitle) matched \"\(trimmedSearchQuery)\"."
         }
 
-        if comicFilter != .all {
-            return "No comics in \(viewModel.collection.displayTitle) match the current \(comicFilter.title.lowercased()) filter."
-        }
-
         return viewModel.collection.sectionKind.detailEmptyStateDescription
     }
 
@@ -955,12 +896,7 @@ struct LibraryOrganizationCollectionDetailView: View {
             return "magnifyingglass"
         }
 
-        return hasActiveFilter ? comicFilter.systemImageName : viewModel.collection.systemImageName
-    }
-
-    private func resetFilters() {
-        comicFilter = .all
-        searchQuery = ""
+        return viewModel.collection.systemImageName
     }
 
     private var selectionSummaryText: String {
