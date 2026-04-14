@@ -90,42 +90,63 @@ struct RemoteComicBatchDownloadOutcome {
 struct RemoteComicCacheSummary: Hashable {
     let fileCount: Int
     let totalBytes: Int64
-    let auxiliaryBytes: Int64
+    let cachedComicBytes: Int64
+    let otherCacheBytes: Int64
 
-    static let empty = RemoteComicCacheSummary(fileCount: 0, totalBytes: 0, auxiliaryBytes: 0)
+    static let empty = RemoteComicCacheSummary(
+        fileCount: 0,
+        totalBytes: 0,
+        cachedComicBytes: 0,
+        otherCacheBytes: 0
+    )
 
-    init(fileCount: Int, totalBytes: Int64, auxiliaryBytes: Int64 = 0) {
+    init(
+        fileCount: Int,
+        totalBytes: Int64,
+        cachedComicBytes: Int64? = nil,
+        auxiliaryBytes: Int64? = nil,
+        otherCacheBytes: Int64? = nil
+    ) {
         self.fileCount = fileCount
-        self.totalBytes = totalBytes
-        self.auxiliaryBytes = max(0, auxiliaryBytes)
+        self.totalBytes = max(0, totalBytes)
+        self.cachedComicBytes = max(0, cachedComicBytes ?? totalBytes)
+        self.otherCacheBytes = max(0, otherCacheBytes ?? auxiliaryBytes ?? 0)
     }
 
     var isEmpty: Bool {
         totalBytes <= 0
     }
 
+    var hasCachedComics: Bool {
+        fileCount > 0 && cachedComicBytes > 0
+    }
+
+    var hasOtherCacheData: Bool {
+        otherCacheBytes > 0
+    }
+
     var sizeText: String {
         ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)
     }
 
+    var cachedComicSizeText: String {
+        ByteCountFormatter.string(fromByteCount: cachedComicBytes, countStyle: .file)
+    }
+
+    var otherCacheSizeText: String {
+        ByteCountFormatter.string(fromByteCount: otherCacheBytes, countStyle: .file)
+    }
+
     var summaryText: String {
-        if fileCount <= 0 {
-            return "Cached data · \(sizeText)"
-        }
-
-        if auxiliaryBytes > 0 {
-            if fileCount == 1 {
-                return "1 cached comic + other cache data · \(sizeText)"
-            }
-
-            return "\(fileCount) cached comics + other cache data · \(sizeText)"
+        if !hasCachedComics {
+            return hasOtherCacheData ? "Other cache data · \(otherCacheSizeText)" : "Cached data · \(sizeText)"
         }
 
         if fileCount == 1 {
-            return "1 cached comic · \(sizeText)"
+            return "1 cached comic · \(cachedComicSizeText)"
         }
 
-        return "\(fileCount) cached comics · \(sizeText)"
+        return "\(fileCount) cached comics · \(cachedComicSizeText)"
     }
 }
 
@@ -164,6 +185,11 @@ private struct RemoteListedDirectoryEntry: Sendable {
     let modifiedAt: Date?
 }
 
+private struct AuxiliaryCacheResourceRecord: Sendable {
+    let resourceURL: URL
+    let size: Int64
+}
+
 private struct RemoteImageComicDirectoryInspection: Sendable {
     let pageEntries: [RemoteListedDirectoryEntry]
     let regularEntries: [RemoteListedDirectoryEntry]
@@ -183,6 +209,11 @@ private struct RemoteDirectoryPresentationInspection: Sendable {
 }
 
 final class RemoteServerBrowsingService {
+    private struct AutomaticCacheTaskRecord {
+        let serverID: UUID
+        let cancellation: @Sendable () -> Void
+    }
+
     private static let resumableDownloadChunkSize: UInt32 = 256 * 1024
     private static let downloadProgressReportingStep: Double = 0.01
     private static let batchDownloadWorkerLimit = 3
@@ -204,7 +235,7 @@ final class RemoteServerBrowsingService {
     private let cacheSummaryLock = NSLock()
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
     private let automaticCacheTaskLock = NSLock()
-    private var automaticCacheTaskCancellers: [String: @Sendable () -> Void] = [:]
+    private var automaticCacheTaskRecords: [String: AutomaticCacheTaskRecord] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
     private let thumbnailSMBClientSemaphore = AsyncSemaphore(maxConcurrent: 2)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
@@ -673,7 +704,8 @@ final class RemoteServerBrowsingService {
                 return RemoteComicCacheSummary(
                     fileCount: partial.fileCount + summary.fileCount,
                     totalBytes: partial.totalBytes + summary.totalBytes,
-                    auxiliaryBytes: partial.auxiliaryBytes + summary.auxiliaryBytes
+                    cachedComicBytes: partial.cachedComicBytes + summary.cachedComicBytes,
+                    otherCacheBytes: partial.otherCacheBytes + summary.otherCacheBytes
                 )
             }
         }
@@ -700,6 +732,10 @@ final class RemoteServerBrowsingService {
         let resourceBytes = resources.reduce(into: Int64.zero) { partialResult, resource in
             partialResult += resource.size
         }
+        let auxiliaryResources = enumerateOtherCacheResources(in: cacheURL)
+        let auxiliaryBytes = auxiliaryResources.reduce(into: Int64.zero) { partialResult, resource in
+            partialResult += resource.size
+        }
         let totalBytes = DiskUsageScanner.allocatedByteCount(
             at: cacheURL,
             fileManager: fileManager
@@ -707,7 +743,8 @@ final class RemoteServerBrowsingService {
         let summary = RemoteComicCacheSummary(
             fileCount: resources.count,
             totalBytes: totalBytes > 0 ? totalBytes : resourceBytes,
-            auxiliaryBytes: max(0, totalBytes - resourceBytes)
+            cachedComicBytes: resourceBytes,
+            otherCacheBytes: auxiliaryBytes
         )
         storeCachedSummary(summary, forRootPath: cacheRootPath)
         return summary
@@ -729,6 +766,7 @@ final class RemoteServerBrowsingService {
 
     func clearCachedComics(for profile: RemoteServerProfile? = nil) throws {
         do {
+            cancelAutomaticCacheTasks(forServerID: profile?.id)
             for cacheURL in cacheRootURLs(for: profile) {
                 guard fileManager.fileExists(atPath: cacheURL.path) else {
                     continue
@@ -744,6 +782,35 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    func clearOtherCachedData(for profile: RemoteServerProfile? = nil) throws {
+        do {
+            cancelAutomaticCacheTasks(forServerID: profile?.id)
+            for cacheURL in cacheRootURLs(for: profile) {
+                guard fileManager.fileExists(atPath: cacheURL.path) else {
+                    continue
+                }
+
+                let auxiliaryResources = enumerateOtherCacheResources(in: cacheURL)
+                for resource in auxiliaryResources {
+                    guard fileManager.fileExists(atPath: resource.resourceURL.path) else {
+                        continue
+                    }
+
+                    try fileManager.removeItem(at: resource.resourceURL)
+                    try? removeEmptyParentDirectories(
+                        from: resource.resourceURL.deletingLastPathComponent(),
+                        stoppingAt: cacheURL
+                    )
+                }
+            }
+            invalidateCachedSummaries()
+        } catch {
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "The leftover remote cache data could not be cleared. \(error.userFacingMessage)"
+            )
+        }
+    }
+
     func clearCachedComicsForServer(id serverID: UUID) throws {
         let cacheURL = remoteComicCacheRootURL
             .appendingPathComponent(serverID.uuidString, isDirectory: true)
@@ -752,6 +819,7 @@ final class RemoteServerBrowsingService {
         }
 
         do {
+            cancelAutomaticCacheTasks(forServerID: serverID)
             try fileManager.removeItem(at: cacheURL)
             invalidateCachedSummaries()
         } catch {
@@ -1933,21 +2001,40 @@ final class RemoteServerBrowsingService {
         cancellation: @escaping @Sendable () -> Void
     ) {
         automaticCacheTaskLock.lock()
-        automaticCacheTaskCancellers[reference.id] = cancellation
+        automaticCacheTaskRecords[reference.id] = AutomaticCacheTaskRecord(
+            serverID: reference.serverID,
+            cancellation: cancellation
+        )
         automaticCacheTaskLock.unlock()
     }
 
     func unregisterAutomaticCacheTask(for reference: RemoteComicFileReference) {
         automaticCacheTaskLock.lock()
-        automaticCacheTaskCancellers.removeValue(forKey: reference.id)
+        automaticCacheTaskRecords.removeValue(forKey: reference.id)
         automaticCacheTaskLock.unlock()
     }
 
     private func cancelAutomaticCacheTask(for reference: RemoteComicFileReference) {
         automaticCacheTaskLock.lock()
-        let cancellation = automaticCacheTaskCancellers.removeValue(forKey: reference.id)
+        let cancellation = automaticCacheTaskRecords.removeValue(forKey: reference.id)?.cancellation
         automaticCacheTaskLock.unlock()
         cancellation?()
+    }
+
+    private func cancelAutomaticCacheTasks(forServerID serverID: UUID?) {
+        automaticCacheTaskLock.lock()
+        let recordsToCancel: [AutomaticCacheTaskRecord]
+        if let serverID {
+            let matchingKeys = automaticCacheTaskRecords.compactMap { key, record in
+                record.serverID == serverID ? key : nil
+            }
+            recordsToCancel = matchingKeys.compactMap { automaticCacheTaskRecords.removeValue(forKey: $0) }
+        } else {
+            recordsToCancel = Array(automaticCacheTaskRecords.values)
+            automaticCacheTaskRecords.removeAll()
+        }
+        automaticCacheTaskLock.unlock()
+        recordsToCancel.forEach { $0.cancellation() }
     }
 
     private func discoveredCachedResourceURLs(for reference: RemoteComicFileReference) -> [URL] {
@@ -2777,9 +2864,8 @@ final class RemoteServerBrowsingService {
                 continue
             }
 
-            let metadata = (try? Data(contentsOf: candidateURL))
-                .flatMap { try? JSONDecoder().decode(CachedRemoteComicMetadata.self, from: $0) }
-            let size = metadata?.cachedByteCount ?? cachedResourceByteCount(at: resourceURL)
+            let size = cachedResourceByteCount(at: resourceURL)
+                + cachedMetadataByteCount(for: resourceURL)
             let resourceValues = try? resourceURL.resourceValues(forKeys: [.contentModificationDateKey])
 
             resources.append(
@@ -2794,8 +2880,112 @@ final class RemoteServerBrowsingService {
         return resources
     }
 
+    private func protectedCachedResourcePaths(in rootURL: URL) -> Set<String> {
+        let resources = enumerateCachedComicResources(in: rootURL)
+        var protectedPaths = Set<String>()
+        protectedPaths.reserveCapacity(resources.count * 2)
+
+        for resource in resources {
+            let resourcePath = resource.resourceURL.standardizedFileURL.path
+            protectedPaths.insert(resourcePath)
+
+            let metadataPath = cachedMetadataURL(for: resource.resourceURL).standardizedFileURL.path
+            if fileManager.fileExists(atPath: metadataPath) {
+                protectedPaths.insert(metadataPath)
+            }
+        }
+
+        return protectedPaths
+    }
+
+    private func enumerateOtherCacheResources(in rootURL: URL) -> [AuxiliaryCacheResourceRecord] {
+        let protectedPaths = protectedCachedResourcePaths(in: rootURL)
+
+        guard let enumerator = fileManager.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .isDirectoryKey
+            ],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var resources: [AuxiliaryCacheResourceRecord] = []
+        resources.reserveCapacity(32)
+        var seenPaths = Set<String>()
+
+        for case let candidateURL as URL in enumerator {
+            let values = try? candidateURL.resourceValues(forKeys: [.isRegularFileKey, .isDirectoryKey])
+            let isRegularFile = values?.isRegularFile == true
+            let isDirectory = values?.isDirectory == true
+            let standardizedPath = candidateURL.standardizedFileURL.path
+
+            if isProtectedCachePath(
+                standardizedPath,
+                protectedPaths: protectedPaths
+            ) {
+                if isDirectory {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            guard seenPaths.insert(standardizedPath).inserted else {
+                if isDirectory {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            guard isRegularFile || isDirectory else {
+                continue
+            }
+
+            resources.append(
+                AuxiliaryCacheResourceRecord(
+                    resourceURL: candidateURL,
+                    size: DiskUsageScanner.allocatedByteCount(at: candidateURL, fileManager: fileManager)
+                )
+            )
+
+            if isDirectory {
+                enumerator.skipDescendants()
+            }
+        }
+
+        return resources
+    }
+
     private func cachedResourceByteCount(at resourceURL: URL) -> Int64 {
         DiskUsageScanner.allocatedByteCount(at: resourceURL, fileManager: fileManager)
+    }
+
+    private func cachedMetadataByteCount(for resourceURL: URL) -> Int64 {
+        let metadataURL = cachedMetadataURL(for: resourceURL)
+        guard fileManager.fileExists(atPath: metadataURL.path) else {
+            return 0
+        }
+
+        return DiskUsageScanner.allocatedByteCount(at: metadataURL, fileManager: fileManager)
+    }
+
+    private func isProtectedCachePath(
+        _ candidatePath: String,
+        protectedPaths: Set<String>
+    ) -> Bool {
+        for protectedPath in protectedPaths {
+            if candidatePath == protectedPath {
+                return true
+            }
+
+            if candidatePath.hasPrefix(protectedPath + "/") {
+                return true
+            }
+        }
+
+        return false
     }
 
     private func downloadRemoteFile(
