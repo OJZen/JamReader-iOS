@@ -339,6 +339,19 @@ final class RemoteServerListViewModel: ObservableObject {
         }
     }
 
+    func clearOtherCache(for profile: RemoteServerProfile) {
+        do {
+            try browsingService.clearOtherCachedData(for: profile)
+            browsingService.evictActiveConnections(for: profile)
+            refreshCacheSummaries()
+        } catch {
+            alert = AppAlertState(
+                title: "Failed to Clear Other Cache Data",
+                message: error.userFacingMessage
+            )
+        }
+    }
+
     func refreshRecentActivity() {
         let activeServerIDs = Set(profiles.map(\.id))
         let allSessions = (try? readingProgressStore.loadSessions()) ?? []

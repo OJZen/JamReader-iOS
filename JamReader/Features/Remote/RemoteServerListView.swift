@@ -199,11 +199,19 @@ struct RemoteServerListView: View {
             }
         }
 
-        if !cacheSummary.isEmpty {
+        if cacheSummary.hasCachedComics {
             Button(role: .destructive) {
                 viewModel.clearCache(for: profile)
             } label: {
                 Label("Clear Downloads", systemImage: "trash")
+            }
+        }
+
+        if cacheSummary.hasOtherCacheData {
+            Button(role: .destructive) {
+                viewModel.clearOtherCache(for: profile)
+            } label: {
+                Label("Clear Other Cache Data", systemImage: "trash.slash")
             }
         }
 

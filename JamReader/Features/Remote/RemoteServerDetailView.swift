@@ -459,12 +459,21 @@ struct RemoteServerDetailView: View {
             }
         }
 
-        if !viewModel.cacheSummary(for: profile).isEmpty {
+        if viewModel.cacheSummary(for: profile).hasCachedComics {
             Button(role: .destructive) {
                 viewModel.clearCache(for: profile)
                 refreshDetailState(forceReload: true)
             } label: {
                 Label("Clear Downloads", systemImage: "trash")
+            }
+        }
+
+        if viewModel.cacheSummary(for: profile).hasOtherCacheData {
+            Button(role: .destructive) {
+                viewModel.clearOtherCache(for: profile)
+                refreshDetailState(forceReload: true)
+            } label: {
+                Label("Clear Other Cache Data", systemImage: "trash.slash")
             }
         }
 
