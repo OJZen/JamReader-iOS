@@ -12,7 +12,6 @@ struct SettingsHomeView: View {
     @State private var mangaLayout = ReaderDisplayLayout(defaultsFor: .manga)
     @State private var webcomicLayout = ReaderDisplayLayout(defaultsFor: .webComic)
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
-    @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .balanced
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
@@ -148,40 +147,23 @@ struct SettingsHomeView: View {
     private var remoteSection: some View {
         Section {
             NavigationLink {
-                RemoteCacheSettingsView(dependencies: dependencies)
+                RemoteNetworkSettingsView()
             } label: {
                 Label {
                     VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                        Text("Manage Cache")
+                        Text("Network")
                             .font(AppFont.body())
                             .foregroundStyle(Color.textPrimary)
 
-                        Text(storageFooter)
+                        Text("Connection preferences will live here.")
                             .font(AppFont.footnote())
                             .foregroundStyle(Color.textSecondary)
                             .lineLimit(1)
                     }
                 } icon: {
                     SettingsIcon(
-                        systemName: "externaldrive.fill",
+                        systemName: "network",
                         color: .teal
-                    )
-                }
-            }
-
-            LabeledContent {
-                Text(remoteCachePolicyPreset.title)
-                    .font(AppFont.body())
-                    .foregroundStyle(Color.textSecondary)
-            } label: {
-                Label {
-                    Text("Cache Policy")
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textPrimary)
-                } icon: {
-                    SettingsIcon(
-                        systemName: "slider.horizontal.3",
-                        color: .indigo
                     )
                 }
             }
@@ -193,69 +175,32 @@ struct SettingsHomeView: View {
     // MARK: - Storage
 
     private var storageSection: some View {
-        Group {
-            Section {
-                LabeledContent {
-                    Text(remoteCacheSummary.isEmpty
-                         ? "None"
-                         : remoteCacheSummary.summaryText)
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textSecondary)
-                } label: {
-                    Label {
-                        Text("Remote Downloads")
+        Section {
+            NavigationLink {
+                RemoteCacheSettingsView(dependencies: dependencies)
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                        Text("Cache Management")
                             .font(AppFont.body())
                             .foregroundStyle(Color.textPrimary)
-                    } icon: {
-                        SettingsIcon(
-                            systemName: "arrow.down.circle.fill",
-                            color: .blue
-                        )
-                    }
-                }
 
-                LabeledContent {
-                    Text(remoteThumbnailCacheSummary.isEmpty
-                         ? "None"
-                         : remoteThumbnailCacheSummary.summaryText)
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textSecondary)
-                } label: {
-                    Label {
-                        Text("Cover Thumbnails")
-                            .font(AppFont.body())
-                            .foregroundStyle(Color.textPrimary)
-                    } icon: {
-                        SettingsIcon(
-                            systemName: "photo.stack.fill",
-                            color: .orange
-                        )
+                        Text(storageFooter)
+                            .font(AppFont.footnote())
+                            .foregroundStyle(Color.textSecondary)
+                            .lineLimit(1)
                     }
+                } icon: {
+                    SettingsIcon(
+                        systemName: "internaldrive.fill",
+                        color: .orange
+                    )
                 }
-
-                LabeledContent {
-                    Text(importedComicsLibrarySummary.isEmpty
-                         ? "None"
-                         : importedComicsLibrarySummary.summaryText)
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textSecondary)
-                } label: {
-                    Label {
-                        Text("Imported Comics")
-                            .font(AppFont.body())
-                            .foregroundStyle(Color.textPrimary)
-                    } icon: {
-                        SettingsIcon(
-                            systemName: "books.vertical.fill",
-                            color: .purple
-                        )
-                    }
-                }
-            } header: {
-                Text("Storage")
-            } footer: {
-                Text("Manage Cache for cleanup.")
             }
+        } header: {
+            Text("Storage")
+        } footer: {
+            Text("Manage downloads, thumbnails, and imported remote files.")
         }
     }
 
@@ -378,8 +323,6 @@ struct SettingsHomeView: View {
             .loadLayout(for: .webComic)
         remoteCacheSummary = dependencies.remoteServerBrowsingService
             .cacheSummary()
-        remoteCachePolicyPreset = dependencies.remoteServerBrowsingService
-            .cachePolicyPreset()
         remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared
             .cacheSummary()
         importedComicsLibrarySummary = dependencies.libraryStorageManager
@@ -393,12 +336,31 @@ struct SettingsHomeView: View {
         case .reading:
             return "Reader defaults by content type"
         case .remote:
-            return remoteCachePolicyPreset.title
+            return "Connection preferences"
         case .storage:
             return storageFooter
         case .about:
             return appVersion
         }
+    }
+}
+
+private struct RemoteNetworkSettingsView: View {
+    var body: some View {
+        List {
+            Section {
+                Text("Network preferences will be added here.")
+                    .font(AppFont.body())
+                    .foregroundStyle(Color.textSecondary)
+            } header: {
+                Text("Coming Soon")
+            } footer: {
+                Text("This section is reserved for remote connection settings.")
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Network")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

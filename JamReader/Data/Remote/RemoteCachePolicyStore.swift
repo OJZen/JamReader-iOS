@@ -1,43 +1,55 @@
 import Foundation
 
 enum RemoteComicCachePolicyPreset: String, CaseIterable, Identifiable {
-    case compact
-    case balanced
-    case extended
+    case fiveHundredMB = "500mb"
+    case oneGigabyte = "1gb"
+    case twoGigabytes = "2gb"
+    case fourGigabytes = "4gb"
+    case unlimited
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .compact:
-            return "Compact"
-        case .balanced:
-            return "Balanced"
-        case .extended:
-            return "Extended"
+        case .fiveHundredMB:
+            return "500 MB"
+        case .oneGigabyte:
+            return "1024 MB"
+        case .twoGigabytes:
+            return "2048 MB"
+        case .fourGigabytes:
+            return "4096 MB"
+        case .unlimited:
+            return "Unlimited"
         }
-    }
-
-    var subtitle: String {
-        policy.summaryText
     }
 
     var policy: RemoteComicCachePolicy {
         switch self {
-        case .compact:
+        case .fiveHundredMB:
             return RemoteComicCachePolicy(
                 maximumCachedComicFileCount: 12,
-                maximumTotalCacheBytes: 512 * 1_024 * 1_024
+                maximumTotalCacheBytes: 500 * 1_024 * 1_024
             )
-        case .balanced:
+        case .oneGigabyte:
+            return RemoteComicCachePolicy(
+                maximumCachedComicFileCount: 24,
+                maximumTotalCacheBytes: 1 * 1_024 * 1_024 * 1_024
+            )
+        case .twoGigabytes:
             return RemoteComicCachePolicy(
                 maximumCachedComicFileCount: 48,
                 maximumTotalCacheBytes: 2 * 1_024 * 1_024 * 1_024
             )
-        case .extended:
+        case .fourGigabytes:
             return RemoteComicCachePolicy(
-                maximumCachedComicFileCount: 120,
-                maximumTotalCacheBytes: 5 * 1_024 * 1_024 * 1_024
+                maximumCachedComicFileCount: 96,
+                maximumTotalCacheBytes: 4 * 1_024 * 1_024 * 1_024
+            )
+        case .unlimited:
+            return RemoteComicCachePolicy(
+                maximumCachedComicFileCount: .max,
+                maximumTotalCacheBytes: .max
             )
         }
     }
@@ -46,15 +58,6 @@ enum RemoteComicCachePolicyPreset: String, CaseIterable, Identifiable {
 struct RemoteComicCachePolicy: Hashable {
     let maximumCachedComicFileCount: Int
     let maximumTotalCacheBytes: Int64
-
-    var summaryText: String {
-        let sizeText = ByteCountFormatter.string(
-            fromByteCount: maximumTotalCacheBytes,
-            countStyle: .file
-        )
-        let comicWord = maximumCachedComicFileCount == 1 ? "comic" : "comics"
-        return "Up to \(maximumCachedComicFileCount) \(comicWord) or \(sizeText)"
-    }
 }
 
 final class RemoteCachePolicyStore {
@@ -70,7 +73,20 @@ final class RemoteCachePolicyStore {
             return preset
         }
 
-        return .balanced
+        if let legacyRawValue = userDefaults.string(forKey: storageKey) {
+            switch legacyRawValue {
+            case "compact":
+                return .fiveHundredMB
+            case "balanced":
+                return .twoGigabytes
+            case "extended":
+                return .fourGigabytes
+            default:
+                break
+            }
+        }
+
+        return .oneGigabyte
     }
 
     func loadPolicy() -> RemoteComicCachePolicy {
