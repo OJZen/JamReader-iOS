@@ -545,6 +545,9 @@ struct LibraryBrowserView: View {
 
     private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
         viewModel.applyUpdatedComic(updatedComic)
+        if let presentedComic, presentedComic.comic.id == updatedComic.id {
+            self.presentedComic = presentedComic.updatingComic(updatedComic)
+        }
     }
 
     @ViewBuilder
@@ -2025,9 +2028,38 @@ private enum PendingComicQuickAction {
 }
 
 private struct LibraryComicPresentation: Identifiable {
-    let id: UUID = UUID()
+    let id: UUID
     let comic: LibraryComic
     let navigationContext: ReaderNavigationContext
+
+    init(comic: LibraryComic, navigationContext: ReaderNavigationContext) {
+        self.id = UUID()
+        self.comic = comic
+        self.navigationContext = navigationContext
+    }
+
+    func updatingComic(_ updatedComic: LibraryComic) -> Self {
+        var updatedNavigationContext = navigationContext
+        if let index = updatedNavigationContext.comics.firstIndex(where: { $0.id == updatedComic.id }) {
+            updatedNavigationContext.comics[index] = updatedComic
+        }
+
+        return Self(
+            id: id,
+            comic: updatedComic,
+            navigationContext: updatedNavigationContext
+        )
+    }
+
+    private init(
+        id: UUID,
+        comic: LibraryComic,
+        navigationContext: ReaderNavigationContext
+    ) {
+        self.id = id
+        self.comic = comic
+        self.navigationContext = navigationContext
+    }
 }
 
 private enum LibraryBrowserDisplayMode: String, CaseIterable, Identifiable {

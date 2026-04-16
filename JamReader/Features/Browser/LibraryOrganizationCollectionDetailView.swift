@@ -699,6 +699,9 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
         viewModel.applyUpdatedComic(updatedComic)
+        if let presentedComic, presentedComic.comic.id == updatedComic.id {
+            self.presentedComic = presentedComic.updatingComic(updatedComic)
+        }
     }
 
     @ViewBuilder
@@ -1058,6 +1061,18 @@ private struct PresentedComic: Identifiable {
     let navigationContext: ReaderNavigationContext
 
     var id: Int64 { comic.id }
+
+    func updatingComic(_ updatedComic: LibraryComic) -> Self {
+        var updatedNavigationContext = navigationContext
+        if let index = updatedNavigationContext.comics.firstIndex(where: { $0.id == updatedComic.id }) {
+            updatedNavigationContext.comics[index] = updatedComic
+        }
+
+        return Self(
+            comic: updatedComic,
+            navigationContext: updatedNavigationContext
+        )
+    }
 }
 
 private enum PendingComicQuickAction {
