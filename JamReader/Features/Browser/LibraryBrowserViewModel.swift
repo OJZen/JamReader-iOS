@@ -49,6 +49,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private var hasAttemptedAutomaticImportRecovery = false
     private let previewCollectionLimit = 6
     nonisolated private static let searchResultLimit = 40
+    nonisolated private static let liveImportNotificationLibraryIDKey = "libraryID"
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
     private let supportedImportedFileExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"
@@ -87,6 +88,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         self.lastInitializationSummary = initialMaintenanceRecord?.summary
         self.databaseSummary = SQLiteDatabaseInspector().inspectDatabase(at: self.databaseURL)
         configureSearch()
+        configureLiveImportUpdates()
     }
 
     @Published private(set) var databaseSummary: LibraryDatabaseSummary
@@ -1026,6 +1028,29 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
             .sink { [weak self] query in
                 self?.searchLibrary(matching: query)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func configureLiveImportUpdates() {
+        NotificationCenter.default.publisher(for: .libraryContentsDidChange)
+            .compactMap { notification in
+                notification.userInfo?[Self.liveImportNotificationLibraryIDKey] as? UUID
+            }
+            .filter { [descriptor] libraryID in
+                libraryID == descriptor.id
+            }
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else {
+                    return
+                }
+
+                guard !self.isInitializingLibrary, !self.isRefreshingLibrary else {
+                    return
+                }
+
+                self.loadContent(respectingTransientState: false)
             }
             .store(in: &cancellables)
     }

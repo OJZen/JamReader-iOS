@@ -20,6 +20,8 @@ struct JamReaderApp: App {
                 store: dependencies.libraryDescriptorStore,
                 storageManager: dependencies.libraryStorageManager,
                 inspector: dependencies.databaseInspector,
+                databaseBootstrapper: dependencies.libraryDatabaseBootstrapper,
+                libraryScanner: dependencies.libraryScanner,
                 maintenanceStatusStore: dependencies.libraryMaintenanceStatusStore,
                 importedComicsImportService: dependencies.importedComicsImportService
             )

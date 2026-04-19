@@ -1,11 +1,14 @@
 import Foundation
 
 enum LibraryKind: String, Codable, Hashable, CaseIterable {
+    case appManaged
     case linkedFolder
     case importedComics
 
     var title: String {
         switch self {
+        case .appManaged:
+            return "App Managed"
         case .linkedFolder:
             return "Linked Folder"
         case .importedComics:
@@ -14,6 +17,6 @@ enum LibraryKind: String, Codable, Hashable, CaseIterable {
     }
 
     var isManagedByApp: Bool {
-        self == .importedComics
+        self == .appManaged || self == .importedComics
     }
 }

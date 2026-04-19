@@ -26,10 +26,10 @@ struct LibraryHomeLibraryActionsSheet: View {
 
                 Section {
                     Button(role: .destructive, action: onRemove) {
-                        Label("Remove from App", systemImage: "trash")
+                        Label(removalActionTitle, systemImage: "trash")
                     }
                 } footer: {
-                    Text("Removes the library from the app. Files stay on disk.")
+                    Text(removalFootnote)
                 }
             }
             .navigationTitle("Library")
@@ -43,6 +43,18 @@ struct LibraryHomeLibraryActionsSheet: View {
         .adaptiveSheetWidth(620)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+
+    private var removalActionTitle: String {
+        item.descriptor.kind.isManagedByApp ? "Delete from Device" : "Remove from App"
+    }
+
+    private var removalFootnote: String {
+        if item.descriptor.kind.isManagedByApp {
+            return "Deletes this library and its files from this device."
+        }
+
+        return "Removes the library from the app. Files stay in the original folder."
     }
 }
 
@@ -94,6 +106,61 @@ struct LibraryRenameSheet: View {
         }
         .adaptiveSheetWidth(520)
         .presentationDetents([.medium])
+        .onAppear {
+            isFocused = true
+        }
+    }
+}
+
+struct LibraryCreateSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let onCreate: (String) -> Bool
+
+    @State private var proposedName = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Library name", text: $proposedName, prompt: Text("Weekend Reads"))
+                        .focused($isFocused)
+                } header: {
+                    Text("Name")
+                } footer: {
+                    Text("A new app-managed library will be created on this device.")
+                }
+
+                Section("How It Works") {
+                    Label("Stored locally inside JamReader", systemImage: "internaldrive.fill")
+                    Label("Ready for direct imports right away", systemImage: "square.and.arrow.down.fill")
+                    Label("You can rename it later in the app", systemImage: "pencil")
+                }
+                .foregroundStyle(Color.textSecondary)
+            }
+            .navigationTitle("New Library")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Create") {
+                        if onCreate(proposedName) {
+                            dismiss()
+                        }
+                    }
+                    .disabled(proposedName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .adaptiveSheetWidth(520)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
         .onAppear {
             isFocused = true
         }

@@ -13,6 +13,7 @@ struct LibraryHomeView: View {
     @State private var activeImportRoute: LibraryHomeImportRoute?
     @State private var importDestinationRoute: LibraryHomeImportRoute?
     @State private var pendingImportDestinationSelection: LibraryImportDestinationSelection = .importedComics
+    @State private var isShowingCreateLibrarySheet = false
     @State private var selectedLibraryID: UUID?
     @State private var libraryActionsItem: LibraryListItem?
     @State private var renamingLibraryItem: LibraryListItem?
@@ -91,6 +92,16 @@ struct LibraryHomeView: View {
                 viewModel.renameLibrary(id: item.id, to: proposedName)
             }
         }
+        .sheet(isPresented: $isShowingCreateLibrarySheet) {
+            LibraryCreateSheet { proposedName in
+                guard let libraryID = viewModel.createLibrary(named: proposedName) else {
+                    return false
+                }
+
+                focusLibrary(libraryID)
+                return true
+            }
+        }
         .sheet(item: $libraryInfoItem) { item in
             LibraryInfoSheet(item: item)
         }
@@ -135,9 +146,9 @@ struct LibraryHomeView: View {
                     EmptyStateView(
                         systemImage: "books.vertical",
                         title: "No Libraries Yet",
-                        description: "Add a library folder or import comics to get started.",
-                        actionTitle: "Add Library",
-                        action: { presentLibraryFolderImporter() }
+                        description: "Create a library on this device, add a linked folder, or import comics to get started.",
+                        actionTitle: "New Library",
+                        action: { presentCreateLibrarySheet() }
                     )
                     .background(Color.surfaceGrouped)
                 } else {
@@ -212,7 +223,7 @@ struct LibraryHomeView: View {
                     LibraryHomeDetailPlaceholder(
                         itemCount: viewModel.items.count,
                         onAddLibrary: {
-                            presentLibraryFolderImporter()
+                            presentCreateLibrarySheet()
                         }
                     )
                 }
@@ -225,6 +236,12 @@ struct LibraryHomeView: View {
     private var addLibraryToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Button {
+                    presentCreateLibrarySheet()
+                } label: {
+                    Label("New Library", systemImage: "plus.rectangle.on.folder.fill")
+                }
+
                 Button {
                     presentLibraryFolderImporter()
                 } label: {
@@ -328,6 +345,10 @@ struct LibraryHomeView: View {
         queueImporterPresentation(for: .libraryFolder)
     }
 
+    private func presentCreateLibrarySheet() {
+        isShowingCreateLibrarySheet = true
+    }
+
     private func presentComicFileImporter() {
         importDestinationRoute = .comicFiles
     }
@@ -422,7 +443,7 @@ struct LibraryHomeView: View {
                     Button(role: .destructive) {
                         viewModel.removeLibrary(id: item.id)
                     } label: {
-                        Label("Remove", systemImage: "trash")
+                        Label(item.removalActionTitle, systemImage: "trash")
                     }
                     Button {
                         renamingLibraryItem = item
@@ -479,7 +500,7 @@ struct LibraryHomeView: View {
         Button(role: .destructive) {
             viewModel.removeLibrary(id: item.id)
         } label: {
-            Label("Remove", systemImage: "trash")
+            Label(item.removalActionTitle, systemImage: "trash")
         }
     }
 
@@ -496,6 +517,17 @@ struct LibraryHomeView: View {
         }
 
         compactNavigationPath = [libraryID]
+    }
+
+    private func focusLibrary(_ libraryID: UUID) {
+        selectedLibraryID = libraryID
+        storedSelectedLibraryID = libraryID.uuidString
+
+        if usesSplitViewLayout {
+            compactNavigationPath = []
+        } else {
+            compactNavigationPath = [libraryID]
+        }
     }
 
     private func queueLibraryAction(_ action: PendingLibraryAction) {
@@ -643,7 +675,7 @@ private struct LibraryHomeDetailPlaceholder: View {
         } actions: {
             if itemCount == 0 {
                 Button(action: onAddLibrary) {
-                    Label("Add Library", systemImage: "plus")
+                    Label("New Library", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -654,7 +686,7 @@ private struct LibraryHomeDetailPlaceholder: View {
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Add a library folder or import comics."
+            return "Create a local library, add a linked folder, or import comics."
         }
 
         return "Choose a library from the sidebar."
@@ -674,7 +706,18 @@ private struct LibraryStatusNote {
 
 private extension LibraryListItem {
     var kindTint: Color {
-        descriptor.kind == .importedComics ? .teal : .blue
+        switch descriptor.kind {
+        case .appManaged:
+            return .indigo
+        case .importedComics:
+            return .teal
+        case .linkedFolder:
+            return .blue
+        }
+    }
+
+    var removalActionTitle: String {
+        descriptor.kind.isManagedByApp ? "Delete" : "Remove"
     }
 
     var libraryScaleSummary: String {
@@ -743,7 +786,7 @@ private extension LibraryListItem {
     private var storageMetadataItem: InlineMetadataItem {
         return InlineMetadataItem(
             systemImage: "books.vertical.fill",
-            text: descriptor.kind == .importedComics ? "App Managed" : "Linked Folder",
+            text: descriptor.kind.title,
             tint: kindTint
         )
     }

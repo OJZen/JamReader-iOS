@@ -73,7 +73,15 @@ struct ImportedComicsImportProgress {
     let scanProgress: LibraryScanProgress?
 }
 
+extension Notification.Name {
+    nonisolated static let libraryContentsDidChange = Notification.Name("LibraryContentsDidChange")
+}
+
 final class ImportedComicsImportService {
+    static let defaultImportedComicsLibraryName = "Imported Comics"
+    private static let libraryIDUserInfoKey = "libraryID"
+    private static let progressiveIndexBatchSize = 8
+
     enum ImportDestinationValidationError: LocalizedError {
         case destinationLibraryNotWritable(String)
 
@@ -99,8 +107,6 @@ final class ImportedComicsImportService {
     private let supportedComicFileExtensions: Set<String> = [
         "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
     ]
-    private let importedComicsLibraryName = "Imported Comics"
-
     init(
         store: LibraryDescriptorStore,
         storageManager: LibraryStorageManager,
@@ -140,11 +146,13 @@ final class ImportedComicsImportService {
         )
         let destinationDirectoryURL = destinationAccessSession.sourceURL.standardizedFileURL
         let destinationDirectoryPath = destinationDirectoryURL.path
+        let destinationDatabaseURL = storageManager.databaseURL(for: destinationResolution.descriptor)
 
         var importedComicCount = 0
         var importedDestinationFileURLs: [URL] = []
         var unsupportedItemNames: [String] = []
         var failedItemNames: [String] = []
+        var pendingIndexedFileURLs: [URL] = []
         let normalizedConsumedSourceURLs = Set(consumeSourceURLs.map(\.standardizedFileURL))
         let transferTotalCount: Int? = traverseDirectories ? nil : urls.count
 
@@ -156,9 +164,11 @@ final class ImportedComicsImportService {
                     withIntermediateDirectories: true
                 )
             }
+            try databaseBootstrapper.ensureDatabaseExists(at: destinationDatabaseURL)
 
             for url in urls {
                 try cancellationCheck?()
+                let previouslyImportedCount = importedDestinationFileURLs.count
                 try autoreleasepool {
                     try importResource(
                         at: url.standardizedFileURL,
@@ -175,8 +185,29 @@ final class ImportedComicsImportService {
                         cancellationCheck: cancellationCheck
                     )
                 }
+
+                let newImportedURLs = Array(importedDestinationFileURLs.dropFirst(previouslyImportedCount))
+                pendingIndexedFileURLs.append(contentsOf: newImportedURLs)
+                if pendingIndexedFileURLs.count >= Self.progressiveIndexBatchSize {
+                    try progressivelyIndexImportedFiles(
+                        pendingIndexedFileURLs,
+                        for: destinationResolution.descriptor,
+                        sourceRootURL: destinationDirectoryURL,
+                        databaseURL: destinationDatabaseURL,
+                        cancellationCheck: cancellationCheck
+                    )
+                    pendingIndexedFileURLs.removeAll(keepingCapacity: true)
+                }
             }
         }
+
+        try progressivelyIndexImportedFiles(
+            pendingIndexedFileURLs,
+            for: destinationResolution.descriptor,
+            sourceRootURL: destinationDirectoryURL,
+            databaseURL: destinationDatabaseURL,
+            cancellationCheck: cancellationCheck
+        )
 
         let scanSummary: LibraryScanSummary?
         let scanErrorMessage: String?
@@ -259,7 +290,7 @@ final class ImportedComicsImportService {
         var options: [LibraryImportDestinationOption] = [
             LibraryImportDestinationOption(
                 selection: .importedComics,
-                title: importedComicsLibraryName,
+                title: Self.defaultImportedComicsLibraryName,
                 status: .appManaged,
                 detail: nil,
                 availability: .available
@@ -280,7 +311,7 @@ final class ImportedComicsImportService {
                         accessSnapshot: accessSnapshot,
                         availability: availability
                     ),
-                    detail: descriptor.sourcePath,
+                    detail: nil,
                     availability: availability
                 )
             }
@@ -395,7 +426,7 @@ final class ImportedComicsImportService {
 
         let descriptor = try storageManager.registerLibrary(
             at: rootURL,
-            suggestedName: importedComicsLibraryName
+            suggestedName: Self.defaultImportedComicsLibraryName
         )
         descriptors.append(descriptor)
         try store.save(descriptors)
@@ -480,7 +511,37 @@ final class ImportedComicsImportService {
                 scannedAt: Date()
             )
         )
+        Self.postLibraryContentsDidChange(for: descriptor.id)
         return summary
+    }
+
+    private func progressivelyIndexImportedFiles(
+        _ importedFileURLs: [URL],
+        for descriptor: LibraryDescriptor,
+        sourceRootURL: URL,
+        databaseURL: URL,
+        cancellationCheck: (() throws -> Void)?
+    ) throws {
+        guard !importedFileURLs.isEmpty else {
+            return
+        }
+
+        do {
+            try cancellationCheck?()
+            _ = try libraryScanner.appendImportedComics(
+                sourceRootURL: sourceRootURL,
+                databaseURL: databaseURL,
+                fileURLs: importedFileURLs,
+                cancellationCheck: cancellationCheck
+            )
+            Self.postLibraryContentsDidChange(for: descriptor.id)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            logger.warning(
+                "Progressive import indexing failed for library \(descriptor.id.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+            )
+        }
     }
 
     private func validatedIndexedSummary(
@@ -558,6 +619,14 @@ final class ImportedComicsImportService {
         databaseInspector.inspectDatabase(at: databaseURL).comicCount
     }
 
+    private static func postLibraryContentsDidChange(for libraryID: UUID) {
+        NotificationCenter.default.post(
+            name: .libraryContentsDidChange,
+            object: nil,
+            userInfo: [libraryIDUserInfoKey: libraryID]
+        )
+    }
+
     private func importAvailability(
         for descriptor: LibraryDescriptor,
         accessSnapshot: LibraryAccessSnapshot
@@ -576,7 +645,7 @@ final class ImportedComicsImportService {
         accessSnapshot: LibraryAccessSnapshot,
         availability: LibraryImportDestinationOption.Availability
     ) -> LibraryImportDestinationOption.Status? {
-        if descriptor.kind == .importedComics {
+        if descriptor.kind.isManagedByApp {
             return .appManaged
         }
 

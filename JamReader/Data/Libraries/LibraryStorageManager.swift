@@ -34,6 +34,7 @@ struct LibraryStorageFootprintSummary: Hashable {
 
 final class LibraryStorageManager {
     private let importedComicsDirectoryName = "ImportedComics"
+    private let managedLibrariesDirectoryName = "Libraries"
     private let fileManager: FileManager
     private let database: AppLibraryDatabase
     private let assetStore: LibraryAssetStore
@@ -47,7 +48,11 @@ final class LibraryStorageManager {
         self.assetStore = LibraryAssetStore(database: database, fileManager: fileManager)
     }
 
-    func registerLibrary(at sourceURL: URL, suggestedName: String? = nil) throws -> LibraryDescriptor {
+    func registerLibrary(
+        at sourceURL: URL,
+        suggestedName: String? = nil,
+        preferredID: UUID? = nil
+    ) throws -> LibraryDescriptor {
         let standardizedURL = sourceURL.standardizedFileURL
         let isManagedURL = isManagedLocalLibraryURL(standardizedURL)
         let scoped = standardizedURL.startAccessingSecurityScopedResource()
@@ -74,8 +79,8 @@ final class LibraryStorageManager {
         }
 
         let descriptor = LibraryDescriptor(
-            id: UUID(),
-            kind: isImportedComicsLibraryURL(standardizedURL) ? .importedComics : .linkedFolder,
+            id: preferredID ?? UUID(),
+            kind: kind(for: standardizedURL),
             name: normalizedLibraryName(suggestedName, fallback: values.name ?? standardizedURL.lastPathComponent),
             rootPath: standardizedURL.path,
             bookmarkData: bookmarkData,
@@ -84,6 +89,22 @@ final class LibraryStorageManager {
         )
 
         try ensureLibraryMetadataStructure(for: descriptor)
+        return descriptor
+    }
+
+    func createManagedLibrary(named proposedName: String) throws -> LibraryDescriptor {
+        let libraryID = UUID()
+        let rootURL = try managedLibraryRootURL(
+            for: libraryID,
+            name: proposedName,
+            createIfNeeded: true
+        )
+        var descriptor = try registerLibrary(
+            at: rootURL,
+            suggestedName: proposedName,
+            preferredID: libraryID
+        )
+        descriptor.kind = .appManaged
         return descriptor
     }
 
@@ -96,6 +117,10 @@ final class LibraryStorageManager {
     func restoreSourceURL(for descriptor: LibraryDescriptor) throws -> URL {
         if shouldResolveImportedComicsRoot(for: descriptor) {
             return try importedComicsLibraryRootURL(createIfNeeded: true)
+        }
+
+        if shouldResolveManagedLibraryRoot(for: descriptor) {
+            return try appManagedLibraryRootURL(for: descriptor, createIfNeeded: true)
         }
 
         if descriptor.bookmarkData.isEmpty || isManagedLocalLibraryPath(descriptor.rootPath) {
@@ -189,6 +214,35 @@ final class LibraryStorageManager {
         try assetStore.ensureLibraryDirectories(for: descriptor.id)
     }
 
+    func deleteManagedLibraryFilesIfNeeded(for descriptor: LibraryDescriptor) throws {
+        switch descriptor.kind {
+        case .linkedFolder:
+            return
+        case .importedComics:
+            guard let rootURL = try? importedComicsLibraryRootURL(createIfNeeded: false),
+                  fileManager.fileExists(atPath: rootURL.path)
+            else {
+                return
+            }
+            try fileManager.removeItem(at: rootURL)
+        case .appManaged:
+            guard let libraryRootURL = try? appManagedLibraryRootURL(for: descriptor, createIfNeeded: false),
+                  let managedRootURL = try? managedLibrariesRootURL(createIfNeeded: false) else {
+                return
+            }
+
+            let managedRootPath = managedRootURL.path
+            let libraryRootPath = libraryRootURL.path
+            guard libraryRootPath.hasPrefix(managedRootPath + "/"),
+                  fileManager.fileExists(atPath: libraryRootPath)
+            else {
+                return
+            }
+
+            try fileManager.removeItem(at: libraryRootURL)
+        }
+    }
+
     private func normalizedLibraryName(_ rawName: String?, fallback: String) -> String {
         let trimmed = rawName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmed.isEmpty {
@@ -205,6 +259,60 @@ final class LibraryStorageManager {
             .appendingPathComponent(importedComicsDirectoryName, isDirectory: true)
             .standardizedFileURL
 
+        if createIfNeeded, !fileManager.fileExists(atPath: rootURL.path) {
+            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        }
+
+        return rootURL
+    }
+
+    private func managedLibrariesRootURL(createIfNeeded: Bool) throws -> URL {
+        let rootURL = try database
+            .storageRootURL()
+            .appendingPathComponent(managedLibrariesDirectoryName, isDirectory: true)
+            .standardizedFileURL
+
+        if createIfNeeded, !fileManager.fileExists(atPath: rootURL.path) {
+            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        }
+
+        return rootURL
+    }
+
+    private func managedLibraryRootURL(
+        for id: UUID,
+        name: String,
+        createIfNeeded: Bool
+    ) throws -> URL {
+        let baseURL = try managedLibrariesRootURL(createIfNeeded: createIfNeeded)
+        let sanitizedName = sanitizedManagedLibraryDirectoryName(from: name)
+        let folderName = "\(sanitizedName)-\(id.uuidString.prefix(8))"
+        let rootURL = baseURL.appendingPathComponent(folderName, isDirectory: true).standardizedFileURL
+
+        if createIfNeeded, !fileManager.fileExists(atPath: rootURL.path) {
+            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        }
+
+        return rootURL
+    }
+
+    private func appManagedLibraryRootURL(
+        for descriptor: LibraryDescriptor,
+        createIfNeeded: Bool
+    ) throws -> URL {
+        let baseURL = try managedLibrariesRootURL(createIfNeeded: createIfNeeded)
+        let existingFolderName = URL(fileURLWithPath: descriptor.rootPath, isDirectory: true)
+            .standardizedFileURL
+            .lastPathComponent
+
+        let folderName: String
+        if existingFolderName.isEmpty || existingFolderName == managedLibrariesDirectoryName {
+            folderName = "\(sanitizedManagedLibraryDirectoryName(from: descriptor.name))-\(descriptor.id.uuidString.prefix(8))"
+        } else {
+            folderName = existingFolderName
+        }
+
+        let rootURL = baseURL.appendingPathComponent(folderName, isDirectory: true).standardizedFileURL
         if createIfNeeded, !fileManager.fileExists(atPath: rootURL.path) {
             try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         }
@@ -233,6 +341,23 @@ final class LibraryStorageManager {
         return candidateURL.lastPathComponent == importedComicsDirectoryName
     }
 
+    private func shouldResolveManagedLibraryRoot(for descriptor: LibraryDescriptor) -> Bool {
+        if descriptor.kind == .appManaged {
+            return true
+        }
+
+        guard descriptor.bookmarkData.isEmpty else {
+            return false
+        }
+
+        let candidateURL = URL(fileURLWithPath: descriptor.rootPath, isDirectory: true).standardizedFileURL
+        guard candidateURL.lastPathComponent != managedLibrariesDirectoryName else {
+            return false
+        }
+
+        return candidateURL.path.contains("/\(managedLibrariesDirectoryName)/")
+    }
+
     private func isManagedLocalLibraryURL(_ url: URL) -> Bool {
         guard let rootURL = try? database.storageRootURL() else {
             return false
@@ -257,7 +382,7 @@ final class LibraryStorageManager {
             didChange = true
         }
 
-        let normalizedKind: LibraryKind = isImportedComicsLibraryURL(resolvedSourceURL) ? .importedComics : .linkedFolder
+        let normalizedKind = kind(for: resolvedSourceURL)
         if normalizedDescriptor.kind != normalizedKind {
             normalizedDescriptor.kind = normalizedKind
             didChange = true
@@ -289,6 +414,35 @@ final class LibraryStorageManager {
         }
 
         return normalizedDescriptor
+    }
+
+    private func kind(for url: URL) -> LibraryKind {
+        if isImportedComicsLibraryURL(url) {
+            return .importedComics
+        }
+
+        if isManagedLocalLibraryURL(url) {
+            return .appManaged
+        }
+
+        return .linkedFolder
+    }
+
+    private func sanitizedManagedLibraryDirectoryName(from name: String) -> String {
+        let fallback = "Library"
+        let lowered = name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        let pieces = lowered.split { character in
+            !(character.isLetter || character.isNumber)
+        }
+        let candidate = pieces.joined(separator: "-")
+        if candidate.isEmpty {
+            return fallback
+        }
+
+        return String(candidate.prefix(40))
     }
 
     private func persistentBookmarkData(for sourceURL: URL) throws -> Data {

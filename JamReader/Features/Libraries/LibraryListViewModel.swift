@@ -34,23 +34,31 @@ final class LibraryListViewModel: ObservableObject {
     private let store: LibraryDescriptorStore
     private let storageManager: LibraryStorageManager
     private let inspector: SQLiteDatabaseInspector
+    private let databaseBootstrapper: LibraryDatabaseBootstrapper
+    private let libraryScanner: LibraryScanner
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let importedComicsImportService: ImportedComicsImportService
 
     private var descriptors: [LibraryDescriptor] = []
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         store: LibraryDescriptorStore,
         storageManager: LibraryStorageManager,
         inspector: SQLiteDatabaseInspector,
+        databaseBootstrapper: LibraryDatabaseBootstrapper,
+        libraryScanner: LibraryScanner,
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
         importedComicsImportService: ImportedComicsImportService
     ) {
         self.store = store
         self.storageManager = storageManager
         self.inspector = inspector
+        self.databaseBootstrapper = databaseBootstrapper
+        self.libraryScanner = libraryScanner
         self.maintenanceStatusStore = maintenanceStatusStore
         self.importedComicsImportService = importedComicsImportService
+        configureLiveLibraryUpdates()
         reload()
     }
 
@@ -142,6 +150,54 @@ final class LibraryListViewModel: ObservableObject {
         )
     }
 
+    func createLibrary(named proposedName: String) -> UUID? {
+        let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            alert = AppAlertState(title: "Invalid Library Name", message: "Enter a name for the new library.")
+            return nil
+        }
+
+        if descriptors.contains(where: {
+            $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
+        }) {
+            alert = AppAlertState(title: "Library Name Already Used", message: trimmedName)
+            return nil
+        }
+
+        if trimmedName.localizedCaseInsensitiveCompare(ImportedComicsImportService.defaultImportedComicsLibraryName) == .orderedSame {
+            alert = AppAlertState(
+                title: "Library Name Reserved",
+                message: "\"\(ImportedComicsImportService.defaultImportedComicsLibraryName)\" is reserved for the built-in imported library."
+            )
+            return nil
+        }
+
+        do {
+            let descriptor = try storageManager.createManagedLibrary(named: trimmedName)
+            descriptors.append(descriptor)
+            try store.save(descriptors)
+            do {
+                let sourceURL = try storageManager.restoreSourceURL(for: descriptor)
+                let databaseURL = storageManager.databaseURL(for: descriptor)
+                try databaseBootstrapper.createDatabaseIfNeeded(at: databaseURL)
+                _ = try libraryScanner.scanLibrary(
+                    sourceRootURL: sourceURL,
+                    databaseURL: databaseURL
+                )
+            } catch {
+                descriptors.removeAll { $0.id == descriptor.id }
+                try? store.save(descriptors)
+                try? storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
+                throw error
+            }
+            rebuildItems()
+            return descriptor.id
+        } catch {
+            alert = AppAlertState(title: "Failed to Create Library", message: error.userFacingMessage)
+            return nil
+        }
+    }
+
     func importComicFiles(
         from urls: [URL],
         destinationSelection: LibraryImportDestinationSelection = .importedComics
@@ -166,15 +222,7 @@ final class LibraryListViewModel: ObservableObject {
 
     func removeLibraries(at offsets: IndexSet) {
         let idsToRemove = offsets.map { items[$0].descriptor.id }
-        idsToRemove.forEach { maintenanceStatusStore.clearRecord(for: $0) }
-        descriptors.removeAll { idsToRemove.contains($0.id) }
-
-        do {
-            try store.save(descriptors)
-            rebuildItems()
-        } catch {
-            alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
-        }
+        removeLibraries(withIDs: idsToRemove)
     }
 
     func renameLibrary(id: UUID, to proposedName: String) -> Bool {
@@ -209,15 +257,7 @@ final class LibraryListViewModel: ObservableObject {
     }
 
     func removeLibrary(id: UUID) {
-        maintenanceStatusStore.clearRecord(for: id)
-        descriptors.removeAll { $0.id == id }
-
-        do {
-            try store.save(descriptors)
-            rebuildItems()
-        } catch {
-            alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
-        }
+        removeLibraries(withIDs: [id])
     }
 
     func presentImportError(_ error: Error) {
@@ -300,6 +340,35 @@ final class LibraryListViewModel: ObservableObject {
         }
     }
 
+    private func removeLibraries(withIDs idsToRemove: [UUID]) {
+        let removedDescriptors = descriptors.filter { idsToRemove.contains($0.id) }
+        descriptors.removeAll { idsToRemove.contains($0.id) }
+
+        do {
+            try store.save(descriptors)
+            rebuildItems()
+        } catch {
+            alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
+            return
+        }
+
+        var fileCleanupFailures: [String] = []
+        for descriptor in removedDescriptors {
+            do {
+                try storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
+            } catch {
+                fileCleanupFailures.append(descriptor.name)
+            }
+        }
+
+        if !fileCleanupFailures.isEmpty {
+            alert = AppAlertState(
+                title: "Library Removed with Warnings",
+                message: "Removed the library from JamReader, but failed to delete local files for: \(previewList(from: fileCleanupFailures))."
+            )
+        }
+    }
+
     private func previewList(from names: [String], limit: Int = 3) -> String {
         let uniqueSortedNames = Array(Set(names)).sorted()
         guard uniqueSortedNames.count > limit else {
@@ -322,5 +391,14 @@ final class LibraryListViewModel: ObservableObject {
                     maintenanceRecord: maintenanceStatusStore.loadRecord(for: descriptor.id)
                 )
             }
+    }
+
+    private func configureLiveLibraryUpdates() {
+        NotificationCenter.default.publisher(for: .libraryContentsDidChange)
+            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.reload()
+            }
+            .store(in: &cancellables)
     }
 }

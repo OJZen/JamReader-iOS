@@ -10,28 +10,58 @@ struct ImportSheetContextCard: View {
     let title: String
     let message: String
     let supplementaryNotice: String?
+    var iconSystemName = "square.and.arrow.down.on.square.fill"
+    var accent: Color = .blue
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: Spacing.md) {
+            HStack(alignment: .top, spacing: Spacing.md) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
+                        .fill(accent.opacity(0.14))
 
-            if let bodyText = trimmed(message) {
-                Text(bodyText)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: iconSystemName)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(accent)
+                }
+                .frame(width: 52, height: 52)
+
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                        .font(AppFont.title3(.semibold))
+                        .foregroundStyle(Color.textPrimary)
+
+                    if let bodyText = trimmed(message) {
+                        Text(bodyText)
+                            .font(AppFont.subheadline())
+                            .foregroundStyle(Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
 
             if let notice = trimmed(supplementaryNotice) {
-                Text(notice)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Label {
+                    Text(notice)
+                        .font(AppFont.footnote())
+                        .foregroundStyle(Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(accent)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 4)
+        .padding(Spacing.lg)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous)
+                .fill(Color.surfaceSecondary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous)
+                .strokeBorder(accent.opacity(0.12), lineWidth: 1)
+        )
     }
 
     private func trimmed(_ text: String?) -> String? {
@@ -42,74 +72,83 @@ struct ImportSheetContextCard: View {
 
 struct LibraryImportDestinationOptionRow: View {
     let option: LibraryImportDestinationOption
-    var isSuggested = false
     var isSelected = false
     var showsSelectionIndicator = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(option.title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
+        HStack(alignment: .top, spacing: Spacing.md) {
+            ZStack {
+                RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+                    .fill(accentColor.opacity(isSelected ? 0.18 : 0.12))
 
-                if let metadataText {
-                    Text(metadataText)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(metadataTint)
-                        .lineLimit(2)
-                }
-
-                if let detail = option.detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                if case .unavailable(let reason) = option.availability {
-                    Text(reason)
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Image(systemName: iconSystemName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(accentColor)
             }
+            .frame(width: 42, height: 42)
 
-            Spacer(minLength: 8)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                HStack(alignment: .top, spacing: Spacing.xs) {
+                    Text(option.title)
+                        .font(AppFont.body(.semibold))
+                        .foregroundStyle(Color.textPrimary)
+                        .lineLimit(2)
 
-            if showsSelectionIndicator && isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(option.isSelectable ? .blue : .secondary)
+                    Spacer(minLength: Spacing.xs)
+
+                if showsSelectionIndicator {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(isSelected ? accentColor : Color.textTertiary)
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
+        .padding(Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+                .fill(cardBackgroundColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+                .strokeBorder(cardBorderColor, lineWidth: isSelected ? 1.5 : 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .opacity(option.isSelectable ? 1 : 0.78)
     }
 
-    private var metadataText: String? {
-        var parts: [String] = []
-
-        if let status = option.status {
-            parts.append(status.title)
-        }
-
-        if isSuggested {
-            parts.append("Suggested")
-        }
-
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    private var accentColor: Color {
+        option.status?.tintColor ?? .blue
     }
 
-    private var metadataTint: Color {
-        if isSuggested {
-            return .blue
+    private var iconSystemName: String {
+        switch option.status {
+        case .appManaged:
+            return "internaldrive.fill"
+        case .linkedFolder:
+            return "folder.fill"
+        case .readOnly:
+            return "lock.fill"
+        case .none:
+            return "square.stack.3d.up.fill"
+        }
+    }
+
+    private var cardBackgroundColor: Color {
+        if isSelected {
+            return accentColor.opacity(0.10)
         }
 
-        return option.status?.tintColor ?? .secondary
+        return Color.surfaceSecondary
+    }
+
+    private var cardBorderColor: Color {
+        if isSelected {
+            return accentColor.opacity(0.55)
+        }
+
+        return Color.black.opacity(0.06)
     }
 }
 
@@ -122,6 +161,53 @@ private extension LibraryImportDestinationOption.Status {
             return .blue
         case .readOnly:
             return .orange
+        }
+    }
+
+    var sortRank: Int {
+        switch self {
+        case .appManaged:
+            return 0
+        case .linkedFolder:
+            return 1
+        case .readOnly:
+            return 2
+        }
+    }
+}
+
+struct ImportSection<Content: View>: View {
+    let title: String
+    let footer: String?
+    @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        footer: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.footer = footer
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(title)
+                .font(AppFont.headline())
+                .foregroundStyle(Color.textPrimary)
+
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                content
+            }
+
+            if let footer, !footer.isEmpty {
+                Text(footer)
+                    .font(AppFont.footnote())
+                    .foregroundStyle(Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Spacing.xxs)
+            }
         }
     }
 }
@@ -197,17 +283,25 @@ final class LibraryImportDestinationSheetViewModel: ObservableObject {
             if lhs.isSelectable != rhs.isSelectable {
                 return lhs.isSelectable
             }
+
             if lhs.selection == preferredSelection {
                 return true
             }
             if rhs.selection == preferredSelection {
                 return false
             }
+
             if lhs.selection == .importedComics {
                 return true
             }
             if rhs.selection == .importedComics {
                 return false
+            }
+
+            let lhsRank = lhs.status?.sortRank ?? .max
+            let rhsRank = rhs.status?.sortRank ?? .max
+            if lhsRank != rhsRank {
+                return lhsRank < rhsRank
             }
 
             return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
@@ -258,44 +352,35 @@ struct LibraryImportDestinationSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    ImportSheetContextCard(
-                        title: title,
-                        message: message,
-                        supplementaryNotice: supplementaryNotice
-                    )
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    ImportSection(
+                        title: "Choose Destination",
+                    ) {
+                        ForEach(viewModel.options) { option in
+                            Button {
+                                guard option.isSelectable else {
+                                    return
+                                }
 
-                Section {
-                    ForEach(viewModel.options) { option in
-                        Button {
-                            guard option.isSelectable else {
-                                return
+                                viewModel.rememberSelection(option.selection)
+                                dismiss()
+                                onSelect(option.selection)
+                            } label: {
+                                LibraryImportDestinationOptionRow(
+                                    option: option
+                                )
                             }
-                            viewModel.rememberSelection(option.selection)
-                            dismiss()
-                            onSelect(option.selection)
-                        } label: {
-                            LibraryImportDestinationOptionRow(
-                                option: option,
-                                isSuggested: option.selection == viewModel.suggestedSelection
-                            )
+                            .buttonStyle(.plain)
+                            .disabled(!option.isSelectable)
+                            .accessibilityHint(confirmLabel)
                         }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .disabled(!option.isSelectable)
-                        .accessibilityHint(confirmLabel)
                     }
-                } header: {
-                    Text("Choose Destination")
-                } footer: {
-                    Text(ImportDestinationSheetCopy.destinationFooter)
                 }
+                .padding(Spacing.lg)
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Import Destination")
+            .background(Color.surfaceGrouped)
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -315,7 +400,8 @@ struct LibraryImportDestinationSheet: View {
                 )
             }
         }
-        .adaptiveFormSheet(720)
+        .adaptiveFormSheet(760)
+        .presentationBackground(Color.surfaceGrouped)
         .presentationDragIndicator(.visible)
     }
 }

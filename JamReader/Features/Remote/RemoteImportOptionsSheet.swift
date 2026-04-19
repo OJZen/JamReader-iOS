@@ -81,34 +81,21 @@ struct RemoteImportOptionsSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    introductionSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xl) {
+                    scopeSection
+                    destinationSection
                 }
-
-                scopeSection
-                destinationSection
+                .padding(Spacing.lg)
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle("Import Options")
+            .background(Color.surfaceGrouped)
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(confirmLabel) {
-                        destinationViewModel.rememberSelection(selectedDestination)
-                        let selectedScope = selectedScope
-                        let selectedDestination = selectedDestination
-                        dismiss()
-                        onConfirm(selectedDestination, selectedScope)
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(!isSelectedDestinationSelectable)
                 }
             }
             .onAppear {
@@ -125,21 +112,36 @@ struct RemoteImportOptionsSheet: View {
                     dismissButton: .default(Text("OK"))
                 )
             }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: Spacing.sm) {
+                    Button {
+                        destinationViewModel.rememberSelection(selectedDestination)
+                        let selectedScope = selectedScope
+                        let selectedDestination = selectedDestination
+                        dismiss()
+                        onConfirm(selectedDestination, selectedScope)
+                    } label: {
+                        Text(confirmLabel)
+                            .font(AppFont.body(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.sm)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isSelectedDestinationSelectable)
+                }
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.sm)
+                .padding(.bottom, Spacing.md)
+                .background(.regularMaterial)
+            }
         }
         .adaptiveFormSheet(720)
+        .presentationBackground(Color.surfaceGrouped)
         .presentationDragIndicator(.visible)
     }
 
-    private var introductionSection: some View {
-        ImportSheetContextCard(
-            title: title,
-            message: message,
-            supplementaryNotice: supplementaryNotice
-        )
-    }
-
     private var scopeSection: some View {
-        Section {
+        ImportSection(title: "Scope") {
             ForEach(availableScopes) { scope in
                 Button {
                     selectedScope = scope
@@ -153,13 +155,11 @@ struct RemoteImportOptionsSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
-        } header: {
-            Text("Scope")
         }
     }
 
     private var destinationSection: some View {
-        Section {
+        ImportSection(title: "Destination") {
             ForEach(destinationViewModel.options) { option in
                 Button {
                     guard option.isSelectable else {
@@ -169,7 +169,6 @@ struct RemoteImportOptionsSheet: View {
                 } label: {
                     LibraryImportDestinationOptionRow(
                         option: option,
-                        isSuggested: option.selection == destinationViewModel.suggestedSelection,
                         isSelected: selectedDestination == option.selection,
                         showsSelectionIndicator: true
                     )
@@ -179,10 +178,6 @@ struct RemoteImportOptionsSheet: View {
                 .contentShape(Rectangle())
                 .disabled(!option.isSelectable)
             }
-        } header: {
-            Text("Destination")
-        } footer: {
-            Text(ImportDestinationSheetCopy.destinationFooter)
         }
     }
 
@@ -208,28 +203,55 @@ private struct RemoteImportScopeRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+                    .fill(.blue.opacity(isSelected ? 0.18 : 0.10))
+
+                Image(systemName: iconName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.blue)
+            }
+            .frame(width: 42, height: 42)
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(scope.title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(AppFont.body(.semibold))
+                    .foregroundStyle(Color.textPrimary)
                     .lineLimit(2)
 
                 Text(scope.summaryText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(AppFont.caption())
+                    .foregroundStyle(Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 12)
 
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title3)
-                    .foregroundStyle(.blue)
-            }
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(isSelected ? .blue : Color.textTertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
+        .padding(Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+                .fill(isSelected ? Color.blue.opacity(0.10) : Color.surfaceSecondary)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
+                .strokeBorder(isSelected ? Color.blue.opacity(0.55) : Color.black.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+    }
+
+    private var iconName: String {
+        switch scope {
+        case .visibleResults:
+            return "eye.fill"
+        case .currentFolderOnly:
+            return "folder.fill"
+        case .includeSubfolders:
+            return "square.stack.3d.up.fill"
+        }
     }
 }
