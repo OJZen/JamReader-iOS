@@ -711,7 +711,7 @@ private struct ReaderThumbnailBrowserMetrics: Equatable {
     init(containerWidth: CGFloat, isPadLayout: Bool) {
         let safeWidth = max(containerWidth, 320)
         usesSplitCards = safeWidth >= 900
-        columns = isPadLayout ? 3 : (safeWidth >= 560 ? 2 : 1)
+        columns = isPadLayout ? 3 : 2
         horizontalInset = safeWidth >= 820 ? 24 : 16
         columnSpacing = safeWidth >= 820 ? 18 : 12
         rowSpacing = safeWidth >= 820 ? 18 : 14
@@ -719,8 +719,8 @@ private struct ReaderThumbnailBrowserMetrics: Equatable {
 
         let availableWidth = safeWidth - (horizontalInset * 2) - (CGFloat(columns - 1) * columnSpacing)
         let itemWidth = floor(max(availableWidth / CGFloat(columns), 118))
-        let thumbnailHeight = floor(itemWidth * 1.42)
-        pageCellHeight = thumbnailHeight + 62
+        let thumbnailHeight = floor(itemWidth * (3.0 / 2.0))
+        pageCellHeight = thumbnailHeight
 
         let scale = UIScreen.main.scale
         thumbnailMaxPixelSize = max(300, Int(max(itemWidth, thumbnailHeight) * scale))
@@ -1089,11 +1089,8 @@ private final class ReaderThumbnailBrowserPageCell: UICollectionViewCell {
     private let thumbnailView = UIImageView()
     private let pageBadgeLabel = ReaderThumbnailInsetLabel()
     private let currentBadgeLabel = ReaderThumbnailInsetLabel()
-    private let titleLabel = UILabel()
-    private let subtitleLabel = UILabel()
     private let placeholderStack = UIStackView()
     private let spinner = UIActivityIndicatorView(style: .medium)
-    private let placeholderLabel = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1115,10 +1112,6 @@ private final class ReaderThumbnailBrowserPageCell: UICollectionViewCell {
 
     func configure(pageNumber: Int, isCurrentPage: Bool) {
         pageBadgeLabel.text = "\(pageNumber)"
-        placeholderLabel.text = "\(pageNumber)"
-        titleLabel.text = "Page \(pageNumber)"
-        subtitleLabel.text = isCurrentPage ? "Reading now" : "Tap to open"
-        subtitleLabel.textColor = isCurrentPage ? tintColor : .secondaryLabel
         currentBadgeLabel.isHidden = !isCurrentPage
         cardView.backgroundColor = isCurrentPage
             ? tintColor.withAlphaComponent(0.14)
@@ -1165,7 +1158,7 @@ private final class ReaderThumbnailBrowserPageCell: UICollectionViewCell {
         thumbnailView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailView.backgroundColor = UIColor.tertiarySystemFill
         thumbnailView.clipsToBounds = true
-        thumbnailView.layer.cornerRadius = 18
+        thumbnailView.layer.cornerRadius = 22
         thumbnailView.layer.cornerCurve = .continuous
         cardView.addSubview(thumbnailView)
 
@@ -1197,43 +1190,20 @@ private final class ReaderThumbnailBrowserPageCell: UICollectionViewCell {
 
         placeholderStack.addArrangedSubview(spinner)
 
-        placeholderLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        placeholderLabel.textColor = .secondaryLabel
-        placeholderStack.addArrangedSubview(placeholderLabel)
-
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        titleLabel.font = .preferredFont(forTextStyle: .subheadline).withWeight(.semibold)
-        titleLabel.textColor = .label
-        cardView.addSubview(titleLabel)
-
-        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
-        subtitleLabel.font = .preferredFont(forTextStyle: .caption1)
-        subtitleLabel.textColor = .secondaryLabel
-        cardView.addSubview(subtitleLabel)
-
         NSLayoutConstraint.activate([
-            thumbnailView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: Spacing.sm),
-            thumbnailView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: Spacing.sm),
-            thumbnailView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -Spacing.sm),
-            thumbnailView.heightAnchor.constraint(equalTo: thumbnailView.widthAnchor, multiplier: 1.42),
+            thumbnailView.topAnchor.constraint(equalTo: cardView.topAnchor),
+            thumbnailView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor),
+            thumbnailView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor),
+            thumbnailView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor),
 
-            pageBadgeLabel.topAnchor.constraint(equalTo: thumbnailView.topAnchor, constant: Spacing.sm),
-            pageBadgeLabel.leadingAnchor.constraint(equalTo: thumbnailView.leadingAnchor, constant: Spacing.sm),
+            pageBadgeLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: Spacing.sm),
+            pageBadgeLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: Spacing.sm),
 
-            currentBadgeLabel.topAnchor.constraint(equalTo: thumbnailView.topAnchor, constant: Spacing.sm),
-            currentBadgeLabel.trailingAnchor.constraint(equalTo: thumbnailView.trailingAnchor, constant: -Spacing.sm),
+            currentBadgeLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: Spacing.sm),
+            currentBadgeLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -Spacing.sm),
 
             placeholderStack.centerXAnchor.constraint(equalTo: thumbnailView.centerXAnchor),
-            placeholderStack.centerYAnchor.constraint(equalTo: thumbnailView.centerYAnchor),
-
-            titleLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: Spacing.sm),
-            titleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: Spacing.sm),
-            titleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -Spacing.sm),
-
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: Spacing.xxxs),
-            subtitleLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: Spacing.sm),
-            subtitleLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -Spacing.sm),
-            subtitleLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -Spacing.sm)
+            placeholderStack.centerYAnchor.constraint(equalTo: thumbnailView.centerYAnchor)
         ])
     }
 }
