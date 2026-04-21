@@ -119,7 +119,7 @@ private actor LibArchivePageSource: ComicPageDataSource {
     private let cache: NSCache<NSNumber, NSData> = {
         let cache = NSCache<NSNumber, NSData>()
         cache.countLimit = 12
-        cache.totalCostLimit = 128 * 1_024 * 1_024
+        cache.totalCostLimit = 48 * 1_024 * 1_024
         return cache
     }()
 

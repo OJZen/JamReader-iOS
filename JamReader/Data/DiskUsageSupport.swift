@@ -1,26 +1,17 @@
 import Foundation
 
-struct DiskUsageFootprint: Hashable {
+struct DiskUsageFootprint: Hashable, Sendable {
     let fileCount: Int
     let totalBytes: Int64
-
-    static let empty = DiskUsageFootprint(fileCount: 0, totalBytes: 0)
 }
 
 enum DiskUsageScanner {
-    private static let resourceKeys: Set<URLResourceKey> = [
-        .isRegularFileKey,
-        .isDirectoryKey,
-        .totalFileAllocatedSizeKey,
-        .fileAllocatedSizeKey,
-        .fileSizeKey
-    ]
-
     nonisolated static func allocatedByteCount(
         at url: URL,
         fileManager: FileManager = .default
     ) -> Int64 {
         let standardizedURL = url.standardizedFileURL
+        let resourceKeys = diskUsageResourceKeys()
         guard fileManager.fileExists(atPath: standardizedURL.path) else {
             return 0
         }
@@ -42,8 +33,9 @@ enum DiskUsageScanner {
         options: FileManager.DirectoryEnumerationOptions = []
     ) -> DiskUsageFootprint {
         let standardizedURL = rootURL.standardizedFileURL
+        let resourceKeys = diskUsageResourceKeys()
         guard fileManager.fileExists(atPath: standardizedURL.path) else {
-            return .empty
+            return DiskUsageFootprint(fileCount: 0, totalBytes: 0)
         }
 
         let rootValues = try? standardizedURL.resourceValues(forKeys: resourceKeys)
@@ -59,7 +51,7 @@ enum DiskUsageScanner {
             includingPropertiesForKeys: Array(resourceKeys),
             options: options
         ) else {
-            return .empty
+            return DiskUsageFootprint(fileCount: 0, totalBytes: 0)
         }
 
         var fileCount = 0
@@ -86,5 +78,15 @@ enum DiskUsageScanner {
                 ?? values?.fileSize
                 ?? 0
         )
+    }
+
+    nonisolated private static func diskUsageResourceKeys() -> Set<URLResourceKey> {
+        [
+            .isRegularFileKey,
+            .isDirectoryKey,
+            .totalFileAllocatedSizeKey,
+            .fileAllocatedSizeKey,
+            .fileSizeKey
+        ]
     }
 }

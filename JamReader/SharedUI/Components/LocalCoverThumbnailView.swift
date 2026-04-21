@@ -168,7 +168,7 @@ final class LocalCoverTransitionCache {
 
     private init() {
         cache.countLimit = 256
-        cache.totalCostLimit = 48 * 1_024 * 1_024
+        cache.totalCostLimit = 24 * 1_024 * 1_024
     }
 
     func image(for key: String) -> UIImage? {
@@ -188,6 +188,10 @@ final class LocalCoverTransitionCache {
         cache.setObject(image, forKey: nsKey, cost: Self.cacheCost(for: image))
     }
 
+    func clear() {
+        cache.removeAllObjects()
+    }
+
     private static func cacheCost(for image: UIImage) -> Int {
         let width = image.size.width * image.scale
         let height = image.size.height * image.scale
@@ -195,7 +199,7 @@ final class LocalCoverTransitionCache {
     }
 }
 
-private actor LocalCoverImagePipeline {
+actor LocalCoverImagePipeline {
     static let shared = LocalCoverImagePipeline()
     private static let semaphore = AsyncSemaphore(maxConcurrent: 4)
 
@@ -203,8 +207,8 @@ private actor LocalCoverImagePipeline {
     private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
 
     init() {
-        cache.countLimit = 512
-        cache.totalCostLimit = 96 * 1_024 * 1_024
+        cache.countLimit = 256
+        cache.totalCostLimit = 48 * 1_024 * 1_024
     }
 
     func image(
@@ -257,6 +261,12 @@ private actor LocalCoverImagePipeline {
         }
 
         return image
+    }
+
+    func clearMemoryCache() {
+        cache.removeAllObjects()
+        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.removeAll()
     }
 
     private static func cacheKey(

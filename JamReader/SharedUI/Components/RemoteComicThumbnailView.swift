@@ -206,12 +206,12 @@ final class RemoteComicThumbnailPipeline {
             maximumCachedThumbnailCount: maximumCachedThumbnailCount,
             maximumTotalCacheBytes: maximumTotalCacheBytes
         )
-        cache.countLimit = 384
-        cache.totalCostLimit = 96 * 1_024 * 1_024
+        cache.countLimit = 256
+        cache.totalCostLimit = 48 * 1_024 * 1_024
         // Smaller limit for the HQ cache — it stores at most one image per item
         // (the largest fetched size) and memory cost is higher per entry.
-        highQualityCache.countLimit = 256
-        highQualityCache.totalCostLimit = 72 * 1_024 * 1_024
+        highQualityCache.countLimit = 128
+        highQualityCache.totalCostLimit = 24 * 1_024 * 1_024
     }
 
     func image(
@@ -336,9 +336,17 @@ final class RemoteComicThumbnailPipeline {
 
     func clearCache() throws {
         cache.removeAllObjects()
+        highQualityCache.removeAllObjects()
         inFlightTasks.values.forEach { $0.cancel() }
         inFlightTasks.removeAll()
         try diskCache.clearCache()
+    }
+
+    func clearMemoryCache() {
+        cache.removeAllObjects()
+        highQualityCache.removeAllObjects()
+        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.removeAll()
     }
 
     func cachedTransitionImage(

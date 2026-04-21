@@ -28,6 +28,9 @@ struct LibraryListItem: Identifiable, Equatable {
 
 @MainActor
 final class LibraryListViewModel: ObservableObject {
+    private static let liveReloadDebounce: RunLoop.SchedulerTimeType.Stride = .milliseconds(900)
+    nonisolated private static let liveImportNotificationLibraryIDKey = "libraryID"
+
     @Published private(set) var items: [LibraryListItem] = []
     @Published var alert: AppAlertState?
 
@@ -384,20 +387,48 @@ final class LibraryListViewModel: ObservableObject {
             .sorted { lhs, rhs in
                 lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
-            .map { descriptor in
-                LibraryListItem(
-                    descriptor: descriptor,
-                    accessSnapshot: storageManager.accessSnapshot(for: descriptor, inspector: inspector),
-                    maintenanceRecord: maintenanceStatusStore.loadRecord(for: descriptor.id)
-                )
-            }
+            .map(makeItem(for:))
+    }
+
+    private func makeItem(for descriptor: LibraryDescriptor) -> LibraryListItem {
+        LibraryListItem(
+            descriptor: descriptor,
+            accessSnapshot: storageManager.accessSnapshot(for: descriptor, inspector: inspector),
+            maintenanceRecord: maintenanceStatusStore.loadRecord(for: descriptor.id)
+        )
+    }
+
+    private func refreshItem(for libraryID: UUID) {
+        guard let descriptor = descriptors.first(where: { $0.id == libraryID }) else {
+            reload()
+            return
+        }
+
+        let refreshedItem = makeItem(for: descriptor)
+        if let itemIndex = items.firstIndex(where: { $0.id == libraryID }) {
+            items[itemIndex] = refreshedItem
+        } else {
+            rebuildItems()
+        }
     }
 
     private func configureLiveLibraryUpdates() {
         NotificationCenter.default.publisher(for: .libraryContentsDidChange)
-            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.reload()
+            .map { notification in
+                notification.userInfo?[Self.liveImportNotificationLibraryIDKey] as? UUID
+            }
+            .debounce(for: Self.liveReloadDebounce, scheduler: RunLoop.main)
+            .sink { [weak self] libraryID in
+                guard let self else {
+                    return
+                }
+
+                guard let libraryID else {
+                    self.reload()
+                    return
+                }
+
+                self.refreshItem(for: libraryID)
             }
             .store(in: &cancellables)
     }

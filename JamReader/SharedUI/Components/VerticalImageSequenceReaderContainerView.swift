@@ -75,8 +75,8 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             self.onReaderTap = onReaderTap
 
             let cache = NSCache<NSNumber, UIImage>()
-            cache.countLimit = 10
-            cache.totalCostLimit = 160 * 1_024 * 1_024
+            cache.countLimit = 6
+            cache.totalCostLimit = 64 * 1_024 * 1_024
             self.imageCache = cache
         }
 

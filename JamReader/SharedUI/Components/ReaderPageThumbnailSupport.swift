@@ -59,7 +59,7 @@ final class ReaderPagePreviewStore: @unchecked Sendable {
 
     nonisolated private init() {
         cache.countLimit = 256
-        cache.totalCostLimit = 128 * 1_024 * 1_024
+        cache.totalCostLimit = 48 * 1_024 * 1_024
     }
 
     nonisolated func entry(namespace: String, pageIndex: Int) -> ReaderPagePreviewEntry? {
@@ -71,6 +71,12 @@ final class ReaderPagePreviewStore: @unchecked Sendable {
 
     nonisolated func image(namespace: String, pageIndex: Int) -> UIImage? {
         entry(namespace: namespace, pageIndex: pageIndex)?.image
+    }
+
+    nonisolated func clear() {
+        lock.lock()
+        cache.removeAllObjects()
+        lock.unlock()
     }
 
     @discardableResult
@@ -462,7 +468,7 @@ final class PDFThumbnailStore {
 
     private init() {
         cache.countLimit = 256
-        cache.totalCostLimit = 64 * 1_024 * 1_024
+        cache.totalCostLimit = 32 * 1_024 * 1_024
     }
 
     func image(for document: PDFComicDocument, pageIndex: Int, maxPixelSize: Int) -> UIImage? {
@@ -498,6 +504,10 @@ final class PDFThumbnailStore {
         let height = image.size.height * image.scale
         return Int(width * height * 4)
     }
+
+    func clear() {
+        cache.removeAllObjects()
+    }
 }
 
 actor ReaderImageSequenceThumbnailPipeline {
@@ -507,8 +517,8 @@ actor ReaderImageSequenceThumbnailPipeline {
     private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
 
     init() {
-        cache.countLimit = 512
-        cache.totalCostLimit = 96 * 1_024 * 1_024
+        cache.countLimit = 256
+        cache.totalCostLimit = 48 * 1_024 * 1_024
     }
 
     func image(
@@ -564,6 +574,12 @@ actor ReaderImageSequenceThumbnailPipeline {
         }
 
         return image
+    }
+
+    func clearMemoryCache() {
+        cache.removeAllObjects()
+        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.removeAll()
     }
 
     private static func loadDownsampledImage(from data: Data, maxPixelSize: Int) -> UIImage? {

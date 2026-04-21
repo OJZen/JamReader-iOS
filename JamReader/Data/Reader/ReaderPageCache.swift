@@ -30,7 +30,7 @@ actor ReaderPageCache {
 
         let cache = NSCache<NSString, NSData>()
         cache.countLimit = 48
-        cache.totalCostLimit = 192 * 1_024 * 1_024
+        cache.totalCostLimit = 96 * 1_024 * 1_024
         self.memoryCache = cache
 
         let cachesURL = (try? fileManager.url(
@@ -96,6 +96,10 @@ actor ReaderPageCache {
         } catch {
             return
         }
+    }
+
+    func clearMemoryCache() {
+        memoryCache.removeAllObjects()
     }
 
     private func prepareDiskRootIfNeeded() throws {

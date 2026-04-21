@@ -5,6 +5,8 @@ import UIKit
 
 @MainActor
 final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
+    private static let liveImportReloadDebounce: RunLoop.SchedulerTimeType.Stride = .milliseconds(700)
+
     @Published private(set) var content: LibraryFolderContent?
     @Published private(set) var isLoading = false
     @Published private(set) var isInitializingLibrary = false
@@ -1040,7 +1042,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             .filter { [descriptor] libraryID in
                 libraryID == descriptor.id
             }
-            .debounce(for: .milliseconds(250), scheduler: RunLoop.main)
+            .debounce(for: Self.liveImportReloadDebounce, scheduler: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self else {
                     return
