@@ -19,6 +19,7 @@ final class LibraryIndexingService {
         let parentRelativePath: String
         let fileName: String
         let hash: String
+        let fileSizeBytes: Int64?
         let coverAssetKey: String
         let metadata: ExtractedComicMetadata?
     }
@@ -256,6 +257,7 @@ final class LibraryIndexingService {
                             parentRelativePath: relativeDirectoryPath(for: relativePath) ?? "",
                             fileName: standardizedURL.lastPathComponent,
                             hash: try directoryImageSequenceInspector.fingerprint(for: inspection),
+                            fileSizeBytes: nil,
                             coverAssetKey: LibraryCoverLocator.coverAssetKey(forRelativePath: relativePath),
                             metadata: metadata
                         )
@@ -318,6 +320,7 @@ final class LibraryIndexingService {
                 )
                 throw error
             }
+            let fileSizeBytes = Int64((try standardizedURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
 
             comics.append(
                 ScannedComic(
@@ -325,6 +328,7 @@ final class LibraryIndexingService {
                     parentRelativePath: relativeDirectoryPath(for: relativePath) ?? "",
                     fileName: standardizedURL.lastPathComponent,
                     hash: hash,
+                    fileSizeBytes: fileSizeBytes > 0 ? fileSizeBytes : nil,
                     coverAssetKey: LibraryCoverLocator.coverAssetKey(forRelativePath: relativePath),
                     metadata: metadata
                 )
@@ -621,6 +625,7 @@ final class LibraryIndexingService {
             relative_path = ?,
             file_hash = ?,
             page_count = COALESCE(?, page_count),
+            file_size_bytes = COALESCE(?, file_size_bytes),
             cover_size_ratio = COALESCE(?, cover_size_ratio),
             updated_at = ?
         WHERE id = ?
@@ -636,13 +641,18 @@ final class LibraryIndexingService {
         } else {
             sqlite3_bind_null(statement, 5)
         }
-        if let coverSizeRatio = scannedComic.metadata?.coverSizeRatio {
-            sqlite3_bind_double(statement, 6, coverSizeRatio)
+        if let fileSizeBytes = scannedComic.fileSizeBytes {
+            sqlite3_bind_int64(statement, 6, fileSizeBytes)
         } else {
             sqlite3_bind_null(statement, 6)
         }
-        sqliteBindDate(Date(), index: 7, statement: statement)
-        sqlite3_bind_int64(statement, 8, recordID)
+        if let coverSizeRatio = scannedComic.metadata?.coverSizeRatio {
+            sqlite3_bind_double(statement, 7, coverSizeRatio)
+        } else {
+            sqlite3_bind_null(statement, 7)
+        }
+        sqliteBindDate(Date(), index: 8, statement: statement)
+        sqlite3_bind_int64(statement, 9, recordID)
         try sqliteStepDone(statement, database: database)
     }
 
@@ -658,13 +668,13 @@ final class LibraryIndexingService {
         let sql = """
         INSERT INTO comics (
             stable_id, library_id, parent_folder_id, file_name, relative_path, file_hash,
-            title, issue_number, current_page, page_count, bookmark1, bookmark2, bookmark3,
+            title, issue_number, current_page, page_count, file_size_bytes, bookmark1, bookmark2, bookmark3,
             is_read, has_been_opened, cover_size_ratio, last_opened_at, added_at, file_type,
             series, volume, rating, is_favorite, story_arc, publication_date, publisher,
             imprint, format, language_iso, writer, penciller, inker, colorist, letterer,
             cover_artist, editor, synopsis, notes, review, tags_text, characters, teams,
             locations, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         let statement = try sqlitePrepare(sql, database: database)
@@ -684,45 +694,50 @@ final class LibraryIndexingService {
         } else {
             sqlite3_bind_null(statement, 10)
         }
-        sqlite3_bind_int64(statement, 11, -1)
+        if let fileSizeBytes = scannedComic.fileSizeBytes {
+            sqlite3_bind_int64(statement, 11, fileSizeBytes)
+        } else {
+            sqlite3_bind_null(statement, 11)
+        }
         sqlite3_bind_int64(statement, 12, -1)
         sqlite3_bind_int64(statement, 13, -1)
-        sqlite3_bind_int(statement, 14, 0)
+        sqlite3_bind_int64(statement, 14, -1)
         sqlite3_bind_int(statement, 15, 0)
+        sqlite3_bind_int(statement, 16, 0)
         if let coverSizeRatio = scannedComic.metadata?.coverSizeRatio {
-            sqlite3_bind_double(statement, 16, coverSizeRatio)
+            sqlite3_bind_double(statement, 17, coverSizeRatio)
         } else {
-            sqlite3_bind_null(statement, 16)
+            sqlite3_bind_null(statement, 17)
         }
-        sqlite3_bind_null(statement, 17)
-        sqliteBindDate(now, index: 18, statement: statement)
-        sqlite3_bind_int64(statement, 19, Int64(fileType.rawValue))
-        sqliteBindOptionalText(imported?.series, index: 20, statement: statement)
-        sqliteBindOptionalText(imported?.volume, index: 21, statement: statement)
-        sqlite3_bind_null(statement, 22)
-        sqlite3_bind_int(statement, 23, 0)
-        sqliteBindOptionalText(imported?.storyArc, index: 24, statement: statement)
-        sqliteBindOptionalText(imported?.publicationDate, index: 25, statement: statement)
-        sqliteBindOptionalText(imported?.publisher, index: 26, statement: statement)
-        sqliteBindOptionalText(imported?.imprint, index: 27, statement: statement)
-        sqliteBindOptionalText(imported?.format, index: 28, statement: statement)
-        sqliteBindOptionalText(imported?.languageISO, index: 29, statement: statement)
-        sqliteBindOptionalText(imported?.writer, index: 30, statement: statement)
-        sqliteBindOptionalText(imported?.penciller, index: 31, statement: statement)
-        sqliteBindOptionalText(imported?.inker, index: 32, statement: statement)
-        sqliteBindOptionalText(imported?.colorist, index: 33, statement: statement)
-        sqliteBindOptionalText(imported?.letterer, index: 34, statement: statement)
-        sqliteBindOptionalText(imported?.coverArtist, index: 35, statement: statement)
-        sqliteBindOptionalText(imported?.editor, index: 36, statement: statement)
-        sqliteBindOptionalText(imported?.synopsis, index: 37, statement: statement)
-        sqliteBindOptionalText(imported?.notes, index: 38, statement: statement)
-        sqliteBindOptionalText(imported?.review, index: 39, statement: statement)
-        sqliteBindOptionalText(imported?.tags, index: 40, statement: statement)
-        sqliteBindOptionalText(imported?.characters, index: 41, statement: statement)
-        sqliteBindOptionalText(imported?.teams, index: 42, statement: statement)
-        sqliteBindOptionalText(imported?.locations, index: 43, statement: statement)
-        sqliteBindDate(now, index: 44, statement: statement)
+        sqlite3_bind_null(statement, 18)
+        sqliteBindDate(now, index: 19, statement: statement)
+        sqlite3_bind_int64(statement, 20, Int64(fileType.rawValue))
+        sqliteBindOptionalText(imported?.series, index: 21, statement: statement)
+        sqliteBindOptionalText(imported?.volume, index: 22, statement: statement)
+        sqlite3_bind_null(statement, 23)
+        sqlite3_bind_int(statement, 24, 0)
+        sqliteBindOptionalText(imported?.storyArc, index: 25, statement: statement)
+        sqliteBindOptionalText(imported?.publicationDate, index: 26, statement: statement)
+        sqliteBindOptionalText(imported?.publisher, index: 27, statement: statement)
+        sqliteBindOptionalText(imported?.imprint, index: 28, statement: statement)
+        sqliteBindOptionalText(imported?.format, index: 29, statement: statement)
+        sqliteBindOptionalText(imported?.languageISO, index: 30, statement: statement)
+        sqliteBindOptionalText(imported?.writer, index: 31, statement: statement)
+        sqliteBindOptionalText(imported?.penciller, index: 32, statement: statement)
+        sqliteBindOptionalText(imported?.inker, index: 33, statement: statement)
+        sqliteBindOptionalText(imported?.colorist, index: 34, statement: statement)
+        sqliteBindOptionalText(imported?.letterer, index: 35, statement: statement)
+        sqliteBindOptionalText(imported?.coverArtist, index: 36, statement: statement)
+        sqliteBindOptionalText(imported?.editor, index: 37, statement: statement)
+        sqliteBindOptionalText(imported?.synopsis, index: 38, statement: statement)
+        sqliteBindOptionalText(imported?.notes, index: 39, statement: statement)
+        sqliteBindOptionalText(imported?.review, index: 40, statement: statement)
+        sqliteBindOptionalText(imported?.tags, index: 41, statement: statement)
+        sqliteBindOptionalText(imported?.characters, index: 42, statement: statement)
+        sqliteBindOptionalText(imported?.teams, index: 43, statement: statement)
+        sqliteBindOptionalText(imported?.locations, index: 44, statement: statement)
         sqliteBindDate(now, index: 45, statement: statement)
+        sqliteBindDate(now, index: 46, statement: statement)
         try sqliteStepDone(statement, database: database)
     }
 

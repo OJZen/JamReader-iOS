@@ -10,6 +10,7 @@ struct LibraryComic: Identifiable, Hashable {
     let issueNumber: String?
     let currentPage: Int
     let pageCount: Int?
+    let fileSizeBytes: Int64?
     let bookmarkPageIndices: [Int]
     let read: Bool
     let hasBeenOpened: Bool
@@ -33,6 +34,7 @@ struct LibraryComic: Identifiable, Hashable {
             issueNumber: issueNumber,
             currentPage: currentPage,
             pageCount: pageCount,
+            fileSizeBytes: fileSizeBytes,
             bookmarkPageIndices: bookmarkPageIndices,
             read: read,
             hasBeenOpened: hasBeenOpened,
@@ -58,6 +60,7 @@ struct LibraryComic: Identifiable, Hashable {
             issueNumber: issueNumber,
             currentPage: currentPage,
             pageCount: pageCount,
+            fileSizeBytes: fileSizeBytes,
             bookmarkPageIndices: bookmarkPageIndices,
             read: read,
             hasBeenOpened: hasBeenOpened,
@@ -90,6 +93,7 @@ struct LibraryComic: Identifiable, Hashable {
             issueNumber: issueNumber,
             currentPage: resolvedCurrentPage,
             pageCount: effectivePageCount,
+            fileSizeBytes: fileSizeBytes,
             bookmarkPageIndices: bookmarkPageIndices,
             read: isRead,
             hasBeenOpened: isRead,
@@ -115,6 +119,7 @@ struct LibraryComic: Identifiable, Hashable {
             issueNumber: issueNumber,
             currentPage: currentPage,
             pageCount: pageCount,
+            fileSizeBytes: fileSizeBytes,
             bookmarkPageIndices: bookmarkPageIndices,
             read: read,
             hasBeenOpened: hasBeenOpened,
@@ -140,6 +145,7 @@ struct LibraryComic: Identifiable, Hashable {
             issueNumber: issueNumber,
             currentPage: progress.currentPage,
             pageCount: progress.pageCount ?? pageCount,
+            fileSizeBytes: fileSizeBytes,
             bookmarkPageIndices: bookmarkPageIndices,
             read: progress.read,
             hasBeenOpened: progress.hasBeenOpened,
@@ -165,6 +171,7 @@ struct LibraryComic: Identifiable, Hashable {
             issueNumber: normalized(metadata.issueNumber),
             currentPage: currentPage,
             pageCount: pageCount,
+            fileSizeBytes: fileSizeBytes,
             bookmarkPageIndices: bookmarkPageIndices,
             read: read,
             hasBeenOpened: hasBeenOpened,
@@ -221,6 +228,14 @@ struct LibraryComic: Identifiable, Hashable {
         }
 
         return "Unread"
+    }
+
+    var fileSizeText: String? {
+        guard let fileSizeBytes, fileSizeBytes > 0 else {
+            return nil
+        }
+
+        return ByteCountFormatter.string(fromByteCount: fileSizeBytes, countStyle: .file)
     }
 
     var isContinueReadingCandidate: Bool {

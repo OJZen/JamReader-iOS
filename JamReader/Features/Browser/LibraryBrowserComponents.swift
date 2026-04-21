@@ -566,16 +566,7 @@ struct LibraryComicRow: View {
                     isFavorite: comic.isFavorite,
                     bookmarkCount: comic.bookmarkPageIndices.count
                 )
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    comic.rowStatusBackground,
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
-                }
+                .padding(.top, 2)
             }
             .padding(.vertical, 2)
         } trailingAccessory: {
@@ -613,8 +604,6 @@ private struct LibraryComicRowBadge: View {
 }
 
 struct LibraryComicCard: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     let comic: LibraryComic
     let coverURL: URL?
     var coverSource: LocalComicCoverSource? = nil
@@ -626,55 +615,47 @@ struct LibraryComicCard: View {
         LibraryBrowserContentCard(
             minHeight: 0,
             cornerRadius: 20,
-            contentPadding: 12,
+            contentPadding: 0,
             strokeOpacity: 0.05,
             isSelected: showsSelectionState && isSelected
         ) {
-            LibraryComicCardCover(
-                comic: comic,
-                coverURL: coverURL,
-                coverSource: coverSource,
-                heroSourceID: heroSourceID,
-                maxWidth: horizontalSizeClass == .regular ? 176 : 148
-            )
+            VStack(alignment: .leading, spacing: 0) {
+                LibraryComicCardCover(
+                    comic: comic,
+                    coverURL: coverURL,
+                    coverSource: coverSource,
+                    heroSourceID: heroSourceID
+                )
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(comic.displayTitle)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(comic.displayTitle)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
 
-                if comic.subtitle != comic.fileName {
-                    Text(comic.subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if comic.subtitle != comic.fileName {
+                        Text(comic.subtitle)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    InlineMetadataLine(
+                        items: comic.rowMetadataItems,
+                        horizontalSpacing: 8,
+                        verticalSpacing: 4
+                    )
+
+                    ComicStatusMetaRow(
+                        progressText: comic.progressText,
+                        isRead: comic.read,
+                        isFavorite: comic.isFavorite,
+                        bookmarkCount: comic.bookmarkPageIndices.count
+                    )
+                    .padding(.top, 2)
                 }
-
-                InlineMetadataLine(
-                    items: comic.rowMetadataItems,
-                    horizontalSpacing: 8,
-                    verticalSpacing: 4
-                )
-
-                ComicStatusMetaRow(
-                    progressText: comic.progressText,
-                    isRead: comic.read,
-                    isFavorite: comic.isFavorite,
-                    bookmarkCount: comic.bookmarkPageIndices.count
-                )
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
-                .background(
-                    comic.rowStatusBackground,
-                    in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .strokeBorder(Color.black.opacity(0.04), lineWidth: 1)
-                }
+                .padding(12)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .overlay(alignment: .topTrailing) {
             if showsSelectionState {
@@ -692,38 +673,36 @@ private struct LibraryComicCardCover: View {
     let coverURL: URL?
     let coverSource: LocalComicCoverSource?
     let heroSourceID: String?
-    let maxWidth: CGFloat
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            cover(width: maxWidth)
-            cover(width: min(maxWidth, 148))
-            cover(width: 140)
-            cover(width: 124)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
+        GeometryReader { proxy in
+            ZStack(alignment: .topLeading) {
+                LocalCoverThumbnailView(
+                    url: coverURL,
+                    fallbackSource: coverSource,
+                    placeholderSystemName: "book.closed.fill",
+                    transitionKey: heroSourceID,
+                    heroSourceID: heroSourceID,
+                    width: max(proxy.size.width, 1),
+                    height: max(proxy.size.height, 1)
+                )
 
-    private func cover(width: CGFloat) -> some View {
-        let height = width / AppLayout.coverAspectRatio
-
-        return ZStack(alignment: .topLeading) {
-            LocalCoverThumbnailView(
-                url: coverURL,
-                fallbackSource: coverSource,
-                placeholderSystemName: "book.closed.fill",
-                transitionKey: heroSourceID,
-                heroSourceID: heroSourceID,
-                width: width,
-                height: height
-            )
-
-            if let badgeTitle = comic.rowPrimaryBadgeTitle {
-                LibraryComicRowBadge(title: badgeTitle)
-                    .padding(10)
+                if let badgeTitle = comic.rowPrimaryBadgeTitle {
+                    LibraryComicRowBadge(title: badgeTitle)
+                        .padding(10)
+                }
             }
         }
-        .frame(width: width, height: height)
+        .aspectRatio(AppLayout.coverAspectRatio, contentMode: .fit)
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 20,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 20,
+                style: .continuous
+            )
+        )
     }
 }
 
@@ -849,11 +828,20 @@ extension LibraryComic {
             )
         }
 
-        if let pageCount, pageCount > 0 {
+        if let pageCount, pageCount > 0, hasBeenOpened || read {
             items.append(
                 InlineMetadataItem(
                     systemImage: "rectangle.stack.fill",
                     text: "\(pageCount) pages"
+                )
+            )
+        }
+
+        if let fileSizeText {
+            items.append(
+                InlineMetadataItem(
+                    systemImage: "internaldrive",
+                    text: fileSizeText
                 )
             )
         }
@@ -878,17 +866,5 @@ extension LibraryComic {
         }
 
         return items
-    }
-
-    var rowStatusBackground: Color {
-        if read {
-            return Color.statusRead.opacity(0.12)
-        }
-
-        if hasBeenOpened {
-            return Color.accentColor.opacity(0.08)
-        }
-
-        return Color(.secondarySystemBackground)
     }
 }

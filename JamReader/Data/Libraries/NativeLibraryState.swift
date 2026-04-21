@@ -1452,9 +1452,9 @@ final class LibraryStateRepository {
 
     private func comic(from statement: OpaquePointer) -> LibraryComic {
         let bookmarkValues = [
-            sqlite3_column_int64(statement, 9),
             sqlite3_column_int64(statement, 10),
             sqlite3_column_int64(statement, 11),
+            sqlite3_column_int64(statement, 12),
         ]
         .filter { $0 >= 0 }
         .map(Int.init)
@@ -1470,17 +1470,18 @@ final class LibraryStateRepository {
             issueNumber: sqliteString(statement, index: 6),
             currentPage: Int(sqlite3_column_int64(statement, 7)),
             pageCount: sqlite3_column_type(statement, 8) == SQLITE_NULL ? nil : Int(sqlite3_column_int64(statement, 8)),
+            fileSizeBytes: sqlite3_column_type(statement, 9) == SQLITE_NULL ? nil : sqlite3_column_int64(statement, 9),
             bookmarkPageIndices: bookmarkValues,
-            read: sqlite3_column_int(statement, 12) == 1,
-            hasBeenOpened: sqlite3_column_int(statement, 13) == 1,
-            coverSizeRatio: sqlite3_column_type(statement, 14) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 14),
-            lastOpenedAt: sqliteDate(statement, index: 15),
-            addedAt: sqliteDate(statement, index: 16),
-            type: LibraryFileType(rawValue: Int(sqlite3_column_int64(statement, 17))) ?? .comic,
-            series: sqliteString(statement, index: 18),
-            volume: sqliteString(statement, index: 19),
-            rating: sqlite3_column_type(statement, 20) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 20),
-            isFavorite: sqlite3_column_int(statement, 21) == 1
+            read: sqlite3_column_int(statement, 13) == 1,
+            hasBeenOpened: sqlite3_column_int(statement, 14) == 1,
+            coverSizeRatio: sqlite3_column_type(statement, 15) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 15),
+            lastOpenedAt: sqliteDate(statement, index: 16),
+            addedAt: sqliteDate(statement, index: 17),
+            type: LibraryFileType(rawValue: Int(sqlite3_column_int64(statement, 18))) ?? .comic,
+            series: sqliteString(statement, index: 19),
+            volume: sqliteString(statement, index: 20),
+            rating: sqlite3_column_type(statement, 21) == SQLITE_NULL ? nil : sqlite3_column_double(statement, 21),
+            isFavorite: sqlite3_column_int(statement, 22) == 1
         )
     }
 
@@ -1495,6 +1496,7 @@ final class LibraryStateRepository {
         issue_number,
         current_page,
         page_count,
+        file_size_bytes,
         bookmark1,
         bookmark2,
         bookmark3,

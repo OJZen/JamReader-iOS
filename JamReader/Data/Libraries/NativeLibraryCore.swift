@@ -85,8 +85,14 @@ final class AppLibraryDatabase {
             for statement in schemaStatements {
                 try sqliteExecute(statement, database: database)
             }
+            try ensureColumnExists(
+                table: "comics",
+                column: "file_size_bytes",
+                definition: "INTEGER",
+                database: database
+            )
             try sqliteExecute(
-                "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('schema_version', '2');",
+                "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('schema_version', '3');",
                 database: database
             )
         }
@@ -189,6 +195,7 @@ final class AppLibraryDatabase {
                 issue_number TEXT,
                 current_page INTEGER NOT NULL DEFAULT 1,
                 page_count INTEGER,
+                file_size_bytes INTEGER,
                 bookmark1 INTEGER NOT NULL DEFAULT -1,
                 bookmark2 INTEGER NOT NULL DEFAULT -1,
                 bookmark3 INTEGER NOT NULL DEFAULT -1,
@@ -295,6 +302,27 @@ final class AppLibraryDatabase {
             "CREATE INDEX IF NOT EXISTS tags_library_idx ON tags (library_id, name);",
             "CREATE INDEX IF NOT EXISTS reading_lists_library_idx ON reading_lists (library_id, ordering_index);",
         ]
+    }
+
+    private func ensureColumnExists(
+        table: String,
+        column: String,
+        definition: String,
+        database: OpaquePointer
+    ) throws {
+        let statement = try sqlitePrepare("PRAGMA table_info(\(table));", database: database)
+        defer { sqlite3_finalize(statement) }
+
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if sqliteString(statement, index: 1) == column {
+                return
+            }
+        }
+
+        try sqliteExecute(
+            "ALTER TABLE \(table) ADD COLUMN \(column) \(definition);",
+            database: database
+        )
     }
 }
 
