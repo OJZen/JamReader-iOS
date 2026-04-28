@@ -32,5 +32,4 @@ res/*.cbt
 .cache/
 .cache/
 .omx/
-.xcodebuild-device-*/
-.xcodebuild-reader-thumbnail-fix/
+.xcodebuild-*/
