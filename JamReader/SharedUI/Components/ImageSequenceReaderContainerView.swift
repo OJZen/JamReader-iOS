@@ -1172,8 +1172,18 @@ private final class ComicImageSpreadViewController: UIViewController {
                 return
             }
 
-            // Let the actual on-screen presentation reset viewport if needed.
             view.setNeedsLayout()
+            view.layoutIfNeeded()
+
+            guard zoomablePageView.bounds.width > 0,
+                  zoomablePageView.bounds.height > 0 else {
+                needsViewportResetOnNextLayout = true
+                return
+            }
+
+            if layoutLoadedPages(resetZoomScale: true) {
+                needsViewportResetOnNextLayout = false
+            }
         }
     }
 

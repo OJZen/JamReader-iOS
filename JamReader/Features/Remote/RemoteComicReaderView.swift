@@ -42,6 +42,7 @@ private struct RemoteComicReaderConfiguration {
 
 struct RemoteComicLoadingView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     private let profile: RemoteServerProfile
     private let item: RemoteDirectoryItem
@@ -143,6 +144,16 @@ struct RemoteComicLoadingView: View {
         .onDisappear {
             loadTask?.cancel()
             loadTask = nil
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active,
+                  readerConfiguration == nil,
+                  loadErrorMessage != nil,
+                  loadTask == nil else {
+                return
+            }
+
+            startLoading(force: true)
         }
     }
 
@@ -295,8 +306,7 @@ struct RemoteComicLoadingView: View {
                     noticeMessage = message
                 }
             } catch {
-                try? dependencies.remoteServerBrowsingService.clearCachedComic(for: reference)
-                loadErrorMessage = "The saved offline copy could not be opened. Download it again from the remote server."
+                loadErrorMessage = "The saved offline copy could not be opened. Try again after the app returns to the foreground."
             }
             return
         }
@@ -667,13 +677,21 @@ struct RemoteComicReaderView: View {
         .onDisappear {
             persistProgress(force: true)
             pendingProgressPersistenceTask?.cancel()
-            backgroundDownloadTask?.cancel()
-            closeResources(for: document)
+            if scenePhase == .active,
+               UIApplication.shared.applicationState == .active {
+                backgroundDownloadTask?.cancel()
+                closeResources(for: document)
+            }
             UIApplication.shared.isIdleTimerDisabled = false
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase != .active {
                 persistProgress(force: true)
+            } else if document == nil, !isLoading {
+                hasLoaded = false
+                Task {
+                    await loadIfNeeded()
+                }
             }
             updateIdleTimerState()
         }
