@@ -226,11 +226,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             }
         }
 
-        if !continueReadingComics.isEmpty {
-            continueReadingComics = continueReadingComics.compactMap { comic in
-                let resolvedComic = comic.id == updatedComic.id ? updatedComic : comic
-                return resolvedComic.isContinueReadingCandidate ? resolvedComic : nil
-            }
+        if folderID == 1 {
+            continueReadingComics = updatedContinueReadingComics(afterApplying: updatedComic)
         }
 
         if !recentComics.isEmpty {
@@ -268,6 +265,24 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             previous: previousComic,
             updated: updatedComic
         )
+    }
+
+    private func updatedContinueReadingComics(afterApplying updatedComic: LibraryComic) -> [LibraryComic] {
+        var comics = continueReadingComics.filter { $0.id != updatedComic.id }
+
+        if updatedComic.isContinueReadingCandidate {
+            comics.append(updatedComic)
+        }
+
+        return comics.sorted { lhs, rhs in
+            let lhsDate = lhs.lastOpenedAt ?? lhs.addedAt ?? .distantPast
+            let rhsDate = rhs.lastOpenedAt ?? rhs.addedAt ?? .distantPast
+            if lhsDate != rhsDate {
+                return lhsDate > rhsDate
+            }
+
+            return lhs.fileName.localizedCaseInsensitiveCompare(rhs.fileName) == .orderedAscending
+        }
     }
 
     func toggleFavorite(for comic: LibraryComic) {

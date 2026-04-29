@@ -145,6 +145,7 @@ struct RemoteServerDetailView: View {
             onDismiss: {
                 heroSourceFrame = .zero
                 heroPreviewImage = nil
+                refreshDetailState(refreshRecentActivity: true)
             }
         ) { session in
             RemoteComicLoadingView(
@@ -550,9 +551,14 @@ struct RemoteServerDetailView: View {
         )
     }
 
-    private func refreshDetailState(forceReload: Bool = false) {
+    private func refreshDetailState(
+        forceReload: Bool = false,
+        refreshRecentActivity: Bool = false
+    ) {
         if forceReload {
             viewModel.load()
+        } else if refreshRecentActivity {
+            viewModel.refreshRecentActivity()
         }
 
         if let updatedProfile = viewModel.profile(withID: profile.id) {
