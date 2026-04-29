@@ -13,6 +13,8 @@ struct LibraryBrowserView: View {
         static let wideGridMinContainerWidth: CGFloat = 860
     }
 
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -35,7 +37,6 @@ struct LibraryBrowserView: View {
     @State private var isShowingBatchOrganizationSheet = false
     @State private var isShowingSelectionActionsSheet = false
     @State private var isShowingComicFileImporter = false
-    @State private var presentedComic: LibraryComicPresentation?
     @State private var containerWidth: CGFloat = 0
 
     init(
@@ -269,110 +270,8 @@ struct LibraryBrowserView: View {
                 viewModel.load()
             }
         }
-        .sheet(item: $editingComic) { comic in
-            ComicMetadataEditorSheet(
-                descriptor: viewModel.descriptor,
-                comic: comic,
-                dependencies: dependencies
-            ) { updatedComic in
-                viewModel.applyUpdatedComic(updatedComic)
-            }
-        }
-        .sheet(item: $organizingComic, onDismiss: viewModel.load) { comic in
-            ComicOrganizationSheet(
-                descriptor: viewModel.descriptor,
-                comic: comic,
-                dependencies: dependencies
-            )
-        }
-        .sheet(item: $quickActionsComic) { comic in
-            LibraryComicQuickActionsSheet(
-                comic: comic,
-                onDone: { quickActionsComic = nil },
-                onEditMetadata: {
-                    queueQuickAction(.edit(comic))
-                },
-                onToggleFavorite: {
-                    viewModel.toggleFavorite(for: comic)
-                    quickActionsComic = nil
-                },
-                onToggleReadStatus: {
-                    viewModel.toggleReadStatus(for: comic)
-                    quickActionsComic = nil
-                },
-                onSetRating: { rating in
-                    viewModel.setRating(rating, for: comic)
-                },
-                onOpenOrganization: {
-                    queueQuickAction(.organize(comic))
-                },
-                onRemoveFromLibrary: viewModel.canRemoveComics ? {
-                    queueQuickAction(.remove(comic))
-                } : nil
-            )
-        }
-        .sheet(isPresented: $isShowingBatchMetadataSheet) {
-            BatchComicMetadataSheet(
-                descriptor: viewModel.descriptor,
-                comicIDs: Array(selectedComicIDs),
-                dependencies: dependencies
-            ) {
-                endSelectionMode()
-                viewModel.load()
-            }
-        }
-        .sheet(isPresented: $isShowingComicInfoImportSheet) {
-            BatchComicInfoImportSheet(
-                descriptor: viewModel.descriptor,
-                comics: comicInfoImportTargetComics,
-                scope: comicInfoImportScope,
-                dependencies: dependencies
-            ) { result in
-                viewModel.load()
-                if isSelectionMode {
-                    endSelectionMode()
-                }
-                viewModel.alert = AppAlertState(
-                    title: result.alertTitle,
-                    message: result.alertMessage
-                )
-            }
-        }
-        .sheet(isPresented: $isShowingBatchOrganizationSheet) {
-            BatchComicOrganizationSheet(
-                descriptor: viewModel.descriptor,
-                comicIDs: Array(selectedComicIDs),
-                dependencies: dependencies
-            ) {
-                endSelectionMode()
-                viewModel.load()
-            }
-        }
-        .sheet(isPresented: $isShowingSelectionActionsSheet) {
-            LibrarySelectionActionsSheet(
-                selectionCount: selectedComicIDs.count,
-                onEditMetadata: {
-                    isShowingBatchMetadataSheet = true
-                },
-                onImportComicInfo: {
-                    isShowingComicInfoImportSheet = true
-                },
-                onOpenOrganization: {
-                    isShowingBatchOrganizationSheet = true
-                },
-                onMarkRead: {
-                    performBatchReadAction(true)
-                },
-                onMarkUnread: {
-                    performBatchReadAction(false)
-                },
-                onAddFavorite: {
-                    performBatchFavoriteAction(true)
-                },
-                onRemoveFavorite: {
-                    performBatchFavoriteAction(false)
-                }
-            )
+        .background {
+            presentationObservers
         }
         .fileImporter(
             isPresented: $isShowingComicFileImporter,
@@ -387,9 +286,6 @@ struct LibraryBrowserView: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
-        }
-        .fullScreenCover(item: $presentedComic) { presentation in
-            readerDestination(for: presentation)
         }
         .onChange(of: quickActionsComic) { _, newValue in
             guard newValue == nil, let pendingQuickAction else {
@@ -420,6 +316,39 @@ struct LibraryBrowserView: View {
         } message: { comic in
             Text("Deletes \"\(comic.displayTitle)\" from this library and removes the local file.")
         }
+    }
+
+    private var presentationObservers: some View {
+        Color.clear
+            .onChange(of: editingComic?.id) { _, _ in
+                presentEditingComicSheetIfNeeded()
+            }
+            .onChange(of: organizingComic?.id) { _, _ in
+                presentOrganizingComicSheetIfNeeded()
+            }
+            .onChange(of: quickActionsComic?.id) { _, _ in
+                presentQuickActionsSheetIfNeeded()
+            }
+            .onChange(of: isShowingBatchMetadataSheet) { _, isPresented in
+                if isPresented {
+                    presentBatchMetadataSheet()
+                }
+            }
+            .onChange(of: isShowingComicInfoImportSheet) { _, isPresented in
+                if isPresented {
+                    presentComicInfoImportSheet()
+                }
+            }
+            .onChange(of: isShowingBatchOrganizationSheet) { _, isPresented in
+                if isPresented {
+                    presentBatchOrganizationSheet()
+                }
+            }
+            .onChange(of: isShowingSelectionActionsSheet) { _, isPresented in
+                if isPresented {
+                    presentSelectionActionsSheet()
+                }
+            }
     }
 
     private var supportsGridDisplay: Bool {
@@ -545,9 +474,6 @@ struct LibraryBrowserView: View {
 
     private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
         viewModel.applyUpdatedComic(updatedComic)
-        if let presentedComic, presentedComic.comic.id == updatedComic.id {
-            self.presentedComic = presentedComic.updatingComic(updatedComic)
-        }
     }
 
     @ViewBuilder
@@ -938,7 +864,8 @@ struct LibraryBrowserView: View {
                     kind: kind,
                     dependencies: dependencies
                 )
-            )
+            ),
+            route: .specialCollection(viewModel.descriptor, kind)
         )
     }
 
@@ -957,7 +884,8 @@ struct LibraryBrowserView: View {
                     sectionKind: sectionKind,
                     dependencies: dependencies
                 )
-            )
+            ),
+            route: .organization(viewModel.descriptor, sectionKind)
         )
     }
 
@@ -992,8 +920,8 @@ struct LibraryBrowserView: View {
                     spacing: adaptiveListColumnSpacing,
                     horizontalInset: LayoutMetrics.horizontalInset
                 ) { item in
-                    NavigationLink {
-                        item.destination
+                    Button {
+                        openShortcut(item)
                     } label: {
                         InsetListRowCard {
                             LibraryShortcutRow(item: item)
@@ -1011,8 +939,8 @@ struct LibraryBrowserView: View {
             gridSection(title: "Browse By") {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(browseByShortcutItems) { item in
-                        NavigationLink {
-                            item.destination
+                        Button {
+                            openShortcut(item)
                         } label: {
                             LibraryShortcutCard(item: item)
                         }
@@ -1035,7 +963,7 @@ struct LibraryBrowserView: View {
                     spacing: adaptiveListColumnSpacing,
                     horizontalInset: LayoutMetrics.horizontalInset
                 ) { comic in
-                    previewListNavigationLink(
+                    previewListButton(
                         for: kind,
                         comic: comic,
                         appliesListRowInsets: false,
@@ -1058,11 +986,11 @@ struct LibraryBrowserView: View {
                 collectionPreviewHeader(for: kind)
             } content: {
                 if kind == .reading, let comic = comics.first {
-                    previewGridNavigationLink(for: kind, comic: comic)
+                    previewGridButton(for: kind, comic: comic)
                 } else {
                     LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                         ForEach(comics) { comic in
-                            previewGridNavigationLink(for: kind, comic: comic)
+                            previewGridButton(for: kind, comic: comic)
                         }
                     }
                 }
@@ -1120,13 +1048,13 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private func previewListNavigationLink(
+    private func previewListButton(
         for kind: LibrarySpecialCollectionKind,
         comic: LibraryComic,
         appliesListRowInsets: Bool = true,
         enablesSwipeActions: Bool = true
     ) -> some View {
-        interactiveComicListNavigationLink(
+        interactiveComicListButton(
             comic: comic,
             context: previewNavigationContext(for: kind),
             heroSourceID: previewHeroSourceID(for: kind, comic: comic),
@@ -1168,11 +1096,11 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private func previewGridNavigationLink(
+    private func previewGridButton(
         for kind: LibrarySpecialCollectionKind,
         comic: LibraryComic
     ) -> some View {
-        interactiveComicGridNavigationLink(
+        interactiveComicGridButton(
             comic: comic,
             context: previewNavigationContext(for: kind),
             heroSourceID: previewHeroSourceID(for: kind, comic: comic),
@@ -1300,7 +1228,7 @@ struct LibraryBrowserView: View {
                     spacing: adaptiveListColumnSpacing,
                     horizontalInset: LayoutMetrics.horizontalInset
                 ) { folder in
-                    folderListNavigationLink(for: folder, appliesListRowInsets: false)
+                    folderListButton(for: folder, appliesListRowInsets: false)
                 }
             } header: {
                 sectionHeaderLabel("Folders", count: folders.count)
@@ -1314,7 +1242,7 @@ struct LibraryBrowserView: View {
             gridSection(title: "Folders", count: folders.count) {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(folders) { folder in
-                        folderGridNavigationLink(for: folder)
+                        folderGridButton(for: folder)
                     }
                 }
             }
@@ -1348,7 +1276,7 @@ struct LibraryBrowserView: View {
                         }
                         .buttonStyle(.plain)
                     } else {
-                        interactiveComicListNavigationLink(
+                        interactiveComicListButton(
                             comic: comic,
                             context: ReaderNavigationContext(
                                 title: content.folder.displayName,
@@ -1396,7 +1324,7 @@ struct LibraryBrowserView: View {
                             }
                             .buttonStyle(.plain)
                         } else {
-                            interactiveComicGridNavigationLink(
+                            interactiveComicGridButton(
                                 comic: comic,
                                 context: ReaderNavigationContext(
                                     title: content.folder.displayName,
@@ -1459,21 +1387,13 @@ struct LibraryBrowserView: View {
         .textCase(nil)
     }
 
-    private func folderDestination(for folder: LibraryFolder) -> some View {
-        LibraryBrowserView(
-            descriptor: viewModel.descriptor,
-            folderID: folder.id,
-            dependencies: dependencies
-        )
-    }
-
     @ViewBuilder
-    private func folderListNavigationLink(
+    private func folderListButton(
         for folder: LibraryFolder,
         appliesListRowInsets: Bool = true
     ) -> some View {
-        let row = NavigationLink {
-            folderDestination(for: folder)
+        let row = Button {
+            openFolder(folder.id)
         } label: {
             InsetListRowCard {
                 LibraryFolderRow(
@@ -1492,9 +1412,9 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private func folderGridNavigationLink(for folder: LibraryFolder) -> some View {
-        NavigationLink {
-            folderDestination(for: folder)
+    private func folderGridButton(for folder: LibraryFolder) -> some View {
+        Button {
+            openFolder(folder.id)
         } label: {
             LibraryFolderCard(
                 folder: folder,
@@ -1518,18 +1438,8 @@ struct LibraryBrowserView: View {
         )
     }
 
-    private func readerDestination(for presentation: LibraryComicPresentation) -> some View {
-        ComicReaderView(
-            descriptor: viewModel.descriptor,
-            comic: presentation.comic,
-            navigationContext: presentation.navigationContext,
-            onComicUpdated: handleReaderComicUpdate,
-            dependencies: dependencies
-        )
-    }
-
     @ViewBuilder
-    private func interactiveComicListNavigationLink<Label: View>(
+    private func interactiveComicListButton<Label: View>(
         comic: LibraryComic,
         context: ReaderNavigationContext,
         heroSourceID: String? = nil,
@@ -1578,7 +1488,7 @@ struct LibraryBrowserView: View {
         }
     }
 
-    private func interactiveComicGridNavigationLink<Label: View>(
+    private func interactiveComicGridButton<Label: View>(
         comic: LibraryComic,
         context: ReaderNavigationContext,
         heroSourceID: String? = nil,
@@ -1633,9 +1543,20 @@ struct LibraryBrowserView: View {
         sourceFrame: CGRect,
         preferredHeroSourceID: String? = nil
     ) {
-        _ = sourceFrame
         _ = preferredHeroSourceID
-        presentedComic = LibraryComicPresentation(comic: comic, navigationContext: context)
+        appPresenter?.presentReader(
+            .local(
+                LocalReaderPresentation(
+                    descriptor: viewModel.descriptor,
+                    comic: comic,
+                    navigationContext: context,
+                    sourceFrame: sourceFrame,
+                    previewImage: nil,
+                    onComicUpdated: handleReaderComicUpdate,
+                    onDismiss: nil
+                )
+            )
+        )
     }
 
     private func handleComicFileImport(_ result: Result<[URL], Error>) {
@@ -1759,8 +1680,10 @@ struct LibraryBrowserView: View {
 
             Spacer(minLength: Spacing.sm)
 
-            NavigationLink {
-                specialCollectionDestination(kind)
+            Button {
+                appNavigator?.navigate(
+                    .library(.specialCollection(viewModel.descriptor, kind))
+                )
             } label: {
                 HStack(spacing: 4) {
                     Text("See All")
@@ -1778,6 +1701,210 @@ struct LibraryBrowserView: View {
     private func queueQuickAction(_ action: PendingComicQuickAction) {
         pendingQuickAction = action
         quickActionsComic = nil
+    }
+
+    private func presentEditingComicSheetIfNeeded() {
+        guard let comic = editingComic else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.edit.\(comic.id)",
+                content: AnyView(
+                    ComicMetadataEditorSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: comic,
+                        dependencies: dependencies
+                    ) { updatedComic in
+                        viewModel.applyUpdatedComic(updatedComic)
+                    }
+                ),
+                onDismiss: {
+                    editingComic = nil
+                }
+            )
+        )
+    }
+
+    private func presentOrganizingComicSheetIfNeeded() {
+        guard let comic = organizingComic else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.organize.\(comic.id)",
+                content: AnyView(
+                    ComicOrganizationSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: comic,
+                        dependencies: dependencies
+                    )
+                ),
+                onDismiss: {
+                    organizingComic = nil
+                    viewModel.load()
+                }
+            )
+        )
+    }
+
+    private func presentQuickActionsSheetIfNeeded() {
+        guard let comic = quickActionsComic else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.quickActions.\(comic.id)",
+                content: AnyView(
+                    LibraryComicQuickActionsSheet(
+                        comic: comic,
+                        onDone: {
+                            quickActionsComic = nil
+                            appPresenter?.dismissSheet()
+                        },
+                        onEditMetadata: {
+                            queueQuickAction(.edit(comic))
+                        },
+                        onToggleFavorite: {
+                            viewModel.toggleFavorite(for: comic)
+                            quickActionsComic = nil
+                            appPresenter?.dismissSheet()
+                        },
+                        onToggleReadStatus: {
+                            viewModel.toggleReadStatus(for: comic)
+                            quickActionsComic = nil
+                            appPresenter?.dismissSheet()
+                        },
+                        onSetRating: { rating in
+                            viewModel.setRating(rating, for: comic)
+                        },
+                        onOpenOrganization: {
+                            queueQuickAction(.organize(comic))
+                        },
+                        onRemoveFromLibrary: viewModel.canRemoveComics ? {
+                            queueQuickAction(.remove(comic))
+                        } : nil
+                    )
+                ),
+                onDismiss: {
+                    quickActionsComic = nil
+                }
+            )
+        )
+    }
+
+    private func presentBatchMetadataSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.batchMetadata.\(selectedComicIDs.sorted().map(String.init).joined(separator: ","))",
+                content: AnyView(
+                    BatchComicMetadataSheet(
+                        descriptor: viewModel.descriptor,
+                        comicIDs: Array(selectedComicIDs),
+                        dependencies: dependencies
+                    ) {
+                        endSelectionMode()
+                        viewModel.load()
+                    }
+                ),
+                onDismiss: {
+                    isShowingBatchMetadataSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentComicInfoImportSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.infoImport.\(comicInfoImportTargetComics.map(\.id).sorted().map(String.init).joined(separator: ","))",
+                content: AnyView(
+                    BatchComicInfoImportSheet(
+                        descriptor: viewModel.descriptor,
+                        comics: comicInfoImportTargetComics,
+                        scope: comicInfoImportScope,
+                        dependencies: dependencies
+                    ) { result in
+                        viewModel.load()
+                        if isSelectionMode {
+                            endSelectionMode()
+                        }
+                        viewModel.alert = AppAlertState(
+                            title: result.alertTitle,
+                            message: result.alertMessage
+                        )
+                    }
+                ),
+                onDismiss: {
+                    isShowingComicInfoImportSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentBatchOrganizationSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.batchOrganization.\(selectedComicIDs.sorted().map(String.init).joined(separator: ","))",
+                content: AnyView(
+                    BatchComicOrganizationSheet(
+                        descriptor: viewModel.descriptor,
+                        comicIDs: Array(selectedComicIDs),
+                        dependencies: dependencies
+                    ) {
+                        endSelectionMode()
+                        viewModel.load()
+                    }
+                ),
+                onDismiss: {
+                    isShowingBatchOrganizationSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentSelectionActionsSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.browser.selectionActions.\(selectedComicIDs.count)",
+                content: AnyView(
+                    LibrarySelectionActionsSheet(
+                        selectionCount: selectedComicIDs.count,
+                        onEditMetadata: {
+                            isShowingBatchMetadataSheet = true
+                        },
+                        onImportComicInfo: {
+                            isShowingComicInfoImportSheet = true
+                        },
+                        onOpenOrganization: {
+                            isShowingBatchOrganizationSheet = true
+                        },
+                        onMarkRead: {
+                            performBatchReadAction(true)
+                            appPresenter?.dismissSheet()
+                        },
+                        onMarkUnread: {
+                            performBatchReadAction(false)
+                            appPresenter?.dismissSheet()
+                        },
+                        onAddFavorite: {
+                            performBatchFavoriteAction(true)
+                            appPresenter?.dismissSheet()
+                        },
+                        onRemoveFavorite: {
+                            performBatchFavoriteAction(false)
+                            appPresenter?.dismissSheet()
+                        }
+                    )
+                ),
+                onDismiss: {
+                    isShowingSelectionActionsSheet = false
+                }
+            )
+        )
     }
 
     private func toggleSelection(for comic: LibraryComic) {
@@ -1858,12 +1985,8 @@ struct LibraryBrowserView: View {
         if !content.folder.isRoot {
             HStack(spacing: Spacing.md) {
                 if let parentFolderID = parentFolderID(for: content) {
-                    NavigationLink {
-                        LibraryBrowserView(
-                            descriptor: viewModel.descriptor,
-                            folderID: parentFolderID,
-                            dependencies: dependencies
-                        )
+                    Button {
+                        openFolder(parentFolderID)
                     } label: {
                         Label("Up", systemImage: "arrow.up.backward")
                             .font(AppFont.subheadline(.semibold))
@@ -1873,12 +1996,8 @@ struct LibraryBrowserView: View {
                 }
 
                 if content.folder.parentID != 1 {
-                    NavigationLink {
-                        LibraryBrowserView(
-                            descriptor: viewModel.descriptor,
-                            folderID: 1,
-                            dependencies: dependencies
-                        )
+                    Button {
+                        openFolder(1)
                     } label: {
                         Label("Library", systemImage: "house")
                             .font(AppFont.subheadline(.semibold))
@@ -1896,6 +2015,16 @@ struct LibraryBrowserView: View {
         }
 
         return content.folder.parentID > 0 ? content.folder.parentID : 1
+    }
+
+    private func openFolder(_ folderID: Int64) {
+        appNavigator?.navigate(.library(.openFolder(viewModel.descriptor, folderID: folderID)))
+    }
+
+    private func openShortcut(_ item: LibraryShortcutCardItem) {
+        if let route = item.route {
+            appNavigator?.navigate(.library(route))
+        }
     }
 
     private func configurePreferredDisplayModeIfNeeded() {
@@ -1976,7 +2105,7 @@ struct LibraryBrowserView: View {
                                 spacing: adaptiveListColumnSpacing,
                                 horizontalInset: LayoutMetrics.horizontalInset
                             ) { folder in
-                                folderListNavigationLink(for: folder, appliesListRowInsets: false)
+                                folderListButton(for: folder, appliesListRowInsets: false)
                             }
                         } header: {
                             sectionHeaderLabel("Matching Folders", count: results.folders.count)
@@ -1991,7 +2120,7 @@ struct LibraryBrowserView: View {
                                 spacing: adaptiveListColumnSpacing,
                                 horizontalInset: LayoutMetrics.horizontalInset
                             ) { comic in
-                                interactiveComicListNavigationLink(
+                                interactiveComicListButton(
                                     comic: comic,
                                     context: ReaderNavigationContext(
                                         title: "Search",

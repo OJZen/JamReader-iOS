@@ -8,6 +8,7 @@ struct LibraryShortcutCardItem: Identifiable {
     let tint: Color
     let metadataText: String?
     let destination: AnyView
+    let route: LibraryNavigationRoute?
 
     init(
         id: String,
@@ -16,7 +17,8 @@ struct LibraryShortcutCardItem: Identifiable {
         systemImageName: String,
         tint: Color,
         metadataText: String? = nil,
-        destination: AnyView
+        destination: AnyView,
+        route: LibraryNavigationRoute? = nil
     ) {
         self.id = id
         self.title = title
@@ -25,6 +27,7 @@ struct LibraryShortcutCardItem: Identifiable {
         self.tint = tint
         self.metadataText = metadataText
         self.destination = destination
+        self.route = route
     }
 }
 

@@ -11,6 +11,8 @@ struct LibraryOrganizationView: View {
         static let wideGridMinContainerWidth: CGFloat = 860
     }
 
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -23,7 +25,6 @@ struct LibraryOrganizationView: View {
     @State private var searchQuery = ""
     @State private var editingCollection: LibraryOrganizationCollection?
     @State private var deletingCollection: LibraryOrganizationCollection?
-    @State private var navigationCollection: LibraryOrganizationCollection?
     @State private var containerWidth: CGFloat = 0
 
     private var adaptiveListColumnCount: Int {
@@ -121,18 +122,7 @@ struct LibraryOrganizationView: View {
             viewModel.load()
         }
         .searchable(text: $searchQuery, prompt: "Search \(viewModel.sectionKind.title)")
-        .sheet(isPresented: $viewModel.isShowingCreateSheet) {
-            LibraryOrganizationCreateSheet(viewModel: viewModel)
-        }
-        .sheet(item: $editingCollection) { collection in
-            LibraryOrganizationCollectionEditorSheet(collection: collection) { name, color in
-                viewModel.updateCollection(
-                    collection,
-                    name: name,
-                    labelColor: color
-                )
-            }
-        }
+        .background { presentationObservers }
         .confirmationDialog(
             deletingCollectionDialogTitle,
             isPresented: deletingCollectionConfirmationBinding,
@@ -156,13 +146,6 @@ struct LibraryOrganizationView: View {
                 title: Text(alert.title),
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
-            )
-        }
-        .navigationDestination(item: $navigationCollection) { collection in
-            LibraryOrganizationCollectionDetailView(
-                descriptor: viewModel.descriptor,
-                collection: collection,
-                dependencies: dependencies
             )
         }
     }
@@ -191,7 +174,7 @@ struct LibraryOrganizationView: View {
                         horizontalInset: LayoutMetrics.horizontalInset
                     ) { collection in
                         Button {
-                            navigationCollection = collection
+                            openCollection(collection)
                         } label: {
                             InsetListRowCard {
                                 LibraryOrganizationCollectionRow(
@@ -228,12 +211,8 @@ struct LibraryOrganizationView: View {
 
                         LazyVGrid(columns: collectionGridColumns, alignment: .leading, spacing: 16) {
                             ForEach(displayedCollections) { collection in
-                                NavigationLink {
-                                    LibraryOrganizationCollectionDetailView(
-                                        descriptor: viewModel.descriptor,
-                                        collection: collection,
-                                        dependencies: dependencies
-                                    )
+                                Button {
+                                    openCollection(collection)
                                 } label: {
                                     LibraryOrganizationCollectionCard(collection: collection)
                                 }
@@ -251,6 +230,21 @@ struct LibraryOrganizationView: View {
             .padding(.vertical, 20)
             .adaptiveContentWidth(1120)
         }
+    }
+
+    @ViewBuilder
+    private var presentationObservers: some View {
+        Color.clear
+            .onChange(of: viewModel.isShowingCreateSheet) { _, isPresented in
+                if isPresented {
+                    presentCreateSheetIfNeeded()
+                } else {
+                    appPresenter?.dismissSheet()
+                }
+            }
+            .onChange(of: editingCollection?.id) { _, _ in
+                presentEditingCollectionSheetIfNeeded()
+            }
     }
 
     private var emptyStateView: some View {
@@ -354,6 +348,50 @@ struct LibraryOrganizationView: View {
     private func applySortMode(_ mode: LibraryOrganizationSortMode) {
         sortMode = mode
         Self.persistSortMode(mode, for: viewModel.sectionKind)
+    }
+
+    private func openCollection(_ collection: LibraryOrganizationCollection) {
+        appNavigator?.navigate(.library(.organizationCollection(viewModel.descriptor, collection)))
+    }
+
+    private func presentCreateSheetIfNeeded() {
+        guard viewModel.isShowingCreateSheet else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.organization.create.\(viewModel.sectionKind.rawValue)",
+                content: AnyView(LibraryOrganizationCreateSheet(viewModel: viewModel)),
+                onDismiss: {
+                    viewModel.dismissCreateSheet()
+                }
+            )
+        )
+    }
+
+    private func presentEditingCollectionSheetIfNeeded() {
+        guard let collection = editingCollection else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.organization.collectionEditor.\(collection.id)",
+                content: AnyView(
+                    LibraryOrganizationCollectionEditorSheet(collection: collection) { name, color in
+                        viewModel.updateCollection(
+                            collection,
+                            name: name,
+                            labelColor: color
+                        )
+                    }
+                ),
+                onDismiss: {
+                    editingCollection = nil
+                }
+            )
+        )
     }
 
     @ViewBuilder

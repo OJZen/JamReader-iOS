@@ -12,6 +12,7 @@ struct LibrarySpecialCollectionView: View {
         static let wideGridMinContainerWidth: CGFloat = 860
     }
 
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -34,7 +35,6 @@ struct LibrarySpecialCollectionView: View {
     @State private var isShowingComicInfoImportSheet = false
     @State private var isShowingBatchOrganizationSheet = false
     @State private var isShowingSelectionActionsSheet = false
-    @State private var presentedComic: PresentedComic?
     @State private var containerWidth: CGFloat = 0
 
     private var showsPersistentComicActions: Bool {
@@ -207,111 +207,6 @@ struct LibrarySpecialCollectionView: View {
             viewModel.load()
         }
         .searchable(text: $searchQuery, prompt: "Search comics")
-        .sheet(item: $editingComic) { comic in
-            ComicMetadataEditorSheet(
-                descriptor: viewModel.descriptor,
-                comic: comic,
-                dependencies: dependencies
-            ) { updatedComic in
-                viewModel.applyUpdatedComic(updatedComic)
-            }
-        }
-        .sheet(item: $organizingComic, onDismiss: viewModel.load) { comic in
-            ComicOrganizationSheet(
-                descriptor: viewModel.descriptor,
-                comic: comic,
-                dependencies: dependencies
-            )
-        }
-        .sheet(item: $quickActionsComic) { comic in
-            LibraryComicQuickActionsSheet(
-                comic: comic,
-                onDone: { quickActionsComic = nil },
-                onEditMetadata: {
-                    queueQuickAction(.edit(comic))
-                },
-                onToggleFavorite: {
-                    viewModel.toggleFavorite(for: comic)
-                    quickActionsComic = nil
-                },
-                onToggleReadStatus: {
-                    viewModel.toggleReadStatus(for: comic)
-                    quickActionsComic = nil
-                },
-                onSetRating: { rating in
-                    viewModel.setRating(rating, for: comic)
-                },
-                onOpenOrganization: {
-                    queueQuickAction(.organize(comic))
-                },
-                onRemoveFromLibrary: viewModel.canRemoveComics ? {
-                    queueQuickAction(.remove(comic))
-                } : nil
-            )
-        }
-        .sheet(isPresented: $isShowingBatchMetadataSheet) {
-            BatchComicMetadataSheet(
-                descriptor: viewModel.descriptor,
-                comicIDs: Array(selectedComicIDs),
-                dependencies: dependencies
-            ) {
-                endSelectionMode()
-                viewModel.load()
-            }
-        }
-        .sheet(isPresented: $isShowingComicInfoImportSheet) {
-            BatchComicInfoImportSheet(
-                descriptor: viewModel.descriptor,
-                comics: comicInfoImportTargetComics,
-                scope: comicInfoImportScope,
-                dependencies: dependencies
-            ) { result in
-                viewModel.load()
-                if isSelectionMode {
-                    endSelectionMode()
-                }
-                viewModel.alert = AppAlertState(
-                    title: result.alertTitle,
-                    message: result.alertMessage
-                )
-            }
-        }
-        .sheet(isPresented: $isShowingBatchOrganizationSheet) {
-            BatchComicOrganizationSheet(
-                descriptor: viewModel.descriptor,
-                comicIDs: Array(selectedComicIDs),
-                dependencies: dependencies
-            ) {
-                endSelectionMode()
-                viewModel.load()
-            }
-        }
-        .sheet(isPresented: $isShowingSelectionActionsSheet) {
-            LibrarySelectionActionsSheet(
-                selectionCount: selectedComicIDs.count,
-                onEditMetadata: {
-                    isShowingBatchMetadataSheet = true
-                },
-                onImportComicInfo: {
-                    isShowingComicInfoImportSheet = true
-                },
-                onOpenOrganization: {
-                    isShowingBatchOrganizationSheet = true
-                },
-                onMarkRead: {
-                    performBatchReadAction(true)
-                },
-                onMarkUnread: {
-                    performBatchReadAction(false)
-                },
-                onAddFavorite: {
-                    performBatchFavoriteAction(true)
-                },
-                onRemoveFavorite: {
-                    performBatchFavoriteAction(false)
-                }
-            )
-        }
         .alert(item: $viewModel.alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -320,6 +215,7 @@ struct LibrarySpecialCollectionView: View {
             )
         }
         .background(readerPresenter)
+        .background { presentationObservers }
         .onChange(of: quickActionsComic) { _, newValue in
             guard newValue == nil, let pendingQuickAction else {
                 return
@@ -361,15 +257,40 @@ struct LibrarySpecialCollectionView: View {
 
     @ViewBuilder
     private var readerPresenter: some View {
+        EmptyView()
+    }
+
+    @ViewBuilder
+    private var presentationObservers: some View {
         Color.clear
-            .fullScreenCover(item: $presentedComic) { presentation in
-                ComicReaderView(
-                    descriptor: viewModel.descriptor,
-                    comic: presentation.comic,
-                    navigationContext: presentation.navigationContext,
-                    onComicUpdated: handleReaderComicUpdate,
-                    dependencies: dependencies
-                )
+            .onChange(of: editingComic?.id) { _, _ in
+                presentEditingComicSheetIfNeeded()
+            }
+            .onChange(of: organizingComic?.id) { _, _ in
+                presentOrganizingComicSheetIfNeeded()
+            }
+            .onChange(of: quickActionsComic?.id) { _, _ in
+                presentQuickActionsSheetIfNeeded()
+            }
+            .onChange(of: isShowingBatchMetadataSheet) { _, isPresented in
+                if isPresented {
+                    presentBatchMetadataSheet()
+                }
+            }
+            .onChange(of: isShowingComicInfoImportSheet) { _, isPresented in
+                if isPresented {
+                    presentComicInfoImportSheet()
+                }
+            }
+            .onChange(of: isShowingBatchOrganizationSheet) { _, isPresented in
+                if isPresented {
+                    presentBatchOrganizationSheet()
+                }
+            }
+            .onChange(of: isShowingSelectionActionsSheet) { _, isPresented in
+                if isPresented {
+                    presentSelectionActionsSheet()
+                }
             }
     }
 
@@ -609,12 +530,20 @@ struct LibrarySpecialCollectionView: View {
     }
 
     private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
-        _ = sourceFrame
-        presentedComic = PresentedComic(
-            comic: comic,
-            navigationContext: ReaderNavigationContext(
-                title: viewModel.kind.title,
-                comics: displayedComics
+        appPresenter?.presentReader(
+            .local(
+                LocalReaderPresentation(
+                    descriptor: viewModel.descriptor,
+                    comic: comic,
+                    navigationContext: ReaderNavigationContext(
+                        title: viewModel.kind.title,
+                        comics: displayedComics
+                    ),
+                    sourceFrame: sourceFrame,
+                    previewImage: nil,
+                    onComicUpdated: handleReaderComicUpdate,
+                    onDismiss: nil
+                )
             )
         )
     }
@@ -641,9 +570,6 @@ struct LibrarySpecialCollectionView: View {
 
     private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
         viewModel.applyUpdatedComic(updatedComic)
-        if let presentedComic, presentedComic.comic.id == updatedComic.id {
-            self.presentedComic = presentedComic.updatingComic(updatedComic)
-        }
     }
 
     @ViewBuilder
@@ -955,6 +881,210 @@ struct LibrarySpecialCollectionView: View {
     private func queueQuickAction(_ action: PendingComicQuickAction) {
         pendingQuickAction = action
         quickActionsComic = nil
+    }
+
+    private func presentEditingComicSheetIfNeeded() {
+        guard let comic = editingComic else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.edit.\(comic.id)",
+                content: AnyView(
+                    ComicMetadataEditorSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: comic,
+                        dependencies: dependencies
+                    ) { updatedComic in
+                        viewModel.applyUpdatedComic(updatedComic)
+                    }
+                ),
+                onDismiss: {
+                    editingComic = nil
+                }
+            )
+        )
+    }
+
+    private func presentOrganizingComicSheetIfNeeded() {
+        guard let comic = organizingComic else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.organize.\(comic.id)",
+                content: AnyView(
+                    ComicOrganizationSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: comic,
+                        dependencies: dependencies
+                    )
+                ),
+                onDismiss: {
+                    organizingComic = nil
+                    viewModel.load()
+                }
+            )
+        )
+    }
+
+    private func presentQuickActionsSheetIfNeeded() {
+        guard let comic = quickActionsComic else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.quickActions.\(comic.id)",
+                content: AnyView(
+                    LibraryComicQuickActionsSheet(
+                        comic: comic,
+                        onDone: {
+                            quickActionsComic = nil
+                            appPresenter?.dismissSheet()
+                        },
+                        onEditMetadata: {
+                            queueQuickAction(.edit(comic))
+                        },
+                        onToggleFavorite: {
+                            viewModel.toggleFavorite(for: comic)
+                            quickActionsComic = nil
+                            appPresenter?.dismissSheet()
+                        },
+                        onToggleReadStatus: {
+                            viewModel.toggleReadStatus(for: comic)
+                            quickActionsComic = nil
+                            appPresenter?.dismissSheet()
+                        },
+                        onSetRating: { rating in
+                            viewModel.setRating(rating, for: comic)
+                        },
+                        onOpenOrganization: {
+                            queueQuickAction(.organize(comic))
+                        },
+                        onRemoveFromLibrary: viewModel.canRemoveComics ? {
+                            queueQuickAction(.remove(comic))
+                        } : nil
+                    )
+                ),
+                onDismiss: {
+                    quickActionsComic = nil
+                }
+            )
+        )
+    }
+
+    private func presentBatchMetadataSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.batchMetadata.\(selectedComicIDs.sorted().map(String.init).joined(separator: ","))",
+                content: AnyView(
+                    BatchComicMetadataSheet(
+                        descriptor: viewModel.descriptor,
+                        comicIDs: Array(selectedComicIDs),
+                        dependencies: dependencies
+                    ) {
+                        endSelectionMode()
+                        viewModel.load()
+                    }
+                ),
+                onDismiss: {
+                    isShowingBatchMetadataSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentComicInfoImportSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.infoImport.\(comicInfoImportTargetComics.map(\.id).sorted().map(String.init).joined(separator: ","))",
+                content: AnyView(
+                    BatchComicInfoImportSheet(
+                        descriptor: viewModel.descriptor,
+                        comics: comicInfoImportTargetComics,
+                        scope: comicInfoImportScope,
+                        dependencies: dependencies
+                    ) { result in
+                        viewModel.load()
+                        if isSelectionMode {
+                            endSelectionMode()
+                        }
+                        viewModel.alert = AppAlertState(
+                            title: result.alertTitle,
+                            message: result.alertMessage
+                        )
+                    }
+                ),
+                onDismiss: {
+                    isShowingComicInfoImportSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentBatchOrganizationSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.batchOrganization.\(selectedComicIDs.sorted().map(String.init).joined(separator: ","))",
+                content: AnyView(
+                    BatchComicOrganizationSheet(
+                        descriptor: viewModel.descriptor,
+                        comicIDs: Array(selectedComicIDs),
+                        dependencies: dependencies
+                    ) {
+                        endSelectionMode()
+                        viewModel.load()
+                    }
+                ),
+                onDismiss: {
+                    isShowingBatchOrganizationSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentSelectionActionsSheet() {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.special.selectionActions.\(selectedComicIDs.count)",
+                content: AnyView(
+                    LibrarySelectionActionsSheet(
+                        selectionCount: selectedComicIDs.count,
+                        onEditMetadata: {
+                            isShowingBatchMetadataSheet = true
+                        },
+                        onImportComicInfo: {
+                            isShowingComicInfoImportSheet = true
+                        },
+                        onOpenOrganization: {
+                            isShowingBatchOrganizationSheet = true
+                        },
+                        onMarkRead: {
+                            performBatchReadAction(true)
+                            appPresenter?.dismissSheet()
+                        },
+                        onMarkUnread: {
+                            performBatchReadAction(false)
+                            appPresenter?.dismissSheet()
+                        },
+                        onAddFavorite: {
+                            performBatchFavoriteAction(true)
+                            appPresenter?.dismissSheet()
+                        },
+                        onRemoveFavorite: {
+                            performBatchFavoriteAction(false)
+                            appPresenter?.dismissSheet()
+                        }
+                    )
+                ),
+                onDismiss: {
+                    isShowingSelectionActionsSheet = false
+                }
+            )
+        )
     }
 
     private func toggleSelection(for comic: LibraryComic) {
