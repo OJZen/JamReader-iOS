@@ -1,12 +1,13 @@
 import SwiftUI
 
 struct SettingsHomeView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appNavigator) private var appNavigator
 
-    @AppStorage("settingsHome.selectedPane") private var selectedPaneRawValue = SettingsHomePane.overview.rawValue
+    @AppStorage(AppNavigationStorageKeys.settingsHomeSelectedPane) private var selectedPaneRawValue = SettingsHomePane.overview.rawValue
 
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
+    private let pane: SettingsHomePane?
 
     @State private var comicLayout = ReaderDisplayLayout(defaultsFor: .comic)
     @State private var mangaLayout = ReaderDisplayLayout(defaultsFor: .manga)
@@ -14,67 +15,47 @@ struct SettingsHomeView: View {
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var containerWidth: CGFloat = 0
+
+    init(
+        viewModel: LibraryListViewModel,
+        dependencies: AppDependencies,
+        pane: SettingsHomePane? = nil
+    ) {
+        self.viewModel = viewModel
+        self.dependencies = dependencies
+        self.pane = pane
+    }
 
     var body: some View {
         Group {
-            if usesSplitViewLayout {
-                splitViewLayout
+            if let pane {
+                content(for: pane)
             } else {
-                compactLayout
+                paneList
             }
         }
-        .readContainerWidth(into: $containerWidth)
         .task { refresh() }
     }
 
-    private var usesSplitViewLayout: Bool {
-        horizontalSizeClass == .regular
-            && (containerWidth == 0 || containerWidth >= AppLayout.regularNavigationSplitMinWidth)
-    }
-
-    private var selectedPane: Binding<SettingsHomePane?> {
-        Binding(
-            get: { SettingsHomePane(rawValue: selectedPaneRawValue) ?? .overview },
-            set: { selectedPaneRawValue = ($0 ?? .overview).rawValue }
-        )
-    }
-
-    private var compactLayout: some View {
-        NavigationStack {
-            settingsList(title: "Settings", displayMode: .large) {
-                readingSection
-                remoteSection
-                storageSection
-                aboutSection
+    private var paneList: some View {
+        List {
+            ForEach(SettingsHomePane.allCases) { pane in
+                Button {
+                    select(pane)
+                } label: {
+                    SettingsPaneRow(
+                        pane: pane,
+                        detail: detailText(for: pane)
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
-    }
-
-    private var splitViewLayout: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(selection: selectedPane) {
-                ForEach(SettingsHomePane.allCases) { pane in
-                    Button {
-                        selectedPane.wrappedValue = pane
-                    } label: {
-                        SettingsPaneRow(
-                            pane: pane,
-                            detail: detailText(for: pane)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .tag(pane as SettingsHomePane?)
-                }
-            }
-            .listStyle(.sidebar)
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-        } detail: {
-            NavigationStack {
-                splitDetailContent(for: selectedPane.wrappedValue ?? .overview)
-            }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.large)
+        .refreshable {
+            refresh()
         }
     }
 
@@ -146,8 +127,8 @@ struct SettingsHomeView: View {
 
     private var remoteSection: some View {
         Section {
-            NavigationLink {
-                RemoteNetworkSettingsView()
+            Button {
+                appNavigator?.navigate(.settings(.remoteNetwork))
             } label: {
                 Label {
                     VStack(alignment: .leading, spacing: Spacing.xxxs) {
@@ -167,6 +148,7 @@ struct SettingsHomeView: View {
                     )
                 }
             }
+            .buttonStyle(.plain)
         } header: {
             Text("Remote")
         }
@@ -176,8 +158,8 @@ struct SettingsHomeView: View {
 
     private var storageSection: some View {
         Section {
-            NavigationLink {
-                RemoteCacheSettingsView(dependencies: dependencies)
+            Button {
+                appNavigator?.navigate(.settings(.remoteCache))
             } label: {
                 Label {
                     VStack(alignment: .leading, spacing: Spacing.xxxs) {
@@ -197,6 +179,7 @@ struct SettingsHomeView: View {
                     )
                 }
             }
+            .buttonStyle(.plain)
         } header: {
             Text("Storage")
         } footer: {
@@ -258,7 +241,7 @@ struct SettingsHomeView: View {
     }
 
     @ViewBuilder
-    private func splitDetailContent(for pane: SettingsHomePane) -> some View {
+    private func content(for pane: SettingsHomePane) -> some View {
         switch pane {
         case .overview:
             settingsList(title: "Settings", displayMode: .inline) {
@@ -343,9 +326,28 @@ struct SettingsHomeView: View {
             return appVersion
         }
     }
+
+    private func select(_ pane: SettingsHomePane) {
+        selectedPaneRawValue = pane.rawValue
+        appNavigator?.navigate(.settings(pane.navigationRoute))
+    }
 }
 
-private struct RemoteNetworkSettingsView: View {
+struct SettingsPaneContentView: View {
+    let pane: SettingsHomePane
+    @ObservedObject var viewModel: LibraryListViewModel
+    let dependencies: AppDependencies
+
+    var body: some View {
+        SettingsHomeView(
+            viewModel: viewModel,
+            dependencies: dependencies,
+            pane: pane
+        )
+    }
+}
+
+struct RemoteNetworkSettingsView: View {
     var body: some View {
         List {
             Section {
@@ -366,7 +368,7 @@ private struct RemoteNetworkSettingsView: View {
 
 // MARK: - Settings Icon
 
-private enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
+enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
     case overview
     case reading
     case remote
@@ -387,6 +389,36 @@ private enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
             return "Storage"
         case .about:
             return "About"
+        }
+    }
+
+    var titleString: String {
+        switch self {
+        case .overview:
+            return "Settings"
+        case .reading:
+            return "Reading"
+        case .remote:
+            return "Remote"
+        case .storage:
+            return "Storage"
+        case .about:
+            return "About"
+        }
+    }
+
+    var navigationRoute: SettingsNavigationRoute {
+        switch self {
+        case .overview:
+            return .overview
+        case .reading:
+            return .reading
+        case .remote:
+            return .remote
+        case .storage:
+            return .storage
+        case .about:
+            return .about
         }
     }
 
@@ -418,6 +450,27 @@ private enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
         case .about:
             return .gray
         }
+    }
+}
+
+extension SettingsNavigationRoute {
+    var settingsPane: SettingsHomePane {
+        switch self {
+        case .overview, .remoteNetwork, .remoteCache:
+            return .overview
+        case .reading:
+            return .reading
+        case .remote:
+            return .remote
+        case .storage:
+            return .storage
+        case .about:
+            return .about
+        }
+    }
+
+    var storageValue: String {
+        settingsPane.rawValue
     }
 }
 

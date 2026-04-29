@@ -1,22 +1,15 @@
 import SwiftUI
 
 struct BrowseHomeView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appNavigator) private var appNavigator
     @AppStorage(AppNavigationStorageKeys.browseHomeSelection) private var storedSelectionRawValue = ""
-    @AppStorage(AppNavigationStorageKeys.browseHomeColumnVisibility) private var storedColumnVisibilityRawValue = StoredBrowseHomeColumnVisibility.automatic.rawValue
 
     let dependencies: AppDependencies
 
     @ObservedObject private var viewModel: RemoteServerListViewModel
     @Binding private var editorDraft: RemoteServerEditorDraft?
     @State private var pendingDeletionProfile: RemoteServerProfile?
-    @State private var navigationRequest: BrowseHomeNavigationRequest?
     @State private var splitSelection: BrowseHomeSplitSelection?
-    @State private var splitSyncTask: Task<Void, Never>?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var containerWidth: CGFloat = 0
-    @State private var hasRestoredSplitState = false
-    @State private var hasRestoredCompactNavigation = false
 
     init(
         dependencies: AppDependencies,
@@ -29,59 +22,26 @@ struct BrowseHomeView: View {
     }
 
     var body: some View {
-        Group {
-            if usesSplitViewLayout {
-                splitViewLayout
-            } else {
-                compactLayout
-            }
+        content
+        .navigationTitle("Browse")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            addServerToolbarItem
         }
-        .readContainerWidth(into: $containerWidth)
+        .refreshable {
+            viewModel.load()
+        }
         .task {
             viewModel.loadIfNeeded()
         }
         .onAppear {
-            debounceSplitSync()
-        }
-        .onChange(of: horizontalSizeClass) { _, _ in
-            debounceSplitSync()
-        }
-        .onChange(of: containerWidth) { _, _ in
-            debounceSplitSync()
+            restoreSelectionIfNeeded()
         }
         .onChange(of: displayedProfiles.map(\.id)) { _, _ in
-            debounceSplitSync()
-        }
-        .onChange(of: quickAccessItems.map(\.id)) { _, _ in
-            debounceSplitSync()
+            restoreSelectionIfNeeded()
         }
         .onChange(of: splitSelection) { _, newValue in
-            guard usesSplitViewLayout else {
-                return
-            }
-
             persistSelection(newValue)
-        }
-        .onChange(of: navigationRequest) { oldValue, newValue in
-            guard !usesSplitViewLayout else {
-                return
-            }
-
-            handleCompactNavigationChange(from: oldValue, to: newValue)
-        }
-        .onChange(of: columnVisibility) { _, newValue in
-            guard usesSplitViewLayout else {
-                return
-            }
-
-            storedColumnVisibilityRawValue = StoredBrowseHomeColumnVisibility(newValue).rawValue
-        }
-        .onChange(of: editorDraft?.id) { oldValue, newValue in
-            guard oldValue != nil, newValue == nil else {
-                return
-            }
-
-            handleEditorDismissal()
         }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
@@ -98,7 +58,7 @@ struct BrowseHomeView: View {
                 Button("Delete \(pendingDeletionProfile.name)", role: .destructive) {
                     viewModel.delete(pendingDeletionProfile)
                     self.pendingDeletionProfile = nil
-                    synchronizeSplitSelection()
+                    restoreSelectionIfNeeded()
                 }
             }
 
@@ -112,29 +72,7 @@ struct BrowseHomeView: View {
         }
     }
 
-    private var usesSplitViewLayout: Bool {
-        horizontalSizeClass == .regular
-            && (containerWidth == 0 || containerWidth >= AppLayout.regularNavigationSplitMinWidth)
-    }
-
-    private var compactLayout: some View {
-        NavigationStack {
-            compactContent
-                .navigationTitle("Browse")
-                .navigationBarTitleDisplayMode(.large)
-                .toolbar {
-                    addServerToolbarItem
-                }
-                .refreshable {
-                    viewModel.load()
-                }
-                .navigationDestination(item: $navigationRequest) { request in
-                    navigationDestination(for: request)
-                }
-        }
-    }
-
-    private var compactContent: some View {
+    private var content: some View {
         Group {
             if displayedProfiles.isEmpty && !showsQuickAccess {
                 BrowseHomeEmptyState(onAddServer: presentCreateServerSheet)
@@ -151,46 +89,6 @@ struct BrowseHomeView: View {
         }
     }
 
-    private var splitViewLayout: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            Group {
-                if displayedProfiles.isEmpty && !showsQuickAccess {
-                    BrowseHomeEmptyState(onAddServer: presentCreateServerSheet)
-                        .background(Color.surfaceGrouped)
-                } else {
-                    List(selection: splitSelectionBinding) {
-                        splitServersSection
-
-                        if showsQuickAccess {
-                            splitQuickAccessSection
-                        }
-                    }
-                    .listStyle(.sidebar)
-                }
-            }
-            .navigationTitle("Browse")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                addServerToolbarItem
-            }
-            .refreshable {
-                viewModel.load()
-            }
-        } detail: {
-            NavigationStack {
-                if let splitSelection {
-                    splitDetailDestination(for: splitSelection)
-                } else {
-                    BrowseHomeDetailPlaceholder(
-                        hasServers: !displayedProfiles.isEmpty,
-                        onAddServer: presentCreateServerSheet
-                    )
-                }
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-    }
-
     // MARK: - Servers Section
 
     @ViewBuilder
@@ -198,7 +96,7 @@ struct BrowseHomeView: View {
         Section {
             ForEach(displayedProfiles) { profile in
                 Button {
-                    navigationRequest = .serverDetail(profile)
+                    open(.server(profile.id))
                 } label: {
                     BrowseHomeServerRow(profile: profile)
                 }
@@ -238,43 +136,13 @@ struct BrowseHomeView: View {
         }
     }
 
-    @ViewBuilder
-    private var splitServersSection: some View {
-        Section("Servers") {
-            ForEach(displayedProfiles) { profile in
-                Button {
-                    splitSelection = .server(profile.id)
-                } label: {
-                    BrowseHomeServerRow(profile: profile, showsDisclosureIndicator: false)
-                }
-                .buttonStyle(.plain)
-                .tag(BrowseHomeSplitSelection.server(profile.id) as BrowseHomeSplitSelection?)
-                .contextMenu {
-                    Button {
-                        requestEditorPresentation(viewModel.makeEditDraft(for: profile))
-                    } label: {
-                        Label("Edit", systemImage: "square.and.pencil")
-                    }
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        pendingDeletionProfile = profile
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
-                }
-            }
-        }
-    }
-
     // MARK: - Quick Access Section
 
     private var quickAccessSection: some View {
         Section {
             ForEach(quickAccessItems) { item in
                 Button {
-                    navigationRequest = item.navigationRequest
+                    open(item.splitSelection)
                 } label: {
                     BrowseHomeQuickAccessRow(item: item)
                 }
@@ -282,20 +150,6 @@ struct BrowseHomeView: View {
             }
         } header: {
             Text("Shortcuts")
-        }
-    }
-
-    private var splitQuickAccessSection: some View {
-        Section("Shortcuts") {
-            ForEach(quickAccessItems) { item in
-                Button {
-                    splitSelection = item.splitSelection
-                } label: {
-                    BrowseHomeQuickAccessRow(item: item, showsDisclosureIndicator: false)
-                }
-                .buttonStyle(.plain)
-                .tag(item.splitSelection as BrowseHomeSplitSelection?)
-            }
         }
     }
 
@@ -330,7 +184,7 @@ struct BrowseHomeView: View {
                     subtitle: totalSavedFolderCount == 1 ? "1 saved" : "\(totalSavedFolderCount) saved",
                     systemImage: "star.fill",
                     tint: .teal,
-                    navigationRequest: .savedFolders
+                    splitSelection: .savedFolders
                 )
             )
         }
@@ -343,7 +197,7 @@ struct BrowseHomeView: View {
                     subtitle: totalOfflineCopyCount == 1 ? "1 downloaded" : "\(totalOfflineCopyCount) downloaded",
                     systemImage: "arrow.down.circle.fill",
                     tint: .green,
-                    navigationRequest: .offlineShelf
+                    splitSelection: .offlineShelf
                 )
             )
         }
@@ -361,223 +215,47 @@ struct BrowseHomeView: View {
         }
     }
 
-    @ViewBuilder
-    private func navigationDestination(for request: BrowseHomeNavigationRequest) -> some View {
-        switch request {
-        case .serverDetail(let profile):
-            RemoteServerDetailView(
-                profile: profile,
-                dependencies: dependencies
-            )
-        case .savedFolders:
-            SavedRemoteFoldersView(dependencies: dependencies)
-        case .offlineShelf:
-            RemoteOfflineShelfView(dependencies: dependencies)
-        }
-    }
-
-    @ViewBuilder
-    private func splitDetailDestination(for selection: BrowseHomeSplitSelection) -> some View {
-        switch selection {
-        case .server(let profileID):
-            if let profile = displayedProfiles.first(where: { $0.id == profileID }) {
-                RemoteServerDetailView(
-                    profile: profile,
-                    dependencies: dependencies,
-                    onRequestEdit: requestEditorPresentation
-                )
-            } else {
-                ContentUnavailableView(
-                    "Server Unavailable",
-                    systemImage: "server.rack",
-                    description: Text("This server is no longer available on this device.")
-                )
-            }
-        case .savedFolders:
-            SavedRemoteFoldersView(dependencies: dependencies)
-        case .offlineShelf:
-            RemoteOfflineShelfView(dependencies: dependencies)
-        }
-    }
-
     private func presentCreateServerSheet() {
         requestEditorPresentation(viewModel.makeCreateDraft())
     }
 
     private func requestEditorPresentation(_ draft: RemoteServerEditorDraft) {
-        // Freeze split-view sync while the system sheet is open so the detail
-        // column does not change underneath the presenter host.
-        splitSyncTask?.cancel()
-        splitSyncTask = nil
-
-        if usesSplitViewLayout {
-            let editorDraftBinding = _editorDraft
-            DispatchQueue.main.async {
-                guard editorDraftBinding.wrappedValue == nil else {
-                    return
-                }
-
-                editorDraftBinding.wrappedValue = draft
-            }
-        } else {
-            editorDraft = draft
-        }
-    }
-
-    private func debounceSplitSync() {
-        guard editorDraft == nil else {
-            return
-        }
-
-        splitSyncTask?.cancel()
-        splitSyncTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            guard !Task.isCancelled else { return }
-            synchronizeBrowseState()
-        }
-    }
-
-    private func synchronizeBrowseState() {
-        if usesSplitViewLayout {
-            hasRestoredCompactNavigation = false
-            restoreSplitStateIfNeeded()
-            synchronizeSplitSelection()
-        } else {
-            hasRestoredSplitState = false
-            restoreCompactNavigationIfNeeded()
-        }
-    }
-
-    private func restoreSplitStateIfNeeded() {
-        guard !hasRestoredSplitState else {
-            return
-        }
-
-        hasRestoredSplitState = true
-        columnVisibility = StoredBrowseHomeColumnVisibility(rawValue: storedColumnVisibilityRawValue)?.value ?? .automatic
-    }
-
-    private func synchronizeSplitSelection() {
-        guard usesSplitViewLayout else {
-            splitSelection = nil
-            return
-        }
-
-        guard editorDraft == nil else {
-            return
-        }
-
-        let validSelections = Set(
-            displayedProfiles.map { BrowseHomeSplitSelection.server($0.id) }
-            + quickAccessItems.map(\.splitSelection)
-        )
-
-        if let storedSelection = restoredSelection,
-           validSelections.contains(storedSelection) {
-            splitSelection = storedSelection
-            return
-        }
-
-        if let splitSelection, validSelections.contains(splitSelection) {
-            return
-        }
-
-        splitSelection = displayedProfiles.first.map { .server($0.id) }
-            ?? quickAccessItems.first?.splitSelection
-    }
-
-    private func handleEditorDismissal() {
-        debounceSplitSync()
-    }
-
-    private var restoredSelection: BrowseHomeSplitSelection? {
-        BrowseHomeSplitSelection(storageValue: storedSelectionRawValue)
-    }
-
-    private func restoreCompactNavigationIfNeeded() {
-        guard !hasRestoredCompactNavigation else {
-            return
-        }
-
-        guard navigationRequest == nil else {
-            hasRestoredCompactNavigation = true
-            return
-        }
-
-        guard let restoredSelection else {
-            hasRestoredCompactNavigation = true
-            return
-        }
-
-        guard let request = navigationRequest(for: restoredSelection) else {
-            return
-        }
-
-        hasRestoredCompactNavigation = true
-        navigationRequest = request
-    }
-
-    private func handleCompactNavigationChange(
-        from oldValue: BrowseHomeNavigationRequest?,
-        to newValue: BrowseHomeNavigationRequest?
-    ) {
-        if let newValue {
-            persistSelection(newValue.splitSelection)
-        } else if oldValue != nil {
-            persistSelection(nil)
-        }
+        editorDraft = draft
     }
 
     private func persistSelection(_ selection: BrowseHomeSplitSelection?) {
         storedSelectionRawValue = selection?.storageValue ?? ""
     }
 
-    private func navigationRequest(for selection: BrowseHomeSplitSelection) -> BrowseHomeNavigationRequest? {
-        switch selection {
-        case .server(let profileID):
-            guard let profile = displayedProfiles.first(where: { $0.id == profileID }) else {
-                return nil
-            }
-            return .serverDetail(profile)
-        case .savedFolders:
-            return .savedFolders
-        case .offlineShelf:
-            return .offlineShelf
+    private func restoreSelectionIfNeeded() {
+        guard splitSelection == nil else {
+            return
+        }
+
+        let restoredSelection = BrowseHomeSplitSelection(storageValue: storedSelectionRawValue)
+        let validSelections = Set(
+            displayedProfiles.map { BrowseHomeSplitSelection.server($0.id) }
+            + quickAccessItems.map(\.splitSelection)
+        )
+        if let restoredSelection, validSelections.contains(restoredSelection) {
+            splitSelection = restoredSelection
         }
     }
 
-    private var splitSelectionBinding: Binding<BrowseHomeSplitSelection?> {
-        Binding(
-            get: { splitSelection },
-            set: { newValue in
-                guard editorDraft == nil else {
-                    return
-                }
-
-                splitSelection = newValue
-            }
-        )
+    private func open(_ selection: BrowseHomeSplitSelection) {
+        splitSelection = selection
+        switch selection {
+        case .server(let profileID):
+            appNavigator?.navigate(.browse(.serverDetail(profileID)))
+        case .savedFolders:
+            appNavigator?.navigate(.browse(.savedFolders(nil)))
+        case .offlineShelf:
+            appNavigator?.navigate(.browse(.offlineShelf(nil)))
+        }
     }
 }
 
 // MARK: - Navigation
-
-private enum BrowseHomeNavigationRequest: Identifiable, Hashable {
-    case serverDetail(RemoteServerProfile)
-    case savedFolders
-    case offlineShelf
-
-    var id: String {
-        switch self {
-        case .serverDetail(let profile):
-            return "server:\(profile.id.uuidString)"
-        case .savedFolders:
-            return "saved-folders"
-        case .offlineShelf:
-            return "offline-shelf"
-        }
-    }
-}
 
 private enum BrowseHomeSplitSelection: Hashable {
     case server(UUID)
@@ -628,66 +306,7 @@ private struct BrowseHomeShortcutItem: Identifiable {
     let subtitle: String
     let systemImage: String
     let tint: Color
-    let navigationRequest: BrowseHomeNavigationRequest
-
-    var splitSelection: BrowseHomeSplitSelection {
-        switch navigationRequest {
-        case .serverDetail(let profile):
-            return .server(profile.id)
-        case .savedFolders:
-            return .savedFolders
-        case .offlineShelf:
-            return .offlineShelf
-        }
-    }
-}
-
-private enum StoredBrowseHomeColumnVisibility: String {
-    case automatic
-    case all
-    case detailOnly
-    case doubleColumn
-
-    init(_ value: NavigationSplitViewVisibility) {
-        switch value {
-        case .automatic:
-            self = .automatic
-        case .all:
-            self = .all
-        case .detailOnly:
-            self = .detailOnly
-        case .doubleColumn:
-            self = .doubleColumn
-        default:
-            self = .automatic
-        }
-    }
-
-    var value: NavigationSplitViewVisibility {
-        switch self {
-        case .automatic:
-            return .automatic
-        case .all:
-            return .all
-        case .detailOnly:
-            return .detailOnly
-        case .doubleColumn:
-            return .doubleColumn
-        }
-    }
-}
-
-private extension BrowseHomeNavigationRequest {
-    var splitSelection: BrowseHomeSplitSelection {
-        switch self {
-        case .serverDetail(let profile):
-            return .server(profile.id)
-        case .savedFolders:
-            return .savedFolders
-        case .offlineShelf:
-            return .offlineShelf
-        }
-    }
+    let splitSelection: BrowseHomeSplitSelection
 }
 
 // MARK: - Server Row
@@ -788,7 +407,7 @@ private struct BrowseHomeEmptyState: View {
     }
 }
 
-private struct BrowseHomeDetailPlaceholder: View {
+struct BrowseHomeDetailPlaceholder: View {
     let hasServers: Bool
     let onAddServer: () -> Void
 

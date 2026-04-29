@@ -2,7 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct LibraryHomeView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
 
     @AppStorage("libraryHome.selectedLibraryID") private var storedSelectedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
@@ -11,29 +12,34 @@ struct LibraryHomeView: View {
     let dependencies: AppDependencies
 
     @State private var activeImportRoute: LibraryHomeImportRoute?
-    @State private var importDestinationRoute: LibraryHomeImportRoute?
     @State private var pendingImportDestinationSelection: LibraryImportDestinationSelection = .importedComics
-    @State private var isShowingCreateLibrarySheet = false
     @State private var selectedLibraryID: UUID?
-    @State private var libraryActionsItem: LibraryListItem?
-    @State private var renamingLibraryItem: LibraryListItem?
-    @State private var libraryInfoItem: LibraryListItem?
-    @State private var pendingLibraryAction: PendingLibraryAction?
-    @State private var compactNavigationPath: [UUID] = []
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
-    @State private var containerWidth: CGFloat = 0
 
     var body: some View {
         Group {
-            if usesSplitViewLayout {
-                splitViewLayout
+            if viewModel.items.isEmpty {
+                EmptyStateView(
+                    systemImage: "books.vertical",
+                    title: "No Libraries Yet",
+                    description: "Create a library on this device, add a linked folder, or import comics to get started.",
+                    actionTitle: "New Library",
+                    action: { presentCreateLibrarySheet() }
+                )
+                .background(Color.surfaceGrouped)
             } else {
-                compactLayout
+                content
             }
         }
-        .readContainerWidth(into: $containerWidth)
+        .navigationTitle("Library")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            addLibraryToolbarItem
+        }
+        .refreshable {
+            viewModel.reload()
+        }
         .fileImporter(
             isPresented: activeImportRouteBinding,
             allowedContentTypes: activeImportContentTypes,
@@ -58,10 +64,6 @@ struct LibraryHomeView: View {
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
         }
-        .onChange(of: containerWidth) { _, _ in
-            synchronizeSelection()
-            handlePendingLibraryFocusIfNeeded()
-        }
         .onChange(of: selectedLibraryID) { _, newValue in
             storedSelectedLibraryID = newValue?.uuidString ?? ""
         }
@@ -71,165 +73,16 @@ struct LibraryHomeView: View {
         .onChange(of: pendingFocusedFolderID) { _, _ in
             handlePendingLibraryFocusIfNeeded()
         }
-        .sheet(item: $libraryActionsItem) { item in
-            LibraryHomeLibraryActionsSheet(
-                item: item,
-                onDone: { libraryActionsItem = nil },
-                onRename: {
-                    queueLibraryAction(.rename(item))
-                },
-                onViewInfo: {
-                    queueLibraryAction(.info(item))
-                },
-                onRemove: {
-                    viewModel.removeLibrary(id: item.id)
-                    libraryActionsItem = nil
-                }
-            )
-        }
-        .sheet(item: $renamingLibraryItem) { item in
-            LibraryRenameSheet(item: item) { proposedName in
-                viewModel.renameLibrary(id: item.id, to: proposedName)
-            }
-        }
-        .sheet(isPresented: $isShowingCreateLibrarySheet) {
-            LibraryCreateSheet { proposedName in
-                guard let libraryID = viewModel.createLibrary(named: proposedName) else {
-                    return false
-                }
-
-                focusLibrary(libraryID)
-                return true
-            }
-        }
-        .sheet(item: $libraryInfoItem) { item in
-            LibraryInfoSheet(item: item)
-        }
-        .sheet(item: $importDestinationRoute) { route in
-            LibraryImportDestinationSheet(
-                title: route.destinationPickerTitle,
-                message: route.destinationPickerMessage,
-                dependencies: dependencies,
-                preferredSelection: preferredImportDestinationSelection
-            ) { selection in
-                pendingImportDestinationSelection = selection
-                queueImporterPresentation(for: route)
-            }
-        }
         .alert(item: $viewModel.alert) { alert in
             makeLibraryAlert(for: alert)
         }
-        .onChange(of: libraryActionsItem) { _, newValue in
-            guard newValue == nil, let pendingLibraryAction else {
-                return
-            }
-
-            self.pendingLibraryAction = nil
-            switch pendingLibraryAction {
-            case .rename(let item):
-                renamingLibraryItem = item
-            case .info(let item):
-                libraryInfoItem = item
-            }
-        }
     }
 
-    private var usesSplitViewLayout: Bool {
-        horizontalSizeClass == .regular
-            && (containerWidth == 0 || containerWidth >= AppLayout.regularNavigationSplitMinWidth)
-    }
-
-    private var compactLayout: some View {
-        NavigationStack(path: $compactNavigationPath) {
-            Group {
-                if viewModel.items.isEmpty {
-                    EmptyStateView(
-                        systemImage: "books.vertical",
-                        title: "No Libraries Yet",
-                        description: "Create a library on this device, add a linked folder, or import comics to get started.",
-                        actionTitle: "New Library",
-                        action: { presentCreateLibrarySheet() }
-                    )
-                    .background(Color.surfaceGrouped)
-                } else {
-                    compactContent
-                }
-            }
-            .navigationTitle("Library")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                addLibraryToolbarItem
-            }
-            .refreshable {
-                viewModel.reload()
-            }
-            .navigationDestination(for: UUID.self) { libraryID in
-                if let item = viewModel.items.first(where: { $0.id == libraryID }) {
-                    LibraryBrowserView(
-                        descriptor: item.descriptor,
-                        folderID: preferredFolderID(for: item),
-                        dependencies: dependencies
-                    )
-                    .id(item.id)
-                    .onAppear {
-                        selectedLibraryID = item.id
-                        consumeFocusedOverride(for: item.id)
-                    }
-                } else {
-                    EmptyStateView(
-                        systemImage: "books.vertical",
-                        title: "Library Unavailable",
-                        description: "This library is no longer available on this device."
-                    )
-                }
-            }
-        }
-    }
-
-    private var compactContent: some View {
+    private var content: some View {
         List {
-            compactLibrariesSection
+            librariesSection
         }
         .listStyle(.insetGrouped)
-    }
-
-    private var splitViewLayout: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            List(selection: $selectedLibraryID) {
-                splitLibrariesSection
-            }
-            .navigationTitle("Library")
-            .navigationBarTitleDisplayMode(.inline)
-            .listStyle(.sidebar)
-            .toolbar {
-                addLibraryToolbarItem
-            }
-            .refreshable {
-                viewModel.reload()
-            }
-        } detail: {
-            NavigationStack {
-                if let selectedItem {
-                    LibraryBrowserView(
-                        descriptor: selectedItem.descriptor,
-                        folderID: preferredFolderID(for: selectedItem),
-                        dependencies: dependencies
-                    )
-                    .id(selectedItem.id)
-                    .onAppear {
-                        consumeFocusedOverride(for: selectedItem.id)
-                    }
-                } else {
-                    LibraryHomeDetailPlaceholder(
-                        itemCount: viewModel.items.count,
-                        onAddLibrary: {
-                            presentCreateLibrarySheet()
-                        }
-                    )
-                }
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
     }
 
     @ToolbarContentBuilder
@@ -309,12 +162,9 @@ struct LibraryHomeView: View {
         focusedFolderIDOverride = Int64(pendingFocusedFolderID).map { max(1, $0) }
 
         selectedLibraryID = item.id
-
-        if usesSplitViewLayout {
-            compactNavigationPath = []
-        } else {
-            compactNavigationPath = [item.id]
-        }
+        appNavigator?.navigate(
+            .library(.openLibrary(item.id, folderID: focusedFolderIDOverride))
+        )
 
         pendingFocusedLibraryID = ""
         pendingFocusedFolderID = ""
@@ -346,15 +196,30 @@ struct LibraryHomeView: View {
     }
 
     private func presentCreateLibrarySheet() {
-        isShowingCreateLibrarySheet = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.create",
+                content: AnyView(
+                    LibraryCreateSheet { proposedName in
+                        guard let libraryID = viewModel.createLibrary(named: proposedName) else {
+                            return false
+                        }
+
+                        appPresenter?.dismissSheet()
+                        focusLibrary(libraryID)
+                        return true
+                    }
+                )
+            )
+        )
     }
 
     private func presentComicFileImporter() {
-        importDestinationRoute = .comicFiles
+        presentImportDestinationSheet(for: .comicFiles)
     }
 
     private func presentComicFolderImporter() {
-        importDestinationRoute = .comicFolder
+        presentImportDestinationSheet(for: .comicFolder)
     }
 
     private var activeImportRouteBinding: Binding<Bool> {
@@ -426,7 +291,7 @@ struct LibraryHomeView: View {
         }
     }
 
-    private var compactLibrariesSection: some View {
+    private var librariesSection: some View {
         Section {
             ForEach(viewModel.items) { item in
                 Button {
@@ -446,7 +311,7 @@ struct LibraryHomeView: View {
                         Label(item.removalActionTitle, systemImage: "trash")
                     }
                     Button {
-                        renamingLibraryItem = item
+                        presentRenameSheet(for: item)
                     } label: {
                         Label("Rename", systemImage: "pencil")
                     }
@@ -459,38 +324,16 @@ struct LibraryHomeView: View {
         }
     }
 
-    private var splitLibrariesSection: some View {
-        Section("Libraries") {
-            if viewModel.items.isEmpty {
-                EmptyStateView(
-                    systemImage: "books.vertical",
-                    title: "No Libraries Yet",
-                    description: "Add a library folder or import comics."
-                )
-                .padding(.vertical, Spacing.xl)
-            } else {
-                ForEach(viewModel.items) { item in
-                    LibrarySidebarRowView(item: item)
-                        .tag(item.id)
-                        .contextMenu {
-                            libraryContextMenuActions(for: item)
-                        }
-                }
-                .onDelete(perform: viewModel.removeLibraries)
-            }
-        }
-    }
-
     @ViewBuilder
     private func libraryContextMenuActions(for item: LibraryListItem) -> some View {
         Button {
-            renamingLibraryItem = item
+            presentRenameSheet(for: item)
         } label: {
             Label("Rename", systemImage: "pencil")
         }
 
         Button {
-            libraryInfoItem = item
+            presentInfoSheet(for: item)
         } label: {
             Label("Info", systemImage: "info.circle")
         }
@@ -511,28 +354,77 @@ struct LibraryHomeView: View {
 
         let libraryID = item.id
         selectedLibraryID = libraryID
-
-        if usesSplitViewLayout {
-            return
-        }
-
-        compactNavigationPath = [libraryID]
+        appNavigator?.navigate(
+            .library(.openLibrary(libraryID, folderID: preferredFolderID(for: item)))
+        )
     }
 
     private func focusLibrary(_ libraryID: UUID) {
         selectedLibraryID = libraryID
         storedSelectedLibraryID = libraryID.uuidString
-
-        if usesSplitViewLayout {
-            compactNavigationPath = []
-        } else {
-            compactNavigationPath = [libraryID]
-        }
+        appNavigator?.navigate(.library(.openLibrary(libraryID, folderID: nil)))
     }
 
-    private func queueLibraryAction(_ action: PendingLibraryAction) {
-        pendingLibraryAction = action
-        libraryActionsItem = nil
+    private func presentActionsSheet(for item: LibraryListItem) {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.actions.\(item.id.uuidString)",
+                content: AnyView(
+                    LibraryHomeLibraryActionsSheet(
+                        item: item,
+                        onDone: { appPresenter?.dismissSheet() },
+                        onRename: { presentRenameSheet(for: item) },
+                        onViewInfo: { presentInfoSheet(for: item) },
+                        onRemove: {
+                            viewModel.removeLibrary(id: item.id)
+                            appPresenter?.dismissSheet()
+                        }
+                    )
+                )
+            )
+        )
+    }
+
+    private func presentRenameSheet(for item: LibraryListItem) {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.rename.\(item.id.uuidString)",
+                content: AnyView(
+                    LibraryRenameSheet(item: item) { proposedName in
+                        viewModel.renameLibrary(id: item.id, to: proposedName)
+                    }
+                )
+            )
+        )
+    }
+
+    private func presentInfoSheet(for item: LibraryListItem) {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.info.\(item.id.uuidString)",
+                content: AnyView(LibraryInfoSheet(item: item))
+            )
+        )
+    }
+
+    private func presentImportDestinationSheet(for route: LibraryHomeImportRoute) {
+        appPresenter?.presentSheet(
+            .content(
+                id: "library.import.destination.\(route.id)",
+                content: AnyView(
+                    LibraryImportDestinationSheet(
+                        title: route.destinationPickerTitle,
+                        message: route.destinationPickerMessage,
+                        dependencies: dependencies,
+                        preferredSelection: preferredImportDestinationSelection
+                    ) { selection in
+                        pendingImportDestinationSelection = selection
+                        appPresenter?.dismissSheet()
+                        queueImporterPresentation(for: route)
+                    }
+                )
+            )
+        )
     }
 }
 
@@ -660,7 +552,7 @@ private func makeLibraryAlert(for alert: AppAlertState) -> Alert {
     )
 }
 
-private struct LibraryHomeDetailPlaceholder: View {
+struct LibraryHomeDetailPlaceholder: View {
     let itemCount: Int
     let onAddLibrary: () -> Void
 
@@ -691,11 +583,6 @@ private struct LibraryHomeDetailPlaceholder: View {
 
         return "Choose a library from the sidebar."
     }
-}
-
-private enum PendingLibraryAction {
-    case rename(LibraryListItem)
-    case info(LibraryListItem)
 }
 
 private struct LibraryStatusNote {
