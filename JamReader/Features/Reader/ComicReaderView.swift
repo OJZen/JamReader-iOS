@@ -3,6 +3,7 @@ import UIKit
 
 struct ComicReaderView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
 
@@ -14,8 +15,7 @@ struct ComicReaderView: View {
     @State private var isShowingQuickMetadataSheet = false
     @State private var isShowingOrganizationSheet = false
     @State private var isShowingReaderControls = false
-    @State private var thumbnailBrowserPresentation: ComicReaderThumbnailBrowserPresentation?
-    @State private var pendingReaderAction: ReaderSecondaryAction?
+    @State private var isShowingThumbnailBrowser = false
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
@@ -156,73 +156,12 @@ struct ComicReaderView: View {
                 ReaderGestureCoordinator.hideChrome(session: readerSession)
             }
         }
-        .sheet(isPresented: $isShowingReaderControls) {
-            readerControlsSheet
-        }
-        .sheet(isPresented: $isShowingQuickMetadataSheet) {
-            ReaderQuickMetadataSheet(
-                descriptor: viewModel.descriptor,
-                comic: viewModel.comic,
-                dependencies: dependencies
-            ) { updatedComic in
-                viewModel.applyUpdatedComic(updatedComic)
-            }
-        }
-        .sheet(isPresented: $isShowingMetadataSheet) {
-            ComicMetadataEditorSheet(
-                descriptor: viewModel.descriptor,
-                comic: viewModel.comic,
-                dependencies: dependencies
-            ) { updatedComic in
-                viewModel.applyUpdatedComic(updatedComic)
-            }
-        }
-        .sheet(isPresented: $isShowingOrganizationSheet) {
-            ComicOrganizationSheet(
-                descriptor: viewModel.descriptor,
-                comic: viewModel.comic,
-                dependencies: dependencies
-            )
-        }
-        .background {
-            SystemSheetPresenter(item: $thumbnailBrowserPresentation) { presentation in
-                ReaderThumbnailBrowserSheet(
-                    document: presentation.document,
-                    currentPageIndex: presentation.currentPageIndex
-                ) { pageIndex in
-                    updateVisiblePage(to: pageIndex)
-                    thumbnailBrowserPresentation = nil
-                }
-            }
-        }
         .alert(item: $viewModel.alert) { alert in
             Alert(
                 title: Text(alert.title),
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
-        }
-        .onChange(of: isShowingReaderControls) { _, isPresented in
-            if isPresented {
-                readerSession.apply(.setChromeVisible(true))
-                return
-            }
-
-            guard !isPresented, let pendingReaderAction else {
-                return
-            }
-
-            self.pendingReaderAction = nil
-            switch pendingReaderAction {
-            case .quickMetadata:
-                isShowingQuickMetadataSheet = true
-            case .metadata:
-                isShowingMetadataSheet = true
-            case .organization:
-                isShowingOrganizationSheet = true
-            case .thumbnails:
-                presentThumbnailBrowser()
-            }
         }
     }
 
@@ -293,20 +232,19 @@ struct ComicReaderView: View {
                 supportsBookmarks: viewModel.pageCount != nil
             ),
             actions: ReaderControlsActions(
-                onDone: { isShowingReaderControls = false },
+                onDone: dismissReaderControls,
                 onOpenThumbnails: {
-                    pendingReaderAction = .thumbnails
-                    isShowingReaderControls = false
+                    presentThumbnailBrowser()
                 },
                 onGoToBookmark: { pageIndex in
                     viewModel.goToBookmark(pageIndex: pageIndex)
                     readerSession.apply(.goToPage(pageIndex))
-                    isShowingReaderControls = false
+                    dismissReaderControls()
                 },
                 onGoToPageNumber: { pageNumber in
                     viewModel.goToPage(number: pageNumber)
                     readerSession.apply(.goToPage(pageNumber - 1))
-                    isShowingReaderControls = false
+                    dismissReaderControls()
                 },
                 onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
                 onSetFitMode: { fitMode in
@@ -345,16 +283,13 @@ struct ComicReaderView: View {
                 onToggleReadStatus: viewModel.toggleReadStatus,
                 onSetRating: viewModel.setRating,
                 onOpenQuickMetadata: {
-                    pendingReaderAction = .quickMetadata
-                    isShowingReaderControls = false
+                    presentQuickMetadataSheet()
                 },
                 onOpenMetadata: {
-                    pendingReaderAction = .metadata
-                    isShowingReaderControls = false
+                    presentMetadataSheet()
                 },
                 onOpenOrganization: {
-                    pendingReaderAction = .organization
-                    isShowingReaderControls = false
+                    presentOrganizationSheet()
                 }
             ),
             metadata: ReaderControlsMetadata(
@@ -379,7 +314,7 @@ struct ComicReaderView: View {
     private var isAnySheetPresented: Bool {
         isShowingReaderControls || isShowingMetadataSheet ||
         isShowingQuickMetadataSheet || isShowingOrganizationSheet ||
-        thumbnailBrowserPresentation != nil
+        isShowingThumbnailBrowser
     }
 
     private var readerTopBar: some View {
@@ -393,8 +328,7 @@ struct ComicReaderView: View {
                 presentThumbnailBrowser()
             } : nil,
             onMenu: {
-                readerSession.setChromeVisible(true)
-                isShowingReaderControls = true
+                presentReaderControls()
             },
             isMenuDisabled: viewModel.document == nil
         )
@@ -439,9 +373,107 @@ struct ComicReaderView: View {
         guard let document = viewModel.document else {
             return
         }
-        thumbnailBrowserPresentation = ComicReaderThumbnailBrowserPresentation(
-            document: document,
-            currentPageIndex: readerSession.state.currentPageIndex
+        isShowingThumbnailBrowser = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.local.thumbnails",
+                content: AnyView(
+                    ReaderThumbnailBrowserSheet(
+                        document: document,
+                        currentPageIndex: readerSession.state.currentPageIndex
+                    ) { pageIndex in
+                        updateVisiblePage(to: pageIndex)
+                        isShowingThumbnailBrowser = false
+                        appPresenter?.dismissSheet()
+                    }
+                ),
+                onDismiss: {
+                    isShowingThumbnailBrowser = false
+                }
+            )
+        )
+    }
+
+    private func presentReaderControls() {
+        isShowingReaderControls = true
+        readerSession.apply(.setChromeVisible(true))
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.local.controls",
+                content: AnyView(readerControlsSheet),
+                onDismiss: {
+                    isShowingReaderControls = false
+                }
+            )
+        )
+    }
+
+    private func dismissReaderControls() {
+        isShowingReaderControls = false
+        appPresenter?.dismissSheet()
+    }
+
+    private func presentQuickMetadataSheet() {
+        isShowingReaderControls = false
+        isShowingQuickMetadataSheet = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.local.quickMetadata",
+                content: AnyView(
+                    ReaderQuickMetadataSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: viewModel.comic,
+                        dependencies: dependencies
+                    ) { updatedComic in
+                        viewModel.applyUpdatedComic(updatedComic)
+                    }
+                ),
+                onDismiss: {
+                    isShowingQuickMetadataSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentMetadataSheet() {
+        isShowingReaderControls = false
+        isShowingMetadataSheet = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.local.metadata",
+                content: AnyView(
+                    ComicMetadataEditorSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: viewModel.comic,
+                        dependencies: dependencies
+                    ) { updatedComic in
+                        viewModel.applyUpdatedComic(updatedComic)
+                    }
+                ),
+                onDismiss: {
+                    isShowingMetadataSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentOrganizationSheet() {
+        isShowingReaderControls = false
+        isShowingOrganizationSheet = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.local.organization",
+                content: AnyView(
+                    ComicOrganizationSheet(
+                        descriptor: viewModel.descriptor,
+                        comic: viewModel.comic,
+                        dependencies: dependencies
+                    )
+                ),
+                onDismiss: {
+                    isShowingOrganizationSheet = false
+                }
+            )
         )
     }
 
@@ -505,17 +537,4 @@ struct ComicReaderView: View {
     private func updateIdleTimerState() {
         UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && viewModel.document != nil
     }
-}
-
-private enum ReaderSecondaryAction {
-    case quickMetadata
-    case metadata
-    case organization
-    case thumbnails
-}
-
-private struct ComicReaderThumbnailBrowserPresentation: Identifiable {
-    let id = UUID()
-    let document: ComicDocument
-    let currentPageIndex: Int
 }

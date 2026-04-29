@@ -529,6 +529,7 @@ private struct RemoteComicLoadingMetricRow: View {
 
 struct RemoteComicReaderView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
 
@@ -548,8 +549,7 @@ struct RemoteComicReaderView: View {
     @State private var hasLoaded = false
     @State private var isRefreshingRemoteCopy = false
     @State private var isShowingReaderControls = false
-    @State private var thumbnailBrowserPresentation: RemoteComicReaderThumbnailBrowserPresentation?
-    @State private var pendingReaderAction: RemoteReaderSecondaryAction?
+    @State private var isShowingThumbnailBrowser = false
     @State private var bookmarkPageIndices: [Int]
     @State private var alert: AppAlertState?
     @State private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
@@ -718,96 +718,6 @@ struct RemoteComicReaderView: View {
 
             scheduleNoticeDismissalIfNeeded()
         }
-        .onChange(of: isShowingReaderControls) { _, isPresented in
-            if isPresented {
-                readerSession.apply(.setChromeVisible(true))
-                return
-            }
-
-            guard !isPresented, let pendingReaderAction else {
-                return
-            }
-
-            self.pendingReaderAction = nil
-            switch pendingReaderAction {
-            case .thumbnails:
-                presentThumbnailBrowser()
-            }
-        }
-        .sheet(isPresented: $isShowingReaderControls) {
-            ReaderControlsSheet(
-                pageState: ReaderControlsPageState(
-                    pageIndicatorText: pageIndicatorText,
-                    currentPageNumber: currentPageNumber,
-                    pageCount: document?.pageCount,
-                    currentPageIsBookmarked: currentPageIsBookmarked,
-                    bookmarkItems: bookmarkItems
-                ),
-                displayState: ReaderControlsDisplayState(
-                    fitMode: effectiveReaderLayout.fitMode,
-                    pagingMode: effectiveReaderLayout.pagingMode,
-                    spreadMode: effectiveReaderLayout.spreadMode,
-                    readingDirection: effectiveReaderLayout.readingDirection,
-                    coverAsSinglePage: effectiveReaderLayout.coverAsSinglePage,
-                    rotation: effectiveReaderLayout.rotation
-                ),
-                capabilities: ReaderControlsCapabilities(
-                    supportsImageLayoutControls: supportsImageLayoutControls,
-                    supportsDoublePageSpread: supportsDoublePageSpread,
-                    supportsRotationControls: supportsRotationControls,
-                    supportsPageNavigation: document?.pageCount != nil,
-                    supportsBookmarks: document?.pageCount != nil
-                ),
-                actions: ReaderControlsActions(
-                    onDone: { isShowingReaderControls = false },
-                    onOpenThumbnails: {
-                        pendingReaderAction = .thumbnails
-                        isShowingReaderControls = false
-                    },
-                    onGoToBookmark: { pageIndex in
-                        updateVisiblePage(to: pageIndex)
-                        persistProgress(force: true)
-                        isShowingReaderControls = false
-                    },
-                    onGoToPageNumber: { pageNumber in
-                        updateVisiblePage(to: pageNumber - 1)
-                        persistProgress(force: true)
-                        isShowingReaderControls = false
-                    },
-                    onToggleBookmark: toggleBookmark,
-                    onSetFitMode: setFitMode,
-                    onSetPagingMode: setPagingMode,
-                    onSetSpreadMode: setSpreadMode,
-                    onSetReadingDirection: setReadingDirection,
-                    onSetCoverAsSinglePage: setCoverAsSinglePage,
-                    onRotateCounterClockwise: rotateCounterClockwise,
-                    onRotateClockwise: rotateClockwise,
-                    onResetRotation: resetRotation
-                ),
-                fileInfo: ReaderControlsFileInfo(
-                    fileName: displayName,
-                    fileExtension: document?.fileURL.pathExtension,
-                    pageCount: document?.pageCount,
-                    series: nil,
-                    volume: nil,
-                    addedAt: nil,
-                    lastOpenedAt: nil,
-                    fileURL: document?.fileURL,
-                    coverDocument: document
-                )
-            )
-        }
-        .background {
-            SystemSheetPresenter(item: $thumbnailBrowserPresentation) { presentation in
-                ReaderThumbnailBrowserSheet(
-                    document: presentation.document,
-                    currentPageIndex: presentation.currentPageIndex
-                ) { pageIndex in
-                    updateVisiblePage(to: pageIndex)
-                    thumbnailBrowserPresentation = nil
-                }
-            }
-        }
         .alert(item: $alert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -818,7 +728,7 @@ struct RemoteComicReaderView: View {
     }
 
     private var isAnySheetPresented: Bool {
-        isShowingReaderControls || thumbnailBrowserPresentation != nil
+        isShowingReaderControls || isShowingThumbnailBrowser
     }
 
     private var supportsDoublePageSpread: Bool {
@@ -886,10 +796,92 @@ struct RemoteComicReaderView: View {
                 presentThumbnailBrowser()
             } : nil,
             onMenu: {
-                readerSession.apply(.setChromeVisible(true))
-                isShowingReaderControls = true
+                presentReaderControls()
             },
             isMenuDisabled: document == nil
+        )
+    }
+
+    private func presentReaderControls() {
+        isShowingReaderControls = true
+        readerSession.apply(.setChromeVisible(true))
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.remote.controls.\(reference.id)",
+                content: AnyView(readerControlsSheet),
+                onDismiss: {
+                    isShowingReaderControls = false
+                }
+            )
+        )
+    }
+
+    private var readerControlsSheet: some View {
+        ReaderControlsSheet(
+            pageState: ReaderControlsPageState(
+                pageIndicatorText: pageIndicatorText,
+                currentPageNumber: currentPageNumber,
+                pageCount: document?.pageCount,
+                currentPageIsBookmarked: currentPageIsBookmarked,
+                bookmarkItems: bookmarkItems
+            ),
+            displayState: ReaderControlsDisplayState(
+                fitMode: effectiveReaderLayout.fitMode,
+                pagingMode: effectiveReaderLayout.pagingMode,
+                spreadMode: effectiveReaderLayout.spreadMode,
+                readingDirection: effectiveReaderLayout.readingDirection,
+                coverAsSinglePage: effectiveReaderLayout.coverAsSinglePage,
+                rotation: effectiveReaderLayout.rotation
+            ),
+            capabilities: ReaderControlsCapabilities(
+                supportsImageLayoutControls: supportsImageLayoutControls,
+                supportsDoublePageSpread: supportsDoublePageSpread,
+                supportsRotationControls: supportsRotationControls,
+                supportsPageNavigation: document?.pageCount != nil,
+                supportsBookmarks: document?.pageCount != nil
+            ),
+            actions: ReaderControlsActions(
+                onDone: {
+                    isShowingReaderControls = false
+                    appPresenter?.dismissSheet()
+                },
+                onOpenThumbnails: {
+                    isShowingReaderControls = false
+                    presentThumbnailBrowser()
+                },
+                onGoToBookmark: { pageIndex in
+                    updateVisiblePage(to: pageIndex)
+                    persistProgress(force: true)
+                    isShowingReaderControls = false
+                    appPresenter?.dismissSheet()
+                },
+                onGoToPageNumber: { pageNumber in
+                    updateVisiblePage(to: pageNumber - 1)
+                    persistProgress(force: true)
+                    isShowingReaderControls = false
+                    appPresenter?.dismissSheet()
+                },
+                onToggleBookmark: toggleBookmark,
+                onSetFitMode: setFitMode,
+                onSetPagingMode: setPagingMode,
+                onSetSpreadMode: setSpreadMode,
+                onSetReadingDirection: setReadingDirection,
+                onSetCoverAsSinglePage: setCoverAsSinglePage,
+                onRotateCounterClockwise: rotateCounterClockwise,
+                onRotateClockwise: rotateClockwise,
+                onResetRotation: resetRotation
+            ),
+            fileInfo: ReaderControlsFileInfo(
+                fileName: displayName,
+                fileExtension: document?.fileURL.pathExtension,
+                pageCount: document?.pageCount,
+                series: nil,
+                volume: nil,
+                addedAt: nil,
+                lastOpenedAt: nil,
+                fileURL: document?.fileURL,
+                coverDocument: document
+            )
         )
     }
 
@@ -962,9 +954,24 @@ struct RemoteComicReaderView: View {
         guard let document else {
             return
         }
-        thumbnailBrowserPresentation = RemoteComicReaderThumbnailBrowserPresentation(
-            document: document,
-            currentPageIndex: currentPageIndex
+        isShowingThumbnailBrowser = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.remote.thumbnails.\(reference.id)",
+                content: AnyView(
+                    ReaderThumbnailBrowserSheet(
+                        document: document,
+                        currentPageIndex: currentPageIndex
+                    ) { pageIndex in
+                        updateVisiblePage(to: pageIndex)
+                        isShowingThumbnailBrowser = false
+                        appPresenter?.dismissSheet()
+                    }
+                ),
+                onDismiss: {
+                    isShowingThumbnailBrowser = false
+                }
+            )
         )
     }
 
@@ -1518,14 +1525,4 @@ struct RemoteComicReaderView: View {
             await pageSource.close()
         }
     }
-}
-
-private enum RemoteReaderSecondaryAction {
-    case thumbnails
-}
-
-private struct RemoteComicReaderThumbnailBrowserPresentation: Identifiable {
-    let id = UUID()
-    let document: ComicDocument
-    let currentPageIndex: Int
 }
