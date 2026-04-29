@@ -10,11 +10,12 @@ struct SavedRemoteFoldersView: View {
     let dependencies: AppDependencies
     let focusedProfile: RemoteServerProfile?
 
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @StateObject private var viewModel: SavedRemoteFoldersViewModel
     @State private var searchText = ""
-    @State private var renameEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
     @State private var pendingRemovalEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
     @State private var containerWidth: CGFloat = 0
 
@@ -66,11 +67,6 @@ struct SavedRemoteFoldersView: View {
         }
         .refreshable {
             await viewModel.load()
-        }
-        .sheet(item: $renameEntry) { entry in
-            SavedRemoteFolderRenameSheet(entry: entry) { proposedTitle in
-                viewModel.renameShortcut(entry, to: proposedTitle)
-            }
         }
         .confirmationDialog(
             "Remove saved folder?",
@@ -131,11 +127,14 @@ struct SavedRemoteFoldersView: View {
     private func savedFolderRow(
         for entry: SavedRemoteFoldersViewModel.ShortcutEntry
     ) -> some View {
-        NavigationLink {
-            RemoteServerBrowserView(
-                profile: entry.profile,
-                currentPath: entry.shortcut.path,
-                dependencies: dependencies
+        Button {
+            appNavigator?.navigate(
+                .browse(
+                    .serverBrowser(
+                        entry.profile.id,
+                        path: entry.shortcut.path
+                    )
+                )
             )
         } label: {
             RemoteSavedFolderCard(
@@ -265,7 +264,7 @@ struct SavedRemoteFoldersView: View {
         for entry: SavedRemoteFoldersViewModel.ShortcutEntry
     ) -> some View {
         Button {
-            renameEntry = entry
+            presentRenameSheet(for: entry)
         } label: {
             Label("Rename", systemImage: "pencil")
         }
@@ -287,6 +286,19 @@ struct SavedRemoteFoldersView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Manage \(entry.shortcut.title)")
+    }
+
+    private func presentRenameSheet(for entry: SavedRemoteFoldersViewModel.ShortcutEntry) {
+        appPresenter?.presentSheet(
+            .content(
+                id: "saved-folder.rename.\(entry.shortcut.id)",
+                content: AnyView(
+                    SavedRemoteFolderRenameSheet(entry: entry) { proposedTitle in
+                        viewModel.renameShortcut(entry, to: proposedTitle)
+                    }
+                )
+            )
+        )
     }
 
 }
@@ -369,6 +381,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
             )
         }
     }
+
 }
 
 private struct SavedRemoteFolderRenameSheet: View {

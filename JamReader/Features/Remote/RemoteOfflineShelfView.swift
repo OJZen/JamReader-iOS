@@ -101,17 +101,6 @@ private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
     }
 }
 
-private enum RemoteOfflineShelfNavigationRequest: Identifiable, Hashable {
-    case folder(RemoteServerProfile, String)
-
-    var id: String {
-        switch self {
-        case .folder(let profile, let path):
-            return "folder:\(profile.id.uuidString):\(path)"
-        }
-    }
-}
-
 @MainActor
 final class RemoteOfflineShelfViewModel: ObservableObject {
     @Published private(set) var entries: [RemoteOfflineComicEntry] = []
@@ -275,17 +264,17 @@ struct RemoteOfflineShelfView: View {
     let dependencies: AppDependencies
     let focusedProfile: RemoteServerProfile?
 
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @StateObject private var viewModel: RemoteOfflineShelfViewModel
     @State private var searchText = ""
     @State private var sortMode: RemoteOfflineShelfSortMode = .recent
     @State private var filterMode: RemoteOfflineShelfFilter = .all
-    @State private var navigationRequest: RemoteOfflineShelfNavigationRequest?
     @State private var feedbackDismissTask: Task<Void, Never>?
     @State private var pendingServerClearProfile: RemoteServerProfile?
     @State private var pendingServerClearCount = 0
-    @State private var presentedEntry: RemoteOfflineComicEntry?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
     @State private var containerWidth: CGFloat = 0
@@ -388,16 +377,6 @@ struct RemoteOfflineShelfView: View {
         .onDisappear {
             feedbackDismissTask?.cancel()
             feedbackDismissTask = nil
-        }
-        .navigationDestination(item: $navigationRequest) { request in
-            switch request {
-            case .folder(let profile, let path):
-                RemoteServerBrowserView(
-                    profile: profile,
-                    currentPath: path,
-                    dependencies: dependencies
-                )
-            }
         }
         .confirmationDialog(
             "Clear downloads for this server?",
@@ -530,23 +509,7 @@ struct RemoteOfflineShelfView: View {
 
     @ViewBuilder
     private var readerPresenter: some View {
-        HeroReaderPresenter(
-            item: $presentedEntry,
-            sourceFrame: heroSourceFrame,
-            previewImage: heroPreviewImage,
-            onDismiss: {
-                heroSourceFrame = .zero
-                heroPreviewImage = nil
-            }
-        ) { entry in
-            RemoteComicLoadingView(
-                profile: entry.profile,
-                item: entry.session.directoryItem,
-                dependencies: dependencies,
-                openMode: .preferLocalCache,
-                referenceOverride: entry.session.resolvedComicFileReference(for: entry.profile)
-            )
-        }
+        EmptyView()
     }
 
     @MainActor
@@ -557,6 +520,25 @@ struct RemoteOfflineShelfView: View {
         heroPreviewImage = RemoteComicThumbnailPipeline.shared.cachedTransitionImage(
             for: item,
             browsingService: dependencies.remoteServerBrowsingService
+        )
+    }
+
+    private func presentOfflineEntry(_ entry: RemoteOfflineComicEntry) {
+        appPresenter?.presentReader(
+            .remote(
+                RemoteReaderPresentation(
+                    profile: entry.profile,
+                    item: entry.session.directoryItem,
+                    openMode: .preferLocalCache,
+                    referenceOverride: entry.session.resolvedComicFileReference(for: entry.profile),
+                    sourceFrame: heroSourceFrame,
+                    previewImage: heroPreviewImage,
+                    onDismiss: {
+                        heroSourceFrame = .zero
+                        heroPreviewImage = nil
+                    }
+                )
+            )
         )
     }
 
@@ -800,7 +782,7 @@ struct RemoteOfflineShelfView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             prepareHeroTransition(for: entry, fallbackFrame: .zero)
-            presentedEntry = entry
+            presentOfflineEntry(entry)
         }
         .overlay(alignment: .trailing) {
             if showsPersistentItemActions {
@@ -849,9 +831,13 @@ struct RemoteOfflineShelfView: View {
         for entry: RemoteOfflineComicEntry
     ) -> some View {
         Button {
-            navigationRequest = .folder(
-                entry.profile,
-                entry.session.parentDirectoryPath
+            appNavigator?.navigate(
+                .browse(
+                    .serverBrowser(
+                        entry.profile.id,
+                        path: entry.session.parentDirectoryPath
+                    )
+                )
             )
         } label: {
             Label("Browse Folder", systemImage: "folder")

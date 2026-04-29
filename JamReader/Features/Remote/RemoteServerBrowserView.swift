@@ -3,6 +3,8 @@ import SwiftUI
 import UIKit
 
 struct RemoteServerBrowserView: View {
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.displayScale) private var displayScale
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -13,8 +15,6 @@ struct RemoteServerBrowserView: View {
     @State private var hasConfiguredDisplayMode = false
     @State private var sortMode: RemoteDirectorySortMode = .nameAscending
     @State private var hasConfiguredSortMode = false
-    @State private var importRequest: RemoteBrowserImportRequest?
-    @State private var navigationRequest: RemoteBrowserNavigationRequest?
     @State private var presentedComicItem: RemoteComicOpenItem?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
@@ -31,7 +31,6 @@ struct RemoteServerBrowserView: View {
     @State private var sectionBuildTask: Task<Void, Never>?
     @State private var isDisplaySnapshotRefreshing = false
     @State private var isSectionBuildRefreshing = false
-    @State private var presentedInfoItem: RemoteDirectoryItem?
     @State private var browserContainerWidth: CGFloat = 0
 
     init(
@@ -116,6 +115,7 @@ struct RemoteServerBrowserView: View {
                     scheduleThumbnailPreheat(immediately: true)
                 } else {
                     cancelThumbnailPreheat()
+                    presentRemoteComicIfNeeded()
                 }
             }
             .refreshable {
@@ -142,14 +142,7 @@ struct RemoteServerBrowserView: View {
             } message: {
                 offlineRemovalDialogMessage
             }
-            .navigationDestination(item: $navigationRequest, destination: navigationDestination)
             .background(readerPresenter)
-            .background {
-                Group {
-                    SystemSheetPresenter(item: $presentedInfoItem, content: browserInfoSheet)
-                    SystemSheetPresenter(item: $importRequest, content: importSheet)
-                }
-            }
     }
 
     private var pendingOfflineRemovalDialogBinding: Binding<Bool> {
@@ -254,29 +247,7 @@ struct RemoteServerBrowserView: View {
 
     @ViewBuilder
     private var readerPresenter: some View {
-        HeroReaderPresenter(
-            item: $presentedComicItem,
-            sourceFrame: heroSourceFrame,
-            previewImage: heroPreviewImage,
-            onDismiss: {
-                heroSourceFrame = .zero
-                heroPreviewImage = nil
-                if let lastDismissRefreshItem {
-                    viewModel.refreshProgressState(for: lastDismissRefreshItem)
-                    self.lastDismissRefreshItem = nil
-                } else {
-                    viewModel.refreshProgressState()
-                }
-            }
-        ) { open in
-            RemoteComicLoadingView(
-                profile: viewModel.profile,
-                item: open.item,
-                dependencies: dependencies,
-                openMode: open.mode,
-                referenceOverride: open.referenceOverride
-            )
-        }
+        EmptyView()
     }
 
     @ViewBuilder
@@ -332,14 +303,14 @@ struct RemoteServerBrowserView: View {
                 if let parentPath = viewModel.parentPath {
                     Section("Navigate") {
                         Button {
-                            navigationRequest = .directory(parentPath)
+                            openDirectory(parentPath)
                         } label: {
                             Label("Up One Level", systemImage: "arrow.up.left")
                         }
 
                         if parentPath != viewModel.rootPath {
                             Button {
-                                navigationRequest = .directory(viewModel.rootPath)
+                                openDirectory(viewModel.rootPath)
                             } label: {
                                 Label("Go to Root", systemImage: "arrow.uturn.backward.circle")
                             }
@@ -416,22 +387,6 @@ struct RemoteServerBrowserView: View {
                     scope: scope
                 )
             }
-        }
-    }
-
-    @ViewBuilder
-    private func navigationDestination(for request: RemoteBrowserNavigationRequest) -> some View {
-        switch request {
-        case .directory(let path):
-            RemoteServerBrowserView(
-                profile: viewModel.profile,
-                currentPath: path,
-                initialDisplayMode: displayMode,
-                initialSortMode: sortMode,
-                dependencies: dependencies
-            )
-        case .comic:
-            EmptyView() // Comics are now presented via fullScreenCover
         }
     }
 
@@ -710,8 +665,8 @@ struct RemoteServerBrowserView: View {
     @ViewBuilder
     private func manageServersButton(loadIssue: RemoteBrowserLoadIssue?) -> some View {
         if loadIssue?.showsManageServersAction == true {
-            NavigationLink {
-                RemoteServerListView(dependencies: dependencies)
+            Button {
+                appNavigator?.navigate(.browse(.home))
             } label: {
                 Label("Manage Servers", systemImage: "slider.horizontal.3")
             }
@@ -738,8 +693,8 @@ struct RemoteServerBrowserView: View {
         if let loadIssue = viewModel.loadIssue,
            loadIssue.allowsOfflineRecovery,
            viewModel.offlineRecoveryCount > 1 {
-            NavigationLink {
-                RemoteOfflineShelfView(dependencies: dependencies)
+            Button {
+                appNavigator?.navigate(.browse(.offlineShelf(viewModel.profile.id)))
             } label: {
                 Label("Offline Shelf", systemImage: "arrow.down.circle")
             }
@@ -751,7 +706,7 @@ struct RemoteServerBrowserView: View {
     private var upOneLevelButton: some View {
         if let parentPath = viewModel.parentPath {
             Button {
-                navigationRequest = .directory(parentPath)
+                openDirectory(parentPath)
             } label: {
                 RemoteBrowserHeaderActionChip(
                     title: "Up",
@@ -767,7 +722,7 @@ struct RemoteServerBrowserView: View {
     private var sessionRootButton: some View {
         if let parentPath = viewModel.parentPath, parentPath != viewModel.rootPath {
             Button {
-                navigationRequest = .directory(viewModel.rootPath)
+                openDirectory(viewModel.rootPath)
             } label: {
                 RemoteBrowserHeaderActionChip(
                     title: "Root",
@@ -1304,7 +1259,7 @@ struct RemoteServerBrowserView: View {
 
     private func openPrimaryAction(for item: RemoteDirectoryItem) {
         if item.isDirectory {
-            navigationRequest = .directory(item.path)
+            openDirectory(item.path)
         } else if item.canOpenAsComic {
             presentedComicItem = RemoteComicOpenItem(item: item, mode: .automatic)
         }
@@ -1330,6 +1285,38 @@ struct RemoteServerBrowserView: View {
 
         prepareHeroTransition(for: item, fallbackFrame: .zero)
         presentedComicItem = RemoteComicOpenItem(item: item, mode: .preferLocalCache)
+    }
+
+    private func presentRemoteComicIfNeeded() {
+        guard let presentedComicItem else {
+            return
+        }
+
+        appPresenter?.presentReader(
+            .remote(
+                RemoteReaderPresentation(
+                    profile: viewModel.profile,
+                    item: presentedComicItem.item,
+                    openMode: presentedComicItem.mode,
+                    referenceOverride: presentedComicItem.referenceOverride,
+                    sourceFrame: heroSourceFrame,
+                    previewImage: heroPreviewImage,
+                    onDismiss: handleReaderDismissal
+                )
+            )
+        )
+    }
+
+    private func handleReaderDismissal() {
+        presentedComicItem = nil
+        heroSourceFrame = .zero
+        heroPreviewImage = nil
+        if let lastDismissRefreshItem {
+            viewModel.refreshProgressState(for: lastDismissRefreshItem)
+            self.lastDismissRefreshItem = nil
+        } else {
+            viewModel.refreshProgressState()
+        }
     }
 
     @MainActor
@@ -1364,17 +1351,29 @@ struct RemoteServerBrowserView: View {
     }
 
     private func presentInfoSheet(for item: RemoteDirectoryItem) {
-        // Let the UIKit context menu dismissal finish before presenting SwiftUI sheet content.
         DispatchQueue.main.async {
-            presentedInfoItem = item
+            appPresenter?.presentSheet(
+                .content(
+                    id: "remote.browser.info.\(item.id)",
+                    content: AnyView(browserInfoSheet(for: item))
+                )
+            )
         }
     }
 
     private func presentImportSheet(_ request: RemoteBrowserImportRequest) {
-        // Match the info-sheet path so UIKit context menu teardown fully settles first.
         DispatchQueue.main.async {
-            importRequest = request
+            appPresenter?.presentSheet(
+                .content(
+                    id: "remote.browser.import.\(request.id)",
+                    content: AnyView(importSheet(for: request))
+                )
+            )
         }
+    }
+
+    private func openDirectory(_ path: String) {
+        appNavigator?.navigate(.browse(.serverBrowser(viewModel.profile.id, path: path)))
     }
 
     private func openOfflineAction(
@@ -1638,25 +1637,6 @@ enum RemoteBrowserImportRequest: Identifiable {
             return "Choose where to copy comics from \(item.name)."
         case .comic(let item):
             return "Choose where to copy \(item.name)."
-        }
-    }
-}
-
-enum RemoteBrowserNavigationRequest: Identifiable, Hashable {
-    case directory(String)
-    case comic(RemoteDirectoryItem, RemoteComicOpenMode)
-
-    var id: String {
-        switch self {
-        case .directory(let path):
-            return "directory:\(path)"
-        case .comic(let item, let openMode):
-            switch openMode {
-            case .automatic:
-                return "comic:\(item.id):automatic"
-            case .preferLocalCache:
-                return "comic:\(item.id):offline"
-            }
         }
     }
 }

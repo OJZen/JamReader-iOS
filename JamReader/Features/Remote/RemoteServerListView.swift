@@ -5,13 +5,14 @@ struct RemoteServerListView: View {
         static let rowAccessoryReservedWidth: CGFloat = 36
     }
 
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
 
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var editorDraft: RemoteServerEditorDraft?
-    @State private var navigationRequest: RemoteServerListNavigationRequest?
     @State private var containerWidth: CGFloat = 0
 
     init(dependencies: AppDependencies) {
@@ -73,30 +74,9 @@ struct RemoteServerListView: View {
         .refreshable {
             viewModel.load()
         }
-        .sheet(item: $editorDraft) { draft in
-            remoteServerEditor(for: draft)
-        }
+        .background { presentationObservers }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
-        }
-        .navigationDestination(item: $navigationRequest) { request in
-            switch request {
-            case .detail(let profile):
-                RemoteServerDetailView(
-                    profile: profile,
-                    dependencies: dependencies
-                )
-            case .savedFolders(let profile):
-                SavedRemoteFoldersView(
-                    dependencies: dependencies,
-                    focusedProfile: profile
-                )
-            case .offlineShelf(let profile):
-                RemoteOfflineShelfView(
-                    dependencies: dependencies,
-                    focusedProfile: profile
-                )
-            }
         }
     }
 
@@ -120,9 +100,17 @@ struct RemoteServerListView: View {
         showsPersistentRowActions ? LayoutMetrics.rowAccessoryReservedWidth : 0
     }
 
+    @ViewBuilder
+    private var presentationObservers: some View {
+        Color.clear
+            .onChange(of: editorDraft?.id) { _, _ in
+                presentEditorSheetIfNeeded()
+            }
+    }
+
     private func remoteServerRow(for profile: RemoteServerProfile) -> some View {
         Button {
-            navigationRequest = .detail(profile)
+            appNavigator?.navigate(.browse(.serverDetail(profile.id)))
         } label: {
             RemoteServerRow(
                 profile: profile,
@@ -148,10 +136,27 @@ struct RemoteServerListView: View {
             let alertState = viewModel.save(draft: updatedDraft)
             if alertState == nil {
                 editorDraft = nil
+                appPresenter?.dismissSheet()
             }
             return alertState
         }
         .id(draft.id)
+    }
+
+    private func presentEditorSheetIfNeeded() {
+        guard let editorDraft else {
+            return
+        }
+
+        appPresenter?.presentSheet(
+            .content(
+                id: "remote.serverList.editor.\(editorDraft.id)",
+                content: AnyView(remoteServerEditor(for: editorDraft)),
+                onDismiss: {
+                    self.editorDraft = nil
+                }
+            )
+        )
     }
 
     @ViewBuilder
@@ -171,7 +176,7 @@ struct RemoteServerListView: View {
 
         if savedFolderCount > 0 {
             Button {
-                navigationRequest = .savedFolders(profile)
+                appNavigator?.navigate(.browse(.savedFolders(profile.id)))
             } label: {
                 Label(
                     savedFolderCount == 1 ? "Saved Folder" : "Saved Folders",
@@ -182,7 +187,7 @@ struct RemoteServerListView: View {
 
         if offlineCopyCount > 0 {
             Button {
-                navigationRequest = .offlineShelf(profile)
+                appNavigator?.navigate(.browse(.offlineShelf(profile.id)))
             } label: {
                 Label(
                     offlineCopyCount == 1 ? "Offline Copy" : "Offline Shelf",
@@ -319,23 +324,5 @@ extension RemoteServerProfile {
 
     var shareDisplaySummary: String {
         providerRootDisplayPath
-    }
-}
-
-
-private enum RemoteServerListNavigationRequest: Identifiable, Hashable {
-    case detail(RemoteServerProfile)
-    case savedFolders(RemoteServerProfile)
-    case offlineShelf(RemoteServerProfile)
-
-    var id: String {
-        switch self {
-        case .detail(let profile):
-            return "detail:\(profile.id.uuidString)"
-        case .savedFolders(let profile):
-            return "saved:\(profile.id.uuidString)"
-        case .offlineShelf(let profile):
-            return "offline:\(profile.id.uuidString)"
-        }
     }
 }

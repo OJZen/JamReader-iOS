@@ -10,6 +10,8 @@ private enum RemoteServerDetailLayoutMetrics {
 
 struct RemoteServerDetailView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let dependencies: AppDependencies
@@ -20,10 +22,6 @@ struct RemoteServerDetailView: View {
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var profile: RemoteServerProfile
     @State private var recentSessions: [RemoteComicReadingSession] = []
-    @State private var editorDraft: RemoteServerEditorDraft?
-    @State private var navigationRequest: RemoteServerDetailNavigationRequest?
-    @State private var presentedRecentSession: RemoteComicReadingSession?
-    @State private var presentedInfoSession: RemoteComicReadingSession?
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
     @State private var containerWidth: CGFloat = 0
@@ -86,45 +84,10 @@ struct RemoteServerDetailView: View {
         .refreshable {
             refreshDetailState(forceReload: true)
         }
-        // Only present the editor sheet locally in compact (iPhone) mode.
-        // In split-view the parent's sidebar sheet owns the presentation so
-        // that exactly ONE sheet is active in the window at a time.
-        .sheet(item: $editorDraft) { draft in
-            remoteServerEditor(for: draft)
-        }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
         }
-        .navigationDestination(item: $navigationRequest) { request in
-            switch request {
-            case .browser(let profile):
-                RemoteServerBrowserView(
-                    profile: profile,
-                    currentPath: RemoteServerBrowserViewModel.lastBrowsedPath(for: profile),
-                    dependencies: dependencies
-                )
-            case .comic(let item):
-                RemoteComicLoadingView(
-                    profile: profile,
-                    item: item,
-                    dependencies: dependencies
-                )
-            case .savedFolders(let profile):
-                SavedRemoteFoldersView(
-                    dependencies: dependencies,
-                    focusedProfile: profile
-                )
-            case .offlineShelf(let profile):
-                RemoteOfflineShelfView(
-                    dependencies: dependencies,
-                    focusedProfile: profile
-                )
-            }
-        }
         .background(readerPresenter)
-        .background {
-            SystemSheetPresenter(item: $presentedInfoSession, content: recentSessionInfoSheet)
-        }
     }
 
     @ViewBuilder
@@ -138,32 +101,19 @@ struct RemoteServerDetailView: View {
 
     @ViewBuilder
     private var readerPresenter: some View {
-        HeroReaderPresenter(
-            item: $presentedRecentSession,
-            sourceFrame: heroSourceFrame,
-            previewImage: heroPreviewImage,
-            onDismiss: {
-                heroSourceFrame = .zero
-                heroPreviewImage = nil
-                refreshDetailState(refreshRecentActivity: true)
-            }
-        ) { session in
-            RemoteComicLoadingView(
-                profile: profile,
-                item: session.directoryItem,
-                dependencies: dependencies,
-                referenceOverride: session.resolvedComicFileReference(for: profile)
-            )
-        }
+        EmptyView()
     }
 
     private func remoteServerEditor(
         for draft: RemoteServerEditorDraft
     ) -> some View {
-        RemoteServerEditorSheet(draft: draft) { updatedDraft in
+        RemoteServerEditorSheet(
+            draft: draft,
+            appliesSwiftUIPresentationModifiers: false
+        ) { updatedDraft in
             let alertState = viewModel.save(draft: updatedDraft)
             if alertState == nil {
-                editorDraft = nil
+                appPresenter?.dismissSheet()
                 refreshDetailState(forceReload: true)
             }
             return alertState
@@ -216,7 +166,7 @@ struct RemoteServerDetailView: View {
         Section("Shortcuts") {
             ForEach(quickAccessItems) { item in
                 Button {
-                    navigationRequest = item.navigationRequest
+                    navigate(item.route)
                 } label: {
                     RemoteServerDetailShortcutRow(item: item)
                 }
@@ -277,6 +227,26 @@ struct RemoteServerDetailView: View {
         )
     }
 
+    private func presentRecentSession(_ session: RemoteComicReadingSession) {
+        appPresenter?.presentReader(
+            .remote(
+                RemoteReaderPresentation(
+                    profile: profile,
+                    item: session.directoryItem,
+                    openMode: .automatic,
+                    referenceOverride: session.resolvedComicFileReference(for: profile),
+                    sourceFrame: heroSourceFrame,
+                    previewImage: heroPreviewImage,
+                    onDismiss: {
+                        heroSourceFrame = .zero
+                        heroPreviewImage = nil
+                        refreshDetailState(refreshRecentActivity: true)
+                    }
+                )
+            )
+        )
+    }
+
     private var recentHistoryCount: Int {
         recentSessions.count
     }
@@ -319,7 +289,7 @@ struct RemoteServerDetailView: View {
     private func recentSessionRow(for session: RemoteComicReadingSession) -> some View {
         let baseRow = HeroTapButton { frame in
             prepareHeroTransition(for: session, fallbackFrame: frame)
-            presentedRecentSession = session
+            presentRecentSession(session)
         } label: {
             RemoteInsetListRowCard {
                 RemoteOfflineComicCard(
@@ -381,7 +351,7 @@ struct RemoteServerDetailView: View {
                 subtitle: browserEntryDisplayText,
                 systemImage: browserEntryIsRoot ? "square.grid.2x2.fill" : "folder.fill",
                 tint: browserEntryIsRoot ? .teal : .blue,
-                navigationRequest: .browser(profile)
+                route: .serverBrowser(profile.id, path: browserEntryRawPath)
             )
         ]
 
@@ -393,7 +363,7 @@ struct RemoteServerDetailView: View {
                     subtitle: savedFolderCount == 1 ? "1 saved" : "\(savedFolderCount) saved",
                     systemImage: "star.fill",
                     tint: .teal,
-                    navigationRequest: .savedFolders(profile)
+                    route: .savedFolders(profile.id)
                 )
             )
         }
@@ -408,7 +378,7 @@ struct RemoteServerDetailView: View {
                         : "\(offlineCopyCount) downloaded on this server",
                     systemImage: "arrow.down.circle.fill",
                     tint: .green,
-                    navigationRequest: .offlineShelf(profile)
+                    route: .offlineShelf(profile.id)
                 )
             )
         }
@@ -423,7 +393,7 @@ struct RemoteServerDetailView: View {
             if let onRequestEdit {
                 onRequestEdit(draft)
             } else {
-                editorDraft = draft
+                presentEditor(for: draft)
             }
         } label: {
             Label("Edit Server", systemImage: "square.and.pencil")
@@ -431,7 +401,7 @@ struct RemoteServerDetailView: View {
 
         if savedFolderCount > 0 {
             Button {
-                navigationRequest = .savedFolders(profile)
+                navigate(.savedFolders(profile.id))
             } label: {
                 Label(
                     savedFolderCount == 1 ? "Saved Folder" : "Saved Folders",
@@ -442,7 +412,7 @@ struct RemoteServerDetailView: View {
 
         if offlineCopyCount > 0 {
             Button {
-                navigationRequest = .offlineShelf(profile)
+                navigate(.offlineShelf(profile.id))
             } label: {
                 Label(
                     offlineCopyCount == 1 ? "Offline Copy" : "Offline Shelf",
@@ -532,9 +502,12 @@ struct RemoteServerDetailView: View {
     }
 
     private func presentInfo(for session: RemoteComicReadingSession) {
-        DispatchQueue.main.async {
-            presentedInfoSession = session
-        }
+        appPresenter?.presentSheet(
+            .content(
+                id: "remote.recent.info.\(session.id)",
+                content: AnyView(recentSessionInfoSheet(for: session))
+            )
+        )
     }
 
     private func recentSessionInfoSheet(
@@ -567,25 +540,18 @@ struct RemoteServerDetailView: View {
 
         recentSessions = viewModel.recentSessions(for: profile)
     }
-}
 
-private enum RemoteServerDetailNavigationRequest: Identifiable, Hashable {
-    case browser(RemoteServerProfile)
-    case comic(RemoteDirectoryItem)
-    case savedFolders(RemoteServerProfile)
-    case offlineShelf(RemoteServerProfile)
+    private func presentEditor(for draft: RemoteServerEditorDraft) {
+        appPresenter?.presentSheet(
+            .content(
+                id: draft.id,
+                content: AnyView(remoteServerEditor(for: draft))
+            )
+        )
+    }
 
-    var id: String {
-        switch self {
-        case .browser(let profile):
-            return "browser:\(profile.id.uuidString)"
-        case .comic(let item):
-            return "comic:\(item.id)"
-        case .savedFolders(let profile):
-            return "saved:\(profile.id.uuidString)"
-        case .offlineShelf(let profile):
-            return "offline:\(profile.id.uuidString)"
-        }
+    private func navigate(_ route: BrowseNavigationRoute) {
+        appNavigator?.navigate(.browse(route))
     }
 }
 
@@ -595,7 +561,7 @@ private struct RemoteServerDetailShortcutItem: Identifiable {
     let subtitle: String
     let systemImage: String
     let tint: Color
-    let navigationRequest: RemoteServerDetailNavigationRequest
+    let route: BrowseNavigationRoute
 }
 
 private struct RemoteServerDetailShortcutRow: View {
