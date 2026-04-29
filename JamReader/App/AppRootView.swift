@@ -1,152 +1,23 @@
 import SwiftUI
 
-struct AppRootView: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    @ObservedObject var viewModel: LibraryListViewModel
-    let dependencies: AppDependencies
-
-    @AppStorage(AppNavigationStorageKeys.selectedTab) private var selectedTabRawValue = AppRootTab.library.rawValue
-    @StateObject private var browseRemoteServerViewModel: RemoteServerListViewModel
-    @State private var browseEditorDraft: RemoteServerEditorDraft?
-    @State private var rootTabBarHeight: CGFloat = AppLayout.bottomBarHeight
-
-    init(viewModel: LibraryListViewModel, dependencies: AppDependencies) {
-        self.viewModel = viewModel
-        self.dependencies = dependencies
-        _browseRemoteServerViewModel = StateObject(
-            wrappedValue: RemoteServerListViewModel(
-                profileStore: dependencies.remoteServerProfileStore,
-                folderShortcutStore: dependencies.remoteFolderShortcutStore,
-                credentialStore: dependencies.remoteServerCredentialStore,
-                browsingService: dependencies.remoteServerBrowsingService,
-                readingProgressStore: dependencies.remoteReadingProgressStore
-            )
-        )
-    }
-
-    private var selectedTab: Binding<AppRootTab> {
-        Binding(
-            get: { AppRootTab(rawValue: selectedTabRawValue) ?? .library },
-            set: { selectedTabRawValue = $0.rawValue }
-        )
-    }
+struct AppRootOverlayView: View {
+    @ObservedObject var controller: RemoteBackgroundImportController
+    let bottomBarHeight: CGFloat
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
-                Color.surfaceGrouped
-                    .ignoresSafeArea()
+            VStack {
+                Spacer()
 
-                if usesUIKitTabBarRoot {
-                    AppRootTabBarControllerView(
-                        selection: selectedTab,
-                        tabBarHeight: $rootTabBarHeight,
-                        libraryRoot: AnyView(
-                            LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
-                                .background(Color.surfaceGrouped.ignoresSafeArea())
-                        ),
-                        browseRoot: AnyView(
-                            BrowseHomeView(
-                                dependencies: dependencies,
-                                viewModel: browseRemoteServerViewModel,
-                                editorDraft: $browseEditorDraft
-                            )
-                            .background(Color.surfaceGrouped.ignoresSafeArea())
-                        ),
-                        settingsRoot: AnyView(
-                            SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
-                                .background(Color.surfaceGrouped.ignoresSafeArea())
-                        )
-                    )
-                    .ignoresSafeArea()
-                } else {
-                    appTabView
-                }
-            }
-            .overlay(alignment: .bottom) {
-                RootImportOverlayHost(
-                    controller: dependencies.remoteBackgroundImportController
-                )
+                RootImportOverlayHost(controller: controller)
                     .padding(.horizontal, Spacing.sm)
                     .padding(
                         .bottom,
-                        proxy.safeAreaInsets.bottom + effectiveBottomBarHeight - Spacing.xxs
+                        proxy.safeAreaInsets.bottom + bottomBarHeight - Spacing.xxs
                     )
             }
         }
-        .background {
-            SystemSheetPresenter(item: $browseEditorDraft) { draft in
-                browseRemoteServerEditor(for: draft)
-            }
-        }
-        // iPad keyboard shortcuts: Cmd+1/2/3 for tab switching
-        .background {
-            VStack {
-                Button("") { selectedTab.wrappedValue = .library }
-                    .keyboardShortcut("1", modifiers: .command)
-                Button("") { selectedTab.wrappedValue = .browse }
-                    .keyboardShortcut("2", modifiers: .command)
-                Button("") { selectedTab.wrappedValue = .settings }
-                    .keyboardShortcut("3", modifiers: .command)
-            }
-            .allowsHitTesting(false)
-            .opacity(0)
-        }
-    }
-
-    private var usesUIKitTabBarRoot: Bool {
-        horizontalSizeClass == .regular
-    }
-
-    private var effectiveBottomBarHeight: CGFloat {
-        usesUIKitTabBarRoot ? rootTabBarHeight : AppLayout.bottomBarHeight
-    }
-
-    private func browseRemoteServerEditor(
-        for draft: RemoteServerEditorDraft
-    ) -> some View {
-        RemoteServerEditorSheet(
-            draft: draft,
-            appliesSwiftUIPresentationModifiers: false
-        ) { updatedDraft in
-            let alertState = browseRemoteServerViewModel.save(draft: updatedDraft)
-            if alertState == nil {
-                browseEditorDraft = nil
-            }
-            return alertState
-        }
-        .id(draft.id)
-    }
-
-    private var appTabView: some View {
-        TabView(selection: selectedTab) {
-            LibraryHomeView(viewModel: viewModel, dependencies: dependencies)
-                .background(Color.surfaceGrouped.ignoresSafeArea())
-                .tabItem {
-                    Label("Library", systemImage: AppRootTab.library.systemImage)
-                }
-                .tag(AppRootTab.library)
-
-            BrowseHomeView(
-                dependencies: dependencies,
-                viewModel: browseRemoteServerViewModel,
-                editorDraft: $browseEditorDraft
-            )
-                .background(Color.surfaceGrouped.ignoresSafeArea())
-                .tabItem {
-                    Label("Browse", systemImage: AppRootTab.browse.systemImage)
-                }
-                .tag(AppRootTab.browse)
-
-            SettingsHomeView(viewModel: viewModel, dependencies: dependencies)
-                .background(Color.surfaceGrouped.ignoresSafeArea())
-                .tabItem {
-                    Label("Settings", systemImage: AppRootTab.settings.systemImage)
-                }
-                .tag(AppRootTab.settings)
-        }
-        .background(Color.surfaceGrouped.ignoresSafeArea())
+        .allowsHitTesting(true)
     }
 }
 
