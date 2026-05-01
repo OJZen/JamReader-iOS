@@ -530,6 +530,12 @@ struct LibrarySpecialCollectionView: View {
     }
 
     private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
+        let heroSourceID = viewModel.heroSourceID(for: comic)
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
+        let effectiveSourceFrame = registeredFrame == .zero ? sourceFrame : registeredFrame
+        let previewImage = LocalCoverTransitionCache.shared.image(for: heroSourceID)
+            ?? viewModel.cachedTransitionImage(for: comic)
+
         appPresenter?.presentReader(
             .local(
                 LocalReaderPresentation(
@@ -539,8 +545,9 @@ struct LibrarySpecialCollectionView: View {
                         title: viewModel.kind.title,
                         comics: displayedComics
                     ),
-                    sourceFrame: sourceFrame,
-                    previewImage: nil,
+                    sourceFrame: effectiveSourceFrame,
+                    previewImage: previewImage,
+                    transitionStyle: .libraryLift,
                     onComicUpdated: handleReaderComicUpdate,
                     onDismiss: nil
                 )

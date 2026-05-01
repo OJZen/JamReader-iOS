@@ -1058,6 +1058,7 @@ struct LibraryBrowserView: View {
             comic: comic,
             context: previewNavigationContext(for: kind),
             heroSourceID: previewHeroSourceID(for: kind, comic: comic),
+            transitionStyle: .libraryLift,
             showsPersistentActions: kind != .reading,
             appliesListRowInsets: appliesListRowInsets,
             enablesSwipeActions: enablesSwipeActions,
@@ -1104,6 +1105,7 @@ struct LibraryBrowserView: View {
             comic: comic,
             context: previewNavigationContext(for: kind),
             heroSourceID: previewHeroSourceID(for: kind, comic: comic),
+            transitionStyle: .libraryLift,
             label: { previewGridCard(for: kind, comic: comic) }
         )
     }
@@ -1443,6 +1445,7 @@ struct LibraryBrowserView: View {
         comic: LibraryComic,
         context: ReaderNavigationContext,
         heroSourceID: String? = nil,
+        transitionStyle: ReaderHeroTransitionStyle = .coverZoom,
         showsPersistentActions: Bool = true,
         appliesListRowInsets: Bool = true,
         enablesSwipeActions: Bool = true,
@@ -1455,7 +1458,8 @@ struct LibraryBrowserView: View {
                 comic,
                 context: context,
                 sourceFrame: frame,
-                preferredHeroSourceID: heroSourceID
+                preferredHeroSourceID: heroSourceID,
+                transitionStyle: transitionStyle
             )
         } label: {
             InsetListRowCard {
@@ -1492,6 +1496,7 @@ struct LibraryBrowserView: View {
         comic: LibraryComic,
         context: ReaderNavigationContext,
         heroSourceID: String? = nil,
+        transitionStyle: ReaderHeroTransitionStyle = .coverZoom,
         @ViewBuilder label: @escaping () -> Label
     ) -> some View {
         HeroTapButton { frame in
@@ -1499,7 +1504,8 @@ struct LibraryBrowserView: View {
                 comic,
                 context: context,
                 sourceFrame: frame,
-                preferredHeroSourceID: heroSourceID
+                preferredHeroSourceID: heroSourceID,
+                transitionStyle: transitionStyle
             )
         } label: {
             label()
@@ -1541,17 +1547,24 @@ struct LibraryBrowserView: View {
         _ comic: LibraryComic,
         context: ReaderNavigationContext,
         sourceFrame: CGRect,
-        preferredHeroSourceID: String? = nil
+        preferredHeroSourceID: String? = nil,
+        transitionStyle: ReaderHeroTransitionStyle = .coverZoom
     ) {
-        _ = preferredHeroSourceID
+        let heroSourceID = preferredHeroSourceID ?? viewModel.heroSourceID(for: comic)
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
+        let effectiveSourceFrame = registeredFrame == .zero ? sourceFrame : registeredFrame
+        let previewImage = LocalCoverTransitionCache.shared.image(for: heroSourceID)
+            ?? viewModel.cachedTransitionImage(for: comic)
+
         appPresenter?.presentReader(
             .local(
                 LocalReaderPresentation(
                     descriptor: viewModel.descriptor,
                     comic: comic,
                     navigationContext: context,
-                    sourceFrame: sourceFrame,
-                    previewImage: nil,
+                    sourceFrame: effectiveSourceFrame,
+                    previewImage: previewImage,
+                    transitionStyle: transitionStyle,
                     onComicUpdated: handleReaderComicUpdate,
                     onDismiss: nil
                 )

@@ -68,8 +68,29 @@ struct LocalReaderPresentation {
     let navigationContext: ReaderNavigationContext?
     let sourceFrame: CGRect
     let previewImage: UIImage?
+    let transitionStyle: ReaderHeroTransitionStyle
     let onComicUpdated: ((LibraryComic) -> Void)?
     let onDismiss: (() -> Void)?
+
+    init(
+        descriptor: LibraryDescriptor,
+        comic: LibraryComic,
+        navigationContext: ReaderNavigationContext?,
+        sourceFrame: CGRect,
+        previewImage: UIImage?,
+        transitionStyle: ReaderHeroTransitionStyle = .coverZoom,
+        onComicUpdated: ((LibraryComic) -> Void)?,
+        onDismiss: (() -> Void)?
+    ) {
+        self.descriptor = descriptor
+        self.comic = comic
+        self.navigationContext = navigationContext
+        self.sourceFrame = sourceFrame
+        self.previewImage = previewImage
+        self.transitionStyle = transitionStyle
+        self.onComicUpdated = onComicUpdated
+        self.onDismiss = onDismiss
+    }
 }
 
 struct RemoteReaderPresentation {
@@ -79,12 +100,40 @@ struct RemoteReaderPresentation {
     let referenceOverride: RemoteComicFileReference?
     let sourceFrame: CGRect
     let previewImage: UIImage?
+    let transitionStyle: ReaderHeroTransitionStyle
     let onDismiss: (() -> Void)?
+
+    init(
+        profile: RemoteServerProfile,
+        item: RemoteDirectoryItem,
+        openMode: RemoteComicOpenMode,
+        referenceOverride: RemoteComicFileReference?,
+        sourceFrame: CGRect,
+        previewImage: UIImage?,
+        transitionStyle: ReaderHeroTransitionStyle = .coverZoom,
+        onDismiss: (() -> Void)?
+    ) {
+        self.profile = profile
+        self.item = item
+        self.openMode = openMode
+        self.referenceOverride = referenceOverride
+        self.sourceFrame = sourceFrame
+        self.previewImage = previewImage
+        self.transitionStyle = transitionStyle
+        self.onDismiss = onDismiss
+    }
 }
 
 enum ReaderPresentationRoute {
     case local(LocalReaderPresentation)
     case remote(RemoteReaderPresentation)
+}
+
+enum ReaderHeroTransitionStyle {
+    /// File-manager style: the thumbnail cover expands into the full-screen reader.
+    case coverZoom
+    /// Library style: the cover/card lifts forward while the reader fades in behind it.
+    case libraryLift
 }
 
 enum AppSheetRoute: Identifiable {

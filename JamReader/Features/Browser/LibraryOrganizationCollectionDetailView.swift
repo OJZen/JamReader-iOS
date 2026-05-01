@@ -402,6 +402,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                     LibraryComicRow(
                         comic: comic,
                         coverURL: viewModel.coverURL(for: comic),
+                        coverSource: viewModel.coverSource(for: comic),
                         showsSelectionState: true,
                         isSelected: selectedComicIDs.contains(comic.id)
                     )
@@ -422,6 +423,8 @@ struct LibraryOrganizationCollectionDetailView: View {
                     LibraryComicRow(
                         comic: comic,
                         coverURL: viewModel.coverURL(for: comic),
+                        coverSource: viewModel.coverSource(for: comic),
+                        heroSourceID: viewModel.heroSourceID(for: comic),
                         trailingAccessoryReservedWidth: comicAccessoryReservedWidth
                     )
                 }
@@ -481,6 +484,7 @@ struct LibraryOrganizationCollectionDetailView: View {
                 LibraryComicCard(
                     comic: comic,
                     coverURL: viewModel.coverURL(for: comic),
+                    coverSource: viewModel.coverSource(for: comic),
                     showsSelectionState: true,
                     isSelected: selectedComicIDs.contains(comic.id)
                 )
@@ -490,7 +494,12 @@ struct LibraryOrganizationCollectionDetailView: View {
             HeroTapButton { frame in
                 presentComic(comic, sourceFrame: frame)
             } label: {
-                LibraryComicCard(comic: comic, coverURL: viewModel.coverURL(for: comic))
+                LibraryComicCard(
+                    comic: comic,
+                    coverURL: viewModel.coverURL(for: comic),
+                    coverSource: viewModel.coverSource(for: comic),
+                    heroSourceID: viewModel.heroSourceID(for: comic)
+                )
             }
             .buttonStyle(.plain)
             .overlay(alignment: .topTrailing) {
@@ -560,6 +569,12 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private func presentComic(_ comic: LibraryComic, sourceFrame: CGRect) {
+        let heroSourceID = viewModel.heroSourceID(for: comic)
+        let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
+        let effectiveSourceFrame = registeredFrame == .zero ? sourceFrame : registeredFrame
+        let previewImage = LocalCoverTransitionCache.shared.image(for: heroSourceID)
+            ?? viewModel.cachedTransitionImage(for: comic)
+
         appPresenter?.presentReader(
             .local(
                 LocalReaderPresentation(
@@ -569,8 +584,9 @@ struct LibraryOrganizationCollectionDetailView: View {
                         title: viewModel.collection.displayTitle,
                         comics: displayedComics
                     ),
-                    sourceFrame: sourceFrame,
-                    previewImage: nil,
+                    sourceFrame: effectiveSourceFrame,
+                    previewImage: previewImage,
+                    transitionStyle: .libraryLift,
                     onComicUpdated: handleReaderComicUpdate,
                     onDismiss: nil
                 )

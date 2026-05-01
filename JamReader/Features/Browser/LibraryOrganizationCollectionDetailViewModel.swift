@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, LoadableViewModel {
@@ -18,6 +19,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     private let databaseURL: URL
     private let metadataRootURL: URL
     private var hasLoaded = false
+    private var accessSession: LibraryAccessSession?
 
     init(
         descriptor: LibraryDescriptor,
@@ -387,5 +389,56 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
 
     func coverURL(for comic: LibraryComic) -> URL? {
         coverLocator.coverURL(for: comic, metadataRootURL: metadataRootURL)
+    }
+
+    func coverSource(for comic: LibraryComic) -> LocalComicCoverSource? {
+        guard let sourceRootURL = resolvedSourceRootURLIfAvailable() else {
+            return nil
+        }
+
+        return LocalComicCoverSource(
+            fileURL: resolveComicFileURL(for: comic, sourceRootURL: sourceRootURL),
+            cacheURL: coverLocator.plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
+        )
+    }
+
+    func heroSourceID(for comic: LibraryComic) -> String {
+        "library-organization-comic-\(descriptor.id.uuidString)-\(collection.id)-\(comic.id)"
+    }
+
+    func cachedTransitionImage(for comic: LibraryComic) -> UIImage? {
+        LocalCoverTransitionCache.shared.image(for: heroSourceID(for: comic))
+    }
+
+    private func resolveComicFileURL(
+        for comic: LibraryComic,
+        sourceRootURL: URL
+    ) -> URL {
+        let relativePath = {
+            let rawPath = comic.path?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if rawPath.isEmpty {
+                return comic.fileName
+            }
+
+            return rawPath
+        }()
+
+        if relativePath.hasPrefix("/") {
+            return sourceRootURL.appendingPathComponent(String(relativePath.dropFirst()))
+        }
+
+        return sourceRootURL.appendingPathComponent(relativePath)
+    }
+
+    private func resolvedSourceRootURLIfAvailable() -> URL? {
+        if accessSession == nil {
+            accessSession = try? storageManager.makeAccessSession(for: descriptor)
+        }
+
+        if let sourceURL = accessSession?.sourceURL {
+            return sourceURL
+        }
+
+        return try? storageManager.restoreSourceURL(for: descriptor)
     }
 }
