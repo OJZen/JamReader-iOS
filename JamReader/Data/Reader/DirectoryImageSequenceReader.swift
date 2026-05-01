@@ -25,7 +25,7 @@ struct DirectoryImageSequenceInspection {
     let comicInfoURL: URL?
 }
 
-final class DirectoryImageSequenceInspector {
+nonisolated final class DirectoryImageSequenceInspector {
     private static let auxiliaryFileNames: Set<String> = [
         "comicinfo.xml",
         "thumbs.db",
@@ -136,7 +136,7 @@ final class DirectoryImageSequenceInspector {
     }
 }
 
-final class DirectoryImageSequenceReader {
+nonisolated final class DirectoryImageSequenceReader {
     private let fileManager: FileManager
     private let inspector: DirectoryImageSequenceInspector
 

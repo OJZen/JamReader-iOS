@@ -1,6 +1,6 @@
 import Foundation
 
-struct LibraryComic: Identifiable, Hashable {
+struct LibraryComic: Identifiable, Hashable, Sendable {
     let id: Int64
     let parentID: Int64
     let fileName: String

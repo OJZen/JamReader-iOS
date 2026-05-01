@@ -1,6 +1,6 @@
 import Foundation
 
-struct ArchiveImageMetadata {
+nonisolated struct ArchiveImageMetadata: Sendable {
     let pageCount: Int
     let coverData: Data?
     let embeddedComicInfoData: Data?

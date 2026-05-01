@@ -18,7 +18,7 @@ enum ComicDocumentLoadError: LocalizedError {
     }
 }
 
-final class ComicDocumentLoader {
+nonisolated final class ComicDocumentLoader {
     private let fileManager: FileManager
     private let directoryImageSequenceReader: DirectoryImageSequenceReader
     private let libArchiveReader: LibArchiveReader

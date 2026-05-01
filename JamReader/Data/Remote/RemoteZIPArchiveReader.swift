@@ -1,7 +1,7 @@
 import Foundation
 import zlib
 
-struct RemoteZIPArchiveReader {
+nonisolated struct RemoteZIPArchiveReader {
     private static let endOfCentralDirectorySignature: UInt32 = 0x06054b50
     private static let centralDirectoryFileHeaderSignature: UInt32 = 0x02014b50
     private static let localFileHeaderSignature: UInt32 = 0x04034b50

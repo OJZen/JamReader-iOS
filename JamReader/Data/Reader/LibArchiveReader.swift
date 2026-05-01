@@ -19,7 +19,7 @@ struct LibArchiveEntry: Sendable {
     let archiveIndex: Int
 }
 
-final class LibArchiveReader {
+nonisolated final class LibArchiveReader {
     func loadDocument(at archiveURL: URL) throws -> ImageSequenceComicDocument {
         let archiveReader = try YRLibArchiveReader(archiveURL: archiveURL)
         let orderedEntries = try orderedPageEntries(from: archiveReader.entryPaths)

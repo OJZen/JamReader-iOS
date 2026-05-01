@@ -1,6 +1,6 @@
 import Foundation
 
-enum LibraryFileType: Int, Codable, Hashable, CaseIterable, Identifiable {
+enum LibraryFileType: Int, Codable, Hashable, CaseIterable, Identifiable, Sendable {
     case comic = 0
     case manga = 1
     case westernManga = 2

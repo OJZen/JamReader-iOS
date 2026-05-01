@@ -23,7 +23,7 @@ enum TARArchiveError: LocalizedError {
     }
 }
 
-struct TARArchiveEntry: Sendable {
+nonisolated struct TARArchiveEntry: Sendable {
     let path: String
     let size: Int
     let dataOffset: UInt64
@@ -33,7 +33,7 @@ struct TARArchiveEntry: Sendable {
     }
 }
 
-final class TARArchiveReader {
+nonisolated final class TARArchiveReader {
     func loadDocument(at archiveURL: URL) throws -> ImageSequenceComicDocument {
         let entries = try TARArchiveParser(archiveURL: archiveURL).parseEntries()
         let orderedEntries = try orderedPageEntries(from: entries)
@@ -99,7 +99,7 @@ final class TARArchiveReader {
     }
 }
 
-private struct TARArchiveParser {
+nonisolated private struct TARArchiveParser {
     private static let blockSize = 512
     private static let regularTypeFlags: Set<UInt8> = [0, ascii("0"), ascii("7")]
     private static let directoryTypeFlags: Set<UInt8> = [ascii("5")]

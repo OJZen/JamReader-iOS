@@ -1,12 +1,12 @@
 import Foundation
 import PDFKit
 
-enum EBookReaderKind: Equatable {
+enum EBookReaderKind: Equatable, Sendable {
     case quickLook
     case epubJS
 }
 
-enum ComicDocument {
+enum ComicDocument: @unchecked Sendable {
     case pdf(PDFComicDocument)
     case imageSequence(ImageSequenceComicDocument)
     case ebook(EBookComicDocument)
@@ -39,7 +39,7 @@ enum ComicDocument {
     }
 }
 
-struct PDFComicDocument {
+struct PDFComicDocument: @unchecked Sendable {
     let url: URL
     let pdfDocument: PDFDocument
 
@@ -48,14 +48,14 @@ struct PDFComicDocument {
     }
 }
 
-struct EBookComicDocument {
+struct EBookComicDocument: Sendable {
     let url: URL
     let fileExtension: String
     let readerKind: EBookReaderKind
     let documentID: String
 }
 
-protocol ComicPageDataSource: AnyObject, Sendable {
+nonisolated protocol ComicPageDataSource: AnyObject, Sendable {
     func dataForPage(at index: Int) async throws -> Data
     func prefetchPages(at indices: [Int]) async
     func close() async
@@ -70,7 +70,7 @@ extension ComicPageDataSource {
     }
 }
 
-struct ImageSequenceComicDocument {
+struct ImageSequenceComicDocument: Sendable {
     let url: URL
     let pageNames: [String]
     let pageSource: any ComicPageDataSource
@@ -88,7 +88,7 @@ struct ImageSequenceComicDocument {
     }
 }
 
-struct UnsupportedComicDocument {
+struct UnsupportedComicDocument: Sendable {
     let url: URL
     let fileExtension: String
     let reason: String

@@ -42,7 +42,7 @@ enum ZIPArchiveError: LocalizedError {
     }
 }
 
-struct ZIPArchiveEntry: Sendable {
+nonisolated struct ZIPArchiveEntry: Sendable {
     let path: String
     let compressionMethod: UInt16
     let generalPurposeFlag: UInt16
@@ -55,7 +55,7 @@ struct ZIPArchiveEntry: Sendable {
     }
 }
 
-final class ZIPArchiveReader {
+nonisolated final class ZIPArchiveReader {
     private let fallbackReader: LibArchiveReader
 
     init(fallbackReader: LibArchiveReader = LibArchiveReader()) {
@@ -198,7 +198,7 @@ final class ZIPArchiveReader {
     }
 }
 
-private struct ZIPArchiveParser {
+nonisolated private struct ZIPArchiveParser {
     private static let endOfCentralDirectorySignature: UInt32 = 0x06054b50
     private static let centralDirectoryFileHeaderSignature: UInt32 = 0x02014b50
     private static let localFileHeaderSignature: UInt32 = 0x04034b50
@@ -371,7 +371,7 @@ private struct ZIPArchiveParser {
     }
 }
 
-private struct ZIPEndOfCentralDirectory {
+nonisolated private struct ZIPEndOfCentralDirectory {
     let diskNumber: UInt16
     let centralDirectoryStartDisk: UInt16
     let totalEntries: UInt16
