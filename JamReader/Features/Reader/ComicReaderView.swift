@@ -20,6 +20,7 @@ struct ComicReaderView: View {
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
     @State private var containerWidth: CGFloat = 0
+    @State private var readerContentRevision = 0
 
     init(
         descriptor: LibraryDescriptor,
@@ -58,24 +59,31 @@ struct ComicReaderView: View {
             isInteractionLocked: readerSession.state.isPageJumpPresented,
             isChromeHidden: !readerSession.state.isChromeVisible
         ) {
-            Group {
-                if viewModel.isLoading {
-                    ReaderFallbackStateView(
-                        title: "Opening Comic",
-                        systemImage: nil,
-                        message: nil,
-                        showsProgress: true
-                    )
-                } else if let document = viewModel.document {
+            ZStack {
+                if viewModel.document == nil {
+                    if viewModel.isLoading || !viewModel.hasAttemptedInitialLoad {
+                        ReaderFallbackStateView(
+                            title: "Opening Comic",
+                            systemImage: nil,
+                            message: nil,
+                            showsProgress: true
+                        )
+                    } else {
+                        ReaderFallbackStateView(
+                            title: "Comic Unavailable",
+                            systemImage: "book.closed",
+                            message: "The selected comic could not be opened."
+                        )
+                    }
+                }
+
+                if let document = viewModel.document {
                     readerContent(for: document)
-                } else {
-                    ReaderFallbackStateView(
-                        title: "Comic Unavailable",
-                        systemImage: "book.closed",
-                        message: "The selected comic could not be opened."
-                    )
+                        .id(readerContentRevision)
+                        .zIndex(1)
                 }
             }
+            .background(Color.black.ignoresSafeArea())
         } topBar: {
             readerTopBar
         } bottomBar: { viewportSize in
@@ -119,12 +127,13 @@ struct ComicReaderView: View {
         .task {
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
             viewModel.loadIfNeeded()
-            synchronizeReaderSession()
+            scheduleReaderSessionSynchronization()
         }
         .onAppear {
             updateIdleTimerState()
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
-            synchronizeReaderSession()
+            viewModel.loadIfNeeded()
+            scheduleReaderSessionSynchronization()
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false
@@ -138,13 +147,14 @@ struct ComicReaderView: View {
         }
         .onChange(of: supportsDoublePageSpread) { _, _ in
             viewModel.setAllowsDoublePageSpread(supportsDoublePageSpread)
-            synchronizeReaderSession()
+            scheduleReaderSessionSynchronization()
         }
         .onChange(of: viewModel.document?.fileURL) { _, _ in
-            synchronizeReaderSession()
+            readerContentRevision &+= 1
+            scheduleReaderSessionSynchronization()
         }
         .onChange(of: viewModel.readerLayout) { _, _ in
-            synchronizeReaderSession()
+            scheduleReaderSessionSynchronization()
         }
         .onChange(of: viewModel.currentPageIndex) { oldValue, newValue in
             guard oldValue != newValue else {
@@ -249,35 +259,35 @@ struct ComicReaderView: View {
                 onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
                 onSetFitMode: { fitMode in
                     viewModel.setFitMode(fitMode)
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onSetPagingMode: { pagingMode in
                     viewModel.setPagingMode(pagingMode)
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onSetSpreadMode: { spreadMode in
                     viewModel.setSpreadMode(spreadMode)
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onSetReadingDirection: { readingDirection in
                     viewModel.setReadingDirection(readingDirection)
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onSetCoverAsSinglePage: { coverAsSinglePage in
                     viewModel.setCoverAsSinglePage(coverAsSinglePage)
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onRotateCounterClockwise: {
                     viewModel.rotateCounterClockwise()
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onRotateClockwise: {
                     viewModel.rotateClockwise()
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onResetRotation: {
                     viewModel.resetRotation()
-                    synchronizeReaderSession()
+                    scheduleReaderSessionSynchronization()
                 },
                 onToggleFavorite: viewModel.toggleFavoriteStatus,
                 onToggleReadStatus: viewModel.toggleReadStatus,
@@ -522,6 +532,13 @@ struct ComicReaderView: View {
 
         readerSession.apply(.dismissPageJump)
         updateVisiblePage(to: pageIndex)
+    }
+
+    private func scheduleReaderSessionSynchronization() {
+        Task { @MainActor in
+            await Task.yield()
+            synchronizeReaderSession()
+        }
     }
 
     private func synchronizeReaderSession() {

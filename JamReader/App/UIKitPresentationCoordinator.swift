@@ -5,7 +5,7 @@ import UIKit
 final class UIKitPresentationCoordinator {
     private let dependencies: AppDependencies
     private weak var rootViewController: UIViewController?
-    private var readerTransitionDelegate: HeroTransitionDelegate?
+    private var readerTransitionDelegate: (any UIViewControllerTransitioningDelegate)?
     private weak var presentedReaderController: UIViewController?
     private weak var presentedSheetController: DismissTrackingSheetHostingController<AnyView>?
     private var presentedSheetID: AnyHashable?
@@ -23,6 +23,7 @@ final class UIKitPresentationCoordinator {
         let content: AnyView
         let sourceFrame: CGRect
         let previewImage: UIImage?
+        let transitionStyle: ReaderHeroTransitionStyle
         let onDismiss: (() -> Void)?
 
         switch route {
@@ -39,6 +40,7 @@ final class UIKitPresentationCoordinator {
             )
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
+            transitionStyle = presentation.transitionStyle
             onDismiss = presentation.onDismiss
         case .remote(let presentation):
             content = AnyView(
@@ -53,10 +55,17 @@ final class UIKitPresentationCoordinator {
             )
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
+            transitionStyle = presentation.transitionStyle
             onDismiss = presentation.onDismiss
         }
 
-        presentReader(content: content, sourceFrame: sourceFrame, previewImage: previewImage, onDismiss: onDismiss)
+        presentReader(
+            content: content,
+            sourceFrame: sourceFrame,
+            previewImage: previewImage,
+            transitionStyle: transitionStyle,
+            onDismiss: onDismiss
+        )
     }
 
     func presentSheet(_ route: AppSheetRoute) {
@@ -115,6 +124,7 @@ final class UIKitPresentationCoordinator {
         content: AnyView,
         sourceFrame: CGRect,
         previewImage: UIImage?,
+        transitionStyle: ReaderHeroTransitionStyle,
         onDismiss: (() -> Void)?
     ) {
         if let presentedReaderController {
@@ -125,24 +135,22 @@ final class UIKitPresentationCoordinator {
                     content: content,
                     sourceFrame: sourceFrame,
                     previewImage: previewImage,
+                    transitionStyle: transitionStyle,
                     onDismiss: onDismiss
                 )
             }
             return
         }
 
-        guard let presenter = topPresenter() else {
+        guard let presenter = rootViewController ?? topPresenter() else {
             return
         }
 
-        let transitionDelegate = HeroTransitionDelegate(
-            sourceFrame: sourceFrame,
-            previewImage: previewImage
-        )
+        let transitionDelegate = ReaderSlideTransitionDelegate()
         readerTransitionDelegate = transitionDelegate
 
         let hostingController = DismissTrackingReaderHostingController(rootView: content)
-        hostingController.modalPresentationStyle = .overFullScreen
+        hostingController.modalPresentationStyle = .custom
         hostingController.modalPresentationCapturesStatusBarAppearance = true
         hostingController.transitioningDelegate = transitionDelegate
         hostingController.onDismiss = { [weak self] in
@@ -202,6 +210,108 @@ final class UIKitPresentationCoordinator {
     }
 }
 
+private final class ReaderSlideTransitionDelegate: NSObject, UIViewControllerTransitioningDelegate {
+    func animationController(
+        forPresented presented: UIViewController,
+        presenting: UIViewController,
+        source: UIViewController
+    ) -> (any UIViewControllerAnimatedTransitioning)? {
+        ReaderSlidePresentTransition()
+    }
+
+    func animationController(
+        forDismissed dismissed: UIViewController
+    ) -> (any UIViewControllerAnimatedTransitioning)? {
+        ReaderSlideDismissTransition()
+    }
+}
+
+private final class ReaderSlidePresentTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        UIAccessibility.isReduceMotionEnabled ? 0.16 : 0.30
+    }
+
+    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
+        guard
+            let toViewController = transitionContext.viewController(forKey: .to),
+            let toView = transitionContext.view(forKey: .to)
+        else {
+            transitionContext.completeTransition(false)
+            return
+        }
+
+        let container = transitionContext.containerView
+        let finalFrame = transitionContext.finalFrame(for: toViewController)
+        toView.frame = finalFrame
+        toView.backgroundColor = .black
+        container.addSubview(toView)
+
+        if UIAccessibility.isReduceMotionEnabled {
+            toView.alpha = 0
+            UIView.animate(
+                withDuration: transitionDuration(using: transitionContext),
+                delay: 0,
+                options: [.curveEaseOut, .beginFromCurrentState]
+            ) {
+                toView.alpha = 1
+            } completion: { _ in
+                transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+            }
+            return
+        }
+
+        toView.alpha = 0.96
+        toView.transform = CGAffineTransform(translationX: 0, y: finalFrame.height)
+
+        UIView.animate(
+            withDuration: transitionDuration(using: transitionContext),
+            delay: 0,
+            usingSpringWithDamping: 0.95,
+            initialSpringVelocity: 0.0,
+            options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]
+        ) {
+            toView.alpha = 1
+            toView.transform = .identity
+        } completion: { _ in
+            toView.transform = .identity
+            transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+        }
+    }
+}
+
+private final class ReaderSlideDismissTransition: NSObject, UIViewControllerAnimatedTransitioning {
+    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
+        UIAccessibility.isReduceMotionEnabled ? 0.14 : 0.24
+    }
+
+    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
+        guard let fromView = transitionContext.view(forKey: .from) else {
+            transitionContext.completeTransition(false)
+            return
+        }
+
+        let finalTranslationY = max(fromView.bounds.height, transitionContext.containerView.bounds.height)
+
+        UIView.animate(
+            withDuration: transitionDuration(using: transitionContext),
+            delay: 0,
+            options: [.curveEaseIn, .beginFromCurrentState, .allowUserInteraction]
+        ) {
+            fromView.alpha = UIAccessibility.isReduceMotionEnabled ? 0 : 0.98
+            if !UIAccessibility.isReduceMotionEnabled {
+                fromView.transform = CGAffineTransform(translationX: 0, y: finalTranslationY)
+            }
+        } completion: { _ in
+            let completed = !transitionContext.transitionWasCancelled
+            if !completed {
+                fromView.alpha = 1
+                fromView.transform = .identity
+            }
+            transitionContext.completeTransition(completed)
+        }
+    }
+}
+
 final class DismissTrackingReaderHostingController<Content: View>: UIHostingController<Content> {
     var onDismiss: (() -> Void)?
     private var hasReportedDismissal = false
@@ -212,7 +322,7 @@ final class DismissTrackingReaderHostingController<Content: View>: UIHostingCont
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .clear
+        view.backgroundColor = .black
     }
 
     override func viewDidDisappear(_ animated: Bool) {
