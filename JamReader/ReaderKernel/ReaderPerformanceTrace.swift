@@ -2,7 +2,7 @@ import Foundation
 
 enum ReaderPerformanceTrace {
 #if DEBUG
-    private static let enabled = ProcessInfo.processInfo.environment["YAC_READER_TRACE"] == "1"
+    private static let enabled = ProcessInfo.processInfo.environment["JAM_READER_TRACE"] == "1"
 #else
     private static let enabled = false
 #endif

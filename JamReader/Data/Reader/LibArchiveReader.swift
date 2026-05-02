@@ -164,7 +164,7 @@ private actor LibArchivePageSource: ComicPageDataSource {
     }
 }
 
-private final class LibArchiveReaderBox: @unchecked Sendable {
+nonisolated private final class LibArchiveReaderBox: @unchecked Sendable {
     nonisolated let archiveReader: YRLibArchiveReader
 
     init(_ archiveReader: YRLibArchiveReader) {

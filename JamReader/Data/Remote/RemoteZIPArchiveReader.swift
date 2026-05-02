@@ -392,7 +392,7 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
     }
 }
 
-private struct RemoteRandomAccessFileReaderBox: @unchecked Sendable {
+nonisolated private struct RemoteRandomAccessFileReaderBox: @unchecked Sendable {
     let fileReader: any RemoteRandomAccessFileReader
 
     init(_ fileReader: any RemoteRandomAccessFileReader) {

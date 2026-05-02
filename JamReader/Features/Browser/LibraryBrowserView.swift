@@ -1432,10 +1432,14 @@ struct LibraryBrowserView: View {
         navigationContext: ReaderNavigationContext
     ) -> some View {
         ComicReaderView(
-            descriptor: viewModel.descriptor,
-            comic: comic,
-            navigationContext: navigationContext,
-            onComicUpdated: handleReaderComicUpdate,
+            request: .library(
+                ComicLibraryOpenRequest(
+                    descriptor: viewModel.descriptor,
+                    comic: comic,
+                    navigationContext: navigationContext,
+                    onComicUpdated: handleReaderComicUpdate
+                )
+            ),
             dependencies: dependencies
         )
     }

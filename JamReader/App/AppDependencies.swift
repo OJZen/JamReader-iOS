@@ -30,6 +30,9 @@ struct AppDependencies {
     let remoteBackgroundImportController: RemoteBackgroundImportController
     let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
+    let comicDocumentService: ComicDocumentService
+    let comicReaderStateStore: ComicReaderStateStore
+    let comicOpenCoordinator: ComicOpenCoordinator
 
     static func makeDefault() -> AppDependencies {
         let appLibraryDatabase = AppLibraryDatabase()
@@ -56,9 +59,21 @@ struct AppDependencies {
         let remoteServerProfileStore = RemoteServerProfileStore()
         let remoteFolderShortcutStore = RemoteFolderShortcutStore()
         let remoteBackgroundImportController = RemoteBackgroundImportController()
+        let readerLayoutPreferencesStore = ReaderLayoutPreferencesStore()
+        let comicDocumentService = ComicDocumentService()
+        let comicReaderStateStore = ComicReaderStateStore(
+            databaseWriter: databaseWriter,
+            remoteReadingProgressStore: remoteReadingProgressStore
+        )
         let remoteServerBrowsingService = RemoteServerBrowsingService(
             credentialStore: remoteServerCredentialStore,
             cachePolicyStore: remoteCachePolicyStore
+        )
+        let comicOpenCoordinator = ComicOpenCoordinator(
+            storageManager: storageManager,
+            documentService: comicDocumentService,
+            remoteServerBrowsingService: remoteServerBrowsingService,
+            remoteReadingProgressStore: remoteReadingProgressStore
         )
         return AppDependencies(
             appLibraryDatabase: appLibraryDatabase,
@@ -109,7 +124,10 @@ struct AppDependencies {
             ),
             remoteBackgroundImportController: remoteBackgroundImportController,
             remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore(),
-            readerLayoutPreferencesStore: ReaderLayoutPreferencesStore()
+            readerLayoutPreferencesStore: readerLayoutPreferencesStore,
+            comicDocumentService: comicDocumentService,
+            comicReaderStateStore: comicReaderStateStore,
+            comicOpenCoordinator: comicOpenCoordinator
         )
     }
 }

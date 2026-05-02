@@ -1,97 +1,160 @@
 import Combine
 import Foundation
 
-private enum ComicReaderLoadState {
-    case idle
-    case loading
-    case ready(ComicDocument)
-}
-
 @MainActor
 final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
-    @Published private(set) var comic: LibraryComic
+    @Published private(set) var loadState: ComicReaderLoadState = .idle
     @Published private(set) var hasAttemptedInitialLoad = false
     @Published private(set) var currentPageIndex = 0
-    @Published private(set) var bookmarkPageIndices: [Int]
+    @Published private(set) var bookmarkPageIndices: [Int] = []
     @Published private(set) var readerLayout: ReaderDisplayLayout
     @Published private(set) var allowsDoublePageSpread = true
-    @Published private(set) var isFavorite: Bool
-    @Published private(set) var rating: Int
+    @Published private(set) var isFavorite = false
+    @Published private(set) var rating = 0
+    @Published private(set) var noticeMessage: String?
+    @Published private(set) var backgroundDownloadProgress: Double?
+    @Published private(set) var presentedDocument: ComicDocument?
     @Published var alert: AppAlertState?
-    @Published private var loadState: ComicReaderLoadState = .idle
 
-    let descriptor: LibraryDescriptor
-
-    private let storageManager: LibraryStorageManager
-    private let databaseWriter: LibraryDatabaseWriter
-    private let documentLoader: ComicDocumentLoader
-    private let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
-    private let onComicUpdated: ((LibraryComic) -> Void)?
+    private let dependencies: AppDependencies
+    private var request: ComicOpenRequest
+    private var activeSession: ComicReaderSession?
+    private var activeDocument: ComicDocument?
+    private var libraryComic: LibraryComic?
     private var navigationContext: ReaderNavigationContext?
-
-    private let databaseURL: URL
-    private var accessSession: LibraryAccessSession?
     private var hasLoaded = false
     private var currentLoadToken: UUID?
-    private var documentLoadTask: Task<Void, Never>?
+    private var remoteRefreshToken: UUID?
+    private var loadTask: Task<Void, Never>?
     private var loadWatchdogTask: Task<Void, Never>?
+    private var backgroundDownloadTask: Task<Void, Never>?
+    private var noticeDismissalTask: Task<Void, Never>?
     private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     private var pendingProgressPersistenceTask: Task<Void, Never>?
 
     init(
-        descriptor: LibraryDescriptor,
-        comic: LibraryComic,
-        navigationContext: ReaderNavigationContext?,
-        storageManager: LibraryStorageManager,
-        databaseWriter: LibraryDatabaseWriter,
-        documentLoader: ComicDocumentLoader,
-        readerLayoutPreferencesStore: ReaderLayoutPreferencesStore,
-        onComicUpdated: ((LibraryComic) -> Void)?
+        request: ComicOpenRequest,
+        dependencies: AppDependencies
     ) {
-        self.descriptor = descriptor
-        self.comic = comic
-        self.storageManager = storageManager
-        self.databaseWriter = databaseWriter
-        self.documentLoader = documentLoader
-        self.readerLayoutPreferencesStore = readerLayoutPreferencesStore
-        self.onComicUpdated = onComicUpdated
-        self.navigationContext = navigationContext
-        self.databaseURL = storageManager.databaseURL(for: descriptor)
-        self.bookmarkPageIndices = ReaderBookmarkNormalizer.normalized(
-            comic.bookmarkPageIndices,
-            maximumCount: 3
+        self.request = request
+        self.dependencies = dependencies
+        self.readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(
+            for: request.preferredLayoutType
         )
-        self.readerLayout = readerLayoutPreferencesStore.loadLayout(for: comic.type)
-        self.isFavorite = comic.isFavorite
-        self.rating = Self.normalizedRatingValue(from: comic.rating)
-
-        preloadInitialDocumentIfPossible()
+        self.currentPageIndex = request.fallbackPageIndex
     }
 
     deinit {
-        documentLoadTask?.cancel()
+        loadTask?.cancel()
         loadWatchdogTask?.cancel()
+        remoteRefreshToken = nil
+        backgroundDownloadTask?.cancel()
+        noticeDismissalTask?.cancel()
         pendingProgressPersistenceTask?.cancel()
+
+        let session = activeSession
+        let document = activeDocument
+        Task {
+            await session?.resourceLease.close(document: document)
+        }
     }
 
     var navigationTitle: String {
-        comic.displayTitle
+        activeSession?.title ?? request.displayTitle
     }
 
     var document: ComicDocument? {
-        guard case .ready(let document) = loadState else {
+        presentedDocument
+    }
+
+    var presentedDocumentPublisher: Published<ComicDocument?>.Publisher {
+        $presentedDocument
+    }
+
+    var documentIdentity: String? {
+        guard let document else {
             return nil
         }
-
-        return document
+        return "\(document.fileURL.path)#\(document.pageCount ?? -1)"
     }
 
     var isLoading: Bool {
-        guard case .loading = loadState else {
-            return false
+        if case .opening = loadState {
+            return true
         }
+        return false
+    }
 
-        return true
+    var loadingMessage: String {
+        if case .opening(let message, _) = loadState {
+            return message
+        }
+        return "Opening Comic"
+    }
+
+    var loadingProgress: Double? {
+        if case .opening(_, let progress) = loadState {
+            return progress
+        }
+        return nil
+    }
+
+    var failureMessage: String? {
+        if case .failed(let message) = loadState {
+            return message
+        }
+        return nil
+    }
+
+    var libraryDescriptor: LibraryDescriptor? {
+        guard case .library(let descriptor, _, _) = activeSession?.stateScope else {
+            if case .library(let request) = request {
+                return request.descriptor
+            }
+            return nil
+        }
+        return descriptor
+    }
+
+    var currentLibraryComic: LibraryComic? {
+        libraryComic
+    }
+
+    var fileName: String {
+        activeSession?.fileName ?? libraryComic?.fileName ?? request.displayTitle
+    }
+
+    var fileSeries: String? {
+        libraryComic?.series
+    }
+
+    var fileVolume: String? {
+        libraryComic?.volume
+    }
+
+    var fileAddedAt: Date? {
+        libraryComic?.addedAt
+    }
+
+    var fileLastOpenedAt: Date? {
+        libraryComic?.lastOpenedAt
+    }
+
+    var fallbackDocumentURL: URL {
+        activeSession?.fallbackDocumentURL ?? request.fallbackDocumentURL
+    }
+
+    var fallbackPageCount: Int {
+        activeSession?.fallbackPageCount ?? request.fallbackPageCount
+    }
+
+    var isLibraryBacked: Bool {
+        activeSession?.isLibraryBacked ?? {
+            if case .library = request {
+                return true
+            }
+            return false
+        }()
     }
 
     var pageIndicatorText: String? {
@@ -106,7 +169,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         if let document, case .imageSequence = document {
             return true
         }
-
         return false
     }
 
@@ -139,7 +201,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard let pageCount = document?.pageCount, pageCount > 0 else {
             return nil
         }
-
         return min(currentPageIndex + 1, pageCount)
     }
 
@@ -148,52 +209,32 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     }
 
     var canOpenPreviousComic: Bool {
-        navigationContext?.previousComic(for: comic.id) != nil
+        guard let libraryComic else {
+            return false
+        }
+        return navigationContext?.previousComic(for: libraryComic.id) != nil
     }
 
     var canOpenNextComic: Bool {
-        navigationContext?.nextComic(for: comic.id) != nil
+        guard let libraryComic else {
+            return false
+        }
+        return navigationContext?.nextComic(for: libraryComic.id) != nil
     }
 
     var readerContextPositionText: String? {
-        navigationContext?.positionText(for: comic.id)
+        guard let libraryComic else {
+            return nil
+        }
+        return navigationContext?.positionText(for: libraryComic.id)
     }
 
     func loadIfNeeded() {
         guard !hasLoaded else {
             return
         }
-
         hasLoaded = true
         load()
-    }
-
-    private func preloadInitialDocumentIfPossible() {
-        guard !hasLoaded else {
-            return
-        }
-
-        hasAttemptedInitialLoad = true
-
-        do {
-            if accessSession == nil {
-                accessSession = try storageManager.makeAccessSession(for: descriptor)
-            }
-
-            let sourceRootURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
-            let document = try documentLoader.loadDocument(for: comic, sourceRootURL: sourceRootURL)
-            currentPageIndex = initialPageIndex(for: comic, pageCount: document.pageCount)
-            normalizeBookmarks(for: document.pageCount)
-            loadState = .ready(document)
-            hasLoaded = true
-        } catch {
-            // Keep the first render in the loading state and let the async load
-            // path report the real user-facing error. This avoids flashing
-            // "Comic Unavailable" during normal presentation.
-            hasAttemptedInitialLoad = false
-            loadState = .idle
-            hasLoaded = false
-        }
     }
 
     func load() {
@@ -201,99 +242,45 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             return
         }
 
-        hasAttemptedInitialLoad = true
-        loadState = .loading
         alert = nil
-        documentLoadTask?.cancel()
+        loadTask?.cancel()
         loadWatchdogTask?.cancel()
+        currentLoadToken = UUID()
+        let token = currentLoadToken!
+        loadState = .opening(message: "Opening Comic", progress: nil)
+        hasAttemptedInitialLoad = true
+        startLoadWatchdog(token: token)
 
-        do {
-            if accessSession == nil {
-                accessSession = try storageManager.makeAccessSession(for: descriptor)
+        let request = request
+        loadTask = Task { [weak self] in
+            guard let self else {
+                return
             }
 
-            let sourceRootURL = accessSession?.sourceURL ?? URL(fileURLWithPath: descriptor.sourcePath, isDirectory: true)
-            let comicSnapshot = comic
-            let loadToken = UUID()
-            currentLoadToken = loadToken
-            startLoadWatchdog(token: loadToken, comic: comicSnapshot)
-            documentLoadTask = Task { [weak self, sourceRootURL, comicSnapshot, loadToken] in
-                let result = await Task.detached(priority: .userInitiated) {
-                    do {
-                        let document = try ComicDocumentLoader().loadDocument(
-                            for: comicSnapshot,
-                            sourceRootURL: sourceRootURL
-                        )
-                        return Result<ComicDocument, Error>.success(document)
-                    } catch {
-                        return Result<ComicDocument, Error>.failure(error)
+            do {
+                for try await event in dependencies.comicOpenCoordinator.openEvents(for: request) {
+                    guard !Task.isCancelled, currentLoadToken == token else {
+                        return
                     }
-                }.value
 
-                guard !Task.isCancelled else {
-                    return
+                    switch event {
+                    case .opening(let message, let progress):
+                        loadState = .opening(message: message, progress: progress)
+                    case .ready(let session, let document):
+                        completeOpen(session: session, document: document, token: token)
+                    }
                 }
 
-                self?.completeDocumentLoad(
-                    result,
-                    for: comicSnapshot,
-                    token: loadToken
-                )
+                guard !Task.isCancelled, currentLoadToken == token else {
+                    return
+                }
+                failOpen(message: "Opening this comic was canceled.", token: token)
+            } catch {
+                guard currentLoadToken == token else {
+                    return
+                }
+                failOpen(error, token: token)
             }
-        } catch {
-            loadState = .idle
-            alert = AppAlertState(title: "Failed to Open Comic", message: error.userFacingMessage)
-        }
-    }
-
-    private func completeDocumentLoad(
-        _ result: Result<ComicDocument, Error>,
-        for loadedComic: LibraryComic,
-        token: UUID
-    ) {
-        guard currentLoadToken == token, comic.id == loadedComic.id else {
-            return
-        }
-
-        loadWatchdogTask?.cancel()
-        documentLoadTask = nil
-        currentLoadToken = nil
-
-        switch result {
-        case .success(let document):
-            currentPageIndex = initialPageIndex(for: loadedComic, pageCount: document.pageCount)
-            normalizeBookmarks(for: document.pageCount)
-            loadState = .ready(document)
-
-            // Keep the first visible frame independent from SQLite writes. A busy
-            // local-library database must not hold the reader on "Opening Comic".
-            persistProgress()
-        case .failure(let error):
-            loadState = .idle
-            alert = AppAlertState(title: "Failed to Open Comic", message: error.userFacingMessage)
-        }
-    }
-
-    private func startLoadWatchdog(token: UUID, comic: LibraryComic) {
-        loadWatchdogTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 15_000_000_000)
-
-            guard !Task.isCancelled else {
-                return
-            }
-
-            guard self?.currentLoadToken == token, self?.comic.id == comic.id else {
-                return
-            }
-
-            self?.documentLoadTask?.cancel()
-            self?.documentLoadTask = nil
-            self?.currentLoadToken = nil
-            self?.loadState = .idle
-            self?.alert = AppAlertState(
-                title: "Failed to Open Comic",
-                message: "Opening this comic took too long. The file may be unavailable or the storage provider is not responding."
-            )
         }
     }
 
@@ -318,11 +305,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard allowsDoublePageSpread || spreadMode == .singlePage else {
             return
         }
-
         guard readerLayout.spreadMode != spreadMode else {
             return
         }
-
         readerLayout.spreadMode = spreadMode
         persistLayoutPreferences()
     }
@@ -331,7 +316,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard readerLayout.pagingMode != pagingMode else {
             return
         }
-
         readerLayout.pagingMode = pagingMode
         if pagingMode == .verticalContinuous {
             readerLayout.spreadMode = .singlePage
@@ -343,7 +327,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard self.allowsDoublePageSpread != allowsDoublePageSpread else {
             return
         }
-
         self.allowsDoublePageSpread = allowsDoublePageSpread
     }
 
@@ -351,7 +334,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard readerLayout.readingDirection != readingDirection else {
             return
         }
-
         readerLayout.readingDirection = readingDirection
         persistLayoutPreferences()
     }
@@ -360,7 +342,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard readerLayout.fitMode != fitMode else {
             return
         }
-
         readerLayout.fitMode = fitMode
         persistLayoutPreferences()
     }
@@ -374,7 +355,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard readerLayout.coverAsSinglePage != coverAsSinglePage else {
             return
         }
-
         readerLayout.coverAsSinglePage = coverAsSinglePage
         persistLayoutPreferences()
     }
@@ -398,76 +378,82 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 bookmarkPageIndices,
                 at: currentPageIndex,
                 pageCount: document?.pageCount,
-                maximumCount: 3
+                maximumCount: isLibraryBacked ? 3 : nil
             )
         )
     }
 
     func toggleFavoriteStatus() {
+        guard let session = activeSession, isLibraryBacked else {
+            return
+        }
         let updatedValue = !isFavorite
         AppHaptics.medium()
 
         do {
-            try databaseWriter.setFavorite(
+            let result = try dependencies.comicReaderStateStore.setFavorite(
                 updatedValue,
-                for: comic.id,
-                in: databaseURL
+                session: session,
+                currentLibraryComic: libraryComic
             )
-            publishComicUpdate(comic.updatingFavorite(updatedValue))
+            applyStateWriteResult(result)
         } catch {
             alert = AppAlertState(title: "Failed to Update Favorites", message: error.userFacingMessage)
         }
     }
 
     func setRating(_ rating: Int) {
+        guard let session = activeSession, isLibraryBacked else {
+            return
+        }
         let normalizedRating = min(max(rating, 0), 5)
         guard self.rating != normalizedRating else {
             return
         }
 
         AppHaptics.selection()
-
         let ratingValue = normalizedRating > 0 ? Double(normalizedRating) : nil
         do {
-            try databaseWriter.setRating(
+            let result = try dependencies.comicReaderStateStore.setRating(
                 ratingValue,
-                for: comic.id,
-                in: databaseURL
+                session: session,
+                currentLibraryComic: libraryComic
             )
-            publishComicUpdate(comic.updatingRating(ratingValue))
+            applyStateWriteResult(result)
         } catch {
             alert = AppAlertState(title: "Failed to Update Rating", message: error.userFacingMessage)
         }
     }
 
     func toggleReadStatus() {
-        setReadStatus(!comic.read)
+        guard let libraryComic else {
+            return
+        }
+        setReadStatus(!libraryComic.read)
     }
 
     func setReadStatus(_ isRead: Bool) {
-        guard comic.read != isRead else {
+        guard let session = activeSession, isLibraryBacked else {
+            return
+        }
+        guard libraryComic?.read != isRead else {
             return
         }
 
         AppHaptics.light()
-
         let resolvedPageCount = document?.pageCount
 
         do {
-            try databaseWriter.setReadStatus(
+            let result = try dependencies.comicReaderStateStore.setReadStatus(
                 isRead,
-                for: comic.id,
-                in: databaseURL
+                resolvedPageCount: resolvedPageCount,
+                session: session,
+                currentLibraryComic: libraryComic
             )
-
             if let pageCount = resolvedPageCount, pageCount > 0 {
                 currentPageIndex = isRead ? (pageCount - 1) : 0
             }
-
-            publishComicUpdate(comic.updatingReadState(
-                isRead,
-                resolvedPageCount: resolvedPageCount
-            ))
+            applyStateWriteResult(result)
             persistProgress(force: true)
         } catch {
             alert = AppAlertState(title: "Failed to Update Read Status", message: error.userFacingMessage)
@@ -478,7 +464,6 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard pageIndex >= 0 else {
             return
         }
-
         if let pageCount = document?.pageCount, pageCount > 0 {
             currentPageIndex = min(pageIndex, pageCount - 1)
         } else {
@@ -491,52 +476,260 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard let pageCount = document?.pageCount, (1...pageCount).contains(number) else {
             return
         }
-
         currentPageIndex = number - 1
         persistProgress(force: true)
     }
 
     func applyUpdatedComic(_ updatedComic: LibraryComic) {
-        let previousType = comic.type
-        if updatedComic.type != previousType {
+        let previousType = libraryComic?.type
+        if let previousType, updatedComic.type != previousType {
             persistLayoutPreferences(for: previousType)
         }
 
-        publishComicUpdate(updatedComic)
+        publishLibraryComicUpdate(updatedComic)
         if updatedComic.type != previousType {
-            readerLayout = readerLayoutPreferencesStore.loadLayout(for: updatedComic.type)
+            readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: updatedComic.type)
         }
     }
 
     func openPreviousComic() {
-        guard let previousComic = navigationContext?.previousComic(for: comic.id) else {
+        guard let libraryComic,
+              let previousComic = navigationContext?.previousComic(for: libraryComic.id) else {
             return
         }
-
-        switchToComic(previousComic)
+        switchToLibraryComic(previousComic)
     }
 
     func openNextComic() {
-        guard let nextComic = navigationContext?.nextComic(for: comic.id) else {
+        guard let libraryComic,
+              let nextComic = navigationContext?.nextComic(for: libraryComic.id) else {
+            return
+        }
+        switchToLibraryComic(nextComic)
+    }
+
+    func refreshRemoteCopy() {
+        guard let session = activeSession,
+              let context = session.remoteContext,
+              backgroundDownloadTask == nil else {
             return
         }
 
-        switchToComic(nextComic)
+        let token = UUID()
+        remoteRefreshToken = token
+        backgroundDownloadProgress = 0
+        let task = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            defer {
+                dependencies.remoteServerBrowsingService.unregisterAutomaticCacheTask(for: context.reference)
+                Task { @MainActor in
+                    if self.remoteRefreshToken == token {
+                        self.remoteRefreshToken = nil
+                    }
+                    self.backgroundDownloadTask = nil
+                    self.backgroundDownloadProgress = nil
+                }
+            }
+
+            do {
+                let result = try await dependencies.remoteServerBrowsingService.downloadComicFile(
+                    for: context.profile,
+                    reference: context.reference,
+                    forceRefresh: true,
+                    progressHandler: { progress in
+                        Task { @MainActor in
+                            guard self.remoteRefreshToken == token else {
+                                return
+                            }
+                            self.backgroundDownloadProgress = progress
+                        }
+                    }
+                )
+                guard !Task.isCancelled, remoteRefreshToken == token else {
+                    return
+                }
+                noticeMessage = noticeMessage(for: result.source)
+                scheduleNoticeDismissalIfNeeded()
+            } catch {
+                guard !Task.isCancelled, remoteRefreshToken == token else {
+                    return
+                }
+                alert = AppAlertState(
+                    title: "Failed to Refresh Remote Comic",
+                    message: error.userFacingMessage
+                )
+            }
+        }
+        backgroundDownloadTask = task
+        dependencies.remoteServerBrowsingService.registerAutomaticCacheTask(
+            for: context.reference,
+            cancellation: { [task] in task.cancel() }
+        )
     }
 
-    private func initialPageIndex(for comic: LibraryComic, pageCount: Int?) -> Int {
-        let storedPage = max(1, comic.currentPage)
-        let pageIndex = storedPage - 1
-
-        if let pageCount, pageCount > 0 {
-            return min(pageIndex, pageCount - 1)
+    private func completeOpen(session: ComicReaderSession, document: ComicDocument, token: UUID) {
+        guard currentLoadToken == token else {
+            Task {
+                await session.resourceLease.close(document: document)
+            }
+            return
         }
 
-        return max(0, pageIndex)
+        loadWatchdogTask?.cancel()
+        loadTask = nil
+        currentLoadToken = nil
+        applyReadySession(session, document: document, replacingCurrentDocument: true)
+        persistProgress()
+        startBackgroundDownloadIfNeeded(for: session)
+    }
+
+    private func failOpen(_ error: Error, token: UUID) {
+        failOpen(message: error.userFacingMessage, token: token)
+    }
+
+    private func failOpen(message: String, token: UUID) {
+        guard currentLoadToken == token else {
+            return
+        }
+        loadWatchdogTask?.cancel()
+        loadTask = nil
+        currentLoadToken = nil
+        loadState = .failed(message)
+        alert = AppAlertState(title: "Failed to Open Comic", message: message)
+    }
+
+    private func applyReadySession(
+        _ session: ComicReaderSession,
+        document: ComicDocument,
+        replacingCurrentDocument: Bool
+    ) {
+        let previousSession = activeSession
+        let previousDocument = activeDocument
+        let isReplacingSession = replacingCurrentDocument && previousSession?.id != session.id
+
+        if isReplacingSession {
+            backgroundDownloadTask?.cancel()
+            backgroundDownloadTask = nil
+            backgroundDownloadProgress = nil
+            remoteRefreshToken = nil
+        }
+
+        activeSession = session
+        activeDocument = document
+        currentPageIndex = session.initialPageIndex
+        bookmarkPageIndices = session.bookmarkPageIndices
+        readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: session.layoutType)
+        libraryComic = session.libraryComic
+        navigationContext = session.navigationContext
+        isFavorite = session.libraryComic?.isFavorite ?? false
+        rating = Self.normalizedRatingValue(from: session.libraryComic?.rating)
+        noticeMessage = session.noticeMessage
+        hasAttemptedInitialLoad = true
+        presentedDocument = document
+        loadState = .ready(session, document)
+        normalizeBookmarks(for: document.pageCount)
+        scheduleNoticeDismissalIfNeeded()
+
+        if isReplacingSession {
+            Task {
+                await previousSession?.resourceLease.close(document: previousDocument)
+            }
+        }
+    }
+
+    private func startLoadWatchdog(token: UUID) {
+        loadWatchdogTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+            guard self?.currentLoadToken == token else {
+                return
+            }
+            self?.loadTask?.cancel()
+            self?.loadTask = nil
+            self?.currentLoadToken = nil
+            self?.loadState = .failed("Opening this comic took too long.")
+            self?.alert = AppAlertState(
+                title: "Failed to Open Comic",
+                message: "Opening this comic took too long. The file may be unavailable or the storage provider is not responding."
+            )
+        }
+    }
+
+    private func startBackgroundDownloadIfNeeded(for session: ComicReaderSession) {
+        guard session.shouldStartBackgroundDownload,
+              let context = session.remoteContext,
+              backgroundDownloadTask == nil else {
+            return
+        }
+
+        backgroundDownloadProgress = 0
+        let sessionID = session.id
+        let task = Task(priority: .utility) { [weak self] in
+            guard let self else {
+                return
+            }
+            defer {
+                dependencies.remoteServerBrowsingService.unregisterAutomaticCacheTask(for: context.reference)
+                Task { @MainActor in
+                    guard self.activeSession?.id == sessionID else {
+                        return
+                    }
+                    self.backgroundDownloadTask = nil
+                    self.backgroundDownloadProgress = nil
+                }
+            }
+
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+
+            do {
+                _ = try await dependencies.remoteServerBrowsingService.downloadComicFile(
+                    for: context.profile,
+                    reference: context.reference,
+                    progressHandler: { progress in
+                        Task { @MainActor in
+                            guard self.activeSession?.id == sessionID else {
+                                return
+                            }
+                            self.backgroundDownloadProgress = progress
+                        }
+                    }
+                )
+                guard !Task.isCancelled else {
+                    return
+                }
+                await MainActor.run {
+                    guard self.activeSession?.id == sessionID else {
+                        return
+                    }
+                    self.noticeMessage = "Offline copy ready."
+                    self.scheduleNoticeDismissalIfNeeded()
+                }
+            } catch {
+                await MainActor.run {
+                    guard self.activeSession?.id == sessionID else {
+                        return
+                    }
+                    self.backgroundDownloadProgress = nil
+                }
+            }
+        }
+
+        backgroundDownloadTask = task
+        dependencies.remoteServerBrowsingService.registerAutomaticCacheTask(
+            for: context.reference,
+            cancellation: { task.cancel() }
+        )
     }
 
     private func persistProgress(force: Bool = false) {
-        guard let document else {
+        guard let session = activeSession, let document else {
             return
         }
         if case .unsupported = document {
@@ -551,25 +744,27 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         pendingProgressPersistenceTask?.cancel()
 
         if force {
-            writeProgress(for: requestedSnapshot, document: document)
+            writeProgress(for: requestedSnapshot, session: session, document: document)
             return
         }
 
         pendingProgressPersistenceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 350_000_000)
-
             guard !Task.isCancelled else {
                 return
             }
-
-            self?.writeProgress(for: requestedSnapshot, document: document)
+            self?.writeProgress(for: requestedSnapshot, session: session, document: document)
         }
     }
 
     private func writeProgress(
         for snapshot: ReaderProgressPersistenceSnapshot,
+        session: ComicReaderSession,
         document: ComicDocument
     ) {
+        guard activeSession?.id == session.id else {
+            return
+        }
         guard lastPersistedProgressSnapshot != snapshot else {
             return
         }
@@ -577,13 +772,14 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         let progress = readingProgress(for: snapshot, document: document)
 
         do {
-            try databaseWriter.updateReadingProgress(
-                for: comic.id,
-                progress: progress,
-                in: databaseURL
+            let result = try dependencies.comicReaderStateStore.saveProgress(
+                progress,
+                bookmarkPageIndices: snapshot.bookmarkPageIndices,
+                session: session,
+                currentLibraryComic: libraryComic
             )
             lastPersistedProgressSnapshot = snapshot
-            publishComicUpdate(comic.updatingReadingProgress(progress))
+            applyStateWriteResult(result)
         } catch {
             alert = AppAlertState(title: "Failed to Save Progress", message: error.userFacingMessage)
         }
@@ -593,7 +789,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         let snapshotPageCount = max(document.pageCount ?? 1, 1)
         return ReaderProgressFactory.snapshot(
             pageIndex: currentPageIndex,
-            pageCount: snapshotPageCount
+            pageCount: snapshotPageCount,
+            bookmarkPageIndices: bookmarkPageIndices,
+            maximumBookmarkCount: isLibraryBacked ? 3 : nil
         )
     }
 
@@ -616,55 +814,72 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         }
     }
 
-    private func switchToComic(_ newComic: LibraryComic) {
-        guard !isLoading else {
+    private func switchToLibraryComic(_ newComic: LibraryComic) {
+        guard !isLoading,
+              let descriptor = libraryDescriptor else {
             return
         }
 
-        documentLoadTask?.cancel()
-        loadWatchdogTask?.cancel()
-        currentLoadToken = nil
         persistProgress(force: true)
         persistLayoutPreferences()
 
-        comic = newComic
-        loadState = .idle
-        currentPageIndex = 0
+        let previousSession = activeSession
+        let previousDocument = activeDocument
+        Task {
+            await previousSession?.resourceLease.close(document: previousDocument)
+        }
+
+        let nextRequest = ComicOpenRequest.library(
+            ComicLibraryOpenRequest(
+                descriptor: descriptor,
+                comic: newComic,
+                navigationContext: navigationContext,
+                onComicUpdated: activeSession?.onLibraryComicUpdated
+            )
+        )
+        request = nextRequest
+        activeSession = nil
+        activeDocument = nil
+        presentedDocument = nil
+        libraryComic = newComic
+        currentPageIndex = max(newComic.currentPage - 1, 0)
         bookmarkPageIndices = ReaderBookmarkNormalizer.normalized(
             newComic.bookmarkPageIndices,
             maximumCount: 3
         )
-        readerLayout = readerLayoutPreferencesStore.loadLayout(for: newComic.type)
+        readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: newComic.type)
         isFavorite = newComic.isFavorite
         rating = Self.normalizedRatingValue(from: newComic.rating)
         lastPersistedProgressSnapshot = nil
-
+        hasLoaded = true
         load()
-    }
-
-    private func updateNavigationContextComic(_ updatedComic: LibraryComic) {
-        guard let currentIndex = navigationContext?.currentIndex(for: updatedComic.id) else {
-            return
-        }
-
-        navigationContext?.comics[currentIndex] = updatedComic
     }
 
     private func applyBookmarks(_ pageIndices: [Int]) {
         let bookmarkArray = ReaderBookmarkNormalizer.normalized(
             pageIndices,
-            maximumCount: 3
+            pageCount: document?.pageCount,
+            maximumCount: isLibraryBacked ? 3 : nil
         )
-        do {
-            try databaseWriter.updateBookmarks(
-                for: comic.id,
-                bookmarkPageIndices: bookmarkArray,
-                in: databaseURL
-            )
-            bookmarkPageIndices = bookmarkArray
-            publishComicUpdate(comic.updatingBookmarkPageIndices(bookmarkArray))
-        } catch {
-            alert = AppAlertState(title: "Failed to Save Bookmarks", message: error.userFacingMessage)
+        bookmarkPageIndices = bookmarkArray
+
+        guard let session = activeSession else {
+            return
+        }
+
+        if isLibraryBacked {
+            do {
+                let result = try dependencies.comicReaderStateStore.saveBookmarks(
+                    bookmarkArray,
+                    session: session,
+                    currentLibraryComic: libraryComic
+                )
+                applyStateWriteResult(result)
+            } catch {
+                alert = AppAlertState(title: "Failed to Save Bookmarks", message: error.userFacingMessage)
+            }
+        } else {
+            persistProgress(force: true)
         }
     }
 
@@ -672,27 +887,32 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         let normalizedBookmarks = ReaderBookmarkNormalizer.normalized(
             bookmarkPageIndices,
             pageCount: pageCount,
-            maximumCount: 3
+            maximumCount: isLibraryBacked ? 3 : nil
         )
         if normalizedBookmarks != bookmarkPageIndices {
             applyBookmarks(normalizedBookmarks)
-        } else {
-            bookmarkPageIndices = normalizedBookmarks
         }
     }
 
     private func persistLayoutPreferences(for type: LibraryFileType? = nil) {
         var persistedLayout = readerLayout
         persistedLayout.rotation = .degrees0
-        readerLayoutPreferencesStore.saveLayout(
+        dependencies.readerLayoutPreferencesStore.saveLayout(
             persistedLayout,
-            for: type ?? comic.type
+            for: type ?? activeSession?.layoutType ?? request.preferredLayoutType
         )
     }
 
-    private func publishComicUpdate(_ updatedComic: LibraryComic) {
-        let didChange = updatedComic != comic
-        comic = updatedComic
+    private func applyStateWriteResult(_ result: ComicReaderStateWriteResult) {
+        guard let updatedComic = result.updatedLibraryComic else {
+            return
+        }
+        publishLibraryComicUpdate(updatedComic)
+    }
+
+    private func publishLibraryComicUpdate(_ updatedComic: LibraryComic) {
+        let didChange = updatedComic != libraryComic
+        libraryComic = updatedComic
         isFavorite = updatedComic.isFavorite
         rating = Self.normalizedRatingValue(from: updatedComic.rating)
         updateNavigationContextComic(updatedComic)
@@ -701,14 +921,46 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             return
         }
 
-        onComicUpdated?(updatedComic)
+        activeSession?.onLibraryComicUpdated?(updatedComic)
+    }
+
+    private func updateNavigationContextComic(_ updatedComic: LibraryComic) {
+        guard let currentIndex = navigationContext?.currentIndex(for: updatedComic.id) else {
+            return
+        }
+        navigationContext?.comics[currentIndex] = updatedComic
+    }
+
+    private func noticeMessage(for source: RemoteComicDownloadResult.Source) -> String? {
+        switch source {
+        case .downloaded:
+            return "Remote copy refreshed."
+        case .cachedCurrent:
+            return "The local copy is already current."
+        case .cachedFallback(let message):
+            return message
+        }
+    }
+
+    private func scheduleNoticeDismissalIfNeeded() {
+        noticeDismissalTask?.cancel()
+        guard noticeMessage != nil else {
+            return
+        }
+
+        noticeDismissalTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.noticeMessage = nil
+        }
     }
 
     private static func normalizedRatingValue(from rating: Double?) -> Int {
         guard let rating, rating > 0 else {
             return 0
         }
-
         return min(max(Int(rating.rounded()), 0), 5)
     }
 }

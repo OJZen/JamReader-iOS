@@ -236,6 +236,8 @@ final class RemoteServerBrowsingService {
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
     private let automaticCacheTaskLock = NSLock()
     private var automaticCacheTaskRecords: [String: AutomaticCacheTaskRecord] = [:]
+    private let activeReaderLeaseLock = NSLock()
+    private var activeReaderLeaseRecords: [UUID: ActiveReaderCacheLeaseRecord] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
     private let thumbnailSMBClientSemaphore = AsyncSemaphore(maxConcurrent: 2)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
@@ -767,6 +769,11 @@ final class RemoteServerBrowsingService {
     func clearCachedComics(for profile: RemoteServerProfile? = nil) throws {
         do {
             cancelAutomaticCacheTasks(forServerID: profile?.id)
+            guard !hasActiveReaderLease(forServerID: profile?.id) else {
+                throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                    "Close the active reader before clearing downloaded comics."
+                )
+            }
             for cacheURL in cacheRootURLs(for: profile) {
                 guard fileManager.fileExists(atPath: cacheURL.path) else {
                     continue
@@ -785,6 +792,11 @@ final class RemoteServerBrowsingService {
     func clearOtherCachedData(for profile: RemoteServerProfile? = nil) throws {
         do {
             cancelAutomaticCacheTasks(forServerID: profile?.id)
+            guard !hasActiveReaderLease(forServerID: profile?.id) else {
+                throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                    "Close the active reader before clearing leftover remote cache data."
+                )
+            }
             for cacheURL in cacheRootURLs(for: profile) {
                 guard fileManager.fileExists(atPath: cacheURL.path) else {
                     continue
@@ -820,6 +832,11 @@ final class RemoteServerBrowsingService {
 
         do {
             cancelAutomaticCacheTasks(forServerID: serverID)
+            guard !hasActiveReaderLease(forServerID: serverID) else {
+                throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                    "Close the active reader before clearing downloaded comics."
+                )
+            }
             try fileManager.removeItem(at: cacheURL)
             invalidateCachedSummaries()
         } catch {
@@ -842,8 +859,32 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    func registerActiveReaderLease(for reference: RemoteComicFileReference) -> UUID {
+        let token = UUID()
+        let protectedPaths = Set(allCachedResourceURLs(for: reference).map { $0.standardizedFileURL.path })
+        let record = ActiveReaderCacheLeaseRecord(
+            serverID: reference.serverID,
+            referenceID: reference.id,
+            protectedPaths: protectedPaths
+        )
+
+        activeReaderLeaseLock.lock()
+        activeReaderLeaseRecords[token] = record
+        activeReaderLeaseLock.unlock()
+        return token
+    }
+
+    func unregisterActiveReaderLease(_ token: UUID, for _: RemoteComicFileReference) {
+        activeReaderLeaseLock.lock()
+        activeReaderLeaseRecords.removeValue(forKey: token)
+        activeReaderLeaseLock.unlock()
+    }
+
     func clearCachedComic(for reference: RemoteComicFileReference) throws {
         cancelAutomaticCacheTask(for: reference)
+        guard !hasActiveReaderLease(for: reference) else {
+            return
+        }
         var removedAnyCachedFile = false
 
         for fileURL in allCachedResourceURLs(for: reference) {
@@ -2630,6 +2671,37 @@ final class RemoteServerBrowsingService {
         try fileManager.removeItem(at: metadataURL)
     }
 
+    private func hasActiveReaderLease(for reference: RemoteComicFileReference) -> Bool {
+        activeReaderLeaseLock.lock()
+        let hasLease = activeReaderLeaseRecords.values.contains { record in
+            record.referenceID == reference.id
+        }
+        activeReaderLeaseLock.unlock()
+        return hasLease
+    }
+
+    private func hasActiveReaderLease(forServerID serverID: UUID?) -> Bool {
+        activeReaderLeaseLock.lock()
+        let hasLease = activeReaderLeaseRecords.values.contains { record in
+            guard let serverID else {
+                return true
+            }
+            return record.serverID == serverID
+        }
+        activeReaderLeaseLock.unlock()
+        return hasLease
+    }
+
+    private func isProtectedByActiveReaderLease(_ fileURL: URL) -> Bool {
+        let path = fileURL.standardizedFileURL.path
+        activeReaderLeaseLock.lock()
+        let isProtected = activeReaderLeaseRecords.values.contains { record in
+            record.protectedPaths.contains(path)
+        }
+        activeReaderLeaseLock.unlock()
+        return isProtected
+    }
+
     private func touchCachedFile(at fileURL: URL) {
         guard fileManager.fileExists(atPath: fileURL.path) else {
             return
@@ -2683,6 +2755,10 @@ final class RemoteServerBrowsingService {
                     || remainingBytes > cachePolicy.maximumTotalCacheBytes
             else {
                 break
+            }
+
+            guard !isProtectedByActiveReaderLease(candidate.resourceURL) else {
+                continue
             }
 
             do {
@@ -3181,6 +3257,12 @@ private struct CachedComicResourceRecord {
     let resourceURL: URL
     let size: Int64
     let lastAccessDate: Date
+}
+
+private struct ActiveReaderCacheLeaseRecord {
+    let serverID: UUID
+    let referenceID: String
+    let protectedPaths: Set<String>
 }
 
 private final class RecursiveListProgressState {

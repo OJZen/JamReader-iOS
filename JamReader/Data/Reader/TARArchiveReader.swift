@@ -403,11 +403,11 @@ private actor TARArchivePageSource: ComicPageDataSource {
 }
 
 private extension Data {
-    var isTARZeroBlock: Bool {
+    nonisolated var isTARZeroBlock: Bool {
         !isEmpty && allSatisfy { $0 == 0 }
     }
 
-    func byte(at offset: Int) -> UInt8? {
+    nonisolated func byte(at offset: Int) -> UInt8? {
         guard offset >= 0, offset < count else {
             return nil
         }

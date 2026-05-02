@@ -134,9 +134,14 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
     @ViewBuilder let statusOverlay: () -> StatusOverlay
     @ViewBuilder let modalOverlay: () -> ModalOverlay
 
+    @State private var windowSafeAreaInsets = EdgeInsets()
+
     var body: some View {
         GeometryReader { proxy in
-            let safeAreaInsets = ReaderSafeAreaResolver.resolvedInsets(from: proxy.safeAreaInsets)
+            let safeAreaInsets = ReaderSafeAreaResolver.resolvedInsets(
+                from: proxy.safeAreaInsets,
+                windowInsets: windowSafeAreaInsets
+            )
 
             ZStack {
                 content()
@@ -164,6 +169,15 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
                 modalOverlay()
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .background {
+                ReaderSafeAreaProbe { insets in
+                    guard windowSafeAreaInsets != insets else {
+                        return
+                    }
+                    windowSafeAreaInsets = insets
+                }
+                .allowsHitTesting(false)
+            }
         }
         .ignoresSafeArea(.container, edges: [.top, .bottom])
         .ignoresSafeArea(.keyboard)
@@ -173,35 +187,67 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
 // MARK: - Safe Area Resolution
 
 private enum ReaderSafeAreaResolver {
-    static func resolvedInsets(from geometryInsets: EdgeInsets) -> EdgeInsets {
-        let windowInsets = currentWindowInsets
-        return EdgeInsets(
+    static func resolvedInsets(from geometryInsets: EdgeInsets, windowInsets: EdgeInsets) -> EdgeInsets {
+        EdgeInsets(
             top: max(geometryInsets.top, windowInsets.top),
             leading: max(geometryInsets.leading, windowInsets.leading),
             bottom: max(geometryInsets.bottom, windowInsets.bottom),
             trailing: max(geometryInsets.trailing, windowInsets.trailing)
         )
     }
+}
 
-    private static var currentWindowInsets: EdgeInsets {
-        guard
-            let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: {
-                    $0.activationState == .foregroundActive || $0.activationState == .foregroundInactive
-                }),
-            let window = windowScene.windows.first(where: \.isKeyWindow) ?? windowScene.windows.first
-        else {
-            return EdgeInsets()
+private struct ReaderSafeAreaProbe: UIViewRepresentable {
+    let onChange: (EdgeInsets) -> Void
+
+    func makeUIView(context: Context) -> SafeAreaReportingView {
+        let view = SafeAreaReportingView()
+        view.onInsetsChanged = onChange
+        return view
+    }
+
+    func updateUIView(_ uiView: SafeAreaReportingView, context: Context) {
+        uiView.onInsetsChanged = onChange
+        uiView.reportInsetsIfNeeded()
+    }
+}
+
+private final class SafeAreaReportingView: UIView {
+    var onInsetsChanged: ((EdgeInsets) -> Void)?
+    private var lastReportedInsets = EdgeInsets()
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        reportInsetsIfNeeded()
+    }
+
+    override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        reportInsetsIfNeeded()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        reportInsetsIfNeeded()
+    }
+
+    func reportInsetsIfNeeded() {
+        let uiInsets = window?.safeAreaInsets ?? safeAreaInsets
+        let edgeInsets = EdgeInsets(
+            top: uiInsets.top,
+            leading: uiInsets.left,
+            bottom: uiInsets.bottom,
+            trailing: uiInsets.right
+        )
+
+        guard edgeInsets != lastReportedInsets else {
+            return
         }
 
-        let insets = window.safeAreaInsets
-        return EdgeInsets(
-            top: insets.top,
-            leading: insets.left,
-            bottom: insets.bottom,
-            trailing: insets.right
-        )
+        lastReportedInsets = edgeInsets
+        DispatchQueue.main.async { [weak self, edgeInsets] in
+            self?.onInsetsChanged?(edgeInsets)
+        }
     }
 }
 

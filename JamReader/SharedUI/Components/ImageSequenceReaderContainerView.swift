@@ -181,7 +181,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
         if lastViewportSize != viewportSize {
             lastViewportSize = viewportSize
-            flowLayout.itemSize = viewportSize
+            flowLayout.itemSize = pageItemSize(for: viewportSize)
             flowLayout.invalidateLayout()
             collectionView.collectionViewLayout.invalidateLayout()
             UIView.performWithoutAnimation {
@@ -197,7 +197,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         super.viewWillTransition(to: size, with: coordinator)
         isViewportTransitionInFlight = true
         coordinator.animate(alongsideTransition: { _ in
-            self.flowLayout.itemSize = size
+            self.flowLayout.itemSize = self.pageItemSize(for: size)
             self.flowLayout.invalidateLayout()
             self.collectionView.collectionViewLayout.invalidateLayout()
             UIView.performWithoutAnimation {
@@ -208,6 +208,17 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             self.isViewportTransitionInFlight = false
             self.finalizeVisibleSpread()
         })
+    }
+
+    private func pageItemSize(for viewportSize: CGSize) -> CGSize {
+        // Flow layout requires the cross-axis item dimension to be strictly
+        // smaller than the collection bounds. During pull-down transforms UIKit
+        // reports fractional frame heights, so keep a tiny black gutter instead
+        // of entering undefined layout behavior.
+        CGSize(
+            width: max(viewportSize.width, 1),
+            height: max(viewportSize.height - 1, 1)
+        )
     }
 
     override var keyCommands: [UIKeyCommand]? {

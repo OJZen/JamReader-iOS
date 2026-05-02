@@ -20,7 +20,7 @@ final class UIKitPresentationCoordinator {
     }
 
     func presentReader(_ route: ReaderPresentationRoute) {
-        let content: AnyView
+        let request: ComicOpenRequest
         let sourceFrame: CGRect
         let previewImage: UIImage?
         let transitionStyle: ReaderHeroTransitionStyle
@@ -28,36 +28,41 @@ final class UIKitPresentationCoordinator {
 
         switch route {
         case .local(let presentation):
-            content = AnyView(
-                ComicReaderView(
+            request = .library(
+                ComicLibraryOpenRequest(
                     descriptor: presentation.descriptor,
                     comic: presentation.comic,
                     navigationContext: presentation.navigationContext,
-                    onComicUpdated: presentation.onComicUpdated,
-                    dependencies: dependencies
+                    onComicUpdated: presentation.onComicUpdated
                 )
-                .environment(\.appPresenter, self)
             )
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
             transitionStyle = presentation.transitionStyle
             onDismiss = presentation.onDismiss
         case .remote(let presentation):
-            content = AnyView(
-                RemoteComicLoadingView(
+            request = .remote(
+                ComicRemoteOpenRequest(
                     profile: presentation.profile,
                     item: presentation.item,
-                    dependencies: dependencies,
                     openMode: presentation.openMode,
                     referenceOverride: presentation.referenceOverride
                 )
-                .environment(\.appPresenter, self)
             )
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
             transitionStyle = presentation.transitionStyle
             onDismiss = presentation.onDismiss
         }
+
+        let content = AnyView(
+            ComicReaderView(
+                request: request,
+                dependencies: dependencies,
+                openingPreviewImage: previewImage
+            )
+                .environment(\.appPresenter, self)
+        )
 
         presentReader(
             content: content,
@@ -146,7 +151,11 @@ final class UIKitPresentationCoordinator {
             return
         }
 
-        let transitionDelegate = ReaderSlideTransitionDelegate()
+        let transitionDelegate = HeroTransitionDelegate(
+            sourceFrame: sourceFrame,
+            previewImage: previewImage,
+            style: transitionStyle
+        )
         readerTransitionDelegate = transitionDelegate
 
         let hostingController = DismissTrackingReaderHostingController(rootView: content)
@@ -206,108 +215,6 @@ final class UIKitPresentationCoordinator {
         if traits.horizontalSizeClass == .compact {
             sheet.detents = [.medium(), .large()]
             sheet.selectedDetentIdentifier = .large
-        }
-    }
-}
-
-private final class ReaderSlideTransitionDelegate: NSObject, UIViewControllerTransitioningDelegate {
-    func animationController(
-        forPresented presented: UIViewController,
-        presenting: UIViewController,
-        source: UIViewController
-    ) -> (any UIViewControllerAnimatedTransitioning)? {
-        ReaderSlidePresentTransition()
-    }
-
-    func animationController(
-        forDismissed dismissed: UIViewController
-    ) -> (any UIViewControllerAnimatedTransitioning)? {
-        ReaderSlideDismissTransition()
-    }
-}
-
-private final class ReaderSlidePresentTransition: NSObject, UIViewControllerAnimatedTransitioning {
-    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        UIAccessibility.isReduceMotionEnabled ? 0.16 : 0.30
-    }
-
-    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
-        guard
-            let toViewController = transitionContext.viewController(forKey: .to),
-            let toView = transitionContext.view(forKey: .to)
-        else {
-            transitionContext.completeTransition(false)
-            return
-        }
-
-        let container = transitionContext.containerView
-        let finalFrame = transitionContext.finalFrame(for: toViewController)
-        toView.frame = finalFrame
-        toView.backgroundColor = .black
-        container.addSubview(toView)
-
-        if UIAccessibility.isReduceMotionEnabled {
-            toView.alpha = 0
-            UIView.animate(
-                withDuration: transitionDuration(using: transitionContext),
-                delay: 0,
-                options: [.curveEaseOut, .beginFromCurrentState]
-            ) {
-                toView.alpha = 1
-            } completion: { _ in
-                transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
-            }
-            return
-        }
-
-        toView.alpha = 0.96
-        toView.transform = CGAffineTransform(translationX: 0, y: finalFrame.height)
-
-        UIView.animate(
-            withDuration: transitionDuration(using: transitionContext),
-            delay: 0,
-            usingSpringWithDamping: 0.95,
-            initialSpringVelocity: 0.0,
-            options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction]
-        ) {
-            toView.alpha = 1
-            toView.transform = .identity
-        } completion: { _ in
-            toView.transform = .identity
-            transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
-        }
-    }
-}
-
-private final class ReaderSlideDismissTransition: NSObject, UIViewControllerAnimatedTransitioning {
-    func transitionDuration(using transitionContext: UIViewControllerContextTransitioning?) -> TimeInterval {
-        UIAccessibility.isReduceMotionEnabled ? 0.14 : 0.24
-    }
-
-    func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
-        guard let fromView = transitionContext.view(forKey: .from) else {
-            transitionContext.completeTransition(false)
-            return
-        }
-
-        let finalTranslationY = max(fromView.bounds.height, transitionContext.containerView.bounds.height)
-
-        UIView.animate(
-            withDuration: transitionDuration(using: transitionContext),
-            delay: 0,
-            options: [.curveEaseIn, .beginFromCurrentState, .allowUserInteraction]
-        ) {
-            fromView.alpha = UIAccessibility.isReduceMotionEnabled ? 0 : 0.98
-            if !UIAccessibility.isReduceMotionEnabled {
-                fromView.transform = CGAffineTransform(translationX: 0, y: finalTranslationY)
-            }
-        } completion: { _ in
-            let completed = !transitionContext.transitionWasCancelled
-            if !completed {
-                fromView.alpha = 1
-                fromView.transform = .identity
-            }
-            transitionContext.completeTransition(completed)
         }
     }
 }
