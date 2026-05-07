@@ -59,7 +59,9 @@ struct ComicReaderView: View {
                 } else if viewModel.isLoading || !viewModel.hasAttemptedInitialLoad {
                     ReaderOpeningStateView(
                         previewImage: openingPreviewImage,
-                        title: viewModel.loadingMessage
+                        title: viewModel.loadingMessage,
+                        progress: viewModel.loadingProgress,
+                        onCancel: cancelOpeningAndDismiss
                     )
                 } else {
                     ReaderFallbackStateView(
@@ -598,6 +600,11 @@ struct ComicReaderView: View {
         scheduleReaderSessionSynchronization()
     }
 
+    private func cancelOpeningAndDismiss() {
+        viewModel.cancelOpening()
+        dismiss()
+    }
+
     private func synchronizeReaderSession() {
         readerSession.synchronize(
             document: viewModel.document,
@@ -616,40 +623,96 @@ struct ComicReaderView: View {
 private struct ReaderOpeningStateView: View {
     let previewImage: UIImage?
     let title: String
+    let progress: Double?
+    let onCancel: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack {
+                Color.black
 
-            if let previewImage {
-                Image(uiImage: previewImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea()
-                    .overlay {
-                        LinearGradient(
-                            colors: [.black.opacity(0.22), .clear, .black.opacity(0.36)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                        .allowsHitTesting(false)
-                    }
+                if let previewImage {
+                    Image(uiImage: previewImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                        .overlay {
+                            LinearGradient(
+                                colors: [.black.opacity(0.22), .clear, .black.opacity(0.36)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .allowsHitTesting(false)
+                        }
+                }
 
+                loadingPanel
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .background(Color.black.ignoresSafeArea())
+    }
+
+    private var normalizedProgress: Double? {
+        guard let progress else {
+            return nil
+        }
+        return min(max(progress, 0), 1)
+    }
+
+    private var progressText: String? {
+        guard let normalizedProgress else {
+            return nil
+        }
+        return "\(Int((normalizedProgress * 100).rounded()))%"
+    }
+
+    private var loadingPanel: some View {
+        VStack(spacing: Spacing.sm) {
+            if let normalizedProgress {
+                ProgressView(value: normalizedProgress)
+                    .progressViewStyle(.linear)
+                    .tint(.white)
+                    .frame(width: 160)
+            } else {
                 ProgressView()
                     .tint(.white)
                     .controlSize(.regular)
-                    .padding(14)
-                    .background(.black.opacity(0.42), in: Circle())
-                    .accessibilityLabel(title)
-            } else {
-                ReaderFallbackStateView(
-                    title: title,
-                    systemImage: nil,
-                    message: nil,
-                    showsProgress: true
-                )
             }
+
+            Text(title)
+                .font(AppFont.headline(.semibold))
+                .foregroundStyle(.white)
+
+            if let progressText {
+                Text(progressText)
+                    .font(AppFont.caption(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+
+            Button(role: .cancel, action: onCancel) {
+                Text("Cancel")
+                    .font(AppFont.callout(.semibold))
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.xs)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.white)
+            .background(.white.opacity(0.14), in: Capsule())
+            .overlay {
+                Capsule()
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            }
+            .padding(.top, Spacing.xs)
         }
+        .padding(.horizontal, Spacing.xl)
+        .padding(.vertical, Spacing.lg)
+        .background(.black.opacity(0.48), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(.white.opacity(0.10), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
     }
 }

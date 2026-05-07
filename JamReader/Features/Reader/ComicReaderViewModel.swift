@@ -301,6 +301,19 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         persistProgress(force: true)
     }
 
+    func cancelOpening() {
+        guard isLoading else {
+            return
+        }
+
+        loadTask?.cancel()
+        loadWatchdogTask?.cancel()
+        loadTask = nil
+        currentLoadToken = nil
+        loadState = .failed("Opening was canceled.")
+        alert = nil
+    }
+
     func setSpreadMode(_ spreadMode: ReaderSpreadMode) {
         guard allowsDoublePageSpread || spreadMode == .singlePage else {
             return

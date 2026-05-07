@@ -7,30 +7,32 @@ struct ReaderFallbackStateView: View {
     var showsProgress = false
 
     var body: some View {
-        VStack(spacing: Spacing.md) {
-            if showsProgress {
-                ProgressView()
-                    .tint(.white)
-            } else if let systemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.86))
-            }
+        GeometryReader { proxy in
+            VStack(spacing: Spacing.md) {
+                if showsProgress {
+                    ProgressView()
+                        .tint(.white)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.86))
+                }
 
-            Text(title)
-                .font(AppFont.headline(.semibold))
-                .foregroundStyle(.white)
+                Text(title)
+                    .font(AppFont.headline(.semibold))
+                    .foregroundStyle(.white)
 
-            if let message, !message.isEmpty {
-                Text(message)
-                    .font(AppFont.callout())
-                    .foregroundStyle(.white.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let message, !message.isEmpty {
+                    Text(message)
+                        .font(AppFont.callout())
+                        .foregroundStyle(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .padding(.horizontal, Spacing.xl)
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .padding(.horizontal, Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.ignoresSafeArea())
     }
 }

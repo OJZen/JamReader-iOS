@@ -54,7 +54,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let memoryPressureCoordinator = AppMemoryPressureCoordinator()
         let appRootCoordinator = AppRootCoordinator(
             dependencies: dependencies,
-            libraryListViewModel: libraryListViewModel
+            libraryListViewModel: libraryListViewModel,
+            windowScene: windowScene
         )
 
         let window = UIWindow(windowScene: windowScene)

@@ -7,19 +7,24 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
 
     private let dependencies: AppDependencies
     private let libraryListViewModel: LibraryListViewModel
+    private let windowScene: UIWindowScene
     private let browseRemoteServerViewModel: RemoteServerListViewModel
     private let presentationCoordinator: UIKitPresentationCoordinator
     private var libraryCoordinator: LibraryTabCoordinator!
     private var browseCoordinator: BrowseTabCoordinator!
     private var settingsCoordinator: SettingsTabCoordinator!
     private var navigationObserver: NSObjectProtocol?
+    private var lifecycleObserver: NSObjectProtocol?
+    private var importOverlayWindow: UIWindow?
 
     init(
         dependencies: AppDependencies,
-        libraryListViewModel: LibraryListViewModel
+        libraryListViewModel: LibraryListViewModel,
+        windowScene: UIWindowScene
     ) {
         self.dependencies = dependencies
         self.libraryListViewModel = libraryListViewModel
+        self.windowScene = windowScene
         self.browseRemoteServerViewModel = RemoteServerListViewModel(
             profileStore: dependencies.remoteServerProfileStore,
             folderShortcutStore: dependencies.remoteFolderShortcutStore,
@@ -69,23 +74,20 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
             rootViewController.mode = .tabBar
         }
 
-        rootViewController.setViewControllers(
-            [
-                libraryCoordinator.rootViewController,
-                browseCoordinator.rootViewController,
-                settingsCoordinator.rootViewController
-            ],
-            animated: false
-        )
+        installRootTabs()
         rootViewController.selectedIndex = storedSelectedTab.index
         presentationCoordinator.attach(rootViewController: rootViewController)
         installImportOverlay()
         observeNavigationRequests()
+        observeLifecycle()
     }
 
     deinit {
         if let navigationObserver {
             NotificationCenter.default.removeObserver(navigationObserver)
+        }
+        if let lifecycleObserver {
+            NotificationCenter.default.removeObserver(lifecycleObserver)
         }
     }
 
@@ -104,6 +106,7 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
     }
 
     func select(_ tab: AppRootTab) {
+        repairRootTabsIfNeeded()
         rootViewController.selectedIndex = tab.index
         UserDefaults.standard.set(tab.rawValue, forKey: AppNavigationStorageKeys.selectedTab)
     }
@@ -129,6 +132,18 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
         }
     }
 
+    private func observeLifecycle() {
+        lifecycleObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.repairRootTabsIfNeeded()
+            }
+        }
+    }
+
     private func handle(_ route: AppNavigationRoute) {
         switch route {
         case .selectTab(let tab):
@@ -146,10 +161,7 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
     }
 
     private func installImportOverlay() {
-        let overlayContainer = PassthroughOverlayView()
-        overlayContainer.backgroundColor = .clear
-        overlayContainer.translatesAutoresizingMaskIntoConstraints = false
-
+        let overlayRootController = RootOverlayWindowController()
         let overlay = RootTabHostingController(
             rootView: AnyView(
                 AppRootOverlayView(
@@ -161,24 +173,41 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
         )
         overlay.view.backgroundColor = .clear
         overlay.view.translatesAutoresizingMaskIntoConstraints = false
+        overlayRootController.embed(overlay)
 
-        rootViewController.view.addSubview(overlayContainer)
-        NSLayoutConstraint.activate([
-            overlayContainer.leadingAnchor.constraint(equalTo: rootViewController.view.leadingAnchor),
-            overlayContainer.trailingAnchor.constraint(equalTo: rootViewController.view.trailingAnchor),
-            overlayContainer.topAnchor.constraint(equalTo: rootViewController.view.topAnchor),
-            overlayContainer.bottomAnchor.constraint(equalTo: rootViewController.view.bottomAnchor)
-        ])
+        let overlayWindow = PassthroughOverlayWindow(windowScene: windowScene)
+        overlayWindow.rootViewController = overlayRootController
+        overlayWindow.backgroundColor = .clear
+        overlayWindow.windowLevel = .normal + 1
+        overlayWindow.isHidden = false
+        importOverlayWindow = overlayWindow
+    }
 
-        rootViewController.addChild(overlay)
-        overlayContainer.addSubview(overlay.view)
-        NSLayoutConstraint.activate([
-            overlay.view.leadingAnchor.constraint(equalTo: overlayContainer.leadingAnchor),
-            overlay.view.trailingAnchor.constraint(equalTo: overlayContainer.trailingAnchor),
-            overlay.view.topAnchor.constraint(equalTo: overlayContainer.topAnchor),
-            overlay.view.bottomAnchor.constraint(equalTo: overlayContainer.bottomAnchor)
-        ])
-        overlay.didMove(toParent: rootViewController)
+    private var rootTabControllers: [UIViewController] {
+        [
+            libraryCoordinator.rootViewController,
+            browseCoordinator.rootViewController,
+            settingsCoordinator.rootViewController
+        ]
+    }
+
+    private func installRootTabs() {
+        rootViewController.setViewControllers(rootTabControllers, animated: false)
+    }
+
+    private func repairRootTabsIfNeeded() {
+        let expectedControllers = rootTabControllers
+        let currentControllers = rootViewController.viewControllers ?? []
+        let currentItemCount = rootViewController.tabBar.items?.count ?? currentControllers.count
+        guard currentItemCount != expectedControllers.count
+                || currentControllers.count != expectedControllers.count
+                || !zip(currentControllers, expectedControllers).allSatisfy({ $0 === $1 }) else {
+            return
+        }
+
+        let selectedTab = AppRootTab(index: rootViewController.selectedIndex) ?? storedSelectedTab
+        rootViewController.setViewControllers(expectedControllers, animated: false)
+        rootViewController.selectedIndex = selectedTab.index
     }
 }
 
@@ -967,6 +996,38 @@ final class RootTabBarController: UITabBarController {
 }
 
 final class RootTabHostingController: UIHostingController<AnyView> {}
+
+final class RootOverlayWindowController: UIViewController {
+    override func loadView() {
+        let view = PassthroughOverlayView()
+        view.backgroundColor = .clear
+        self.view = view
+    }
+
+    func embed(_ controller: UIViewController) {
+        addChild(controller)
+        view.addSubview(controller.view)
+        controller.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            controller.view.topAnchor.constraint(equalTo: view.topAnchor),
+            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        controller.didMove(toParent: self)
+    }
+}
+
+final class PassthroughOverlayWindow: UIWindow {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hitView = super.hitTest(point, with: event)
+        if hitView === self || hitView === rootViewController?.view {
+            return nil
+        }
+
+        return hitView
+    }
+}
 
 final class PassthroughOverlayView: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
