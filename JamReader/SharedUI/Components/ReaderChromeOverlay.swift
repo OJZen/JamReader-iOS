@@ -179,7 +179,7 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
                 .allowsHitTesting(false)
             }
         }
-        .ignoresSafeArea(.container, edges: [.top, .bottom])
+        .ignoresSafeArea(.container)
         .ignoresSafeArea(.keyboard)
     }
 }
@@ -287,7 +287,8 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
         VStack(spacing: 0) {
             topBar()
                 .padding(.top, safeAreaInsets.top)
-                .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
+                .padding(.leading, ReaderChromeMetrics.horizontalPadding + safeAreaInsets.leading)
+                .padding(.trailing, ReaderChromeMetrics.horizontalPadding + safeAreaInsets.trailing)
                 .background(
                     LinearGradient(
                         stops: [
@@ -305,7 +306,8 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
             Spacer(minLength: 0)
 
             bottomBar()
-                .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
+                .padding(.leading, ReaderChromeMetrics.horizontalPadding + safeAreaInsets.leading)
+                .padding(.trailing, ReaderChromeMetrics.horizontalPadding + safeAreaInsets.trailing)
                 .padding(.bottom, max(safeAreaInsets.bottom, Spacing.xs))
                 .background(
                     LinearGradient(
@@ -1093,7 +1095,8 @@ struct ReaderTopStatusStack<Content: View>: View {
         }
         .frame(maxWidth: 420)
         .padding(.top, safeAreaInsets.top + ReaderChromeMetrics.statusTopOffset)
-        .padding(.horizontal, ReaderChromeMetrics.horizontalPadding)
+        .padding(.leading, ReaderChromeMetrics.horizontalPadding + safeAreaInsets.leading)
+        .padding(.trailing, ReaderChromeMetrics.horizontalPadding + safeAreaInsets.trailing)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .chromeVisibility(!isChromeHidden)
     }

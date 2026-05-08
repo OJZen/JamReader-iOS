@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UIKit
 
@@ -16,6 +17,7 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
     private var navigationObserver: NSObjectProtocol?
     private var lifecycleObserver: NSObjectProtocol?
     private var importOverlayWindow: UIWindow?
+    private var importOverlayVisibilityCancellable: AnyCancellable?
 
     init(
         dependencies: AppDependencies,
@@ -161,11 +163,12 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
     }
 
     private func installImportOverlay() {
+        let importController = dependencies.remoteBackgroundImportController
         let overlayRootController = RootOverlayWindowController()
         let overlay = RootTabHostingController(
             rootView: AnyView(
                 AppRootOverlayView(
-                    controller: dependencies.remoteBackgroundImportController,
+                    controller: importController,
                     bottomBarHeight: AppLayout.bottomBarHeight
                 )
                 .environment(\.appPresenter, presentationCoordinator)
@@ -179,8 +182,19 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
         overlayWindow.rootViewController = overlayRootController
         overlayWindow.backgroundColor = .clear
         overlayWindow.windowLevel = .normal + 1
-        overlayWindow.isHidden = false
+        overlayWindow.isHidden = !hasImportOverlayContent
         importOverlayWindow = overlayWindow
+
+        importOverlayVisibilityCancellable = importController.$activeProgress
+            .combineLatest(importController.$feedback)
+            .sink { [weak self] activeProgress, feedback in
+                self?.importOverlayWindow?.isHidden = activeProgress == nil && feedback == nil
+            }
+    }
+
+    private var hasImportOverlayContent: Bool {
+        let importController = dependencies.remoteBackgroundImportController
+        return importController.activeProgress != nil || importController.feedback != nil
     }
 
     private var rootTabControllers: [UIViewController] {

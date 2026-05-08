@@ -56,9 +56,10 @@ final class ReaderSessionController: ObservableObject {
     ) {
         let currentLayout = state.layout
         state.descriptor = descriptor
-        // Preserve user's manual layout changes unless the content kind demands a different layout.
-        if currentLayout.pagingMode != descriptor.layout.pagingMode
-            || currentLayout.readingDirection != descriptor.layout.readingDirection {
+        // The view model passes the effective layout, including viewport-based
+        // normalization. Keep the session in lockstep so UIKit reader containers
+        // are not left with stale spread or fit settings after rotation.
+        if currentLayout != descriptor.layout {
             state.layout = descriptor.layout
         }
         state.currentPageIndex = clampedPageIndex(

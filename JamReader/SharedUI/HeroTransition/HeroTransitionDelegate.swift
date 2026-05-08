@@ -43,6 +43,51 @@ final class HeroTransitionDelegate: NSObject, UIViewControllerTransitioningDeleg
             style: style
         )
     }
+
+    func presentationController(
+        forPresented presented: UIViewController,
+        presenting: UIViewController?,
+        source: UIViewController
+    ) -> UIPresentationController? {
+        ReaderFullscreenPresentationController(
+            presentedViewController: presented,
+            presenting: presenting ?? source
+        )
+    }
+}
+
+private final class ReaderFullscreenPresentationController: UIPresentationController {
+    override var frameOfPresentedViewInContainerView: CGRect {
+        containerView?.bounds ?? .zero
+    }
+
+    override var shouldPresentInFullscreen: Bool {
+        true
+    }
+
+    override func presentationTransitionWillBegin() {
+        super.presentationTransitionWillBegin()
+        applyFullscreenFrame()
+    }
+
+    override func containerViewWillLayoutSubviews() {
+        super.containerViewWillLayoutSubviews()
+        applyFullscreenFrame()
+    }
+
+    override func containerViewDidLayoutSubviews() {
+        super.containerViewDidLayoutSubviews()
+        applyFullscreenFrame()
+    }
+
+    private func applyFullscreenFrame() {
+        guard let presentedView else {
+            return
+        }
+
+        presentedView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        presentedView.frame = frameOfPresentedViewInContainerView
+    }
 }
 
 // MARK: - Open transition
@@ -86,6 +131,7 @@ private final class HeroPresentTransition: NSObject, UIViewControllerAnimatedTra
 
         let container = ctx.containerView
         let finalFrame = ctx.finalFrame(for: toVC)
+        toView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
 
         if UIAccessibility.isReduceMotionEnabled {
             animateReducedMotion(using: ctx, container: container, toView: toView, finalFrame: finalFrame)
