@@ -33,7 +33,7 @@ final class HeroSourceRegistry {
             return .zero
         }
 
-        return view.convert(view.bounds, to: nil)
+        return HeroSourceFrameSanitizer.windowFrame(for: view)
     }
 }
 
@@ -46,8 +46,57 @@ final class FrameAnchor {
     /// The view's current frame in window (screen) coordinates, or .zero if
     /// the view is not in a window.
     var windowFrame: CGRect {
-        guard let view, view.window != nil else { return .zero }
-        return view.convert(view.bounds, to: nil)
+        guard let view else { return .zero }
+        return HeroSourceFrameSanitizer.windowFrame(for: view)
+    }
+}
+
+enum HeroSourceFrameSanitizer {
+    static func windowFrame(for view: UIView) -> CGRect {
+        guard let window = view.window else {
+            return .zero
+        }
+
+        window.layoutIfNeeded()
+        view.superview?.layoutIfNeeded()
+        view.layoutIfNeeded()
+
+        let frame = view.convert(view.bounds, to: nil)
+        return sanitized(frame, in: window.bounds)
+    }
+
+    static func sanitized(_ frame: CGRect, in bounds: CGRect) -> CGRect {
+        guard frame.isFiniteHeroFrame, bounds.width > 0, bounds.height > 0 else {
+            return .zero
+        }
+
+        // After scene restore UIKit can briefly report a view-sized frame at
+        // the window origin before SwiftUI has committed the real placement.
+        // Treat that as missing data instead of animating from the top-left.
+        if abs(frame.minX) < 0.5, abs(frame.minY) < 0.5 {
+            return .zero
+        }
+
+        let tolerantBounds = bounds.insetBy(dx: -2, dy: -2)
+        let intersection = frame.intersection(tolerantBounds)
+        guard !intersection.isNull,
+              intersection.width > 2,
+              intersection.height > 2 else {
+            return .zero
+        }
+
+        return frame
+    }
+}
+
+extension CGRect {
+    var isFiniteHeroFrame: Bool {
+        origin.x.isFinite
+            && origin.y.isFinite
+            && width.isFinite
+            && height.isFinite
+            && width > 2
+            && height > 2
     }
 }
 

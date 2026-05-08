@@ -70,6 +70,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
-        memoryPressureCoordinator?.purgeVolatileCaches()
+        memoryPressureCoordinator?.purgeBackgroundCaches()
     }
 }

@@ -30,15 +30,28 @@ final class AppMemoryPressureCoordinator: ObservableObject {
             return
         }
 
-        purgeVolatileCaches()
+        purgeBackgroundCaches()
     }
 
     func purgeVolatileCaches() {
         LocalCoverTransitionCache.shared.clear()
+        purgeReaderDisplayCaches()
+        RemoteComicThumbnailPipeline.shared.clearMemoryCache()
+        purgeAsyncImageCaches()
+    }
+
+    func purgeBackgroundCaches() {
+        purgeReaderDisplayCaches()
+        RemoteComicThumbnailPipeline.shared.clearDisplayMemoryCache()
+        purgeAsyncImageCaches()
+    }
+
+    private func purgeReaderDisplayCaches() {
         ReaderPagePreviewStore.shared.clear()
         PDFThumbnailStore.shared.clear()
-        RemoteComicThumbnailPipeline.shared.clearMemoryCache()
+    }
 
+    private func purgeAsyncImageCaches() {
         Task {
             await ReaderPageCache.shared.clearMemoryCache()
             await LocalCoverImagePipeline.shared.clearMemoryCache()

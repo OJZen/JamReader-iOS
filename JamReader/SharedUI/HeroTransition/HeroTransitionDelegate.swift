@@ -311,11 +311,12 @@ private final class HeroPresentTransition: NSObject, UIViewControllerAnimatedTra
         in finalFrame: CGRect,
         container: UIView
     ) -> CGRect {
-        let convertedFrame = sourceFrame.isUsableHeroFrame
+        let convertedFrame = sourceFrame.isFiniteHeroFrame
             ? container.convert(sourceFrame, from: nil)
             : .zero
+        let sanitizedFrame = HeroSourceFrameSanitizer.sanitized(convertedFrame, in: finalFrame)
 
-        guard convertedFrame.isUsableHeroFrame else {
+        guard sanitizedFrame.isFiniteHeroFrame else {
             let fallbackSize = CGSize(
                 width: min(max(finalFrame.width * 0.22, 80), 150),
                 height: min(max(finalFrame.height * 0.18, 112), 220)
@@ -328,7 +329,7 @@ private final class HeroPresentTransition: NSObject, UIViewControllerAnimatedTra
             )
         }
 
-        return convertedFrame
+        return sanitizedFrame
     }
 
     private static func readerEntryTransform(from startFrame: CGRect, in finalFrame: CGRect) -> CGAffineTransform {
@@ -553,16 +554,5 @@ private final class HeroFloatingPreviewView: UIView {
             roundedRect: bounds,
             cornerRadius: previewCornerRadius
         ).cgPath
-    }
-}
-
-private extension CGRect {
-    var isUsableHeroFrame: Bool {
-        origin.x.isFinite
-            && origin.y.isFinite
-            && width.isFinite
-            && height.isFinite
-            && width > 2
-            && height > 2
     }
 }

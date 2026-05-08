@@ -349,6 +349,12 @@ final class RemoteComicThumbnailPipeline {
         inFlightTasks.removeAll()
     }
 
+    func clearDisplayMemoryCache() {
+        cache.removeAllObjects()
+        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.removeAll()
+    }
+
     func cachedTransitionImage(
         for item: RemoteDirectoryItem,
         browsingService: RemoteServerBrowsingService
