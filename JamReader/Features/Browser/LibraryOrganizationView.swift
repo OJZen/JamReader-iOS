@@ -235,6 +235,7 @@ struct LibraryOrganizationView: View {
     @ViewBuilder
     private var presentationObservers: some View {
         Color.clear
+            .allowsHitTesting(false)
             .onChange(of: viewModel.isShowingCreateSheet) { _, isPresented in
                 if isPresented {
                     presentCreateSheetIfNeeded()

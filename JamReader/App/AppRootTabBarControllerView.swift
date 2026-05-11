@@ -1035,21 +1035,54 @@ final class RootOverlayWindowController: UIViewController {
 final class PassthroughOverlayWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hitView = super.hitTest(point, with: event)
-        if hitView === self || hitView === rootViewController?.view {
+        guard let hitView else {
             return nil
         }
 
-        return hitView
+        guard let rootView = rootViewController?.view else {
+            return hitView === self ? nil : hitView
+        }
+
+        if hitView === self || hitView === rootView {
+            return nil
+        }
+
+        return hitView.hasOverlayInteractionTarget(stoppingAt: rootView) ? hitView : nil
     }
 }
 
 final class PassthroughOverlayView: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hitView = super.hitTest(point, with: event)
-        if hitView === self || hitView === subviews.first {
+        guard let hitView else {
             return nil
         }
 
-        return hitView
+        let hostingRootView = subviews.first
+        if hitView === self || hitView === hostingRootView {
+            return nil
+        }
+
+        return hitView.hasOverlayInteractionTarget(stoppingAt: hostingRootView ?? self) ? hitView : nil
+    }
+}
+
+private extension UIView {
+    func hasOverlayInteractionTarget(stoppingAt rootView: UIView) -> Bool {
+        var view: UIView? = self
+
+        while let currentView = view, currentView !== rootView {
+            if currentView is UIControl {
+                return true
+            }
+
+            if currentView.gestureRecognizers?.isEmpty == false {
+                return true
+            }
+
+            view = currentView.superview
+        }
+
+        return false
     }
 }

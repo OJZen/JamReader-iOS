@@ -263,6 +263,7 @@ struct LibrarySpecialCollectionView: View {
     @ViewBuilder
     private var presentationObservers: some View {
         Color.clear
+            .allowsHitTesting(false)
             .onChange(of: editingComic?.id) { _, _ in
                 presentEditingComicSheetIfNeeded()
             }

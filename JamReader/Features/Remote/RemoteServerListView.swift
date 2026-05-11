@@ -103,6 +103,7 @@ struct RemoteServerListView: View {
     @ViewBuilder
     private var presentationObservers: some View {
         Color.clear
+            .allowsHitTesting(false)
             .onChange(of: editorDraft?.id) { _, _ in
                 presentEditorSheetIfNeeded()
             }

@@ -624,6 +624,7 @@ private struct ReaderThumbnailScrubber: View {
                                             key: ReaderThumbnailMidpointPreferenceKey.self,
                                             value: [pageIndex: itemProxy.frame(in: .named(coordinateSpaceName)).midX]
                                         )
+                                        .allowsHitTesting(false)
                                     }
                                 }
                             }

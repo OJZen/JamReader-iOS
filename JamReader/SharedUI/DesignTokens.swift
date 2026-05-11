@@ -311,6 +311,7 @@ private struct ContainerWidthReaderModifier: ViewModifier {
                         key: ContainerWidthPreferenceKey.self,
                         value: geometry.size.width
                     )
+                    .allowsHitTesting(false)
                 }
             }
             .onPreferenceChange(ContainerWidthPreferenceKey.self) { newWidth in
