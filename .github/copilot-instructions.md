@@ -42,19 +42,22 @@ Single iOS app (iPhone + iPad) combining desktop JamReader + JamReaderLibrary. S
 | SharedUI | `JamReader/SharedUI/` | Reusable SwiftUI components, UIKit bridges, design tokens |
 | Vendor | `JamReader/Vendor/` | `SWXMLHash 8.1.1` (XML), `SMBClient 0.3.1` (SMB protocol) |
 
-### Reader Architecture (4 layers)
+### Reader Architecture
 
-1. **Reader Shell (SwiftUI)** — `ComicReaderView` / `RemoteComicReaderView`. Navigation entry only.
-2. **Reader Runtime** — `ReaderSessionController` is the single source of truth for page index, chrome visibility, layout. All mutations go through `ReaderCommand` (command/reducer pattern).
-3. **Reader Host (UIKit)** — `ReaderGestureCoordinator` dispatches taps. Chrome overlay doesn't affect content layout.
-4. **Content Controllers** — `ImageSequenceReaderContainerView` (paged, UICollectionView-based), `VerticalImageSequenceReaderContainerView` (continuous scroll), `PDFReaderContainerView`. Each wraps `ZoomableImagePageView` (UIScrollView-based zoom).
+All local and remote entry points must go through the unified reader open pipeline:
+
+1. **Open request** — Library, remote cache, remote stream, and file URL callers create `ComicOpenRequest`.
+2. **Open coordinator** — `ComicOpenCoordinator` resolves the request into `ComicReaderSession` + `ComicDocument`, including source URL, cache lease, security scope, initial progress, and state store.
+3. **Reader shell** — `ComicReaderView` hosts the reader UI. Do not reintroduce a separate remote reader shell with its own page/progress/layout state machine.
+4. **Content containers** — `ImageSequenceReaderContainerView` (paged UICollectionView), `VerticalImageSequenceReaderContainerView` (continuous scroll), `PDFReaderContainerView`, and EPUB support render the active document.
 
 ### Data Layer
 
-- **Database**: Raw SQLite3 C API (not CoreData/GRDB). Schema mirrors desktop `library.ydb` v9.16.0 for full compatibility.
-- **Archive formats**: ZIP/CBZ (custom parser + libarchive fallback), TAR/CBT (custom), RAR/CBR/7Z/CB7/ARJ (libarchive via ObjC++ bridge `YRLibArchiveReader`), PDF (PDFKit). Router: `ComicDocumentLoader`.
-- **Remote**: Vendored `SMBClient` with async/await API. `RemoteServerBrowsingService` abstracts directory listing. Downloads go to local cache, not streamed live.
-- **Thumbnails**: Two-tier cache — memory (NSCache, 48 items / 192 MB) + disk (512 MB LRU in `Caches/JamReader/ReaderPages/`).
+- **Database**: Raw SQLite3 C API (not CoreData/GRDB). The app-owned library database is `Application Support/JamReader/AppLibraryV2.sqlite`; external folders are content sources only.
+- **Assets**: Library covers and derived resources live under `Application Support/JamReader/LibraryAssets/<libraryID>/`. Do not write covers or metadata into source folders.
+- **Archive formats**: ZIP/CBZ (custom parser + libarchive fallback), TAR/CBT (custom), RAR/CBR/7Z/CB7/ARJ (libarchive via ObjC++ bridge `YRLibArchiveReader`), PDF (PDFKit), EPUB. Router: `ComicDocumentLoader`.
+- **Remote**: Vendored `SMBClient` with async/await API. `RemoteServerBrowsingService` abstracts SMB/WebDAV listing, remote cache, and supported streaming. WebDAV ZIP streaming/cover prefetch requires Range support; no-Range WebDAV falls back to full download before opening.
+- **Thumbnails/cache**: Reader pages, remote thumbnails, offline copies, and partial downloads have separate lifecycles. Cache deletion must also remove matching cache records and must not delete active reader leases.
 
 ## Hard Constraints
 
@@ -62,12 +65,15 @@ Single iOS app (iPhone + iPad) combining desktop JamReader + JamReaderLibrary. S
 
 All gesture handling must use UIKit `UIGestureRecognizer`. The script `scripts/check_no_swiftui_gestures.sh` blocks `.gesture()`, `.onTapGesture()`, `DragGesture`, `MagnificationGesture`, `RotationGesture`, `LongPressGesture`, `.simultaneousGesture()`, `.highPriorityGesture()`. Violations fail CI.
 
-### Desktop Library Compatibility
+### Native Library Ownership
 
-Must read/write desktop `library.ydb` without corruption:
-- Comic hashing: SHA1 of first 512 KB + file size (`pseudoHash`)
-- Cover scaling: 640px wide (landscape), 480px wide (portrait), 960px tall (super-long), JPEG quality 75
-- Two storage modes: **In-place** (`.jamreaderlibrary/` beside source) and **Mirrored** (app sandbox only)
+JamReader does not read or write desktop compatibility databases. The app-owned SQLite database is the only business truth.
+
+- Do not create hidden library folders or database files in source folders.
+- Store paths as library-scoped relative paths; use file fingerprints only to preserve local state across rename/move during rescan.
+- Scope all mutable SQLite writes by `library_id`; public `Int64` IDs are not globally safe.
+- Enable SQLite foreign keys for every connection, not only at bootstrap.
+- Remote server configuration and credentials stay in their existing JSON/UserDefaults/Keychain stores; do not merge them into the local library schema without an explicit design change.
 
 ### Tab Boundary Isolation
 

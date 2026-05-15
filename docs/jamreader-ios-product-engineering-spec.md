@@ -1524,10 +1524,11 @@ Settings 中还会展示：
 - `JamReader/Features/Reader/ComicReaderViewModel.swift`
 - `JamReader/Features/Remote/RemoteServerBrowserView.swift`
 - `JamReader/Features/Remote/RemoteServerBrowserViewModel.swift`
-- `JamReader/Features/Remote/RemoteComicReaderView.swift`
 - `JamReader/Features/Settings/SettingsHomeView.swift`
 - `JamReader/Features/Settings/RemoteCacheSettingsView.swift`
+- `JamReader/ReaderKernel/ComicOpenPipeline.swift`
 - `JamReader/SharedUI/Components/ReaderChromeOverlay.swift`
+- `JamReader/SharedUI/Components/ReaderDocumentComponents.swift`
 - `JamReader/SharedUI/Components/PullDownToDismissModifier.swift`
 - `JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift`
 - `JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift`

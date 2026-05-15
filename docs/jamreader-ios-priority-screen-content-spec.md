@@ -667,7 +667,7 @@ Actions:
 ### 9.8 Design-to-Code Mapping
 
 - Local shell: `ComicReaderView`
-- Remote shell: `RemoteComicReaderView`
+- Remote shell: `ComicReaderView` via `ComicOpenRequest` / `ComicOpenCoordinator`
 - Chrome reference: `ReaderChromeOverlay`
 - Controls reference: `ReaderControlsSupport`
 

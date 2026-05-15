@@ -2,6 +2,8 @@
 
 更新时间：2026-03-19
 
+> 状态：本文件记录阅读器/手势重构的历史方案和设计依据。当前实现已经进一步收口为统一 `ComicOpenRequest` / `ComicOpenCoordinator` / `ComicReaderView` pipeline，本地与远程入口不应再各自维护 reader shell。维护当前代码时优先参考 `docs/maintenance-pitfalls.md`、`.github/copilot-instructions.md` 和当前源码。
+
 ## 1. 背景判断
 
 当前图片分页阅读器已经暴露出结构性问题，而不是单点 bug：
@@ -25,7 +27,7 @@
 
 - SwiftUI 外层：
   - [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
-  - [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
+  - 历史旧壳：`RemoteComicReaderView`
 - 运行时 ViewModel：
   - [ComicReaderViewModel.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderViewModel.swift)
 - UIKit 容器：
@@ -72,7 +74,7 @@
 当前本地和远程阅读器都拥有各自一套外层壳：
 
 - [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
-- [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
+- 历史旧壳：`RemoteComicReaderView`
 
 它们共享了部分底层容器，但运行时控制仍有重复：
 
@@ -131,7 +133,7 @@
 文件：
 
 - 精简 [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
-- 精简 [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
+- 收敛历史远程旧壳 `RemoteComicReaderView`
 
 约束：
 
@@ -371,7 +373,7 @@ chrome 需要和内容分离。
 保留并逐步收缩：
 
 - [ComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderView.swift)
-- [RemoteComicReaderView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Remote/RemoteComicReaderView.swift)
+- 历史旧壳：`RemoteComicReaderView`
 - [ComicReaderViewModel.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/Features/Reader/ComicReaderViewModel.swift)
 
 逐步替换：
@@ -574,7 +576,7 @@ chrome 需要和内容分离。
 
 任务：
 
-- `RemoteComicReaderView` 接新 host
+- 历史远程旧壳接新 host
 - 远程进度 store 适配
 - 远程刷新入口
 - 缓存回退提示入口

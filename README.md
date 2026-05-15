@@ -45,3 +45,7 @@ Gesture architecture check:
 ```bash
 ./scripts/check_no_swiftui_gestures.sh
 ```
+
+## Maintenance Notes
+
+- [Maintenance pitfalls and regression checklist](docs/maintenance-pitfalls.md)

@@ -21,7 +21,6 @@ rg -n "library\\.ydb|\\.jamreaderlibrary|storageMode|Desktop Compatible|Browse O
 ```
 
 - Expect no runtime compatibility hits.
-- Expect no runtime compatibility hits.
 
 ## Library Isolation Sweep
 
