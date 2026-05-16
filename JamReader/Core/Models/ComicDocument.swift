@@ -1,5 +1,4 @@
 import Foundation
-import PDFKit
 
 enum EBookReaderKind: Equatable, Sendable {
     case quickLook
@@ -7,15 +6,12 @@ enum EBookReaderKind: Equatable, Sendable {
 }
 
 enum ComicDocument: @unchecked Sendable {
-    case pdf(PDFComicDocument)
     case imageSequence(ImageSequenceComicDocument)
     case ebook(EBookComicDocument)
     case unsupported(UnsupportedComicDocument)
 
     var pageCount: Int? {
         switch self {
-        case .pdf(let document):
-            return document.pageCount
         case .imageSequence(let document):
             return document.pageCount
         case .ebook:
@@ -27,8 +23,6 @@ enum ComicDocument: @unchecked Sendable {
 
     var fileURL: URL {
         switch self {
-        case .pdf(let document):
-            return document.url
         case .imageSequence(let document):
             return document.url
         case .ebook(let document):
@@ -39,13 +33,9 @@ enum ComicDocument: @unchecked Sendable {
     }
 }
 
-struct PDFComicDocument: @unchecked Sendable {
-    let url: URL
-    let pdfDocument: PDFDocument
-
-    var pageCount: Int {
-        pdfDocument.pageCount
-    }
+nonisolated enum ImageSequenceDocumentKind: Equatable, Sendable {
+    case comicImages
+    case renderedDocument
 }
 
 struct EBookComicDocument: Sendable {
@@ -70,13 +60,30 @@ extension ComicPageDataSource {
     }
 }
 
-struct ImageSequenceComicDocument: Sendable {
+nonisolated struct ImageSequenceComicDocument: Sendable {
     let url: URL
     let pageNames: [String]
     let pageSource: any ComicPageDataSource
+    let kind: ImageSequenceDocumentKind
+
+    init(
+        url: URL,
+        pageNames: [String],
+        pageSource: any ComicPageDataSource,
+        kind: ImageSequenceDocumentKind = .comicImages
+    ) {
+        self.url = url
+        self.pageNames = pageNames
+        self.pageSource = pageSource
+        self.kind = kind
+    }
 
     var pageCount: Int {
         pageNames.count
+    }
+
+    var usesComicImageLayout: Bool {
+        kind == .comicImages
     }
 
     func pageName(at index: Int) -> String? {

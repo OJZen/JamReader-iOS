@@ -1,8 +1,8 @@
 import Foundation
 
 enum ReaderContentKind: Equatable {
-    case pdf
     case ebook
+    case renderedDocument
     case imagePaged
     case imageContinuous
 }
@@ -50,11 +50,12 @@ extension ReaderContentDescriptor {
         layout: ReaderDisplayLayout
     ) -> ReaderContentKind {
         switch document {
-        case .pdf:
-            return .pdf
         case .ebook:
             return .ebook
-        case .imageSequence:
+        case .imageSequence(let imageSequence):
+            if !imageSequence.usesComicImageLayout {
+                return .renderedDocument
+            }
             return layout.pagingMode == .verticalContinuous ? .imageContinuous : .imagePaged
         case .unsupported:
             return layout.pagingMode == .verticalContinuous ? .imageContinuous : .imagePaged

@@ -166,16 +166,18 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     }
 
     var supportsImageLayoutControls: Bool {
-        if let document, case .imageSequence = document {
-            return true
+        if let document, case .imageSequence(let imageSequence) = document {
+            return imageSequence.usesComicImageLayout
         }
         return false
     }
 
     var supportsRotationControls: Bool {
         switch document {
-        case .pdf?, .imageSequence?:
-            return effectiveReaderLayout.pagingMode != .verticalContinuous
+        case .imageSequence(let imageSequence)?:
+            return imageSequence.usesComicImageLayout
+                ? effectiveReaderLayout.pagingMode != .verticalContinuous
+                : true
         case .ebook?, .unsupported?, nil:
             return false
         }
@@ -817,7 +819,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             return ReaderProgressFactory.nonPaginatedProgress(
                 currentPosition: max(snapshot.pageIndex + 1, 1)
             )
-        case .pdf, .imageSequence:
+        case .imageSequence:
             return ReaderProgressFactory.progress(
                 forPageIndex: snapshot.pageIndex,
                 pageCount: max(document.pageCount ?? 1, 1)

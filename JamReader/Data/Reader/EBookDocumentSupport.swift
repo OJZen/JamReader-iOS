@@ -32,7 +32,14 @@ enum EBookDocumentSupport {
     }
 
     nonisolated static func unsupportedReason(for fileURL: URL) -> String {
-        "\(fileURL.pathExtension.uppercased()) preview is not available on this device."
+        if fileURL.pathExtension.lowercased() == "mobi" {
+            if MuPDFDocumentRenderer.isAvailable {
+                return "MOBI could not be opened by MuPDF or Quick Look."
+            }
+            return "MOBI reading requires the MuPDF engine, which is not linked into this build."
+        }
+
+        return "\(fileURL.pathExtension.uppercased()) preview is not available on this device."
     }
 
     nonisolated static func documentIdentifier(for fileURL: URL) -> String {
@@ -85,7 +92,8 @@ final class LocalEBookThumbnailExtractor {
         await withCheckedContinuation { continuation in
             extractionQueue.async {
                 let image = autoreleasepool {
-                    EBookDocumentSupport.generateThumbnail(at: fileURL, maxPixelSize: maxPixelSize)
+                    MuPDFThumbnailRenderer.thumbnail(from: fileURL, maxPixelSize: maxPixelSize)
+                        ?? EBookDocumentSupport.generateThumbnail(at: fileURL, maxPixelSize: maxPixelSize)
                 }
                 continuation.resume(returning: image)
             }

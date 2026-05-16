@@ -1,7 +1,6 @@
 import Combine
 import CryptoKit
 import ImageIO
-import PDFKit
 import SwiftUI
 import UIKit
 
@@ -228,10 +227,19 @@ final class RemoteComicThumbnailPipeline {
             return nil
         }
 
+        if item.isPDFDocument, !prefersLocalCache {
+            return await cachedThumbnailImage(
+                for: item,
+                browsingService: browsingService,
+                maxPixelSize: maxPixelSize
+            )
+        }
+
         let requestedMaxPixelSize = maxPixelSize
         let maxPixelSize = Self.normalizedPixelSize(for: requestedMaxPixelSize)
         let cacheKey = Self.cacheKey(for: reference, maxPixelSize: maxPixelSize)
-        let requestKey = Self.requestKey(forCacheKey: cacheKey, allowsRemoteFetch: allowsRemoteFetch)
+        let allowsWorkerRemoteFetch = item.isPDFDocument ? false : allowsRemoteFetch
+        let requestKey = Self.requestKey(forCacheKey: cacheKey, allowsRemoteFetch: allowsWorkerRemoteFetch)
         let nsCacheKey = cacheKey as NSString
 
         if let cachedImage = cache.object(forKey: nsCacheKey) {
@@ -309,7 +317,7 @@ final class RemoteComicThumbnailPipeline {
                     prefersLocalCache: prefersLocalCache,
                     maxPixelSize: maxPixelSize,
                     diskURL: diskURL,
-                    allowsRemoteFetch: allowsRemoteFetch
+                    allowsRemoteFetch: allowsWorkerRemoteFetch
                 )
             }
         }
@@ -406,6 +414,58 @@ final class RemoteComicThumbnailPipeline {
         let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
         if let hqImage = highQualityCache.object(forKey: hqKey),
            Self.pixelSize(for: hqImage) >= maxPixelSize {
+            return hqImage
+        }
+
+        return nil
+    }
+
+    func cachedThumbnailImage(
+        for item: RemoteDirectoryItem,
+        browsingService: RemoteServerBrowsingService,
+        maxPixelSize: Int
+    ) async -> UIImage? {
+        guard item.canOpenAsComic,
+              let reference = try? browsingService.makeComicFileReference(from: item)
+        else {
+            return nil
+        }
+
+        let requestedMaxPixelSize = maxPixelSize
+        let normalizedMaxPixelSize = Self.normalizedPixelSize(for: requestedMaxPixelSize)
+        var candidatePixelSizes: [Int] = []
+        for pixelSize in [normalizedMaxPixelSize, requestedMaxPixelSize, 512, 384, 256, 160] {
+            guard !candidatePixelSizes.contains(pixelSize) else {
+                continue
+            }
+            candidatePixelSizes.append(pixelSize)
+        }
+
+        for pixelSize in candidatePixelSizes {
+            let cacheKey = Self.cacheKey(for: reference, maxPixelSize: pixelSize)
+            let nsCacheKey = cacheKey as NSString
+
+            if let cachedImage = cache.object(forKey: nsCacheKey) {
+                promoteToTransitionCache(cachedImage, for: reference)
+                return cachedImage
+            }
+
+            let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
+            if let diskCachedImage = await diskCache.loadCachedImageAsync(at: diskURL) {
+                cache.setObject(
+                    diskCachedImage,
+                    forKey: nsCacheKey,
+                    cost: Self.cacheCost(for: diskCachedImage)
+                )
+                promoteToTransitionCache(diskCachedImage, for: reference)
+                diskCache.touchCachedThumbnail(at: diskURL)
+                return diskCachedImage
+            }
+        }
+
+        let hqKey = Self.itemQualityCacheKey(for: reference) as NSString
+        if let hqImage = highQualityCache.object(forKey: hqKey),
+           Self.pixelSize(for: hqImage) >= normalizedMaxPixelSize {
             return hqImage
         }
 
@@ -974,11 +1034,13 @@ private struct RemoteComicThumbnailWorker {
         let isEBookDocument = EBookDocumentSupport.supportsFileExtension(reference.fileExtension)
 
         if reference.isPDFDocument {
-            guard let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
+            guard prefersLocalCache,
+                  let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
                   let cachedImage = await Self.extractLocalPDFThumbnail(
                     from: cachedFileURL,
                     maxPixelSize: maxPixelSize
-                  ) else {
+                  )
+            else {
                 return nil
             }
 
@@ -1104,20 +1166,17 @@ private final class LocalPDFBrowserThumbnailExtractor: @unchecked Sendable {
         await withCheckedContinuation { continuation in
             extractionQueue.async {
                 let image = autoreleasepool { () -> UIImage? in
-                    guard let document = PDFDocument(url: fileURL),
-                          document.pageCount > 0,
-                          let page = document.page(at: 0) else {
-                        return nil
+                    if let muPDFImage = MuPDFThumbnailRenderer.thumbnail(
+                        from: fileURL,
+                        maxPixelSize: max(1, min(maxPixelSize, 512))
+                    ) {
+                        return muPDFImage
                     }
 
-                    let clampedPixelSize = max(1, min(maxPixelSize, 512))
-                    let targetSize = CGSize(width: clampedPixelSize, height: clampedPixelSize)
-                    let thumbnail = page.thumbnail(of: targetSize, for: .mediaBox)
-                    guard thumbnail.size.width > 0, thumbnail.size.height > 0 else {
-                        return nil
-                    }
-
-                    return thumbnail
+                    return LocalPDFThumbnailRenderer.thumbnail(
+                        from: fileURL,
+                        maxPixelSize: max(1, min(maxPixelSize, 512))
+                    )
                 }
 
                 continuation.resume(returning: image)

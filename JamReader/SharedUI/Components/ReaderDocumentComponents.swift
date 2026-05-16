@@ -49,18 +49,6 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
 
     var body: some View {
         switch document {
-        case .pdf(let pdf):
-            ReaderRotatedContentHost(rotation: layout.rotation) {
-                PDFReaderContainerView(
-                    document: pdf.pdfDocument,
-                    requestedPageIndex: pageIndex,
-                    rotation: layout.rotation,
-                    onPageChanged: onPageChanged,
-                    onReaderTap: onReaderTap
-                )
-            }
-            .ignoresSafeArea()
-            .background(Color.black.ignoresSafeArea())
         case .imageSequence(let imageSequence):
             readerImageSequenceContent(for: imageSequence)
         case .ebook(let ebook):
@@ -72,11 +60,15 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
 
     @ViewBuilder
     private func readerImageSequenceContent(for document: ImageSequenceComicDocument) -> some View {
-        if layout.pagingMode == .verticalContinuous {
+        let resolvedLayout = document.usesComicImageLayout
+            ? layout
+            : layout.normalizedForRenderedDocument
+
+        if resolvedLayout.pagingMode == .verticalContinuous {
             VerticalImageSequenceReaderContainerView(
                 document: document,
                 initialPageIndex: pageIndex,
-                layout: layout,
+                layout: resolvedLayout,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap
             )
@@ -86,7 +78,7 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
             ImageSequenceReaderContainerView(
                 document: document,
                 initialPageIndex: pageIndex,
-                layout: layout,
+                layout: resolvedLayout,
                 isHorizontalScrollingDisabled: isHorizontalScrollingDisabled,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap,
@@ -112,6 +104,19 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())
         }
+    }
+}
+
+private extension ReaderDisplayLayout {
+    var normalizedForRenderedDocument: ReaderDisplayLayout {
+        ReaderDisplayLayout(
+            pagingMode: .paged,
+            spreadMode: .singlePage,
+            readingDirection: .leftToRight,
+            coverAsSinglePage: true,
+            fitMode: .page,
+            rotation: rotation
+        )
     }
 }
 

@@ -634,9 +634,8 @@ final class ReaderThumbnailBrowserViewController: UIViewController, UICollection
         case (.imageSequence(let lhs), .imageSequence(let rhs)):
             return lhs.url != rhs.url
                 || lhs.pageNames != rhs.pageNames
+                || lhs.kind != rhs.kind
                 || ObjectIdentifier(lhs.pageSource) != ObjectIdentifier(rhs.pageSource)
-        case (.pdf(let lhs), .pdf(let rhs)):
-            return lhs.url != rhs.url
         case (.ebook(let lhs), .ebook(let rhs)):
             return lhs.url != rhs.url || lhs.documentID != rhs.documentID
         case (.unsupported(let lhs), .unsupported(let rhs)):
@@ -741,21 +740,13 @@ private enum ReaderThumbnailBrowserImageResolver {
                 namespace: ReaderPageCache.namespace(for: imageSequence.url),
                 pageIndex: pageIndex
             )
-        case .pdf, .ebook, .unsupported:
+        case .ebook, .unsupported:
             return nil
         }
     }
 
     static func image(for document: ComicDocument, pageIndex: Int, maxPixelSize: Int) async -> UIImage? {
         switch document {
-        case .pdf(let pdfDocument):
-            return await MainActor.run {
-                PDFThumbnailStore.shared.image(
-                    for: pdfDocument,
-                    pageIndex: pageIndex,
-                    maxPixelSize: maxPixelSize
-                )
-            }
         case .ebook(let ebookDocument):
             return await LocalEBookThumbnailExtractor.shared.thumbnail(
                 from: ebookDocument.url,

@@ -1,17 +1,13 @@
 import Foundation
-import PDFKit
 
 enum ComicDocumentLoadError: LocalizedError {
     case fileMissing
-    case unreadablePDF
     case unsupportedRemoteStreamingFormat(String)
 
     var errorDescription: String? {
         switch self {
         case .fileMissing:
             return "The selected comic file could not be found."
-        case .unreadablePDF:
-            return "The PDF could not be opened."
         case .unsupportedRemoteStreamingFormat(let fileName):
             return "\(fileName) still needs a full download before it can be opened."
         }
@@ -24,6 +20,7 @@ nonisolated final class ComicDocumentLoader {
     private let libArchiveReader: LibArchiveReader
     private let zipArchiveReader: ZIPArchiveReader
     private let tarArchiveReader: TARArchiveReader
+    private let muPDFDocumentReader: MuPDFComicDocumentReader
     private let remoteZIPArchiveReader: RemoteZIPArchiveReader
 
     init(
@@ -32,6 +29,7 @@ nonisolated final class ComicDocumentLoader {
         libArchiveReader: LibArchiveReader = LibArchiveReader(),
         zipArchiveReader: ZIPArchiveReader = ZIPArchiveReader(),
         tarArchiveReader: TARArchiveReader = TARArchiveReader(),
+        muPDFDocumentReader: MuPDFComicDocumentReader = MuPDFComicDocumentReader(),
         remoteZIPArchiveReader: RemoteZIPArchiveReader = RemoteZIPArchiveReader()
     ) {
         self.fileManager = fileManager
@@ -39,6 +37,7 @@ nonisolated final class ComicDocumentLoader {
         self.libArchiveReader = libArchiveReader
         self.zipArchiveReader = zipArchiveReader
         self.tarArchiveReader = tarArchiveReader
+        self.muPDFDocumentReader = muPDFDocumentReader
         self.remoteZIPArchiveReader = remoteZIPArchiveReader
     }
 
@@ -59,14 +58,15 @@ nonisolated final class ComicDocumentLoader {
         let `extension` = fileURL.pathExtension.lowercased()
         switch `extension` {
         case "pdf":
-            guard let document = PDFDocument(url: fileURL), document.pageCount > 0 else {
-                throw ComicDocumentLoadError.unreadablePDF
+            if let muPDFDocument = loadMuPDFDocumentIfPossible(at: fileURL) {
+                return .imageSequence(muPDFDocument)
             }
 
-            return .pdf(
-                PDFComicDocument(
+            return .unsupported(
+                UnsupportedComicDocument(
                     url: fileURL,
-                    pdfDocument: document
+                    fileExtension: `extension`,
+                    reason: MuPDFDocumentRenderer.unsupportedReason(for: fileURL)
                 )
             )
         case "cbz", "zip":
@@ -76,6 +76,10 @@ nonisolated final class ComicDocumentLoader {
         case "cbt", "tar":
             return .imageSequence(try tarArchiveReader.loadDocument(at: fileURL))
         case "epub":
+            if let muPDFDocument = loadMuPDFDocumentIfPossible(at: fileURL) {
+                return .imageSequence(muPDFDocument)
+            }
+
             return .ebook(
                 EBookComicDocument(
                     url: fileURL,
@@ -85,6 +89,10 @@ nonisolated final class ComicDocumentLoader {
                 )
             )
         case "mobi":
+            if let muPDFDocument = loadMuPDFDocumentIfPossible(at: fileURL) {
+                return .imageSequence(muPDFDocument)
+            }
+
             if EBookDocumentSupport.canPreviewDocument(at: fileURL) {
                 return .ebook(
                     EBookComicDocument(
@@ -112,6 +120,14 @@ nonisolated final class ComicDocumentLoader {
                 )
             )
         }
+    }
+
+    private func loadMuPDFDocumentIfPossible(at fileURL: URL) -> ImageSequenceComicDocument? {
+        guard MuPDFDocumentRenderer.canAttemptDocumentOpen(at: fileURL) else {
+            return nil
+        }
+
+        return try? muPDFDocumentReader.loadDocument(at: fileURL)
     }
 
     func supportsRemoteStreaming(for fileName: String) -> Bool {

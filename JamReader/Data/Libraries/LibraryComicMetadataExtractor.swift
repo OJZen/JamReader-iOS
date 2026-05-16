@@ -1,6 +1,5 @@
 import Foundation
 import ImageIO
-import PDFKit
 import UIKit
 
 struct ExtractedComicMetadata {
@@ -93,6 +92,9 @@ final class LibraryComicMetadataExtractor {
 
         switch fileExtension {
         case "pdf":
+            if let metadata = extractMuPDFMetadata(for: fileURL, coverPage: coverPage) {
+                return metadata
+            }
             return try extractPDFMetadata(for: fileURL, coverPage: coverPage)
         case "cbz", "zip":
             return try extractArchiveMetadata(
@@ -125,7 +127,10 @@ final class LibraryComicMetadataExtractor {
         let fileExtension = fileURL.pathExtension.lowercased()
         switch fileExtension {
         case "pdf":
-            return PDFDocument(url: fileURL)?.pageCount
+            if let pageCount = MuPDFThumbnailRenderer.pageCount(for: fileURL), pageCount > 0 {
+                return pageCount
+            }
+            return LocalPDFThumbnailRenderer.pageCount(for: fileURL)
         case "cbz", "zip":
             return (try? zipArchiveReader.countPages(at: fileURL)) ?? (try? libArchiveReader.countPages(at: fileURL))
         case "cbr", "rar", "cb7", "7z", "arj":
@@ -133,19 +138,42 @@ final class LibraryComicMetadataExtractor {
         case "cbt", "tar":
             return try? tarArchiveReader.countPages(at: fileURL)
         case "epub", "mobi":
-            return 0
+            return MuPDFThumbnailRenderer.pageCount(for: fileURL) ?? 0
         default:
             return nil
         }
     }
 
     private func extractEBookMetadata(for fileURL: URL) throws -> ExtractedComicMetadata? {
+        if let metadata = extractMuPDFMetadata(for: fileURL) {
+            return metadata
+        }
+
         let coverImage = autoreleasepool {
             EBookDocumentSupport.generateThumbnail(at: fileURL, maxPixelSize: 1400)
         }
 
         return ExtractedComicMetadata(
             pageCount: 0,
+            originalCoverSize: coverImage?.size,
+            coverImage: coverImage,
+            importedComicInfo: nil
+        )
+    }
+
+    private func extractMuPDFMetadata(for fileURL: URL, coverPage: Int = 1) -> ExtractedComicMetadata? {
+        guard let renderer = try? MuPDFDocumentRenderer(url: fileURL) else {
+            return nil
+        }
+
+        let pageCount = renderer.pageCount
+        let pageIndex = min(max(coverPage - 1, 0), max(pageCount - 1, 0))
+        let coverImage = pageCount > 0
+            ? try? renderer.imageForPage(at: pageIndex, maxPixelSize: 1400)
+            : nil
+
+        return ExtractedComicMetadata(
+            pageCount: pageCount,
             originalCoverSize: coverImage?.size,
             coverImage: coverImage,
             importedComicInfo: nil
@@ -227,27 +255,23 @@ final class LibraryComicMetadataExtractor {
     }
 
     private func extractPDFMetadata(for fileURL: URL, coverPage: Int) throws -> ExtractedComicMetadata? {
-        guard let document = PDFDocument(url: fileURL), document.pageCount > 0 else {
+        guard let pageCount = LocalPDFThumbnailRenderer.pageCount(for: fileURL),
+              pageCount > 0
+        else {
             return nil
         }
 
-        let pageIndex = min(max(coverPage - 1, 0), document.pageCount - 1)
-        guard let page = document.page(at: pageIndex) else {
-            return ExtractedComicMetadata(
-                pageCount: document.pageCount,
-                originalCoverSize: nil,
-                coverImage: nil,
-                importedComicInfo: nil
-            )
-        }
-
-        let originalSize = page.bounds(for: .mediaBox).size
-        let thumbnail = page.thumbnail(of: CGSize(width: 1400, height: 1400), for: .mediaBox)
+        let pageIndex = min(max(coverPage - 1, 0), pageCount - 1)
+        let thumbnailInfo = LocalPDFThumbnailRenderer.thumbnailInfo(
+            from: fileURL,
+            pageIndex: pageIndex,
+            maxPixelSize: 1400
+        )
 
         return ExtractedComicMetadata(
-            pageCount: document.pageCount,
-            originalCoverSize: originalSize.width > 0 && originalSize.height > 0 ? originalSize : nil,
-            coverImage: thumbnail.size.width > 0 && thumbnail.size.height > 0 ? thumbnail : nil,
+            pageCount: pageCount,
+            originalCoverSize: thumbnailInfo?.originalPageSize,
+            coverImage: thumbnailInfo?.image,
             importedComicInfo: nil
         )
     }
@@ -276,6 +300,14 @@ final class LibraryComicMetadataExtractor {
         do {
             switch fileExtension {
             case "pdf":
+                if let pageCount = MuPDFThumbnailRenderer.pageCount(for: fileURL), pageCount > 0 {
+                    return ExtractedComicMetadata(
+                        pageCount: pageCount,
+                        originalCoverSize: preferredSidecar.originalSize,
+                        coverImage: preferredSidecar.image,
+                        importedComicInfo: nil
+                    )
+                }
                 return try extractPDFMetadataSummary(
                     for: fileURL,
                     preferredSidecar: preferredSidecar
@@ -297,7 +329,7 @@ final class LibraryComicMetadataExtractor {
                 )
             case "epub", "mobi":
                 return ExtractedComicMetadata(
-                    pageCount: 0,
+                    pageCount: MuPDFThumbnailRenderer.pageCount(for: fileURL) ?? 0,
                     originalCoverSize: preferredSidecar.originalSize,
                     coverImage: preferredSidecar.image,
                     importedComicInfo: nil
@@ -319,8 +351,7 @@ final class LibraryComicMetadataExtractor {
         for fileURL: URL,
         preferredSidecar: (image: UIImage, originalSize: CGSize?)
     ) throws -> ExtractedComicMetadata? {
-        let document = PDFDocument(url: fileURL)
-        let pageCount = document?.pageCount ?? 0
+        let pageCount = LocalPDFThumbnailRenderer.pageCount(for: fileURL) ?? 0
 
         return ExtractedComicMetadata(
             pageCount: pageCount,

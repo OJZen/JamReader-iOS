@@ -31,5 +31,6 @@ res/*.cb7
 res/*.cbt
 .cache/
 .cache/
+.mupdf/
 .omx/
 .xcodebuild-*/

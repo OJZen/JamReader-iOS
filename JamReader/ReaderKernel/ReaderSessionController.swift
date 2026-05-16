@@ -114,10 +114,10 @@ final class ReaderSessionController: ObservableObject {
 
     private func resolvedContentKind(for layout: ReaderDisplayLayout) -> ReaderContentKind {
         switch state.descriptor.kind {
-        case .pdf:
-            return .pdf
         case .ebook:
             return .ebook
+        case .renderedDocument:
+            return .renderedDocument
         case .imagePaged, .imageContinuous:
             return layout.pagingMode == .verticalContinuous ? .imageContinuous : .imagePaged
         }

@@ -898,7 +898,7 @@ Regular 宽度下缩略图更大，布局更宽松。
 | 单击右边缘 | 若 PDF 还能后翻则后一页；否则交给 Reader chrome 路由 | |
 | 单击中间 | 显示/隐藏 chrome | |
 | 已放大状态下任意单击 | 视为中间点击，仅切换 chrome | 防止误翻页 |
-| PDF 自带缩放/拖动 | 由 PDFKit 承担 | |
+| PDF 缩放/拖动 | 由 MuPDF 渲染页接入统一 UIKit reader 容器 | 不再使用系统 PDF 独立容器 |
 | 键盘右/下/Space | 下一页 | |
 | 键盘左/上/Shift+Space | 上一页 | |
 
@@ -1452,7 +1452,6 @@ Settings 中还会展示：
 
 - `ImageSequenceReaderContainerView`
 - `VerticalImageSequenceReaderContainerView`
-- `PDFReaderContainerView`
 
 ### 12.2 点击路由是抽象过的
 
@@ -1532,7 +1531,6 @@ Settings 中还会展示：
 - `JamReader/SharedUI/Components/PullDownToDismissModifier.swift`
 - `JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift`
 - `JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift`
-- `JamReader/SharedUI/Components/PDFReaderContainerView.swift`
 - `JamReader/ReaderKernel/ReaderGestureCoordinator.swift`
 - `JamReader/ReaderKernel/ReaderTapSupport.swift`
 - `JamReader/Core/Types/ReaderDisplayLayout.swift`

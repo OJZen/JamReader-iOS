@@ -54,7 +54,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     nonisolated private static let liveImportNotificationLibraryIDKey = "libraryID"
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
     private let supportedImportedFileExtensions: Set<String> = [
-        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf"
+        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub", "mobi"
     ]
 
     init(

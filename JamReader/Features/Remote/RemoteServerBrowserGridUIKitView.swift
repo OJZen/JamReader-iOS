@@ -1003,7 +1003,17 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             )
             cacheBadgeView.isHidden = true
             progressTrackView.isHidden = true
-        } else if row.item.canOpenAsComic, !row.item.isPDFDocument {
+        } else if row.item.canOpenAsComic, row.item.isPDFDocument {
+            configureCachedPDFThumbnail(
+                item: row.item,
+                profile: profile,
+                browsingService: browsingService,
+                prefersLocalCache: row.cacheAvailability.kind == .current,
+                itemWidth: itemWidth
+            )
+            updateCacheBadge(for: row.cacheAvailability)
+            updateProgressBar(for: row.readingSession)
+        } else if row.item.canOpenAsComic {
             configureComicThumbnail(
                 item: row.item,
                 profile: profile,
@@ -1013,15 +1023,6 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 allowsRemoteFetch: allowsRemoteFetch
             )
             symbolView.isHidden = true
-            updateCacheBadge(for: row.cacheAvailability)
-            updateProgressBar(for: row.readingSession)
-        } else if row.item.canOpenAsComic {
-            thumbnailTask?.cancel()
-            thumbnailTask = nil
-            thumbnailImageView.isHidden = true
-            thumbnailPlaceholderView.isHidden = true
-            symbolView.isHidden = false
-            configureSymbolView(for: row.item)
             updateCacheBadge(for: row.cacheAvailability)
             updateProgressBar(for: row.readingSession)
         } else {
@@ -1034,6 +1035,59 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             progressTrackView.isHidden = true
             configureSymbolView(for: row.item)
         }
+    }
+
+    private func configureCachedPDFThumbnail(
+        item: RemoteDirectoryItem,
+        profile: RemoteServerProfile,
+        browsingService: RemoteServerBrowsingService,
+        prefersLocalCache: Bool,
+        itemWidth: CGFloat
+    ) {
+        thumbnailTask?.cancel()
+        thumbnailImageView.image = nil
+        thumbnailImageView.isHidden = true
+        thumbnailPlaceholderView.isHidden = true
+        symbolView.isHidden = false
+        configureSymbolView(for: item)
+
+        let pixelSize = Int(max(itemWidth, itemWidth / AppLayout.coverAspectRatio) * UIScreen.main.scale)
+        let itemID = item.id
+
+        if let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
+            for: item,
+            browsingService: browsingService,
+            maxPixelSize: pixelSize
+        ), representedItemID == itemID {
+            displayCachedPDFThumbnail(seeded)
+        }
+
+        thumbnailTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let image = await RemoteComicThumbnailPipeline.shared.image(
+                for: profile,
+                item: item,
+                browsingService: browsingService,
+                prefersLocalCache: prefersLocalCache,
+                maxPixelSize: pixelSize,
+                allowsRemoteFetch: false
+            )
+            guard !Task.isCancelled, self.representedItemID == itemID else {
+                return
+            }
+            self.displayCachedPDFThumbnail(image)
+        }
+    }
+
+    private func displayCachedPDFThumbnail(_ image: UIImage?) {
+        guard let image else {
+            return
+        }
+
+        thumbnailImageView.image = image
+        thumbnailImageView.isHidden = false
+        thumbnailPlaceholderView.isHidden = true
+        symbolView.isHidden = true
     }
 
     private func configureDirectoryPreview(

@@ -58,7 +58,9 @@ struct RemoteComicInfoSheet: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                prefersLocalCache: cacheAvailability.hasLocalCopy,
+                prefersLocalCache: item.isPDFDocument
+                    ? cacheAvailability.kind == .current
+                    : cacheAvailability.hasLocalCopy,
                 width: 112,
                 height: 160
             )

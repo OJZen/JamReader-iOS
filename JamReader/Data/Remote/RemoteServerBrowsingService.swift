@@ -1020,6 +1020,10 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         maxPixelSize: Int
     ) async -> UIImage? {
+        if reference.isPDFDocument {
+            return nil
+        }
+
         if profile.providerKind == .webdav,
            !(await webDAVRangeRequestsSupported(for: profile, reference: reference)) {
             return nil
@@ -1037,7 +1041,7 @@ final class RemoteServerBrowsingService {
         defer { Task { await thumbnailSemaphore.signal() } }
 
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
-        guard ["cbz", "zip", "cbt", "tar", "pdf", "cbr", "rar", "cb7", "7z", "arj"].contains(fileExtension) else {
+        guard ["cbz", "zip", "cbt", "tar", "cbr", "rar", "cb7", "7z", "arj"].contains(fileExtension) else {
             return nil
         }
 
@@ -2164,9 +2168,6 @@ final class RemoteServerBrowsingService {
                 .extractThumbnail(maxPixelSize: maxPixelSize)
         case "cbt", "tar":
             return try await RemoteTARThumbnailExtractor(fileReader: reader)
-                .extractThumbnail(maxPixelSize: maxPixelSize)
-        case "pdf":
-            return try await RemotePDFThumbnailExtractor(fileReader: reader)
                 .extractThumbnail(maxPixelSize: maxPixelSize)
         case "cbr", "rar", "cb7", "7z", "arj":
             return try await RemoteLibArchiveThumbnailExtractor(fileReader: reader)

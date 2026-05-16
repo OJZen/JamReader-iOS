@@ -48,7 +48,6 @@ final class AppMemoryPressureCoordinator: ObservableObject {
 
     private func purgeReaderDisplayCaches() {
         ReaderPagePreviewStore.shared.clear()
-        PDFThumbnailStore.shared.clear()
     }
 
     private func purgeAsyncImageCaches() {

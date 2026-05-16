@@ -13,8 +13,9 @@ JamReader is a native comic reader for iPhone and iPad with local, SMB, and WebD
   - `CBR / RAR`
   - `CB7 / 7Z / ARJ`
   - `CBT / TAR`
-  - `PDF`
+  - `PDF` when MuPDF is linked into the build
   - `EPUB`
+  - `MOBI` when MuPDF is linked into the build
 
 ## Project Status
 
@@ -31,14 +32,13 @@ open JamReader.xcodeproj
 CLI build:
 
 ```bash
-xcodebuild \
-  -project JamReader.xcodeproj \
-  -scheme JamReader \
-  -destination 'generic/platform=iOS' \
-  -derivedDataPath /tmp/jamreader-derived-data \
-  CODE_SIGNING_ALLOWED=NO \
-  build
+./scripts/build_ios.sh
 ```
+
+`scripts/build_ios.sh` auto-links MuPDF when an iPhoneOS arm64 build is available
+at `.mupdf/mupdf-1.27.2`, or at the path provided by `MUPDF_ROOT`. Without that
+local artifact the app still builds, but PDF/MOBI reader support falls back to
+the "MuPDF engine is not linked" message.
 
 Gesture architecture check:
 

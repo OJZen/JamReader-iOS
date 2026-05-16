@@ -419,7 +419,9 @@ struct RemoteDirectoryItemListRow: View {
                 profile: profile,
                 item: item,
                 browsingService: browsingService,
-                prefersLocalCache: cacheAvailability.hasLocalCopy,
+                prefersLocalCache: item.isPDFDocument
+                    ? cacheAvailability.kind == .current
+                    : cacheAvailability.hasLocalCopy,
                 heroSourceID: heroSourceID,
                 width: 44,
                 height: 62
@@ -583,7 +585,9 @@ struct RemoteDirectoryGridCard: View {
                     profile: profile,
                     item: item,
                     browsingService: browsingService,
-                    prefersLocalCache: cacheAvailability.hasLocalCopy,
+                    prefersLocalCache: item.isPDFDocument
+                        ? cacheAvailability.kind == .current
+                        : cacheAvailability.hasLocalCopy,
                     heroSourceID: heroSourceID,
                     width: cardWidth,
                     height: imageHeight

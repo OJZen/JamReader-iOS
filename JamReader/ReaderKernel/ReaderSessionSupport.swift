@@ -10,7 +10,10 @@ enum ReaderPageIndicatorFormatter {
             return nil
         }
 
-        guard let document, case .imageSequence = document else {
+        guard let document,
+              case .imageSequence(let imageSequence) = document,
+              imageSequence.usesComicImageLayout
+        else {
             return "\(min(currentPageIndex + 1, pageCount)) / \(pageCount)"
         }
 

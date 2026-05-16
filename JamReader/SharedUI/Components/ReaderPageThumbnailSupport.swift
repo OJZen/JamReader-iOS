@@ -1,6 +1,5 @@
 import Combine
 import ImageIO
-import PDFKit
 import SwiftUI
 import UIKit
 
@@ -221,12 +220,10 @@ struct ReaderPageThumbnailView: View {
 
     private var placeholderSystemName: String {
         switch document {
-        case .pdf:
-            return "doc.richtext"
         case .ebook:
             return "book.closed"
-        case .imageSequence:
-            return "photo"
+        case .imageSequence(let imageSequence):
+            return imageSequence.usesComicImageLayout ? "photo" : "doc.richtext"
         case .unsupported:
             return "book.closed"
         }
@@ -358,7 +355,7 @@ final class ReaderPageThumbnailLoader: ObservableObject {
             } else if requestDidChange || !phase.isImage {
                 phase = .loading
             }
-        case .pdf, .ebook, .unsupported:
+        case .ebook, .unsupported:
             if requestDidChange || !phase.isImage {
                 phase = .loading
             }
@@ -368,12 +365,6 @@ final class ReaderPageThumbnailLoader: ObservableObject {
             let image: UIImage?
 
             switch document {
-            case .pdf(let pdf):
-                image = PDFThumbnailStore.shared.image(
-                    for: pdf,
-                    pageIndex: pageIndex,
-                    maxPixelSize: maxPixelSize
-                )
             case .ebook(let ebook):
                 image = await LocalEBookThumbnailExtractor.shared.thumbnail(
                     from: ebook.url,
@@ -457,56 +448,6 @@ private extension ReaderPageThumbnailLoader.Phase {
         }
 
         return false
-    }
-}
-
-@MainActor
-final class PDFThumbnailStore {
-    static let shared = PDFThumbnailStore()
-
-    private let cache = NSCache<NSString, UIImage>()
-
-    private init() {
-        cache.countLimit = 256
-        cache.totalCostLimit = 32 * 1_024 * 1_024
-    }
-
-    func image(for document: PDFComicDocument, pageIndex: Int, maxPixelSize: Int) -> UIImage? {
-        let cacheKey = cacheKey(for: document, pageIndex: pageIndex, maxPixelSize: maxPixelSize)
-        let nsCacheKey = cacheKey as NSString
-
-        if let cachedImage = cache.object(forKey: nsCacheKey) {
-            return cachedImage
-        }
-
-        guard let page = document.pdfDocument.page(at: pageIndex) else {
-            return nil
-        }
-
-        let thumbnailSize = CGSize(
-            width: CGFloat(maxPixelSize),
-            height: CGFloat(maxPixelSize) * 1.45
-        )
-        let image = page.thumbnail(of: thumbnailSize, for: .mediaBox)
-        cache.setObject(image, forKey: nsCacheKey, cost: Self.cacheCost(for: image))
-        return image
-    }
-
-    private func cacheKey(for document: PDFComicDocument, pageIndex: Int, maxPixelSize: Int) -> String {
-        let resourceValues = try? document.url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
-        let modificationTime = resourceValues?.contentModificationDate?.timeIntervalSince1970 ?? 0
-        let fileSize = resourceValues?.fileSize ?? 0
-        return "\(document.url.path)#\(fileSize)#\(Int(modificationTime))#\(pageIndex)#\(maxPixelSize)"
-    }
-
-    private static func cacheCost(for image: UIImage) -> Int {
-        let width = image.size.width * image.scale
-        let height = image.size.height * image.scale
-        return Int(width * height * 4)
-    }
-
-    func clear() {
-        cache.removeAllObjects()
     }
 }
 

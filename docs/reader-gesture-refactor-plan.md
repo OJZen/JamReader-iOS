@@ -33,7 +33,6 @@
 - UIKit 容器：
   - [ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift)
   - [VerticalImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)
-  - [PDFReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/PDFReaderContainerView.swift)
 
 这导致：
 
@@ -183,7 +182,7 @@
 
 - `ImagePagedContentController`
 - `ImageContinuousContentController`
-- `PDFContentController`
+- `RenderedDocumentContentController`
 
 协议建议：
 
@@ -303,11 +302,11 @@
 
 ## 4.4 PDF 阅读器重构方向
 
-PDF 不必完全重做渲染，但要接入统一宿主。
+PDF 不再使用系统 PDF 独立容器，必须通过 MuPDF 渲染为文档页并接入统一宿主。
 
 策略：
 
-- 保留 PDFKit / 现有 PDF 内容容器
+- 保留 MuPDF 渲染文档语义，不把 PDF 当作普通漫画图片序列
 - 适配统一命令接口和统一 chrome 接口
 - 统一边缘点按、键盘翻页、缩略图入口、跳页入口
 
@@ -363,7 +362,7 @@ chrome 需要和内容分离。
 - `ReaderContentControlling.swift`
 - `ImagePagedContentController.swift`
 - `ImageContinuousContentController.swift`
-- `PDFContentController.swift`
+- `RenderedDocumentContentController.swift`
 - `ZoomableImagePageView.swift`
 - `ReaderViewportState.swift`
 - `ReaderPagePrefetchController.swift`
@@ -380,7 +379,6 @@ chrome 需要和内容分离。
 
 - [ImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift)
 - [VerticalImageSequenceReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)
-- [PDFReaderContainerView.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/PDFReaderContainerView.swift)
 - [ReaderChromeOverlay.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ReaderChromeOverlay.swift)
 - [ReaderPageJumpOverlay.swift](/Volumes/Ju/Projects/ios/JamReader/JamReader/SharedUI/Components/ReaderPageJumpOverlay.swift)
 
@@ -594,7 +592,7 @@ chrome 需要和内容分离。
 任务：
 
 - vertical content controller 适配
-- PDF content controller 适配
+- MuPDF rendered document content controller 适配
 - 统一 chrome
 - 统一命令系统
 
