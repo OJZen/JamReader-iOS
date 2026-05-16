@@ -21,9 +21,11 @@ enum AppRootTab: String, Hashable {
 
 enum AppNavigationStorageKeys {
     static let selectedTab = "appRoot.selectedTab"
+    static let libraryHomeSelectedLibraryID = "libraryHome.selectedLibraryID"
     static let pendingFocusedLibraryID = "libraryHome.pendingFocusedLibraryID"
     static let pendingFocusedFolderID = "libraryHome.pendingFocusedFolderID"
     static let browseHomeSelection = "browseHome.selection"
+    static let browseDetailSelection = "browseHome.detailSelection"
     static let browseHomeColumnVisibility = "browseHome.columnVisibility"
     static let settingsHomeSelectedPane = "settingsHome.selectedPane"
 }

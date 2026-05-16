@@ -5,7 +5,7 @@ struct LibraryHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
 
-    @AppStorage("libraryHome.selectedLibraryID") private var storedSelectedLibraryID = ""
+    @AppStorage(AppNavigationStorageKeys.libraryHomeSelectedLibraryID) private var storedSelectedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedFolderID) private var pendingFocusedFolderID = ""
     @ObservedObject var viewModel: LibraryListViewModel

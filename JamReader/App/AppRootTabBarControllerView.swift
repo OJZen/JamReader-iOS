@@ -282,6 +282,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             pop: { [weak self] in self?.pop() }
         )
         installRoot()
+        restoreStoredDetailIfNeeded()
     }
 
     func navigate(_ route: LibraryNavigationRoute) {
@@ -349,7 +350,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         }
     }
 
-    private func openLibrary(_ libraryID: UUID, folderID: Int64?) {
+    private func openLibrary(_ libraryID: UUID, folderID: Int64?, animated: Bool = true) {
         viewModel.reload()
         guard let item = viewModel.items.first(where: { $0.id == libraryID }) else {
             showUnavailable(title: "Library Unavailable", message: "This library is no longer available on this device.")
@@ -357,21 +358,41 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         }
 
         selectedLibraryID = item.id
-        UserDefaults.standard.set(item.id.uuidString, forKey: "libraryHome.selectedLibraryID")
+        UserDefaults.standard.set(
+            item.id.uuidString,
+            forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
+        )
         let resolvedFolderID = folderID ?? LibraryBrowserView.lastOpenedFolderID(for: item.id)
         let controller = makeLibraryBrowser(descriptor: item.descriptor, folderID: resolvedFolderID)
 
         if let compactNavigationController {
             compactNavigationController.setViewControllers(
                 [compactNavigationController.viewControllers.first, controller].compactMap { $0 },
-                animated: true
+                animated: animated
             )
         } else {
             detailNavigationController?.setViewControllers([controller], animated: false)
         }
     }
 
+    private func restoreStoredDetailIfNeeded() {
+        let storedLibraryID = UserDefaults.standard.string(
+            forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
+        )
+        guard let libraryID = storedLibraryID.flatMap(UUID.init(uuidString:)),
+              viewModel.items.contains(where: { $0.id == libraryID }) else {
+            return
+        }
+
+        openLibrary(libraryID, folderID: nil, animated: false)
+    }
+
     private func openFolder(_ descriptor: LibraryDescriptor, folderID: Int64) {
+        selectedLibraryID = descriptor.id
+        UserDefaults.standard.set(
+            descriptor.id.uuidString,
+            forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
+        )
         let controller = makeLibraryBrowser(descriptor: descriptor, folderID: folderID)
         if let compactNavigationController {
             compactNavigationController.pushViewController(controller, animated: true)
@@ -536,6 +557,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             pop: { [weak self] in self?.pop() }
         )
         installRoot()
+        restoreStoredDetailIfNeeded()
     }
 
     func navigate(_ route: BrowseNavigationRoute) {
@@ -630,14 +652,16 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         .environment(\.appNavigator, navigator)
     }
 
-    private func showServerDetail(_ profileID: UUID) {
+    private func showServerDetail(_ profileID: UUID, animated: Bool = true) {
         viewModel.load()
         guard let profile = profile(for: profileID) else {
             showUnavailable(title: "Server Unavailable", message: "This server is no longer available on this device.")
             return
         }
 
-        persistSelection("server:\(profileID.uuidString)")
+        let selection = BrowseStoredDetailSelection.serverDetail(profileID)
+        persistHomeSelection(selection.homeStorageValue)
+        persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
             RemoteServerDetailView(
                 profile: profile,
@@ -649,16 +673,22 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             title: profile.displayTitle
         )
         controller.navigationItem.largeTitleDisplayMode = .never
-        setPrimaryDestination(controller)
+        setPrimaryDestination(controller, animated: animated)
     }
 
-    private func showServerBrowser(_ profileID: UUID, path: String?) {
+    private func showServerBrowser(
+        _ profileID: UUID,
+        path: String?,
+        replacesDetailStack: Bool = false,
+        animated: Bool = true
+    ) {
         viewModel.load()
         guard let profile = profile(for: profileID) else {
             showUnavailable(title: "Server Unavailable", message: "This server is no longer available on this device.")
             return
         }
 
+        persistDetailSelection(BrowseStoredDetailSelection.serverBrowser(profileID).storageValue)
         let controller = makeHostingController(
             RemoteServerBrowserView(
                 profile: profile,
@@ -668,61 +698,99 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             title: profile.displayTitle
         )
         controller.navigationItem.largeTitleDisplayMode = .never
-        pushOrSetDetail(controller)
+        if replacesDetailStack {
+            setPrimaryDestination(controller, animated: animated)
+        } else {
+            pushOrSetDetail(controller, animated: animated)
+        }
     }
 
-    private func showSavedFolders(profileID: UUID?) {
+    private func showSavedFolders(profileID: UUID?, animated: Bool = true) {
         let focusedProfile: RemoteServerProfile?
         if let profileID {
             focusedProfile = profile(for: profileID)
         } else {
             focusedProfile = nil
         }
-        persistSelection(profileID.map { "saved-folders:\($0.uuidString)" } ?? "saved-folders")
+        let selection = BrowseStoredDetailSelection.savedFolders(profileID)
+        persistHomeSelection(selection.homeStorageValue)
+        persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
             SavedRemoteFoldersView(dependencies: dependencies, focusedProfile: focusedProfile),
             title: "Saved Folders"
         )
         controller.navigationItem.largeTitleDisplayMode = UINavigationItem.LargeTitleDisplayMode.never
-        setPrimaryDestination(controller)
+        setPrimaryDestination(controller, animated: animated)
     }
 
-    private func showOfflineShelf(profileID: UUID?) {
+    private func showOfflineShelf(profileID: UUID?, animated: Bool = true) {
         let focusedProfile: RemoteServerProfile?
         if let profileID {
             focusedProfile = profile(for: profileID)
         } else {
             focusedProfile = nil
         }
-        persistSelection(profileID.map { "offline-shelf:\($0.uuidString)" } ?? "offline-shelf")
+        let selection = BrowseStoredDetailSelection.offlineShelf(profileID)
+        persistHomeSelection(selection.homeStorageValue)
+        persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
             RemoteOfflineShelfView(dependencies: dependencies, focusedProfile: focusedProfile),
             title: "Offline Shelf"
         )
         controller.navigationItem.largeTitleDisplayMode = UINavigationItem.LargeTitleDisplayMode.never
-        setPrimaryDestination(controller)
+        setPrimaryDestination(controller, animated: animated)
     }
 
-    private func setPrimaryDestination(_ controller: UIViewController) {
+    private func setPrimaryDestination(_ controller: UIViewController, animated: Bool = true) {
         if let compactNavigationController {
             compactNavigationController.setViewControllers(
                 [compactNavigationController.viewControllers.first, controller].compactMap { $0 },
-                animated: true
+                animated: animated
             )
         } else {
             detailNavigationController?.setViewControllers([controller], animated: false)
         }
     }
 
-    private func pushOrSetDetail(_ controller: UIViewController) {
+    private func pushOrSetDetail(_ controller: UIViewController, animated: Bool = true) {
         if let compactNavigationController {
-            compactNavigationController.pushViewController(controller, animated: true)
+            compactNavigationController.pushViewController(controller, animated: animated)
         } else if let detailNavigationController {
             if detailNavigationController.viewControllers.isEmpty {
                 detailNavigationController.setViewControllers([controller], animated: false)
             } else {
-                detailNavigationController.pushViewController(controller, animated: true)
+                detailNavigationController.pushViewController(controller, animated: animated)
             }
+        }
+    }
+
+    private func restoreStoredDetailIfNeeded() {
+        viewModel.load()
+        let defaults = UserDefaults.standard
+        let storedSelection = defaults.string(forKey: AppNavigationStorageKeys.browseDetailSelection)
+            ?? defaults.string(forKey: AppNavigationStorageKeys.browseHomeSelection)
+        guard let storedSelection, !storedSelection.isEmpty else {
+            return
+        }
+
+        guard let storedRoute = BrowseStoredDetailSelection(storageValue: storedSelection) else {
+            return
+        }
+
+        switch storedRoute {
+        case .savedFolders(let profileID):
+            showSavedFolders(profileID: profileID, animated: false)
+        case .offlineShelf(let profileID):
+            showOfflineShelf(profileID: profileID, animated: false)
+        case .serverBrowser(let profileID):
+            showServerBrowser(
+                profileID,
+                path: nil,
+                replacesDetailStack: true,
+                animated: false
+            )
+        case .serverDetail(let profileID):
+            showServerDetail(profileID, animated: false)
         }
     }
 
@@ -760,8 +828,12 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         viewModel.profiles.first(where: { $0.id == id })
     }
 
-    private func persistSelection(_ value: String) {
+    private func persistHomeSelection(_ value: String) {
         UserDefaults.standard.set(value, forKey: AppNavigationStorageKeys.browseHomeSelection)
+    }
+
+    private func persistDetailSelection(_ value: String) {
+        UserDefaults.standard.set(value, forKey: AppNavigationStorageKeys.browseDetailSelection)
     }
 
     private func makeHostingController<Content: View>(
@@ -790,6 +862,82 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         activeNavigationController?.navigationBar.prefersLargeTitles = true
         primaryNavigationController?.navigationBar.prefersLargeTitles = true
         detailNavigationController?.navigationBar.prefersLargeTitles = true
+    }
+
+    private enum BrowseStoredDetailSelection {
+        private static let serverPrefix = "server:"
+        private static let browserPrefix = "browser:"
+        private static let savedFoldersPrefix = "saved-folders:"
+        private static let offlineShelfPrefix = "offline-shelf:"
+
+        case serverDetail(UUID)
+        case serverBrowser(UUID)
+        case savedFolders(UUID?)
+        case offlineShelf(UUID?)
+
+        init?(storageValue: String) {
+            if storageValue == "saved-folders" {
+                self = .savedFolders(nil)
+                return
+            }
+
+            if storageValue == "offline-shelf" {
+                self = .offlineShelf(nil)
+                return
+            }
+
+            if let id = Self.uuid(from: storageValue, prefix: Self.serverPrefix) {
+                self = .serverDetail(id)
+                return
+            }
+
+            if let id = Self.uuid(from: storageValue, prefix: Self.browserPrefix) {
+                self = .serverBrowser(id)
+                return
+            }
+
+            if let id = Self.uuid(from: storageValue, prefix: Self.savedFoldersPrefix) {
+                self = .savedFolders(id)
+                return
+            }
+
+            if let id = Self.uuid(from: storageValue, prefix: Self.offlineShelfPrefix) {
+                self = .offlineShelf(id)
+                return
+            }
+
+            return nil
+        }
+
+        var storageValue: String {
+            switch self {
+            case .serverDetail(let profileID):
+                return "\(Self.serverPrefix)\(profileID.uuidString)"
+            case .serverBrowser(let profileID):
+                return "\(Self.browserPrefix)\(profileID.uuidString)"
+            case .savedFolders(let profileID):
+                return profileID.map { "\(Self.savedFoldersPrefix)\($0.uuidString)" } ?? "saved-folders"
+            case .offlineShelf(let profileID):
+                return profileID.map { "\(Self.offlineShelfPrefix)\($0.uuidString)" } ?? "offline-shelf"
+            }
+        }
+
+        var homeStorageValue: String {
+            switch self {
+            case .serverBrowser(let profileID):
+                return BrowseStoredDetailSelection.serverDetail(profileID).storageValue
+            default:
+                return storageValue
+            }
+        }
+
+        private static func uuid(from value: String, prefix: String) -> UUID? {
+            guard value.hasPrefix(prefix) else {
+                return nil
+            }
+
+            return UUID(uuidString: String(value.dropFirst(prefix.count)))
+        }
     }
 }
 
