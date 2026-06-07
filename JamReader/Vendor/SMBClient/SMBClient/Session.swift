@@ -1,7 +1,7 @@
 import Foundation
 
 public class Session {
-  private var messageId = SequenceNumber<UInt64>()
+  private var messageId = SequenceNumber()
   private var sessionId: UInt64 = 0
   private(set) var treeId: UInt32 = 0
 
@@ -705,10 +705,10 @@ public class Session {
   }
 }
 
-private class SequenceNumber<I: UnsignedInteger & FixedWidthInteger> {
-  var current: I = 0
+private final class SequenceNumber {
+  var current: UInt64 = 0
 
-  func next(count: I = 1) -> I {
+  func next(count: UInt64 = 1) -> UInt64 {
     let next = current
     current &+= count
     return next

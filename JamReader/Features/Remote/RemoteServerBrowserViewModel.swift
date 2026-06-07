@@ -1063,7 +1063,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         extraFailedItemNames: extraFailedItemNames
                     ),
                     kind: hasIndexingWarning ? .info : .success,
-                    primaryAction: primaryAction
+                    primaryAction: primaryAction,
+                    autoDismissAfter: 5
                 )
             )
             return

@@ -998,7 +998,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         case .overview, .reading, .remote, .storage, .about:
             showPane(route)
         case .remoteNetwork:
-            pushOrSetDetail(makeHostingController(RemoteNetworkSettingsView(), title: "Network"))
+            pushOrSetDetail(makeHostingController(RemoteNetworkSettingsView(), title: "Remote"))
         case .remoteCache:
             pushOrSetDetail(
                 makeHostingController(
@@ -1195,7 +1195,8 @@ final class PassthroughOverlayWindow: UIWindow {
             return nil
         }
 
-        return hitView.hasOverlayInteractionTarget(stoppingAt: rootView) ? hitView : nil
+        let rootPoint = rootView.convert(point, from: self)
+        return rootView.containsOverlayInteractionRegion(at: rootPoint) ? hitView : nil
     }
 }
 
@@ -1206,29 +1207,34 @@ final class PassthroughOverlayView: UIView {
             return nil
         }
 
-        let hostingRootView = subviews.first
+        guard let hostingRootView = subviews.first else {
+            return nil
+        }
+
         if hitView === self || hitView === hostingRootView {
             return nil
         }
 
-        return hitView.hasOverlayInteractionTarget(stoppingAt: hostingRootView ?? self) ? hitView : nil
+        let hostingPoint = hostingRootView.convert(point, from: self)
+        return hostingRootView.containsOverlayInteractionRegion(at: hostingPoint) ? hitView : nil
     }
 }
 
 private extension UIView {
-    func hasOverlayInteractionTarget(stoppingAt rootView: UIView) -> Bool {
-        var view: UIView? = self
+    func containsOverlayInteractionRegion(at point: CGPoint) -> Bool {
+        guard !isHidden, alpha > 0.01 else {
+            return false
+        }
 
-        while let currentView = view, currentView !== rootView {
-            if currentView is UIControl {
+        if self is OverlayInteractionRegionView, bounds.contains(point) {
+            return true
+        }
+
+        for subview in subviews.reversed() {
+            let convertedPoint = subview.convert(point, from: self)
+            if subview.containsOverlayInteractionRegion(at: convertedPoint) {
                 return true
             }
-
-            if currentView.gestureRecognizers?.isEmpty == false {
-                return true
-            }
-
-            view = currentView.superview
         }
 
         return false

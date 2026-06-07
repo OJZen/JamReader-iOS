@@ -57,6 +57,13 @@ struct RemoteServerEditorDraft: Identifiable {
     }
 }
 
+private struct RemoteServerNormalizedConnectionFields {
+    var host: String
+    var portText: String
+    var shareName: String
+    var baseDirectoryPath: String
+}
+
 @MainActor
 final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var profiles: [RemoteServerProfile] = []
@@ -171,14 +178,15 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func save(draft: RemoteServerEditorDraft) -> AppAlertState? {
+        let connectionFields = normalizedConnectionFields(for: draft)
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let host = draft.host.trimmingCharacters(in: .whitespacesAndNewlines)
-        let shareName = draft.shareName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let baseDirectoryPath = draft.baseDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let host = connectionFields.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shareName = connectionFields.shareName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseDirectoryPath = connectionFields.baseDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let username = draft.username.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = draft.password.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard let port = Int(draft.portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        guard let port = Int(connectionFields.portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             return AppAlertState(
                 title: "Invalid Port",
                 message: "Enter a numeric port for this remote server."
@@ -403,6 +411,151 @@ final class RemoteServerListViewModel: ObservableObject {
 
     func profile(withID profileID: UUID) -> RemoteServerProfile? {
         profiles.first { $0.id == profileID }
+    }
+
+    private func normalizedConnectionFields(
+        for draft: RemoteServerEditorDraft
+    ) -> RemoteServerNormalizedConnectionFields {
+        var fields = RemoteServerNormalizedConnectionFields(
+            host: draft.host,
+            portText: draft.portText,
+            shareName: draft.shareName,
+            baseDirectoryPath: draft.baseDirectoryPath
+        )
+
+        switch draft.providerKind {
+        case .smb:
+            normalizeSMBConnectionFields(&fields)
+        case .webdav:
+            normalizeWebDAVConnectionFields(&fields)
+        }
+
+        return fields
+    }
+
+    private func normalizeSMBConnectionFields(
+        _ fields: inout RemoteServerNormalizedConnectionFields
+    ) {
+        let rawHost = fields.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawHost.isEmpty,
+              let components = parsedURLComponents(from: rawHost, defaultScheme: "smb"),
+              let parsedHost = components.host,
+              !parsedHost.isEmpty else {
+            return
+        }
+
+        fields.host = parsedHost
+
+        if let port = components.port,
+           shouldUseParsedPort(fields.portText, defaultPort: RemoteProviderKind.smb.defaultPort) {
+            fields.portText = String(port)
+        }
+
+        let pathComponents = decodedPathComponents(from: components)
+        guard let shareComponent = pathComponents.first else {
+            return
+        }
+
+        let trimmedShareName = fields.shareName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedBaseDirectory = fields.baseDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedShareName.isEmpty {
+            fields.shareName = shareComponent
+            if trimmedBaseDirectory.isEmpty {
+                fields.baseDirectoryPath = joinedAbsolutePath(Array(pathComponents.dropFirst()))
+            }
+        } else if trimmedBaseDirectory.isEmpty,
+                  trimmedShareName == shareComponent {
+            fields.baseDirectoryPath = joinedAbsolutePath(Array(pathComponents.dropFirst()))
+        }
+    }
+
+    private func normalizeWebDAVConnectionFields(
+        _ fields: inout RemoteServerNormalizedConnectionFields
+    ) {
+        let rawHost = fields.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawHost.isEmpty,
+              var components = parsedURLComponents(from: rawHost, defaultScheme: "https"),
+              components.host != nil else {
+            return
+        }
+
+        if !rawHost.contains("://"), components.port == 80 {
+            components.scheme = "http"
+        }
+
+        let pathComponents = decodedPathComponents(from: components)
+        let trimmedShareName = fields.shareName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scheme = components.scheme?.lowercased() ?? "https"
+        let defaultPort = scheme == "http" ? 80 : 443
+        if let port = components.port {
+            if shouldUseParsedPort(fields.portText, defaultPort: defaultPort) {
+                fields.portText = String(port)
+            }
+        } else if scheme == "http",
+                  shouldUseParsedPort(
+                    fields.portText,
+                    defaultPort: RemoteProviderKind.webdav.defaultPort
+                  ) {
+            fields.portText = String(defaultPort)
+        }
+
+        if trimmedShareName.isEmpty, !pathComponents.isEmpty {
+            fields.shareName = joinedAbsolutePath(pathComponents)
+            fields.host = urlString(from: components, includesPath: false)
+        } else {
+            fields.host = urlString(from: components, includesPath: true)
+        }
+    }
+
+    private func parsedURLComponents(
+        from rawValue: String,
+        defaultScheme: String
+    ) -> URLComponents? {
+        let seededValue = rawValue.contains("://")
+            ? rawValue
+            : "\(defaultScheme)://\(rawValue)"
+        return URLComponents(string: seededValue)
+    }
+
+    private func decodedPathComponents(
+        from components: URLComponents
+    ) -> [String] {
+        let decodedPath = components.percentEncodedPath.removingPercentEncoding
+            ?? components.path
+        return decodedPath
+            .split(separator: "/")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+    }
+
+    private func shouldUseParsedPort(
+        _ portText: String,
+        defaultPort: Int
+    ) -> Bool {
+        let trimmedPort = portText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedPort.isEmpty || Int(trimmedPort) == defaultPort
+    }
+
+    private func joinedAbsolutePath(_ pathComponents: [String]) -> String {
+        guard !pathComponents.isEmpty else {
+            return ""
+        }
+
+        return "/" + pathComponents.joined(separator: "/")
+    }
+
+    private func urlString(
+        from components: URLComponents,
+        includesPath: Bool
+    ) -> String {
+        var normalizedComponents = components
+        normalizedComponents.port = nil
+        normalizedComponents.query = nil
+        normalizedComponents.fragment = nil
+        if !includesPath {
+            normalizedComponents.path = ""
+        }
+        return normalizedComponents.string ?? components.string ?? ""
     }
 
     private func refreshShortcutCount() {

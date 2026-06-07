@@ -381,7 +381,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             let horizontalInset = contentInsets.left + contentInsets.right
             let availableWidth = max(effectiveWidth - horizontalInset, 1)
             let totalSpacing = CGFloat(max(columns - 1, 0)) * interItemSpacing
-            let itemWidth = floor((availableWidth - totalSpacing) / CGFloat(columns))
+            let itemWidth = max(floor((availableWidth - totalSpacing) / CGFloat(columns)), 1)
             let itemHeight: CGFloat
             switch presentationStyle {
             case .grid:
@@ -391,7 +391,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             }
 
             let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1.0),
+                widthDimension: .absolute(itemWidth),
                 heightDimension: .fractionalHeight(1.0)
             )
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
@@ -402,7 +402,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             )
             let group = NSCollectionLayoutGroup.horizontal(
                 layoutSize: groupSize,
-                subitem: item,
+                repeatingSubitem: item,
                 count: columns
             )
             group.interItemSpacing = NSCollectionLayoutSpacing.fixed(interItemSpacing)

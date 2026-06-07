@@ -287,7 +287,7 @@ final class RemoteServerBrowsingService {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "A display name is required for the remote server."
+                    message: "Enter a display name, such as Home NAS or Cloud Comics."
                 )
             )
         }
@@ -296,7 +296,9 @@ final class RemoteServerBrowsingService {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "Host cannot be empty."
+                    message: profile.providerKind == .smb
+                        ? "Enter the SMB server address, such as nas.local or 192.168.1.20."
+                        : "Enter the WebDAV server URL, such as https://cloud.example.com."
                 )
             )
         }
@@ -316,7 +318,7 @@ final class RemoteServerBrowsingService {
                 issues.append(
                     RemoteServerValidationIssue(
                         severity: .error,
-                        message: "Share name cannot be empty."
+                        message: "Enter the SMB share name. For smb://nas.local/Comics/Manga, the share name is Comics."
                     )
                 )
             }
@@ -325,7 +327,7 @@ final class RemoteServerBrowsingService {
                 issues.append(
                     RemoteServerValidationIssue(
                         severity: .error,
-                        message: "Enter a valid WebDAV host or URL."
+                        message: "Enter a valid WebDAV server URL and path, such as https://cloud.example.com with /remote.php/dav/files/you/Comics."
                     )
                 )
             }

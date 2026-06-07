@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum RemoteDirectoryPreviewSupport {
     static func previewItems(for item: RemoteDirectoryItem) -> [RemoteDirectoryItem] {
@@ -1081,6 +1082,7 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
             .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 8)
             .padding(.horizontal, Spacing.md)
             .padding(.bottom, Spacing.xxs)
+            .background(OverlayInteractionRegionMarker())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Expand Import")
@@ -1245,8 +1247,22 @@ private struct RemoteBrowserOverlaySurface<Content: View>: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
         }
+        .background(OverlayInteractionRegionMarker())
         .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 6)
         .padding(.horizontal, Spacing.md)
         .padding(.bottom, Spacing.xxs)
     }
 }
+
+struct OverlayInteractionRegionMarker: UIViewRepresentable {
+    func makeUIView(context: Context) -> OverlayInteractionRegionView {
+        let view = OverlayInteractionRegionView()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: OverlayInteractionRegionView, context: Context) {}
+}
+
+final class OverlayInteractionRegionView: UIView {}

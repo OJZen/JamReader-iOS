@@ -10,6 +10,7 @@ struct RemoteServerEditorSheet: View {
     @State private var draft: RemoteServerEditorDraft
     @State private var alert: AppAlertState?
     @State private var containerWidth: CGFloat = 0
+    @State private var isShowingInputHelp = false
     @FocusState private var isNameFieldFocused: Bool
 
     init(
@@ -32,6 +33,11 @@ struct RemoteServerEditorSheet: View {
         .readContainerWidth(into: $containerWidth)
         .alert(item: $alert) { alert in
             makeRemoteAlert(for: alert)
+        }
+        .alert(inputHelpTitle, isPresented: $isShowingInputHelp) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(inputHelpMessage)
         }
         .task {
             guard !Task.isCancelled else {
@@ -93,54 +99,42 @@ struct RemoteServerEditorSheet: View {
             }
 
             Section {
-                TextField("Display Name", text: $draft.name)
+                TextField("Display Name", text: $draft.name, prompt: Text(displayNamePrompt))
                     .focused($isNameFieldFocused)
 
-                TextField("Host", text: $draft.host, prompt: Text("nas.local"))
+                TextField(hostFieldTitle, text: $draft.host, prompt: Text(hostPrompt))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
 
-                TextField("Port", text: $draft.portText)
+                TextField("Port", text: $draft.portText, prompt: Text(portPrompt))
                     .keyboardType(.numberPad)
             } header: {
                 Text("Connection")
             } footer: {
-                Text(
-                    draft.providerKind == .smb
-                        ? (draft.usesDefaultPort
-                            ? "SMB uses 445."
-                            : "Use a custom port only if needed.")
-                        : (draft.usesDefaultPort
-                            ? "WebDAV uses 443 for HTTPS or 80 for HTTP."
-                            : "Use a custom port only if needed.")
-                )
+                Text(connectionFooter)
             }
 
             Section {
                 TextField(
-                    draft.providerKind == .smb ? "Share" : "Server Path",
+                    providerRootFieldTitle,
                     text: $draft.shareName,
-                    prompt: Text(draft.providerKind == .smb ? "Comics" : "/remote.php/dav/files/you/Comics")
+                    prompt: Text(providerRootPrompt)
                 )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
                 TextField(
-                    "Base Directory",
+                    "Start Folder",
                     text: $draft.baseDirectoryPath,
-                    prompt: Text(draft.providerKind == .smb ? "/Manga/Weekly" : "/Weekly")
+                    prompt: Text(startFolderPrompt)
                 )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             } header: {
                 Text("Location")
             } footer: {
-                Text(
-                    draft.providerKind == .smb
-                        ? "Leave Base Directory empty to start at the root."
-                        : "Leave Base Directory empty to start at Server Path."
-                )
+                Text(locationFooter)
             }
 
             Section {
@@ -190,6 +184,15 @@ struct RemoteServerEditorSheet: View {
             }
         }
 
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                isShowingInputHelp = true
+            } label: {
+                Image(systemName: "questionmark.circle")
+            }
+            .accessibilityLabel("Server Field Help")
+        }
+
         ToolbarItem(placement: .confirmationAction) {
             Button(draft.actionTitle) {
                 handleSave()
@@ -200,6 +203,114 @@ struct RemoteServerEditorSheet: View {
     private func handleSave() {
         if let alertState = onSave(draft) {
             alert = alertState
+        }
+    }
+
+    private var displayNamePrompt: String {
+        switch draft.providerKind {
+        case .smb:
+            return "Home NAS"
+        case .webdav:
+            return "Cloud Comics"
+        }
+    }
+
+    private var hostFieldTitle: String {
+        switch draft.providerKind {
+        case .smb:
+            return "Server Address"
+        case .webdav:
+            return "Server URL"
+        }
+    }
+
+    private var hostPrompt: String {
+        switch draft.providerKind {
+        case .smb:
+            return "nas.local or 192.168.1.20"
+        case .webdav:
+            return "https://cloud.example.com"
+        }
+    }
+
+    private var portPrompt: String {
+        String(draft.providerKind.defaultPort)
+    }
+
+    private var providerRootFieldTitle: String {
+        switch draft.providerKind {
+        case .smb:
+            return "Share Name"
+        case .webdav:
+            return "WebDAV Path"
+        }
+    }
+
+    private var providerRootPrompt: String {
+        switch draft.providerKind {
+        case .smb:
+            return "Comics"
+        case .webdav:
+            return "/remote.php/dav/files/you/Comics"
+        }
+    }
+
+    private var startFolderPrompt: String {
+        switch draft.providerKind {
+        case .smb:
+            return "/Manga/Weekly"
+        case .webdav:
+            return "/Weekly"
+        }
+    }
+
+    private var connectionFooter: String {
+        switch draft.providerKind {
+        case .smb:
+            return draft.usesDefaultPort
+                ? "Address only. Share and start folder go below."
+                : "Use a custom port only if your SMB server does not use 445."
+        case .webdav:
+            return draft.usesDefaultPort
+                ? "Use https://. Use http:// only for local servers that require it."
+                : "Use a custom port only if your WebDAV server does not use 443 or 80."
+        }
+    }
+
+    private var locationFooter: String {
+        switch draft.providerKind {
+        case .smb:
+            return "Leave Start Folder empty to open the share root."
+        case .webdav:
+            return "Leave Start Folder empty to open the WebDAV path."
+        }
+    }
+
+    private var inputHelpTitle: String {
+        switch draft.providerKind {
+        case .smb:
+            return "SMB Field Help"
+        case .webdav:
+            return "WebDAV Field Help"
+        }
+    }
+
+    private var inputHelpMessage: String {
+        switch draft.providerKind {
+        case .smb:
+            return """
+            Paste smb://nas.local/Comics/Manga into Server Address, or split it as:
+            Server Address: nas.local
+            Share Name: Comics
+            Start Folder: /Manga
+            """
+        case .webdav:
+            return """
+            Paste the full WebDAV URL into Server URL, or split it as:
+            Server URL: https://cloud.example.com
+            WebDAV Path: /remote.php/dav/files/you/Comics
+            Start Folder: optional subfolder, such as /Weekly
+            """
         }
     }
 }

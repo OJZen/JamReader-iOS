@@ -128,22 +128,22 @@ struct SettingsHomeView: View {
     private var remoteSection: some View {
         Section {
             Button {
-                appNavigator?.navigate(.settings(.remoteNetwork))
+                appNavigator?.navigate(.browse(.home))
             } label: {
                 Label {
                     VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                        Text("Network")
+                        Text("Remote Servers")
                             .font(AppFont.body())
                             .foregroundStyle(Color.textPrimary)
 
-                        Text("Connection preferences will live here.")
+                        Text("Manage SMB and WebDAV servers from Browse.")
                             .font(AppFont.footnote())
                             .foregroundStyle(Color.textSecondary)
                             .lineLimit(1)
                     }
                 } icon: {
                     SettingsIcon(
-                        systemName: "network",
+                        systemName: "server.rack",
                         color: .teal
                     )
                 }
@@ -319,7 +319,7 @@ struct SettingsHomeView: View {
         case .reading:
             return "Reader defaults by content type"
         case .remote:
-            return "Connection preferences"
+            return "SMB and WebDAV server access"
         case .storage:
             return storageFooter
         case .about:
@@ -348,20 +348,37 @@ struct SettingsPaneContentView: View {
 }
 
 struct RemoteNetworkSettingsView: View {
+    @Environment(\.appNavigator) private var appNavigator
+
     var body: some View {
         List {
             Section {
-                Text("Network preferences will be added here.")
-                    .font(AppFont.body())
-                    .foregroundStyle(Color.textSecondary)
+                Button {
+                    appNavigator?.navigate(.browse(.home))
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                            Text("Remote Servers")
+                                .font(AppFont.body())
+                                .foregroundStyle(Color.textPrimary)
+
+                            Text("Add, edit, and browse SMB or WebDAV servers from Browse.")
+                                .font(AppFont.footnote())
+                                .foregroundStyle(Color.textSecondary)
+                        }
+                    } icon: {
+                        SettingsIcon(systemName: "server.rack", color: .teal)
+                    }
+                }
+                .buttonStyle(.plain)
             } header: {
-                Text("Coming Soon")
+                Text("Remote")
             } footer: {
-                Text("This section is reserved for remote connection settings.")
+                Text("Server connection details are managed next to the remote browser so setup and browsing stay in the same place.")
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Network")
+        .navigationTitle("Remote")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
