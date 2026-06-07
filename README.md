@@ -38,7 +38,11 @@ CLI build:
 `scripts/build_ios.sh` auto-links MuPDF when an iPhoneOS arm64 build is available
 at `.mupdf/mupdf-1.27.2`, or at the path provided by `MUPDF_ROOT`. Without that
 local artifact the app still builds, but PDF/MOBI reader support falls back to
-the "MuPDF engine is not linked" message.
+the "MuPDF engine is not linked" message. EPUB support does not depend on MuPDF.
+
+If you archive from Xcode instead of using the script, make sure the archive
+configuration receives the same MuPDF header, library, and linker settings when
+PDF/MOBI support should be included.
 
 Gesture architecture check:
 

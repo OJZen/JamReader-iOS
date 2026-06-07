@@ -638,8 +638,10 @@ Full Metadata 是完整编辑器，包含：
 当前阅读器支持：
 
 - Image Sequence：图片序列漫画
-- PDF
-- Unsupported：已被索引但阅读器尚未完成支持的类型
+- PDF：通过 MuPDF 渲染页接入统一阅读器；未链接 MuPDF 的构建会显示明确的引擎缺失提示
+- EPUB：通过内置 EPUB reader 打开
+- MOBI：优先通过 MuPDF/系统预览能力打开；未链接 MuPDF 的构建会显示明确的引擎缺失提示
+- Unsupported：已被索引或远程枚举到、但当前版本不能打开的类型
 
 对图片序列又分两种阅读形态：
 
@@ -949,10 +951,10 @@ Regular 宽度下缩略图更大，布局更宽松。
 
 阅读器里已经明确暴露出的边界包括：
 
-- 某些已被索引的文件类型仍处于“Reader Not Ready”状态
-- 文案明确说明：archive page extraction 仍在迁移中
+- 不支持格式会显示 `Unsupported Format`，避免继续使用开发阶段的 “Reader Not Ready” 口径。
+- PDF/MOBI 的完整阅读能力取决于构建时是否链接 MuPDF；EPUB 不依赖 MuPDF。
 
-这意味着产品已经支持索引层面识别，但阅读能力并未对所有格式完全补齐。
+这意味着产品可以识别并隐藏或解释不支持项，但不能承诺打开任意扩展名。
 
 ## 8. 远程浏览系统
 
@@ -1495,7 +1497,7 @@ Settings 中还会展示：
 
 1. 本地 Reader 书签上限 3 个，而远程 Reader 当前未见同样上限，是否需要统一。
 2. 远程 Reader 不支持前后漫画跳转，这是否符合长期产品预期。
-3. Unsupported archive 的迁移优先级是否足够高，因为它直接影响“已索引但不可读”的用户感知。
+3. 不支持格式的隐藏、提示和错误恢复是否足够清晰，因为它直接影响“目录里有文件但不能打开”的用户感知。
 4. `Linked Folder / App Managed / Read Only` 三类 Library 的用户文案是否需要进一步统一成更易懂的产品语言。
 5. Batch Metadata 与 ComicInfo 导入已经很强，是否需要补一套更系统的“整理工作流”入口。
 

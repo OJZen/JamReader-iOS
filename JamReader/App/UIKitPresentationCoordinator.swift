@@ -7,7 +7,7 @@ final class UIKitPresentationCoordinator {
     private weak var rootViewController: UIViewController?
     private var readerTransitionDelegate: (any UIViewControllerTransitioningDelegate)?
     private weak var presentedReaderController: UIViewController?
-    private weak var presentedSheetController: DismissTrackingSheetHostingController<AnyView>?
+    private weak var presentedSheetController: DismissTrackingSheetHostingController?
     private var presentedSheetID: AnyHashable?
 
     init(dependencies: AppDependencies, rootViewController: UIViewController? = nil) {
@@ -219,7 +219,7 @@ final class UIKitPresentationCoordinator {
     }
 }
 
-final class DismissTrackingReaderHostingController<Content: View>: UIHostingController<Content> {
+final class DismissTrackingReaderHostingController: UIHostingController<AnyView> {
     var onDismiss: (() -> Void)?
     private var hasReportedDismissal = false
 

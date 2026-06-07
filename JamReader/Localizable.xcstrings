@@ -10,18 +10,6 @@
     "(%lld)" : {
 
     },
-    "/ %lld" : {
-
-    },
-    "/Manga/Weekly" : {
-
-    },
-    "/remote.php/dav/files/you/Comics" : {
-
-    },
-    "/Weekly" : {
-
-    },
     "%lld" : {
 
     },
@@ -41,28 +29,14 @@
     "%lld%%" : {
 
     },
-    "%lld%% completed across %lld pages" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%% completed across %2$lld pages"
-          }
-        }
-      }
-    },
     "1 Star" : {
 
     },
+    "A new app-managed library will be created on this device." : {
+
+    },
     "About" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于"
-          }
-        }
-      }
+
     },
     "Access" : {
 
@@ -88,9 +62,6 @@
     "Add Favorite" : {
 
     },
-    "Add Library" : {
-
-    },
     "Add Library Folder" : {
 
     },
@@ -106,7 +77,10 @@
     "Add to Favorites" : {
 
     },
-    "All Pages" : {
+    "Add, edit, and browse SMB or WebDAV servers from Browse." : {
+
+    },
+    "AI Model" : {
 
     },
     "Apply" : {
@@ -118,7 +92,7 @@
     "Authentication" : {
 
     },
-    "Base Directory" : {
+    "Background download in progress" : {
 
     },
     "Batch Metadata" : {
@@ -128,14 +102,7 @@
 
     },
     "Browse" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浏览"
-          }
-        }
-      }
+
     },
     "Browse By" : {
 
@@ -149,7 +116,7 @@
     "Builds this library's local index, adds the root folder, and scans supported comic files." : {
 
     },
-    "Cache Policy" : {
+    "Cache Management" : {
 
     },
     "Cancel" : {
@@ -165,9 +132,6 @@
 
     },
     "Choose a server or shortcut." : {
-
-    },
-    "Choose Destination" : {
 
     },
     "Classification" : {
@@ -188,9 +152,6 @@
     "Clear downloads?" : {
 
     },
-    "Clear Filters" : {
-
-    },
     "Clear History" : {
 
     },
@@ -198,6 +159,12 @@
 
     },
     "Clear imported comics?" : {
+
+    },
+    "Clear Other Cache Data" : {
+
+    },
+    "Clear other cache data?" : {
 
     },
     "Clear Search" : {
@@ -233,9 +200,6 @@
     "Comics" : {
 
     },
-    "Connecting" : {
-
-    },
     "Connection" : {
 
     },
@@ -246,9 +210,6 @@
 
     },
     "Cover as Single Page" : {
-
-    },
-    "Cover Thumbnails" : {
 
     },
     "Create" : {
@@ -302,9 +263,6 @@
           }
         }
       }
-    },
-    "Destination" : {
-
     },
     "Details" : {
 
@@ -366,9 +324,6 @@
     "Filter" : {
 
     },
-    "Filter comics" : {
-
-    },
     "Fit Mode" : {
 
     },
@@ -381,16 +336,19 @@
     "Format" : {
 
     },
-    "Go To" : {
-
-    },
     "Go to Page" : {
 
     },
     "Go to Root" : {
 
     },
-    "Host" : {
+    "How It Works" : {
+
+    },
+    "Image Enhancement" : {
+
+    },
+    "Image Processing" : {
 
     },
     "Import" : {
@@ -408,25 +366,16 @@
     "Import Current Folder ComicInfo" : {
 
     },
-    "Import Destination" : {
-
-    },
     "Import Folder to Library" : {
 
     },
     "Import Library ComicInfo" : {
 
     },
-    "Import Options" : {
-
-    },
     "Import to Library" : {
 
     },
     "Imported" : {
-
-    },
-    "Imported Comics" : {
 
     },
     "Imported files are removed. The library stays in the app." : {
@@ -462,12 +411,6 @@
     "Layout" : {
 
     },
-    "Leave Base Directory empty to start at Server Path." : {
-
-    },
-    "Leave Base Directory empty to start at the root." : {
-
-    },
     "Left" : {
 
     },
@@ -478,14 +421,7 @@
 
     },
     "Library" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "书库"
-          }
-        }
-      }
+
     },
     "Library Actions" : {
 
@@ -508,9 +444,6 @@
     "Local State" : {
 
     },
-    "Locate" : {
-
-    },
     "Location" : {
 
     },
@@ -526,13 +459,13 @@
     "Manage %@" : {
 
     },
-    "Manage Cache" : {
-
-    },
-    "Manage Cache for cleanup." : {
+    "Manage downloads, thumbnails, and imported remote files." : {
 
     },
     "Manage Servers" : {
+
+    },
+    "Manage SMB and WebDAV servers from Browse." : {
 
     },
     "Mark Read" : {
@@ -547,6 +480,9 @@
     "Mode" : {
 
     },
+    "Model Processing" : {
+
+    },
     "More Actions for %@" : {
 
     },
@@ -559,10 +495,10 @@
     "Name" : {
 
     },
-    "nas.local" : {
+    "Navigate" : {
 
     },
-    "Navigate" : {
+    "New Library" : {
 
     },
     "No reading lists yet." : {
@@ -590,9 +526,6 @@
 
     },
     "Notes" : {
-
-    },
-    "Now Reading" : {
 
     },
     "Offline" : {
@@ -634,15 +567,11 @@
     "Organize" : {
 
     },
+    "Other Cache Data" : {
+
+    },
     "Overview" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "概览"
-          }
-        }
-      }
+
     },
     "Page" : {
 
@@ -681,7 +610,16 @@
     "Penciller" : {
 
     },
+    "Perspective Crop" : {
+
+    },
     "Port" : {
+
+    },
+    "Preparing Preview" : {
+
+    },
+    "Processed in %@ ms" : {
 
     },
     "Provider" : {
@@ -699,9 +637,6 @@
     "Quick Edit Metadata" : {
 
     },
-    "Quick Jump" : {
-
-    },
     "Quick Metadata" : {
 
     },
@@ -712,14 +647,7 @@
 
     },
     "Reading" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阅读"
-          }
-        }
-      }
+
     },
     "Reading Direction" : {
 
@@ -730,10 +658,10 @@
     "Reading Mode" : {
 
     },
-    "Reading now" : {
+    "Reading Status" : {
 
     },
-    "Reading Status" : {
+    "Ready for direct imports right away" : {
 
     },
     "Recent" : {
@@ -754,23 +682,10 @@
     "Refresh Library" : {
 
     },
-    "Refreshing Remote Copy" : {
-
-    },
     "Remote" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "远程"
-          }
-        }
-      }
+
     },
     "Remote Cache" : {
-
-    },
-    "Remote Downloads" : {
 
     },
     "Remote Servers" : {
@@ -788,9 +703,6 @@
     "Remove Favorite" : {
 
     },
-    "Remove from App" : {
-
-    },
     "Remove from Favorites" : {
 
     },
@@ -798,9 +710,6 @@
 
     },
     "Remove Shortcut" : {
-
-    },
-    "Removes the library from the app. Files stay on disk." : {
 
     },
     "Removes the shortcut for \"%@\" only." : {
@@ -819,9 +728,6 @@
 
     },
     "Resume" : {
-
-    },
-    "Retention" : {
 
     },
     "Retry" : {
@@ -866,13 +772,13 @@
     "Search %@" : {
 
     },
+    "Search comics" : {
+
+    },
     "Search entire library" : {
 
     },
     "Search folders" : {
-
-    },
-    "Search shelf" : {
 
     },
     "Searching Library" : {
@@ -908,10 +814,10 @@
     "Server Actions" : {
 
     },
-    "Server Path" : {
+    "Server connection details are managed next to the remote browser so setup and browsing stay in the same place." : {
 
     },
-    "Server Unavailable" : {
+    "Server Field Help" : {
 
     },
     "Servers" : {
@@ -921,16 +827,6 @@
 
     },
     "Settings" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置"
-          }
-        }
-      }
-    },
-    "Share" : {
 
     },
     "Shortcuts" : {
@@ -940,9 +836,6 @@
 
     },
     "Show File Info" : {
-
-    },
-    "SMB uses 445." : {
 
     },
     "Something Went Wrong" : {
@@ -969,18 +862,20 @@
     "Spread" : {
 
     },
+    "Start Folder" : {
+
+    },
     "Status" : {
 
     },
     "Storage" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "存储"
-          }
-        }
-      }
+
+    },
+    "Storage Limit" : {
+
+    },
+    "Stored locally inside JamReader" : {
+
     },
     "Story Arc" : {
 
@@ -988,16 +883,13 @@
     "Strategy" : {
 
     },
+    "Switch to %@" : {
+
+    },
     "Tags" : {
 
     },
     "Tags and Reading Lists" : {
-
-    },
-    "Tap any thumbnail to jump instantly." : {
-
-    },
-    "Tap to open" : {
 
     },
     "Teams" : {
@@ -1009,7 +901,7 @@
     "This removes the comic file from the library on this device." : {
 
     },
-    "This server is no longer available on this device." : {
+    "This removes unfinished downloads and leftover remote cache files without touching completed offline copies." : {
 
     },
     "Thumbnails" : {
@@ -1042,9 +934,6 @@
     "Updated" : {
 
     },
-    "Use a custom port only if needed." : {
-
-    },
     "Username" : {
 
     },
@@ -1054,10 +943,13 @@
     "View" : {
 
     },
+    "View Controls" : {
+
+    },
     "Volume" : {
 
     },
-    "WebDAV uses 443 for HTTPS or 80 for HTTP." : {
+    "Weekend Reads" : {
 
     },
     "When" : {
@@ -1067,6 +959,9 @@
 
     },
     "Writer" : {
+
+    },
+    "You can rename it later in the app" : {
 
     }
   },

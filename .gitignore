@@ -34,3 +34,9 @@ res/*.cbt
 .mupdf/
 .omx/
 .xcodebuild-*/
+
+# Local model conversion inputs and scratch outputs
+/models/
+.tmp-*/
+scripts/__pycache__/
+*.pyc

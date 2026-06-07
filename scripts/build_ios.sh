@@ -18,7 +18,7 @@ if [[ -f "$MUPDF_ROOT/include/mupdf/fitz.h" \
     'OTHER_LDFLAGS=$(inherited) -lmupdf -lmupdf-third -lc++ -lz -lbz2 -liconv -framework CoreGraphics -framework ImageIO -framework CoreText -framework MobileCoreServices'
   )
 else
-  echo "[build_ios] MuPDF not found at $MUPDF_ROOT; building without PDF/EPUB/MOBI engine."
+  echo "[build_ios] MuPDF not found at $MUPDF_ROOT; building without PDF/MOBI document rendering."
 fi
 
 echo "[build_ios] Cleaning previous build artifacts..."
