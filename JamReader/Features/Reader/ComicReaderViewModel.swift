@@ -14,6 +14,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var noticeMessage: String?
     @Published private(set) var backgroundDownloadProgress: Double?
     @Published private(set) var presentedDocument: ComicDocument?
+    @Published private(set) var imageEnhancementSettings: ReaderImageEnhancementSettings
     @Published var alert: AppAlertState?
 
     private let dependencies: AppDependencies
@@ -41,6 +42,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         self.readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(
             for: request.preferredLayoutType
         )
+        self.imageEnhancementSettings = dependencies.readerImageEnhancementPreferencesStore.loadSettings()
         self.currentPageIndex = request.fallbackPageIndex
     }
 
@@ -181,6 +183,14 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         case .ebook?, .unsupported?, nil:
             return false
         }
+    }
+
+    var supportsImageEnhancement: Bool {
+        guard case .imageSequence(let imageSequence)? = document else {
+            return false
+        }
+
+        return imageSequence.pageCount > 0
     }
 
     var effectiveReaderLayout: ReaderDisplayLayout {
@@ -384,6 +394,15 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
 
     func resetRotation() {
         readerLayout.rotation = .degrees0
+    }
+
+    func setImageEnhancementSettings(_ settings: ReaderImageEnhancementSettings) {
+        guard imageEnhancementSettings != settings else {
+            return
+        }
+
+        imageEnhancementSettings = settings
+        dependencies.readerImageEnhancementPreferencesStore.saveSettings(settings)
     }
 
     func toggleBookmarkForCurrentPage() {

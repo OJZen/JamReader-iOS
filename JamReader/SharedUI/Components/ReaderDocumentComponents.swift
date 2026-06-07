@@ -41,6 +41,7 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
     let document: ComicDocument
     let pageIndex: Int
     let layout: ReaderDisplayLayout
+    let imageEnhancementSettings: ReaderImageEnhancementSettings
     let isHorizontalScrollingDisabled: Bool
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
@@ -69,6 +70,7 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 document: document,
                 initialPageIndex: pageIndex,
                 layout: resolvedLayout,
+                imageEnhancementSettings: imageEnhancementSettings,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap
             )
@@ -79,6 +81,7 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 document: document,
                 initialPageIndex: pageIndex,
                 layout: resolvedLayout,
+                imageEnhancementSettings: imageEnhancementSettings,
                 isHorizontalScrollingDisabled: isHorizontalScrollingDisabled,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap,

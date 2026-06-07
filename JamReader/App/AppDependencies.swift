@@ -30,6 +30,7 @@ struct AppDependencies {
     let remoteBackgroundImportController: RemoteBackgroundImportController
     let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
+    let readerImageEnhancementPreferencesStore: ReaderImageEnhancementPreferencesStore
     let comicDocumentService: ComicDocumentService
     let comicReaderStateStore: ComicReaderStateStore
     let comicOpenCoordinator: ComicOpenCoordinator
@@ -60,6 +61,7 @@ struct AppDependencies {
         let remoteFolderShortcutStore = RemoteFolderShortcutStore()
         let remoteBackgroundImportController = RemoteBackgroundImportController()
         let readerLayoutPreferencesStore = ReaderLayoutPreferencesStore()
+        let readerImageEnhancementPreferencesStore = ReaderImageEnhancementPreferencesStore()
         let comicDocumentService = ComicDocumentService()
         let comicReaderStateStore = ComicReaderStateStore(
             databaseWriter: databaseWriter,
@@ -125,6 +127,7 @@ struct AppDependencies {
             remoteBackgroundImportController: remoteBackgroundImportController,
             remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore(),
             readerLayoutPreferencesStore: readerLayoutPreferencesStore,
+            readerImageEnhancementPreferencesStore: readerImageEnhancementPreferencesStore,
             comicDocumentService: comicDocumentService,
             comicReaderStateStore: comicReaderStateStore,
             comicOpenCoordinator: comicOpenCoordinator

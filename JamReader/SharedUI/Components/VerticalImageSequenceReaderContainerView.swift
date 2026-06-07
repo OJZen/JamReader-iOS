@@ -1,11 +1,11 @@
 import SwiftUI
-import ImageIO
 import UIKit
 
 struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
+    let imageEnhancementSettings: ReaderImageEnhancementSettings
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
 
@@ -13,6 +13,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         Coordinator(
             document: document,
             layout: layout,
+            imageEnhancementSettings: imageEnhancementSettings,
             currentPageIndex: clampedPageIndex(initialPageIndex),
             onPageChanged: onPageChanged,
             onReaderTap: onReaderTap
@@ -32,6 +33,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         context.coordinator.update(
             document: document,
             layout: layout,
+            imageEnhancementSettings: imageEnhancementSettings,
             requestedPageIndex: clampedPageIndex(initialPageIndex)
         )
     }
@@ -55,6 +57,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         private(set) var document: ImageSequenceComicDocument
         private(set) var layout: ReaderDisplayLayout
+        private(set) var imageEnhancementSettings: ReaderImageEnhancementSettings
         private(set) var currentPageIndex: Int
         var onPageChanged: (Int) -> Void
         var onReaderTap: (ReaderTapRegion) -> Void
@@ -63,12 +66,14 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         init(
             document: ImageSequenceComicDocument,
             layout: ReaderDisplayLayout,
+            imageEnhancementSettings: ReaderImageEnhancementSettings,
             currentPageIndex: Int,
             onPageChanged: @escaping (Int) -> Void,
             onReaderTap: @escaping (ReaderTapRegion) -> Void
         ) {
             self.document = document
             self.layout = layout
+            self.imageEnhancementSettings = imageEnhancementSettings
             self.currentPageIndex = currentPageIndex
             self.lastReportedPageIndex = currentPageIndex
             self.onPageChanged = onPageChanged
@@ -115,16 +120,23 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             viewController.collectionView.reloadData()
         }
 
-        func update(document: ImageSequenceComicDocument, layout: ReaderDisplayLayout, requestedPageIndex: Int) {
+        func update(
+            document: ImageSequenceComicDocument,
+            layout: ReaderDisplayLayout,
+            imageEnhancementSettings: ReaderImageEnhancementSettings,
+            requestedPageIndex: Int
+        ) {
             let documentChanged = self.document.url != document.url
                 || self.document.pageNames != document.pageNames
                 || ObjectIdentifier(self.document.pageSource) != ObjectIdentifier(document.pageSource)
             let layoutChanged = self.layout != layout
+            let enhancementChanged = self.imageEnhancementSettings != imageEnhancementSettings
 
             self.document = document
             self.layout = layout
+            self.imageEnhancementSettings = imageEnhancementSettings
 
-            if documentChanged {
+            if documentChanged || enhancementChanged {
                 pageAspectRatios.removeAll()
                 imageCache.removeAllObjects()
                 cancelPageTasks()
@@ -243,6 +255,10 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         }
 
         func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+            guard !usesModelEnhancement else {
+                return
+            }
+
             for indexPath in indexPaths {
                 ensurePageLoaded(at: indexPath.item, priority: .utility)
             }
@@ -383,6 +399,9 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
             let pageSource = document.pageSource
             let maxPixelSize = preferredDecodeMaxPixelSize()
+            let documentURL = document.url
+            let pageName = document.pageName(at: index) ?? "Page \(index + 1)"
+            let enhancementSettings = imageEnhancementSettings.persistentRenderingSettings
             let previewNamespace = self.previewNamespace
 
             pageLoadTasks[index] = Task(priority: priority) { [weak self] in
@@ -393,9 +412,22 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 let result = await Task.detached(priority: priority) {
                     do {
                         let data = try await pageSource.dataForPage(at: index)
-                        guard let image = Self.decodeImage(from: data, maxPixelSize: maxPixelSize) else {
+                        guard let decodedImage = ReaderImageDecoder.decodeImage(
+                            from: data,
+                            maxPixelSize: maxPixelSize
+                        ) else {
                             throw VerticalPageLoadError.decodeFailed(index: index)
                         }
+
+                        let image = await ReaderImageEnhancementPipeline.shared.enhancedImage(
+                            from: decodedImage,
+                            documentURL: documentURL,
+                            pageIndex: index,
+                            pageName: pageName,
+                            settings: enhancementSettings,
+                            targetMaxPixelSize: maxPixelSize,
+                            priority: priority
+                        )
 
                         let safeWidth = max(image.size.width, 1)
                         let ratio = image.size.height / safeWidth
@@ -460,6 +492,9 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             guard document.pageCount > 1 else {
                 return
             }
+            guard !usesModelEnhancement else {
+                return
+            }
 
             let lower = max(0, pageIndex - 2)
             let upper = min(document.pageCount - 1, pageIndex + 2)
@@ -468,8 +503,15 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             }
         }
 
+        private var usesModelEnhancement: Bool {
+            imageEnhancementSettings.persistentRenderingSettings.modelScale.isEnabled
+        }
+
         private var previewNamespace: String {
-            ReaderPageCache.namespace(for: document.url)
+            ReaderImageEnhancementNamespace.namespace(
+                documentURL: document.url,
+                settings: imageEnhancementSettings.persistentRenderingSettings
+            )
         }
 
         private func observePreviewUpdatesIfNeeded() {
@@ -584,14 +626,24 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         private func preferredDecodeMaxPixelSize() -> Int {
             guard let collectionView = viewController?.collectionView else {
-                return 3072
+                return modelAwareDecodeMaxPixelSize(defaultValue: 3072)
             }
 
             let contentWidth = max(preferredContentWidth(for: collectionView), 640)
             let screenScale = collectionView.window?.windowScene?.screen.scale
                 ?? collectionView.traitCollection.displayScale
             let estimated = contentWidth * screenScale * 2.5
-            return max(1800, min(Int(estimated.rounded()), 8192))
+            let defaultValue = max(1800, min(Int(estimated.rounded()), 8192))
+            return modelAwareDecodeMaxPixelSize(defaultValue: defaultValue)
+        }
+
+        private func modelAwareDecodeMaxPixelSize(defaultValue: Int) -> Int {
+            let renderingSettings = imageEnhancementSettings.persistentRenderingSettings
+            guard let modelMaxPixelSize = renderingSettings.preferredDecodeMaxPixelSize else {
+                return defaultValue
+            }
+
+            return min(defaultValue, modelMaxPixelSize)
         }
 
         private func handleContainerBoundsChanged() {
@@ -668,25 +720,6 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             pageLoadTasks.removeAll()
         }
 
-        nonisolated private static func decodeImage(from data: Data, maxPixelSize: Int) -> UIImage? {
-            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-            guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-                return UIImage(data: data)
-            }
-
-            let thumbnailOptions: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize)
-            ]
-
-            if let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) {
-                return UIImage(cgImage: thumbnail)
-            }
-
-            return UIImage(data: data)
-        }
     }
 }
 

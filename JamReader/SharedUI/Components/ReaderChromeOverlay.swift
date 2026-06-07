@@ -337,6 +337,10 @@ struct ReaderTopBar: View {
     let secondaryAccessibilityLabel: String?
     let onSecondaryAction: (() -> Void)?
     let isSecondaryDisabled: Bool
+    let preMenuSystemImage: String?
+    let preMenuAccessibilityLabel: String?
+    let isPreMenuActive: Bool
+    let onPreMenuAction: (() -> Void)?
     let onMenu: () -> Void
     let isMenuDisabled: Bool
 
@@ -347,6 +351,10 @@ struct ReaderTopBar: View {
         secondaryAccessibilityLabel: String? = nil,
         onSecondaryAction: (() -> Void)? = nil,
         isSecondaryDisabled: Bool = false,
+        preMenuSystemImage: String? = nil,
+        preMenuAccessibilityLabel: String? = nil,
+        isPreMenuActive: Bool = false,
+        onPreMenuAction: (() -> Void)? = nil,
         onMenu: @escaping () -> Void,
         isMenuDisabled: Bool = false
     ) {
@@ -356,6 +364,10 @@ struct ReaderTopBar: View {
         self.secondaryAccessibilityLabel = secondaryAccessibilityLabel
         self.onSecondaryAction = onSecondaryAction
         self.isSecondaryDisabled = isSecondaryDisabled
+        self.preMenuSystemImage = preMenuSystemImage
+        self.preMenuAccessibilityLabel = preMenuAccessibilityLabel
+        self.isPreMenuActive = isPreMenuActive
+        self.onPreMenuAction = onPreMenuAction
         self.onMenu = onMenu
         self.isMenuDisabled = isMenuDisabled
     }
@@ -378,6 +390,15 @@ struct ReaderTopBar: View {
                     .accessibilityLabel(secondaryAccessibilityLabel ?? "Reader Action")
             }
 
+            if let preMenuSystemImage, let onPreMenuAction {
+                chromeButton(
+                    systemImage: preMenuSystemImage,
+                    isActive: isPreMenuActive,
+                    action: onPreMenuAction
+                )
+                .accessibilityLabel(preMenuAccessibilityLabel ?? "Reader Action")
+            }
+
             chromeButton(systemImage: "ellipsis", action: onMenu)
             .disabled(isMenuDisabled)
             .opacity(isMenuDisabled ? 0.4 : 1)
@@ -385,16 +406,28 @@ struct ReaderTopBar: View {
         .padding(.vertical, ReaderChromeMetrics.barVerticalPadding)
     }
 
-    private func chromeButton(systemImage: String, action: @escaping () -> Void) -> some View {
+    private func chromeButton(
+        systemImage: String,
+        isActive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(isActive ? .black : .white)
                 .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                .background(.ultraThinMaterial, in: Circle())
+                .background {
+                    if isActive {
+                        Circle()
+                            .fill(Color.white.opacity(0.92))
+                    } else {
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                    }
+                }
                 .overlay {
                     Circle()
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                        .stroke(Color.white.opacity(isActive ? 0.35 : 0.10), lineWidth: 1)
                 }
                 .contentShape(Circle())
         }

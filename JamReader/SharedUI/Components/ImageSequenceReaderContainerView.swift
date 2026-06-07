@@ -1,11 +1,11 @@
 import SwiftUI
-import ImageIO
 import UIKit
 
 struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
+    let imageEnhancementSettings: ReaderImageEnhancementSettings
     let isHorizontalScrollingDisabled: Bool
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
@@ -15,6 +15,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         ReaderPagedCollectionViewController(
             document: document,
             layout: layout,
+            imageEnhancementSettings: imageEnhancementSettings,
             onPageChanged: onPageChanged,
             onReaderTap: onReaderTap,
             initialPageIndex: clampedPageIndex(initialPageIndex)
@@ -29,6 +30,7 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
         viewController.update(
             document: document,
             layout: layout,
+            imageEnhancementSettings: imageEnhancementSettings,
             requestedPageIndex: clampedPageIndex(initialPageIndex)
         )
     }
@@ -74,6 +76,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
     private var document: ImageSequenceComicDocument
     private var layout: ReaderDisplayLayout
+    private var imageEnhancementSettings: ReaderImageEnhancementSettings
     private var spreads: [ReaderSpreadDescriptor]
     private var controllerCache: [Int: ComicImageSpreadViewController] = [:]
     private var prefetchTask: Task<Void, Never>?
@@ -98,12 +101,14 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     init(
         document: ImageSequenceComicDocument,
         layout: ReaderDisplayLayout,
+        imageEnhancementSettings: ReaderImageEnhancementSettings,
         onPageChanged: @escaping (Int) -> Void,
         onReaderTap: @escaping (ReaderTapRegion) -> Void,
         initialPageIndex: Int
     ) {
         self.document = document
         self.layout = layout
+        self.imageEnhancementSettings = imageEnhancementSettings
         self.spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: document.pageCount, layout: layout)
         self.currentPageIndex = initialPageIndex
         self.currentSpreadIndex = ReaderSpreadDescriptor.spreadIndex(containing: initialPageIndex, in: spreads) ?? 0
@@ -277,17 +282,20 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     func update(
         document: ImageSequenceComicDocument,
         layout: ReaderDisplayLayout,
+        imageEnhancementSettings: ReaderImageEnhancementSettings,
         requestedPageIndex: Int
     ) {
         let documentChanged = self.document.url != document.url
             || self.document.pageNames != document.pageNames
             || ObjectIdentifier(self.document.pageSource) != ObjectIdentifier(document.pageSource)
         let layoutChanged = self.layout != layout
+        let enhancementChanged = self.imageEnhancementSettings != imageEnhancementSettings
 
         self.document = document
         self.layout = layout
+        self.imageEnhancementSettings = imageEnhancementSettings
 
-        if documentChanged || layoutChanged {
+        if documentChanged || layoutChanged || enhancementChanged {
             self.spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: document.pageCount, layout: layout)
             staleRequestedPageIndexToIgnore = nil
             clearControllerCache()
@@ -520,6 +528,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             spread: spreads[spreadIndex],
             document: document,
             layout: layout,
+            imageEnhancementSettings: imageEnhancementSettings,
             onTapRegion: { [weak self] tapRegion in
                 self?.handleTapRegion(tapRegion)
             }
@@ -630,6 +639,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         controllerPrewarmWorkItem?.cancel()
+        guard !usesModelEnhancement else {
+            controllerPrewarmWorkItem = nil
+            return
+        }
 
         let workItem = DispatchWorkItem { [weak self] in
             self?.prewarmNeighbors(around: spreadIndex)
@@ -653,6 +666,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
     private func preparePageTurnFeedback() {
         pageTurnFeedbackGenerator.prepare()
+    }
+
+    private var usesModelEnhancement: Bool {
+        imageEnhancementSettings.persistentRenderingSettings.modelScale.isEnabled
     }
 
     private func handleInteractionBegan(on spreadIndex: Int) {
@@ -798,6 +815,7 @@ private final class ComicImageSpreadViewController: UIViewController {
     private let spread: ReaderSpreadDescriptor
     private let document: ImageSequenceComicDocument
     private let layout: ReaderDisplayLayout
+    private let imageEnhancementSettings: ReaderImageEnhancementSettings
     private let zoomablePageView = ZoomableImagePageView()
     private let rotationContainerView = UIView()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
@@ -820,13 +838,18 @@ private final class ComicImageSpreadViewController: UIViewController {
         spread: ReaderSpreadDescriptor,
         document: ImageSequenceComicDocument,
         layout: ReaderDisplayLayout,
+        imageEnhancementSettings: ReaderImageEnhancementSettings,
         onTapRegion: @escaping (ReaderTapRegion) -> Void
     ) {
         self.spreadIndex = spreadIndex
         self.spread = spread
         self.document = document
         self.layout = layout
-        self.previewNamespace = ReaderPageCache.namespace(for: document.url)
+        self.imageEnhancementSettings = imageEnhancementSettings
+        self.previewNamespace = ReaderImageEnhancementNamespace.namespace(
+            documentURL: document.url,
+            settings: imageEnhancementSettings.persistentRenderingSettings
+        )
         self.onTapRegion = onTapRegion
         super.init(nibName: nil, bundle: nil)
     }
@@ -932,8 +955,12 @@ private final class ComicImageSpreadViewController: UIViewController {
         let pageNames = pageIndices.map { index in
             document.pageName(at: index) ?? "Page \(index + 1)"
         }
-        let shouldPreferFullResolution = layout.fitMode == .originalSize
+        let pageNameByIndex = Dictionary(uniqueKeysWithValues: zip(pageIndices, pageNames))
         let decodeMaxPixelSize = preferredDecodeMaxPixelSize()
+        let shouldPreferFullResolution = layout.fitMode == .originalSize
+            && !imageEnhancementSettings.modelScale.isEnabled
+        let documentURL = document.url
+        let enhancementSettings = imageEnhancementSettings.persistentRenderingSettings
 
         observePreviewUpdates(for: pageIndices)
         applyPreviewIfAvailable(for: pageIndices, resetZoomScale: true)
@@ -947,13 +974,24 @@ private final class ComicImageSpreadViewController: UIViewController {
 
                     for index in pageIndices {
                         let data = try await pageSource.dataForPage(at: index)
-                        guard let image = Self.decodeImage(
+                        guard let decodedImage = ReaderImageDecoder.decodeImage(
                             from: data,
                             maxPixelSize: decodeMaxPixelSize,
                             preferFullResolution: shouldPreferFullResolution
                         ) else {
                             throw ReaderSpreadImageError.decodeFailed(index: index)
                         }
+
+                        let pageName = pageNameByIndex[index] ?? "Page \(index + 1)"
+                        let image = await ReaderImageEnhancementPipeline.shared.enhancedImage(
+                            from: decodedImage,
+                            documentURL: documentURL,
+                            pageIndex: index,
+                            pageName: pageName,
+                            settings: enhancementSettings,
+                            targetMaxPixelSize: decodeMaxPixelSize,
+                            priority: .userInitiated
+                        )
 
                         loadedPages.append(LoadedComicPage(index: index, image: image))
                     }
@@ -1211,45 +1249,15 @@ private final class ComicImageSpreadViewController: UIViewController {
         let zoomFactor = min(max(zoomablePageView.maximumZoomScale, 2.5), 3.5)
         let spreadFactor: CGFloat = spread.pageIndices.count > 1 ? 1.2 : 1.5
         let estimatedPixels = normalizedDimension * screenScale * zoomFactor * spreadFactor
-        return max(1600, min(Int(estimatedPixels.rounded()), 8192))
+        let defaultValue = max(1600, min(Int(estimatedPixels.rounded()), 8192))
+        let renderingSettings = imageEnhancementSettings.persistentRenderingSettings
+        guard let modelMaxPixelSize = renderingSettings.preferredDecodeMaxPixelSize else {
+            return defaultValue
+        }
+
+        return min(defaultValue, modelMaxPixelSize)
     }
 
-    nonisolated private static func decodeImage(
-        from data: Data,
-        maxPixelSize: Int,
-        preferFullResolution: Bool
-    ) -> UIImage? {
-        guard !preferFullResolution else {
-            return UIImage(data: data)
-        }
-
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            return UIImage(data: data)
-        }
-
-        if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-           let pixelWidth = properties[kCGImagePropertyPixelWidth] as? CGFloat,
-           let pixelHeight = properties[kCGImagePropertyPixelHeight] as? CGFloat {
-            let maxSourceDimension = max(pixelWidth, pixelHeight)
-            if maxSourceDimension <= CGFloat(maxPixelSize) * 1.1 {
-                return UIImage(data: data)
-            }
-        }
-
-        let thumbnailOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(1, maxPixelSize)
-        ]
-
-        if let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) {
-            return UIImage(cgImage: thumbnail)
-        }
-
-        return UIImage(data: data)
-    }
 }
 
 private enum ReaderSpreadImageError: LocalizedError {

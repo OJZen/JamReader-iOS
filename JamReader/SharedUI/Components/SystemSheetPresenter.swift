@@ -1,6 +1,6 @@
 import SwiftUI
 
-final class DismissTrackingSheetHostingController<Content: View>: UIHostingController<Content>, UIAdaptivePresentationControllerDelegate {
+final class DismissTrackingSheetHostingController: UIHostingController<AnyView>, UIAdaptivePresentationControllerDelegate {
     var onDismiss: (() -> Void)?
     private var hasReportedDismissal = false
 

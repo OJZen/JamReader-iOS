@@ -17,6 +17,7 @@ struct ComicReaderView: View {
     @State private var isShowingOrganizationSheet = false
     @State private var isShowingReaderControls = false
     @State private var isShowingThumbnailBrowser = false
+    @State private var isShowingImageEnhancementSheet = false
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
@@ -175,6 +176,7 @@ struct ComicReaderView: View {
             document: document,
             pageIndex: readerSession.state.currentPageIndex,
             layout: readerSession.state.layout,
+            imageEnhancementSettings: viewModel.imageEnhancementSettings,
             isHorizontalScrollingDisabled: isDismissGestureActive,
             onPageChanged: handleVisiblePageChange(to:),
             onReaderTap: handleReaderTap,
@@ -185,7 +187,7 @@ struct ComicReaderView: View {
             }
         ) { unsupportedDocument in
             ReaderFallbackStateView(
-                title: "Reader Not Ready",
+                title: "Unsupported Format",
                 systemImage: "shippingbox",
                 message: unsupportedReaderMessage(for: unsupportedDocument)
             )
@@ -199,7 +201,7 @@ struct ComicReaderView: View {
             return unsupportedDocument.reason
         }
 
-        return "\(fileExtension.uppercased()) reading support is still being ported.\n\n\(unsupportedDocument.reason)"
+        return "JamReader cannot open \(fileExtension.uppercased()) files yet.\n\n\(unsupportedDocument.reason)"
     }
 
     private var readerControlsSheet: some View {
@@ -336,7 +338,7 @@ struct ComicReaderView: View {
     private var isAnySheetPresented: Bool {
         isShowingReaderControls || isShowingMetadataSheet ||
         isShowingQuickMetadataSheet || isShowingOrganizationSheet ||
-        isShowingThumbnailBrowser
+        isShowingThumbnailBrowser || isShowingImageEnhancementSheet
     }
 
     private var readerTopBar: some View {
@@ -348,6 +350,15 @@ struct ComicReaderView: View {
             onSecondaryAction: showsThumbnailShortcut ? {
                 readerSession.setChromeVisible(true)
                 presentThumbnailBrowser()
+            } : nil,
+            preMenuSystemImage: viewModel.supportsImageEnhancement
+                ? viewModel.imageEnhancementSettings.systemImage
+                : nil,
+            preMenuAccessibilityLabel: "Image Enhancement",
+            isPreMenuActive: viewModel.imageEnhancementSettings.isEnabled,
+            onPreMenuAction: viewModel.supportsImageEnhancement ? {
+                readerSession.setChromeVisible(true)
+                presentImageEnhancementSheet()
             } : nil,
             onMenu: {
                 presentReaderControls()
@@ -454,6 +465,40 @@ struct ComicReaderView: View {
                 }
             )
         )
+    }
+
+    private func presentImageEnhancementSheet() {
+        guard case .imageSequence(let imageSequence)? = viewModel.document else {
+            return
+        }
+
+        isShowingImageEnhancementSheet = true
+        readerSession.apply(.setChromeVisible(true))
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.local.imageEnhancement",
+                content: AnyView(
+                    ReaderImageEnhancementSheet(
+                        document: imageSequence,
+                        pageIndex: readerSession.state.currentPageIndex,
+                        currentSettings: viewModel.imageEnhancementSettings,
+                        onCancel: dismissImageEnhancementSheet,
+                        onApply: { settings in
+                            viewModel.setImageEnhancementSettings(settings)
+                            dismissImageEnhancementSheet()
+                        }
+                    )
+                ),
+                onDismiss: {
+                    isShowingImageEnhancementSheet = false
+                }
+            )
+        )
+    }
+
+    private func dismissImageEnhancementSheet() {
+        isShowingImageEnhancementSheet = false
+        appPresenter?.dismissSheet()
     }
 
     private func dismissReaderControls() {
