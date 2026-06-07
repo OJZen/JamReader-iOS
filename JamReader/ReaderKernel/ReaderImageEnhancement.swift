@@ -79,9 +79,6 @@ nonisolated enum ReaderImageModelScale: String, CaseIterable, Identifiable, Send
 
 nonisolated enum ReaderImageModelBackend: String, CaseIterable, Identifiable, Sendable {
     case realCUGAN
-    case swinIR
-
-    static let allCases: [ReaderImageModelBackend] = [.realCUGAN]
 
     var id: String { rawValue }
 
@@ -89,8 +86,6 @@ nonisolated enum ReaderImageModelBackend: String, CaseIterable, Identifiable, Se
         switch self {
         case .realCUGAN:
             return "Real-CUGAN"
-        case .swinIR:
-            return "SwinIR JPEG"
         }
     }
 
@@ -98,8 +93,6 @@ nonisolated enum ReaderImageModelBackend: String, CaseIterable, Identifiable, Se
         switch self {
         case .realCUGAN:
             return "sparkles"
-        case .swinIR:
-            return "wand.and.sparkles"
         }
     }
 }
@@ -145,19 +138,11 @@ nonisolated struct ReaderImageEnhancementSettings: Equatable, Sendable {
         switch modelBackend {
         case .realCUGAN:
             return ReaderRealCUGANCoreMLBackend.preferredDecodeMaxPixelSize(for: modelScale)
-        case .swinIR:
-            return ReaderSwinIRCoreMLBackend.preferredDecodeMaxPixelSize(for: modelScale)
         }
     }
 
     var persistentRenderingSettings: ReaderImageEnhancementSettings {
-        guard modelBackend == .swinIR, modelScale.isEnabled else {
-            return self
-        }
-
-        var settings = self
-        settings.modelScale = .off
-        return settings
+        self
     }
 
     var cacheKey: String {
@@ -180,12 +165,9 @@ final class ReaderImageEnhancementPreferencesStore {
         let level = userDefaults.string(forKey: levelKey)
             .flatMap(ReaderImageEnhancementLevel.init(rawValue:))
             ?? ReaderImageEnhancementSettings.default.level
-        let storedModelBackend = userDefaults.string(forKey: modelBackendKey)
+        let modelBackend = userDefaults.string(forKey: modelBackendKey)
             .flatMap(ReaderImageModelBackend.init(rawValue:))
             ?? ReaderImageEnhancementSettings.default.modelBackend
-        let modelBackend: ReaderImageModelBackend = storedModelBackend == .swinIR
-            ? .realCUGAN
-            : storedModelBackend
         let modelScale = userDefaults.string(forKey: modelScaleKey)
             .flatMap { storedValue in
                 ReaderImageModelScale(rawValue: storedValue)

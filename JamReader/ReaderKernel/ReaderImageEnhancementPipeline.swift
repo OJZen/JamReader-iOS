@@ -419,13 +419,6 @@ actor ReaderImageEnhancementPipeline {
                 modelScale: settings.modelScale,
                 targetMaxPixelSize: targetMaxPixelSize
             )
-        case .swinIR:
-            return ReaderSwinIRCoreMLBackend.shared.enhancedImageResult(
-                from: image,
-                context: context,
-                modelScale: settings.modelScale,
-                targetMaxPixelSize: targetMaxPixelSize
-            )
         }
     }
 
