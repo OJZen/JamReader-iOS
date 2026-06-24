@@ -349,6 +349,12 @@ struct ComicReaderView: View {
                 readerSession.setChromeVisible(true)
                 presentThumbnailBrowser()
             } : nil,
+            savePageSystemImage: viewModel.isSavingCurrentPageToPhotoLibrary ? "hourglass" : "square.and.arrow.down",
+            savePageAccessibilityLabel: "Save Page to Photos",
+            onSavePage: viewModel.supportsCurrentPagePhotoSave ? {
+                viewModel.saveCurrentPageToPhotoLibrary()
+            } : nil,
+            isSavePageDisabled: viewModel.isSavingCurrentPageToPhotoLibrary,
             onMenu: {
                 presentReaderControls()
             },

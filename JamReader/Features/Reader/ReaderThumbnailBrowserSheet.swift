@@ -21,7 +21,6 @@ struct ReaderThumbnailBrowserSheet: View {
                     focusCurrentRequestID: focusCurrentRequestID
                 ) { pageIndex in
                     onSelectPage(pageIndex)
-                    dismiss()
                 }
             }
             .navigationTitle("Pages")

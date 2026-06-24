@@ -337,6 +337,10 @@ struct ReaderTopBar: View {
     let secondaryAccessibilityLabel: String?
     let onSecondaryAction: (() -> Void)?
     let isSecondaryDisabled: Bool
+    let savePageSystemImage: String?
+    let savePageAccessibilityLabel: String?
+    let onSavePage: (() -> Void)?
+    let isSavePageDisabled: Bool
     let onMenu: () -> Void
     let isMenuDisabled: Bool
 
@@ -347,6 +351,10 @@ struct ReaderTopBar: View {
         secondaryAccessibilityLabel: String? = nil,
         onSecondaryAction: (() -> Void)? = nil,
         isSecondaryDisabled: Bool = false,
+        savePageSystemImage: String? = nil,
+        savePageAccessibilityLabel: String? = nil,
+        onSavePage: (() -> Void)? = nil,
+        isSavePageDisabled: Bool = false,
         onMenu: @escaping () -> Void,
         isMenuDisabled: Bool = false
     ) {
@@ -356,6 +364,10 @@ struct ReaderTopBar: View {
         self.secondaryAccessibilityLabel = secondaryAccessibilityLabel
         self.onSecondaryAction = onSecondaryAction
         self.isSecondaryDisabled = isSecondaryDisabled
+        self.savePageSystemImage = savePageSystemImage
+        self.savePageAccessibilityLabel = savePageAccessibilityLabel
+        self.onSavePage = onSavePage
+        self.isSavePageDisabled = isSavePageDisabled
         self.onMenu = onMenu
         self.isMenuDisabled = isMenuDisabled
     }
@@ -376,6 +388,13 @@ struct ReaderTopBar: View {
                     .disabled(isSecondaryDisabled)
                     .opacity(isSecondaryDisabled ? 0.4 : 1)
                     .accessibilityLabel(secondaryAccessibilityLabel ?? "Reader Action")
+            }
+
+            if let savePageSystemImage, let onSavePage {
+                chromeButton(systemImage: savePageSystemImage, action: onSavePage)
+                    .disabled(isSavePageDisabled)
+                    .opacity(isSavePageDisabled ? 0.4 : 1)
+                    .accessibilityLabel(savePageAccessibilityLabel ?? "Save Page")
             }
 
             chromeButton(systemImage: "ellipsis", action: onMenu)

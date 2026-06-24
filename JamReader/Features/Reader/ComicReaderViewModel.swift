@@ -14,6 +14,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var noticeMessage: String?
     @Published private(set) var backgroundDownloadProgress: Double?
     @Published private(set) var presentedDocument: ComicDocument?
+    @Published private(set) var isSavingCurrentPageToPhotoLibrary = false
     @Published var alert: AppAlertState?
 
     private let dependencies: AppDependencies
@@ -29,6 +30,8 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     private var loadWatchdogTask: Task<Void, Never>?
     private var backgroundDownloadTask: Task<Void, Never>?
     private var noticeDismissalTask: Task<Void, Never>?
+    private var saveCurrentPageTask: Task<Void, Never>?
+    private var saveCurrentPageToken: UUID?
     private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     private var pendingProgressPersistenceTask: Task<Void, Never>?
 
@@ -50,6 +53,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         remoteRefreshToken = nil
         backgroundDownloadTask?.cancel()
         noticeDismissalTask?.cancel()
+        saveCurrentPageTask?.cancel()
         pendingProgressPersistenceTask?.cancel()
 
         let session = activeSession
@@ -181,6 +185,13 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         case .ebook?, .unsupported?, nil:
             return false
         }
+    }
+
+    var supportsCurrentPagePhotoSave: Bool {
+        if case .imageSequence? = document {
+            return true
+        }
+        return false
     }
 
     var effectiveReaderLayout: ReaderDisplayLayout {
@@ -493,6 +504,92 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         }
         currentPageIndex = number - 1
         persistProgress(force: true)
+    }
+
+    func saveCurrentPageToPhotoLibrary() {
+        guard !isSavingCurrentPageToPhotoLibrary else {
+            return
+        }
+        guard case .imageSequence(let imageDocument) = document else {
+            alert = AppAlertState(
+                title: "Unable to Save Page",
+                message: "Only image pages can be saved to Photos."
+            )
+            return
+        }
+        guard (0..<imageDocument.pageCount).contains(currentPageIndex) else {
+            alert = AppAlertState(
+                title: "Unable to Save Page",
+                message: "The current page is no longer available."
+            )
+            return
+        }
+
+        let pageIndex = currentPageIndex
+        let pageSource = imageDocument.pageSource
+        let pageName = imageDocument.pageName(at: pageIndex) ?? "Page \(pageIndex + 1).png"
+        let token = UUID()
+
+        saveCurrentPageTask?.cancel()
+        saveCurrentPageToken = token
+        isSavingCurrentPageToPhotoLibrary = true
+        noticeMessage = "Saving page to Photos..."
+        noticeDismissalTask?.cancel()
+
+        saveCurrentPageTask = Task { [weak self, pageSource, pageIndex, pageName, token] in
+            do {
+                try await Self.writePageToPhotoLibrary(
+                    pageSource: pageSource,
+                    pageIndex: pageIndex,
+                    pageName: pageName
+                )
+                try Task.checkCancellation()
+
+                guard self?.saveCurrentPageToken == token else {
+                    return
+                }
+                self?.saveCurrentPageTask = nil
+                self?.saveCurrentPageToken = nil
+                self?.isSavingCurrentPageToPhotoLibrary = false
+                self?.noticeMessage = "Saved page to Photos."
+                self?.scheduleNoticeDismissalIfNeeded()
+            } catch is CancellationError {
+                guard self?.saveCurrentPageToken == token else {
+                    return
+                }
+                self?.saveCurrentPageTask = nil
+                self?.saveCurrentPageToken = nil
+                self?.isSavingCurrentPageToPhotoLibrary = false
+                self?.noticeMessage = nil
+            } catch {
+                guard self?.saveCurrentPageToken == token else {
+                    return
+                }
+                self?.saveCurrentPageTask = nil
+                self?.saveCurrentPageToken = nil
+                self?.isSavingCurrentPageToPhotoLibrary = false
+                self?.noticeMessage = nil
+                self?.alert = AppAlertState(
+                    title: "Failed to Save Page",
+                    message: error.userFacingMessage
+                )
+            }
+        }
+    }
+
+    nonisolated private static func writePageToPhotoLibrary(
+        pageSource: any ComicPageDataSource,
+        pageIndex: Int,
+        pageName: String
+    ) async throws {
+        try await Task.detached(priority: .userInitiated) {
+            let pageData = try await pageSource.dataForPage(at: pageIndex)
+            try Task.checkCancellation()
+            try await ComicPagePhotoLibrarySaver.savePageImageData(
+                pageData,
+                suggestedFileName: pageName
+            )
+        }.value
     }
 
     func applyUpdatedComic(_ updatedComic: LibraryComic) {
