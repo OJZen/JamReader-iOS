@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		F91C5B162F69A9E5001DF797 /* JamReader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JamReader.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F92A00012F9D000100000001 /* JamReaderTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JamReaderTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -29,10 +30,22 @@
 			path = JamReader;
 			sourceTree = "<group>";
 		};
+		F92A00022F9D000100000001 /* JamReaderTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = JamReaderTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F91C5B132F69A9E5001DF797 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F92A00042F9D000100000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				F91C5B182F69A9E5001DF797 /* JamReader */,
+				F92A00022F9D000100000001 /* JamReaderTests */,
 				F91C5B172F69A9E5001DF797 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,11 +68,22 @@
 			isa = PBXGroup;
 			children = (
 				F91C5B162F69A9E5001DF797 /* JamReader.app */,
+				F92A00012F9D000100000001 /* JamReaderTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXContainerItemProxy section */
+		F92A000B2F9D000100000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F91C5B0E2F69A9E5001DF797 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F91C5B152F69A9E5001DF797;
+			remoteInfo = JamReader;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXNativeTarget section */
 		F91C5B152F69A9E5001DF797 /* JamReader */ = {
@@ -83,6 +108,29 @@
 			productReference = F91C5B162F69A9E5001DF797 /* JamReader.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F92A00062F9D000100000001 /* JamReaderTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F92A00092F9D000100000001 /* Build configuration list for PBXNativeTarget "JamReaderTests" */;
+			buildPhases = (
+				F92A00032F9D000100000001 /* Sources */,
+				F92A00042F9D000100000001 /* Frameworks */,
+				F92A00052F9D000100000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F92A000A2F9D000100000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				F92A00022F9D000100000001 /* JamReaderTests */,
+			);
+			name = JamReaderTests;
+			packageProductDependencies = (
+			);
+			productName = JamReaderTests;
+			productReference = F92A00012F9D000100000001 /* JamReaderTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,6 +143,10 @@
 				TargetAttributes = {
 					F91C5B152F69A9E5001DF797 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					F92A00062F9D000100000001 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = F91C5B152F69A9E5001DF797;
 					};
 				};
 			};
@@ -114,12 +166,20 @@
 			projectRoot = "";
 			targets = (
 				F91C5B152F69A9E5001DF797 /* JamReader */,
+				F92A00062F9D000100000001 /* JamReaderTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		F91C5B142F69A9E5001DF797 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F92A00052F9D000100000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -136,7 +196,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F92A00032F9D000100000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F92A000A2F9D000100000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F91C5B152F69A9E5001DF797 /* JamReader */;
+			targetProxy = F92A000B2F9D000100000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		F91C5B1F2F69A9E7001DF797 /* Debug */ = {
@@ -328,6 +403,60 @@
 			};
 			name = Release;
 		};
+		F92A00072F9D000100000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WGK4N3VX88;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ooou.fun.jamreader.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JamReader.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/JamReader";
+			};
+			name = Debug;
+		};
+		F92A00082F9D000100000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WGK4N3VX88;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = ooou.fun.jamreader.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/JamReader.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/JamReader";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -345,6 +474,15 @@
 			buildConfigurations = (
 				F91C5B222F69A9E7001DF797 /* Debug */,
 				F91C5B232F69A9E7001DF797 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F92A00092F9D000100000001 /* Build configuration list for PBXNativeTarget "JamReaderTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F92A00072F9D000100000001 /* Debug */,
+				F92A00082F9D000100000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

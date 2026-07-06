@@ -1,45 +1,13 @@
 import CryptoKit
 import Foundation
-import QuickLook
 import QuickLookThumbnailing
 import UIKit
 
 enum EBookDocumentSupport {
-    nonisolated static let supportedExtensions: Set<String> = ["epub", "mobi"]
+    nonisolated static let supportedExtensions: Set<String> = ["epub"]
 
     nonisolated static func supportsFileExtension(_ fileExtension: String) -> Bool {
         supportedExtensions.contains(fileExtension.lowercased())
-    }
-
-    nonisolated static func canPreviewDocument(at fileURL: URL) -> Bool {
-        guard supportsFileExtension(fileURL.pathExtension) else {
-            return false
-        }
-
-        if Thread.isMainThread {
-            return MainActor.assumeIsolated {
-                QLPreviewController.canPreview(fileURL as NSURL)
-            }
-        }
-
-        var canPreview = false
-        DispatchQueue.main.sync {
-            canPreview = MainActor.assumeIsolated {
-                QLPreviewController.canPreview(fileURL as NSURL)
-            }
-        }
-        return canPreview
-    }
-
-    nonisolated static func unsupportedReason(for fileURL: URL) -> String {
-        if fileURL.pathExtension.lowercased() == "mobi" {
-            if MuPDFDocumentRenderer.isAvailable {
-                return "MOBI could not be opened by MuPDF or Quick Look."
-            }
-            return "MOBI reading requires the MuPDF engine, which is not linked into this build."
-        }
-
-        return "\(fileURL.pathExtension.uppercased()) preview is not available on this device."
     }
 
     nonisolated static func documentIdentifier(for fileURL: URL) -> String {

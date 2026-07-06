@@ -563,7 +563,6 @@ iOS 设置里看到的 App 占用和 app 自己统计差很多时，通常是只
 - `CBT / TAR`
 - `PDF` when MuPDF is linked into the build
 - `EPUB`
-- `MOBI` when MuPDF is linked into the build
 
 维护注意：
 
@@ -571,8 +570,8 @@ iOS 设置里看到的 App 占用和 app 自己统计差很多时，通常是只
 - 压缩包封面读取要有超时和错误隔离。
 - PDF 缩略图使用 CoreGraphics 本地渲染，不依赖 reader 引擎。
 - PDF 在远程预热路径要保守。
-- EPUB/PDF/MOBI 通过统一 reader 打开，但不要假设它们和图片序列共享所有 viewport 行为；MuPDF 渲染页也要保留文档语义。
-- `scripts/build_ios.sh` 会在 `.mupdf/mupdf-1.27.2` 或 `MUPDF_ROOT` 下发现 iPhoneOS arm64 MuPDF 产物时自动链接；没有该产物时构建仍会成功，但 PDF/MOBI 阅读器会显示 MuPDF 未链接。
+- EPUB/PDF 通过统一 reader 打开，但不要假设它们和图片序列共享所有 viewport 行为；MuPDF 渲染页也要保留文档语义。
+- `scripts/build_ios.sh` 会在 `.mupdf/mupdf-1.27.2` 或 `MUPDF_ROOT` 下发现 iPhoneOS arm64 MuPDF 产物时自动链接；没有该产物时构建仍会成功，但 PDF 阅读器会显示 MuPDF 未链接。
 - 同名图片封面优先于压缩包第一页。
 
 ## 12. 最小回归检查清单
@@ -584,6 +583,7 @@ iOS 设置里看到的 App 占用和 app 自己统计差很多时，通常是只
 ```bash
 git diff --check
 ./scripts/check_no_swiftui_gestures.sh
+./scripts/check_supported_formats_consistency.sh
 xcodebuild -project JamReader.xcodeproj -scheme JamReader -destination 'generic/platform=iOS' -derivedDataPath .xcodebuild build
 ```
 

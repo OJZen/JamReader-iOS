@@ -108,7 +108,7 @@ final class LibraryComicMetadataExtractor {
             return try extractArchiveMetadata(
                 tarArchiveReader.extractMetadata(at: fileURL, coverPage: coverPage)
             )
-        case "epub", "mobi":
+        case "epub":
             return try extractEBookMetadata(for: fileURL)
         default:
             return nil
@@ -137,7 +137,7 @@ final class LibraryComicMetadataExtractor {
             return try? libArchiveReader.countPages(at: fileURL)
         case "cbt", "tar":
             return try? tarArchiveReader.countPages(at: fileURL)
-        case "epub", "mobi":
+        case "epub":
             return MuPDFThumbnailRenderer.pageCount(for: fileURL) ?? 0
         default:
             return nil
@@ -327,7 +327,7 @@ final class LibraryComicMetadataExtractor {
                     tarArchiveReader.extractMetadataSummary(at: fileURL),
                     preferredSidecar: preferredSidecar
                 )
-            case "epub", "mobi":
+            case "epub":
                 return ExtractedComicMetadata(
                     pageCount: MuPDFThumbnailRenderer.pageCount(for: fileURL) ?? 0,
                     originalCoverSize: preferredSidecar.originalSize,

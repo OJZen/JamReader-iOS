@@ -225,7 +225,7 @@ final class RemoteServerBrowsingService {
         "desktop.ini"
     ]
     private let supportedComicFileExtensions: Set<String> = [
-        "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf", "arj", "epub", "mobi"
+        "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf", "arj", "epub"
     ]
     private let credentialStore: RemoteServerCredentialStore
     private let cachePolicyStore: RemoteCachePolicyStore

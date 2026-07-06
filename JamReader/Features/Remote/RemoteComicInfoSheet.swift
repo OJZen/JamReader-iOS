@@ -236,8 +236,6 @@ struct RemoteComicInfoSheet: View {
             return "PDF"
         case "epub":
             return "EPUB"
-        case "mobi":
-            return "MOBI"
         default:
             return ext.isEmpty ? "Comic File" : ext.uppercased()
         }

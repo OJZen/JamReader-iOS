@@ -28,7 +28,7 @@ enum MuPDFDocumentRendererError: LocalizedError {
 }
 
 nonisolated final class MuPDFDocumentRenderer: @unchecked Sendable {
-    nonisolated static let supportedExtensions: Set<String> = ["pdf", "epub", "mobi"]
+    nonisolated static let supportedExtensions: Set<String> = ["pdf", "epub"]
 
     nonisolated static var isAvailable: Bool {
         YRMuPDFDocument.isAvailable()

@@ -88,29 +88,6 @@ nonisolated final class ComicDocumentLoader {
                     documentID: EBookDocumentSupport.documentIdentifier(for: fileURL)
                 )
             )
-        case "mobi":
-            if let muPDFDocument = loadMuPDFDocumentIfPossible(at: fileURL) {
-                return .imageSequence(muPDFDocument)
-            }
-
-            if EBookDocumentSupport.canPreviewDocument(at: fileURL) {
-                return .ebook(
-                    EBookComicDocument(
-                        url: fileURL,
-                        fileExtension: `extension`,
-                        readerKind: .quickLook,
-                        documentID: EBookDocumentSupport.documentIdentifier(for: fileURL)
-                    )
-                )
-            }
-
-            return .unsupported(
-                UnsupportedComicDocument(
-                    url: fileURL,
-                    fileExtension: `extension`,
-                    reason: EBookDocumentSupport.unsupportedReason(for: fileURL)
-                )
-            )
         default:
             return .unsupported(
                 UnsupportedComicDocument(
