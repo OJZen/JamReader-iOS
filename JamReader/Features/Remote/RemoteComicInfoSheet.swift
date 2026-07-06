@@ -214,31 +214,9 @@ struct RemoteComicInfoSheet: View {
             return "Image Folder Comic"
         }
 
-        let ext = URL(fileURLWithPath: item.name).pathExtension.lowercased()
-        switch ext {
-        case "cbz":
-            return "CBZ (ZIP)"
-        case "zip":
-            return "ZIP"
-        case "cbr":
-            return "CBR (RAR)"
-        case "rar":
-            return "RAR"
-        case "cb7":
-            return "CB7 (7Z)"
-        case "7z":
-            return "7Z"
-        case "cbt":
-            return "CBT (TAR)"
-        case "tar":
-            return "TAR"
-        case "pdf":
-            return "PDF"
-        case "epub":
-            return "EPUB"
-        default:
-            return ext.isEmpty ? "Comic File" : ext.uppercased()
-        }
+        return SupportedComicFormats.displayName(
+            forFileExtension: URL(fileURLWithPath: item.name).pathExtension
+        )
     }
 
     private var offlineStatusText: String {

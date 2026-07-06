@@ -104,9 +104,7 @@ final class ImportedComicsImportService {
     private let databaseReader = LibraryDatabaseReader()
     private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "ImportedComicsImport")
 
-    private let supportedComicFileExtensions: Set<String> = [
-        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub"
-    ]
+    private let supportedComicFileExtensions = SupportedComicFormats.comicFileExtensions
     init(
         store: LibraryDescriptorStore,
         storageManager: LibraryStorageManager,

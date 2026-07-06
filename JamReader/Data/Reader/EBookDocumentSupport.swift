@@ -4,7 +4,7 @@ import QuickLookThumbnailing
 import UIKit
 
 enum EBookDocumentSupport {
-    nonisolated static let supportedExtensions: Set<String> = ["epub"]
+    nonisolated static let supportedExtensions = SupportedComicFormats.eBookFileExtensions
 
     nonisolated static func supportsFileExtension(_ fileExtension: String) -> Bool {
         supportedExtensions.contains(fileExtension.lowercased())

@@ -51,9 +51,7 @@ final class LibraryIndexingService {
     private let metadataExtractor: LibraryComicMetadataExtractor
     private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "LibraryIndexing")
-    private let supportedExtensions: Set<String> = [
-        "cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub"
-    ]
+    private let supportedExtensions = SupportedComicFormats.comicFileExtensions
     private let folderCoverRenderSize = CGSize(width: 480, height: 640)
 
     init(

@@ -2,7 +2,32 @@ import XCTest
 @testable import JamReader
 
 final class SupportedFormatPolicyTests: XCTestCase {
+    func testSupportedComicFormatPolicyContainsCurrentPublicFormats() {
+        XCTAssertEqual(
+            SupportedComicFormats.archiveFileExtensions,
+            Set(["cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt"])
+        )
+        XCTAssertEqual(SupportedComicFormats.documentFileExtensions, Set(["pdf", "epub"]))
+        XCTAssertEqual(
+            SupportedComicFormats.comicFileExtensions,
+            Set(["cbr", "cbz", "rar", "zip", "tar", "7z", "cb7", "arj", "cbt", "pdf", "epub"])
+        )
+    }
+
+    func testReaderDocumentFormatPoliciesUseSharedSupportedFormatPolicy() {
+        XCTAssertEqual(EBookDocumentSupport.supportedExtensions, SupportedComicFormats.eBookFileExtensions)
+        XCTAssertEqual(MuPDFDocumentRenderer.supportedExtensions, SupportedComicFormats.muPDFDocumentFileExtensions)
+    }
+
+    func testFormatDisplayNamesAreCentralized() {
+        XCTAssertEqual(SupportedComicFormats.displayName(forFileExtension: "cbz"), "CBZ (ZIP)")
+        XCTAssertEqual(SupportedComicFormats.displayName(forFileExtension: "EPUB"), "EPUB")
+        XCTAssertEqual(SupportedComicFormats.displayName(forFileExtension: ""), "Comic File")
+        XCTAssertEqual(SupportedComicFormats.displayName(forFileExtension: "unknown"), "UNKNOWN")
+    }
+
     func testMOBIIsNotAdvertisedAsAnEBookOrMuPDFDocumentFormat() {
+        XCTAssertFalse(SupportedComicFormats.supportsComicFileExtension("mobi"))
         XCTAssertFalse(EBookDocumentSupport.supportsFileExtension("mobi"))
         XCTAssertFalse(MuPDFDocumentRenderer.supportsFileExtension("mobi"))
     }

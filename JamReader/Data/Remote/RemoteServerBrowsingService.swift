@@ -224,9 +224,7 @@ final class RemoteServerBrowsingService {
         "thumbs.db",
         "desktop.ini"
     ]
-    private let supportedComicFileExtensions: Set<String> = [
-        "cbz", "zip", "cbr", "rar", "cb7", "7z", "cbt", "tar", "pdf", "arj", "epub"
-    ]
+    private let supportedComicFileExtensions = SupportedComicFormats.comicFileExtensions
     private let credentialStore: RemoteServerCredentialStore
     private let cachePolicyStore: RemoteCachePolicyStore
     private let webDAVClient: RemoteWebDAVClient
@@ -1041,7 +1039,7 @@ final class RemoteServerBrowsingService {
         defer { Task { await thumbnailSemaphore.signal() } }
 
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
-        guard ["cbz", "zip", "cbt", "tar", "cbr", "rar", "cb7", "7z", "arj"].contains(fileExtension) else {
+        guard SupportedComicFormats.isArchiveFileExtension(fileExtension) else {
             return nil
         }
 
