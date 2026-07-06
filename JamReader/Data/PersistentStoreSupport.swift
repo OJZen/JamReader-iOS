@@ -9,10 +9,16 @@ struct FileBackedJSONStore {
     let encoder: JSONEncoder
     let decoder: JSONDecoder
     let fileName: String
+    let storageDirectoryURL: URL?
 
-    init(fileName: String, fileManager: FileManager = .default) {
+    init(
+        fileName: String,
+        fileManager: FileManager = .default,
+        storageDirectoryURL: URL? = nil
+    ) {
         self.fileManager = fileManager
         self.fileName = fileName
+        self.storageDirectoryURL = storageDirectoryURL
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -40,12 +46,17 @@ struct FileBackedJSONStore {
     }
 
     func storageFileURL() throws -> URL {
-        let directory = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ).appendingPathComponent("JamReader", isDirectory: true)
+        let directory: URL
+        if let storageDirectoryURL {
+            directory = storageDirectoryURL
+        } else {
+            directory = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            ).appendingPathComponent("JamReader", isDirectory: true)
+        }
 
         if !fileManager.fileExists(atPath: directory.path) {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)

@@ -13,6 +13,14 @@ final class RemoteReadingProgressStore {
         self.maximumStoredSessions = maximumStoredSessions
     }
 
+    init(
+        storage: FileBackedJSONStore,
+        maximumStoredSessions: Int = 200
+    ) {
+        self.storage = storage
+        self.maximumStoredSessions = maximumStoredSessions
+    }
+
     func loadSessions() throws -> [RemoteComicReadingSession] {
         if let cachedSessions {
             return cachedSessions
