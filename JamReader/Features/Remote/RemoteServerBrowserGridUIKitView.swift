@@ -402,7 +402,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             )
             let group = NSCollectionLayoutGroup.horizontal(
                 layoutSize: groupSize,
-                subitem: item,
+                repeatingSubitem: item,
                 count: columns
             )
             group.interItemSpacing = NSCollectionLayoutSpacing.fixed(interItemSpacing)
