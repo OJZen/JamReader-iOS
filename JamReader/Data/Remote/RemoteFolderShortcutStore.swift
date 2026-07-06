@@ -7,6 +7,10 @@ final class RemoteFolderShortcutStore {
         self.storage = FileBackedJSONStore(fileName: "remote_folder_shortcuts.json", fileManager: fileManager)
     }
 
+    init(storage: FileBackedJSONStore) {
+        self.storage = storage
+    }
+
     func load() throws -> [RemoteFolderShortcut] {
         try storage.load([RemoteFolderShortcut].self) ?? []
     }
