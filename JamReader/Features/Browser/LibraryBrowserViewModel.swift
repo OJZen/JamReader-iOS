@@ -868,7 +868,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
 
         if !failedNames.isEmpty {
-            messageLines.append("Failed to import \(failedNames.count) item(s): \(previewList(from: failedNames)).")
+            messageLines.append("Failed to import \(failedNames.count) item(s): \(NamePreviewFormatter.preview(from: failedNames)).")
         }
 
         alert = AppAlertState(
@@ -1025,16 +1025,6 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
 
         return preferredURL
-    }
-
-    private func previewList(from names: [String], limit: Int = 3) -> String {
-        let uniqueSortedNames = Array(Set(names)).sorted()
-        guard uniqueSortedNames.count > limit else {
-            return uniqueSortedNames.joined(separator: ", ")
-        }
-
-        let preview = uniqueSortedNames.prefix(limit).joined(separator: ", ")
-        return "\(preview), +\(uniqueSortedNames.count - limit) more"
     }
 
     private func configureSearch() {

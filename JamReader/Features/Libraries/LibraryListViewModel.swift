@@ -144,7 +144,7 @@ final class LibraryListViewModel: ObservableObject {
         }
 
         if !failedItemNames.isEmpty {
-            messageLines.append("Failed to add \(failedItemNames.count) item(s): \(previewList(from: failedItemNames)).")
+            messageLines.append("Failed to add \(failedItemNames.count) item(s): \(NamePreviewFormatter.preview(from: failedItemNames)).")
         }
 
         alert = AppAlertState(
@@ -318,7 +318,7 @@ final class LibraryListViewModel: ObservableObject {
             }
 
             if !result.failedItemNames.isEmpty {
-                messageLines.append("Failed to import \(result.failedItemNames.count) item(s): \(previewList(from: result.failedItemNames)).")
+                messageLines.append("Failed to import \(result.failedItemNames.count) item(s): \(NamePreviewFormatter.preview(from: result.failedItemNames)).")
             }
 
             if (result.createdLibrary || result.hasImportedAnyComics) {
@@ -367,19 +367,9 @@ final class LibraryListViewModel: ObservableObject {
         if !fileCleanupFailures.isEmpty {
             alert = AppAlertState(
                 title: "Library Removed with Warnings",
-                message: "Removed the library from JamReader, but failed to delete local files for: \(previewList(from: fileCleanupFailures))."
+                message: "Removed the library from JamReader, but failed to delete local files for: \(NamePreviewFormatter.preview(from: fileCleanupFailures))."
             )
         }
-    }
-
-    private func previewList(from names: [String], limit: Int = 3) -> String {
-        let uniqueSortedNames = Array(Set(names)).sorted()
-        guard uniqueSortedNames.count > limit else {
-            return uniqueSortedNames.joined(separator: ", ")
-        }
-
-        let preview = uniqueSortedNames.prefix(limit).joined(separator: ", ")
-        return "\(preview), +\(uniqueSortedNames.count - limit) more"
     }
 
     private func rebuildItems() {

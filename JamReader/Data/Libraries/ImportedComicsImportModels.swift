@@ -40,21 +40,11 @@ struct ImportedComicsImportResult {
 
         let combinedFailedItemNames = failedItemNames + extraFailedItemNames
         if !combinedFailedItemNames.isEmpty {
-            let preview = Self.previewList(from: combinedFailedItemNames)
+            let preview = NamePreviewFormatter.preview(from: combinedFailedItemNames)
             messageLines.append("Failed to import \(combinedFailedItemNames.count) item(s): \(preview).")
         }
 
         return messageLines
-    }
-
-    private static func previewList(from names: [String], limit: Int = 3) -> String {
-        let uniqueSortedNames = Array(Set(names)).sorted()
-        guard uniqueSortedNames.count > limit else {
-            return uniqueSortedNames.joined(separator: ", ")
-        }
-
-        let preview = uniqueSortedNames.prefix(limit).joined(separator: ", ")
-        return "\(preview), +\(uniqueSortedNames.count - limit) more"
     }
 }
 
