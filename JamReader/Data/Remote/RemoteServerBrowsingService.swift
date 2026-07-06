@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import ImageIO
 import UIKit
@@ -230,6 +229,7 @@ final class RemoteServerBrowsingService {
     private let webDAVClient: RemoteWebDAVClient
     private let fileManager: FileManager
     private let remoteComicCacheRootURL: URL
+    private let cachePathResolver: RemoteCachePathResolver
     private let cacheSummaryLock = NSLock()
     private var cacheSummariesByRootPath: [String: RemoteComicCacheSummary] = [:]
     private let automaticCacheTaskLock = NSLock()
@@ -253,12 +253,16 @@ final class RemoteServerBrowsingService {
         self.cachePolicyStore = cachePolicyStore
         self.webDAVClient = webDAVClient
         self.fileManager = fileManager
-        self.remoteComicCacheRootURL = (
+        let remoteComicCacheRootURL = (
             fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         )
             .appendingPathComponent("JamReader", isDirectory: true)
             .appendingPathComponent("RemoteComics", isDirectory: true)
+        self.remoteComicCacheRootURL = remoteComicCacheRootURL
+        self.cachePathResolver = RemoteCachePathResolver(
+            remoteComicCacheRootURL: remoteComicCacheRootURL
+        )
     }
 
     func capabilities(for providerKind: RemoteProviderKind) -> RemoteServerBrowserCapabilities {
@@ -1934,70 +1938,22 @@ final class RemoteServerBrowsingService {
     }
 
     private func cachedFileURL(for reference: RemoteComicFileReference) -> URL {
-        let rootComponents: [String]
-        if let cacheScopeKey = reference.cacheScopeKey {
-            rootComponents = cacheRootPathComponents(cacheScopeKey: cacheScopeKey)
-        } else {
-            rootComponents = legacyCacheRootPathComponents(
-                providerKind: reference.providerKind,
-                providerRootIdentifier: reference.shareName
-            )
-        }
-
-        return cachedFileURL(for: reference, rootComponents: rootComponents)
+        cachePathResolver.cachedFileURL(for: reference)
     }
 
     private func legacyCachedFileURL(for reference: RemoteComicFileReference) -> URL {
-        cachedFileURL(
-            for: reference,
-            rootComponents: legacyCacheRootPathComponents(
-                providerKind: reference.providerKind,
-                providerRootIdentifier: reference.shareName
-            )
-        )
+        cachePathResolver.legacyCachedFileURL(for: reference)
     }
 
     private func cachedFileURL(
         for reference: RemoteComicFileReference,
         rootComponents: [String]
     ) -> URL {
-        var destinationURL = remoteComicCacheRootURL
-            .appendingPathComponent(reference.serverID.uuidString, isDirectory: true)
-        for component in rootComponents {
-            destinationURL.appendPathComponent(component, isDirectory: true)
-        }
-
-        let normalizedPath = smbRelativePath(forDisplayPath: reference.path)
-        let components = normalizedPath
-            .split(separator: "/")
-            .map(String.init)
-            .filter { $0 != ".." && $0 != "." && !$0.isEmpty }
-
-        if components.isEmpty {
-            return destinationURL.appendingPathComponent(
-                reference.fileName,
-                isDirectory: reference.isImageDirectoryComic
-            )
-        }
-
-        for component in components.dropLast() {
-            destinationURL.appendPathComponent(component, isDirectory: true)
-        }
-
-        return destinationURL.appendingPathComponent(
-            components.last ?? reference.fileName,
-            isDirectory: reference.isImageDirectoryComic
-        )
+        cachePathResolver.cachedFileURL(for: reference, rootComponents: rootComponents)
     }
 
     private func cachedFileCandidateURLs(for reference: RemoteComicFileReference) -> [URL] {
-        let preferredURL = cachedFileURL(for: reference)
-        let legacyURL = legacyCachedFileURL(for: reference)
-        guard preferredURL.standardizedFileURL.path != legacyURL.standardizedFileURL.path else {
-            return [preferredURL]
-        }
-
-        return [preferredURL, legacyURL]
+        cachePathResolver.cachedFileCandidateURLs(for: reference)
     }
 
     private func allCachedResourceURLs(for reference: RemoteComicFileReference) -> [URL] {
@@ -2019,24 +1975,14 @@ final class RemoteServerBrowsingService {
         providerKind: RemoteProviderKind,
         providerRootIdentifier: String
     ) -> [String] {
-        switch providerKind {
-        case .smb:
-            let trimmed = providerRootIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
-            return [trimmed.isEmpty ? "share" : trimmed]
-        case .webdav:
-            let components = normalizeDisplayPath(providerRootIdentifier)
-                .split(separator: "/")
-                .map(String.init)
-            return components.isEmpty ? ["webdav-root"] : ["webdav"] + components
-        }
+        RemoteCachePathResolver.legacyCacheRootPathComponents(
+            providerKind: providerKind,
+            providerRootIdentifier: providerRootIdentifier
+        )
     }
 
     private func cacheRootPathComponents(cacheScopeKey: String) -> [String] {
-        let digest = SHA256.hash(data: Data(cacheScopeKey.utf8))
-            .prefix(12)
-            .map { String(format: "%02x", $0) }
-            .joined()
-        return ["scope-\(digest)"]
+        RemoteCachePathResolver.cacheRootPathComponents(cacheScopeKey: cacheScopeKey)
     }
 
     func registerAutomaticCacheTask(
@@ -2568,47 +2514,15 @@ final class RemoteServerBrowsingService {
     }
 
     private func cacheRootURL(for profile: RemoteServerProfile?) -> URL {
-        guard let profile else {
-            return remoteComicCacheRootURL
-        }
-
-        var cacheURL = remoteComicCacheRootURL
-            .appendingPathComponent(profile.id.uuidString, isDirectory: true)
-        for component in cacheRootPathComponents(cacheScopeKey: profile.remoteCacheScopeKey) {
-            cacheURL.appendPathComponent(component, isDirectory: true)
-        }
-
-        return cacheURL
+        cachePathResolver.cacheRootURL(for: profile)
     }
 
     private func legacyCacheRootURL(for profile: RemoteServerProfile) -> URL {
-        var cacheURL = remoteComicCacheRootURL
-            .appendingPathComponent(profile.id.uuidString, isDirectory: true)
-        for component in legacyCacheRootPathComponents(
-            providerKind: profile.providerKind,
-            providerRootIdentifier: profile.normalizedProviderRootIdentifier
-        ) {
-            cacheURL.appendPathComponent(component, isDirectory: true)
-        }
-
-        return cacheURL
+        cachePathResolver.legacyCacheRootURL(for: profile)
     }
 
     private func cacheRootURLs(for profile: RemoteServerProfile?) -> [URL] {
-        guard let profile else {
-            return [remoteComicCacheRootURL]
-        }
-
-        var ordered: [URL] = []
-        var seenPaths = Set<String>()
-        for url in [cacheRootURL(for: profile), legacyCacheRootURL(for: profile)] {
-            let standardizedPath = url.standardizedFileURL.path
-            guard seenPaths.insert(standardizedPath).inserted else {
-                continue
-            }
-            ordered.append(url)
-        }
-        return ordered
+        cachePathResolver.cacheRootURLs(for: profile)
     }
 
     private func cachedMetadataURL(for fileURL: URL) -> URL {
