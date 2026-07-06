@@ -7,6 +7,10 @@ final class RemoteServerProfileStore {
         self.storage = FileBackedJSONStore(fileName: "remote_servers.json", fileManager: fileManager)
     }
 
+    init(storage: FileBackedJSONStore) {
+        self.storage = storage
+    }
+
     func load() throws -> [RemoteServerProfile] {
         try storage.load([RemoteServerProfile].self) ?? []
     }
