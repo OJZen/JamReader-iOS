@@ -23,7 +23,7 @@ final class EPUBReadingLocationStore: @unchecked Sendable {
     func saveLocation(_ location: String?, for document: EBookComicDocument) {
         let key = key(for: document.documentID)
         let sanitized = location?.trimmingCharacters(in: .whitespacesAndNewlines)
-        queue.async { [defaults] in
+        queue.sync { [defaults] in
             guard let sanitized, !sanitized.isEmpty else {
                 defaults.removeObject(forKey: key)
                 return
