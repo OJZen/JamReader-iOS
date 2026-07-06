@@ -29,8 +29,8 @@ final class ImportedComicsImportService {
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
     private let fileManager: FileManager
-    private let databaseInspector = SQLiteDatabaseInspector()
-    private let databaseReader = LibraryDatabaseReader()
+    private let databaseInspector: SQLiteDatabaseInspector
+    private let databaseReader: LibraryDatabaseReader
     private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "ImportedComicsImport")
 
     private let supportedComicFileExtensions = SupportedComicFormats.comicFileExtensions
@@ -41,7 +41,9 @@ final class ImportedComicsImportService {
         libraryScanner: LibraryScanner,
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
         directoryImageSequenceInspector: DirectoryImageSequenceInspector = DirectoryImageSequenceInspector(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        databaseInspector: SQLiteDatabaseInspector = SQLiteDatabaseInspector(),
+        databaseReader: LibraryDatabaseReader = LibraryDatabaseReader()
     ) {
         self.store = store
         self.storageManager = storageManager
@@ -50,6 +52,8 @@ final class ImportedComicsImportService {
         self.maintenanceStatusStore = maintenanceStatusStore
         self.directoryImageSequenceInspector = directoryImageSequenceInspector
         self.fileManager = fileManager
+        self.databaseInspector = databaseInspector
+        self.databaseReader = databaseReader
     }
 
     func importComicResources(
@@ -591,7 +595,7 @@ final class ImportedComicsImportService {
     private func sourceAccessSnapshot(for descriptor: LibraryDescriptor) -> LibraryAccessSnapshot {
         storageManager.accessSnapshot(
             for: descriptor,
-            inspector: SQLiteDatabaseInspector()
+            inspector: databaseInspector
         )
     }
 
