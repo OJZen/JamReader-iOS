@@ -2678,6 +2678,11 @@ final class RemoteServerBrowsingService {
                 continue
             }
 
+            if isDirectory,
+               containsProtectedCachePath(inside: standardizedPath, protectedPaths: protectedPaths) {
+                continue
+            }
+
             guard seenPaths.insert(standardizedPath).inserted else {
                 if isDirectory {
                     enumerator.skipDescendants()
@@ -2729,6 +2734,17 @@ final class RemoteServerBrowsingService {
             if candidatePath.hasPrefix(protectedPath + "/") {
                 return true
             }
+        }
+
+        return false
+    }
+
+    private func containsProtectedCachePath(
+        inside candidateDirectoryPath: String,
+        protectedPaths: Set<String>
+    ) -> Bool {
+        for protectedPath in protectedPaths where protectedPath.hasPrefix(candidateDirectoryPath + "/") {
+            return true
         }
 
         return false
