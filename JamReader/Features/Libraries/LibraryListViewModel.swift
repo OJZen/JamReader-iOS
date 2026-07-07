@@ -204,8 +204,20 @@ final class LibraryListViewModel: ObservableObject {
                 )
             } catch {
                 descriptors.removeAll { $0.id == descriptor.id }
-                try? store.save(descriptors)
-                try? storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
+                do {
+                    try store.save(descriptors)
+                } catch {
+                    logger.warning(
+                        "Managed library create rollback failed item=descriptorStore id=\(descriptor.id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(descriptor.name), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
+                do {
+                    try storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
+                } catch {
+                    logger.warning(
+                        "Managed library create rollback failed item=managedFiles id=\(descriptor.id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(descriptor.name), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
                 throw error
             }
             rebuildItems()
@@ -372,12 +384,27 @@ final class LibraryListViewModel: ObservableObject {
 
     private func removeLibraries(withIDs idsToRemove: [UUID]) {
         let removedDescriptors = descriptors.filter { idsToRemove.contains($0.id) }
+        let removedNames = removedDescriptors.map(\.name)
+
+        if !removedDescriptors.isEmpty {
+            logger.notice(
+                "Library remove requested count=\(removedDescriptors.count, privacy: .public) ids=\(AppLogSanitizer.namesPreview(removedDescriptors.map { $0.id.uuidString }), privacy: .public) names=\(AppLogSanitizer.namesPreview(removedNames), privacy: .public)"
+            )
+        }
         descriptors.removeAll { idsToRemove.contains($0.id) }
 
         do {
             try store.save(descriptors)
             rebuildItems()
+            if !removedDescriptors.isEmpty {
+                logger.info(
+                    "Library remove completed count=\(removedDescriptors.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(removedNames), privacy: .public)"
+                )
+            }
         } catch {
+            logger.error(
+                "Library remove failed count=\(removedDescriptors.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(removedNames), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
             return
         }
@@ -392,6 +419,9 @@ final class LibraryListViewModel: ObservableObject {
         }
 
         if !fileCleanupFailures.isEmpty {
+            logger.warning(
+                "Library remove file cleanup failed count=\(fileCleanupFailures.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(fileCleanupFailures), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Library Removed with Warnings",
                 message: "Removed the library from JamReader, but failed to delete local files for: \(NamePreviewFormatter.preview(from: fileCleanupFailures))."
