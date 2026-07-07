@@ -132,7 +132,13 @@ actor EPUBDocumentPreparationService {
                 return bookRootURL
             }
 
-            try? fileManager.removeItem(at: documentRootURL)
+            do {
+                try fileManager.removeItem(at: documentRootURL)
+            } catch {
+                logger.warning(
+                    "EPUB extraction cache reset cleanup failed documentID=\(document.documentID, privacy: .public) path=\(AppLogSanitizer.path(documentRootURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             logger.notice(
                 "EPUB extraction cache reset documentID=\(document.documentID, privacy: .public) reason=missingContainerXML"
             )

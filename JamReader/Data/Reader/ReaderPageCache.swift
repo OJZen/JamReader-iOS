@@ -85,7 +85,13 @@ actor ReaderPageCache {
             touch(fileURL)
             return data
         } catch {
-            try? fileManager.removeItem(at: fileURL)
+            do {
+                try fileManager.removeItem(at: fileURL)
+            } catch {
+                logger.warning(
+                    "Reader page cache corrupt file cleanup failed path=\(AppLogSanitizer.path(fileURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             logDiskFailureIfNeeded(
                 "Reader page cache read failed",
                 error: error

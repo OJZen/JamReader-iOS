@@ -2212,7 +2212,13 @@ final class RemoteServerBrowsingService {
             throw CancellationError()
         } catch {
             if fileManager.fileExists(atPath: temporaryDirectoryURL.path) {
-                try? fileManager.removeItem(at: temporaryDirectoryURL)
+                do {
+                    try fileManager.removeItem(at: temporaryDirectoryURL)
+                } catch {
+                    cacheLogger.warning(
+                        "Remote image directory temporary cleanup failed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(AppLogSanitizer.path(temporaryDirectoryURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
             }
 
             if fileManager.fileExists(atPath: destinationURL.path) {
