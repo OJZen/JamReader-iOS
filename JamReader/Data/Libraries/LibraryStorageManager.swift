@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum LibraryStorageError: LocalizedError {
     case invalidFolder
@@ -38,6 +39,7 @@ final class LibraryStorageManager {
     private let fileManager: FileManager
     private let database: AppLibraryDatabase
     private let assetStore: LibraryAssetStore
+    private let logger = AppLog.library
 
     init(
         fileManager: FileManager = .default,
@@ -206,6 +208,9 @@ final class LibraryStorageManager {
                 )
             }
         } catch {
+            logger.warning(
+                "Library access snapshot failed libraryID=\(descriptor.id.uuidString, privacy: .public) kind=\(descriptor.kind.rawValue, privacy: .public) root=\(AppLogSanitizer.path(descriptor.rootPath), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             return LibraryAccessSnapshot(lastError: error.userFacingMessage)
         }
     }

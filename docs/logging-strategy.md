@@ -41,7 +41,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 ## 当前已覆盖的高价值区域
 
 - App lifecycle/cache pressure：已记录内存警告、后台切换触发的内存缓存清理。
-- Library list ViewModel：已记录书库加载、新增文件夹、创建托管书库、重命名等低频动作。
+- Library list/storage：已记录书库加载、新增文件夹、创建托管书库、重命名、访问快照失败等低频动作。
 - Library organization：已记录标签、书单、集合成员关系、单本/批量组织分配、收藏/阅读状态、评分、元数据保存和 ComicInfo 导入。
 - Library comic removal：已记录单本/批量漫画从本地书库移除、只读拒绝和删除失败原因。
 - Library import/indexing：已记录导入、复制移动、索引恢复、扫描同步、导入书库清空、ComicInfo 批量导入等结果摘要。
