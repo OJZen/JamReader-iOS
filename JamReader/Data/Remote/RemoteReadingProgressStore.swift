@@ -1,8 +1,10 @@
 import Foundation
+import os
 
 final class RemoteReadingProgressStore {
     private let storage: FileBackedJSONStore
     private let maximumStoredSessions: Int
+    private let logger = AppLog.reader
     private var cachedSessions: [RemoteComicReadingSession]?
 
     init(
@@ -85,31 +87,51 @@ final class RemoteReadingProgressStore {
         }
 
         if sessions.count > maximumStoredSessions {
+            let discardedCount = sessions.count - maximumStoredSessions
             sessions = Array(sessions.prefix(maximumStoredSessions))
+            logger.info(
+                "Remote reading history trimmed discarded=\(discardedCount, privacy: .public) retained=\(sessions.count, privacy: .public) maximum=\(self.maximumStoredSessions, privacy: .public)"
+            )
         }
 
         try saveSessions(sessions)
     }
 
     func deleteSessions(for serverID: UUID) throws {
-        let filteredSessions = try loadSessions().filter { $0.serverID != serverID }
+        let sessions = try loadSessions()
+        let filteredSessions = sessions.filter { $0.serverID != serverID }
         try saveSessions(filteredSessions)
+        logger.info(
+            "Remote reading history deleted scope=server serverID=\(serverID.uuidString, privacy: .public) removed=\(sessions.count - filteredSessions.count, privacy: .public) remaining=\(filteredSessions.count, privacy: .public)"
+        )
     }
 
     func deleteSessions(for profile: RemoteServerProfile) throws {
-        let filteredSessions = try loadSessions().filter { !$0.matches(profile: profile) }
+        let sessions = try loadSessions()
+        let filteredSessions = sessions.filter { !$0.matches(profile: profile) }
         try saveSessions(filteredSessions)
+        logger.info(
+            "Remote reading history deleted scope=profile provider=\(profile.providerKind.rawValue, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) removed=\(sessions.count - filteredSessions.count, privacy: .public) remaining=\(filteredSessions.count, privacy: .public)"
+        )
     }
 
     func deleteSession(_ session: RemoteComicReadingSession) throws {
-        let filteredSessions = try loadSessions().filter { candidate in
+        let sessions = try loadSessions()
+        let filteredSessions = sessions.filter { candidate in
             candidate.id != session.id
         }
         try saveSessions(filteredSessions)
+        logger.info(
+            "Remote reading history deleted scope=session serverID=\(session.serverID.uuidString, privacy: .public) removed=\(sessions.count - filteredSessions.count, privacy: .public) remaining=\(filteredSessions.count, privacy: .public)"
+        )
     }
 
     func clearAllSessions() throws {
+        let sessions = try loadSessions()
         try saveSessions([])
+        logger.notice(
+            "Remote reading history cleared removed=\(sessions.count, privacy: .public)"
+        )
     }
 
     private func saveSessions(_ sessions: [RemoteComicReadingSession]) throws {

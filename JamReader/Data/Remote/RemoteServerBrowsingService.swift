@@ -2581,12 +2581,24 @@ final class RemoteServerBrowsingService {
             return
         }
 
+        cacheLogger.notice(
+            """
+            Remote cache trim started fileCount=\(cachedResources.count, privacy: .public) \
+            totalBytes=\(totalBytes, privacy: .public) \
+            maxFileCount=\(cachePolicy.maximumCachedComicFileCount, privacy: .public) \
+            maxBytes=\(cachePolicy.maximumTotalCacheBytes, privacy: .public)
+            """
+        )
+
         let evictionCandidates = cachedResources.sorted { lhs, rhs in
             lhs.lastAccessDate < rhs.lastAccessDate
         }
 
         var remainingFileCount = cachedResources.count
         var remainingBytes = totalBytes
+        var removedFileCount = 0
+        var removedBytes: Int64 = 0
+        var protectedSkipCount = 0
 
         for candidate in evictionCandidates {
             guard remainingFileCount > cachePolicy.maximumCachedComicFileCount
@@ -2596,6 +2608,7 @@ final class RemoteServerBrowsingService {
             }
 
             guard !isProtectedByActiveReaderLease(candidate.resourceURL) else {
+                protectedSkipCount += 1
                 continue
             }
 
@@ -2608,11 +2621,39 @@ final class RemoteServerBrowsingService {
                 )
                 remainingFileCount -= 1
                 remainingBytes -= candidate.size
+                removedFileCount += 1
+                removedBytes += candidate.size
             } catch {
+                cacheLogger.error(
+                    "Remote cache trim failed removedFiles=\(removedFileCount, privacy: .public) removedBytes=\(removedBytes, privacy: .public) protectedSkipped=\(protectedSkipCount, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                     "The downloaded remote comic cache could not be trimmed automatically. \(error.userFacingMessage)"
                 )
             }
+        }
+
+        if removedFileCount > 0 {
+            cacheLogger.info(
+                """
+                Remote cache trim completed removedFiles=\(removedFileCount, privacy: .public) \
+                removedBytes=\(removedBytes, privacy: .public) \
+                remainingFiles=\(remainingFileCount, privacy: .public) \
+                remainingBytes=\(remainingBytes, privacy: .public) \
+                protectedSkipped=\(protectedSkipCount, privacy: .public)
+                """
+            )
+        }
+
+        if remainingFileCount > cachePolicy.maximumCachedComicFileCount
+            || remainingBytes > cachePolicy.maximumTotalCacheBytes {
+            cacheLogger.warning(
+                """
+                Remote cache trim incomplete remainingFiles=\(remainingFileCount, privacy: .public) \
+                remainingBytes=\(remainingBytes, privacy: .public) \
+                protectedSkipped=\(protectedSkipCount, privacy: .public)
+                """
+            )
         }
     }
 
