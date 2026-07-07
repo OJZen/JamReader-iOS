@@ -660,9 +660,10 @@ final class RemoteServerBrowsingService {
 
                     try fileManager.removeItem(at: resource.resourceURL)
                     removedResourceCount += 1
-                    try? removeEmptyParentDirectories(
+                    removeEmptyParentDirectoriesIfPossible(
                         from: resource.resourceURL.deletingLastPathComponent(),
-                        stoppingAt: cacheURL
+                        stoppingAt: cacheURL,
+                        reason: "clearAuxiliaryResource"
                     )
                 }
             }
@@ -768,15 +769,21 @@ final class RemoteServerBrowsingService {
 
         for fileURL in allCachedResourceURLs(for: reference) {
             guard fileManager.fileExists(atPath: fileURL.path) else {
-                try? removeCachedMetadata(for: fileURL)
-                try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
+                removeCachedMetadataIfPossible(for: fileURL, reason: "clearMissingCachedFile")
+                resetPartialDownloadArtifactsIfPossible(
+                    at: temporaryDownloadURL(for: fileURL),
+                    reason: "clearMissingCachedFile"
+                )
                 continue
             }
 
             do {
                 try fileManager.removeItem(at: fileURL)
-                try? removeCachedMetadata(for: fileURL)
-                try? resetPartialDownloadArtifacts(at: temporaryDownloadURL(for: fileURL))
+                removeCachedMetadataIfPossible(for: fileURL, reason: "clearCachedFile")
+                resetPartialDownloadArtifactsIfPossible(
+                    at: temporaryDownloadURL(for: fileURL),
+                    reason: "clearCachedFile"
+                )
                 try removeEmptyParentDirectories(
                     from: fileURL.deletingLastPathComponent(),
                     stoppingAt: cacheRootURL(for: nil)
@@ -2090,11 +2097,18 @@ final class RemoteServerBrowsingService {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.moveItem(at: temporaryDownloadURL, to: destinationURL)
-            try? removePartialDownloadMetadata(at: temporaryDownloadURL)
-            try? storeCachedMetadata(for: reference, at: destinationURL)
+            removePartialDownloadMetadataIfPossible(
+                at: temporaryDownloadURL,
+                reason: "downloadCompleted"
+            )
+            storeCachedMetadataIfPossible(
+                for: reference,
+                at: destinationURL,
+                reason: "downloadCompleted"
+            )
             touchCachedFile(at: destinationURL)
             if trimCacheAfterDownload {
-                try? trimCacheIfNeeded()
+                trimCacheIfNeededIfPossible(reason: "downloadCompleted")
             }
             invalidateCachedSummaries()
             return RemoteComicDownloadResult(localFileURL: destinationURL, source: .downloaded)
@@ -2180,14 +2194,15 @@ final class RemoteServerBrowsingService {
                 at: destinationURL,
                 fileManager: fileManager
             )
-            try? storeCachedMetadata(
+            storeCachedMetadataIfPossible(
                 for: reference,
                 at: destinationURL,
-                cachedByteCount: cachedBytes
+                cachedByteCount: cachedBytes,
+                reason: "imageDirectoryDownloadCompleted"
             )
             touchCachedFile(at: destinationURL)
             if trimCacheAfterDownload {
-                try? trimCacheIfNeeded()
+                trimCacheIfNeededIfPossible(reason: "imageDirectoryDownloadCompleted")
             }
             invalidateCachedSummaries()
             progressHandler(1.0)
@@ -2500,6 +2515,27 @@ final class RemoteServerBrowsingService {
         try data.write(to: cachedMetadataURL(for: fileURL), options: .atomic)
     }
 
+    private func storeCachedMetadataIfPossible(
+        for reference: RemoteComicFileReference,
+        at fileURL: URL,
+        cachedByteCount: Int64? = nil,
+        reason: String
+    ) {
+        do {
+            try storeCachedMetadata(
+                for: reference,
+                at: fileURL,
+                cachedByteCount: cachedByteCount
+            )
+        } catch {
+            let remotePath = logRemotePath(reference.path)
+            let cachePath = AppLogSanitizer.path(fileURL.path)
+            cacheLogger.warning(
+                "Remote cache metadata store failed reason=\(reason, privacy: .public) server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(remotePath, privacy: .public) cachePath=\(cachePath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+    }
+
     private func removeCachedMetadata(for fileURL: URL) throws {
         let metadataURL = cachedMetadataURL(for: fileURL)
         guard fileManager.fileExists(atPath: metadataURL.path) else {
@@ -2507,6 +2543,17 @@ final class RemoteServerBrowsingService {
         }
 
         try fileManager.removeItem(at: metadataURL)
+    }
+
+    private func removeCachedMetadataIfPossible(for fileURL: URL, reason: String) {
+        do {
+            try removeCachedMetadata(for: fileURL)
+        } catch {
+            let cachePath = AppLogSanitizer.path(fileURL.path)
+            cacheLogger.warning(
+                "Remote cache metadata remove failed reason=\(reason, privacy: .public) cachePath=\(cachePath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     private func hasActiveReaderLease(for reference: RemoteComicFileReference) -> Bool {
@@ -2614,10 +2661,14 @@ final class RemoteServerBrowsingService {
 
             do {
                 try fileManager.removeItem(at: candidate.resourceURL)
-                try? removeCachedMetadata(for: candidate.resourceURL)
-                try? removeEmptyParentDirectories(
+                removeCachedMetadataIfPossible(
+                    for: candidate.resourceURL,
+                    reason: "trimEvictedResource"
+                )
+                removeEmptyParentDirectoriesIfPossible(
                     from: candidate.resourceURL.deletingLastPathComponent(),
-                    stoppingAt: remoteComicCacheRootURL
+                    stoppingAt: remoteComicCacheRootURL,
+                    reason: "trimEvictedResource"
                 )
                 remainingFileCount -= 1
                 remainingBytes -= candidate.size
@@ -2657,6 +2708,16 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    private func trimCacheIfNeededIfPossible(reason: String) {
+        do {
+            try trimCacheIfNeeded()
+        } catch {
+            cacheLogger.warning(
+                "Remote cache trim fallback reason=\(reason, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+    }
+
     private func removeEmptyParentDirectories(from startURL: URL, stoppingAt rootURL: URL) throws {
         var currentURL = startURL.standardizedFileURL
         let normalizedRootURL = rootURL.standardizedFileURL
@@ -2672,6 +2733,21 @@ final class RemoteServerBrowsingService {
 
             try fileManager.removeItem(at: currentURL)
             currentURL.deleteLastPathComponent()
+        }
+    }
+
+    private func removeEmptyParentDirectoriesIfPossible(
+        from startURL: URL,
+        stoppingAt rootURL: URL,
+        reason: String
+    ) {
+        do {
+            try removeEmptyParentDirectories(from: startURL, stoppingAt: rootURL)
+        } catch {
+            let startPath = AppLogSanitizer.path(startURL.path)
+            cacheLogger.warning(
+                "Remote cache empty directory cleanup failed reason=\(reason, privacy: .public) path=\(startPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
         }
     }
 
@@ -2719,11 +2795,42 @@ final class RemoteServerBrowsingService {
         try fileManager.removeItem(at: metadataURL)
     }
 
+    private func removePartialDownloadMetadataIfPossible(
+        at temporaryDownloadURL: URL,
+        reason: String
+    ) {
+        do {
+            try removePartialDownloadMetadata(at: temporaryDownloadURL)
+        } catch {
+            let tempPath = AppLogSanitizer.path(temporaryDownloadURL.path)
+            cacheLogger.warning(
+                "Remote partial metadata remove failed reason=\(reason, privacy: .public) tempPath=\(tempPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+    }
+
     private func resetPartialDownloadArtifacts(at temporaryDownloadURL: URL) throws {
         if fileManager.fileExists(atPath: temporaryDownloadURL.path) {
             try fileManager.removeItem(at: temporaryDownloadURL)
         }
-        try? removePartialDownloadMetadata(at: temporaryDownloadURL)
+        removePartialDownloadMetadataIfPossible(
+            at: temporaryDownloadURL,
+            reason: "resetPartialDownloadArtifacts"
+        )
+    }
+
+    private func resetPartialDownloadArtifactsIfPossible(
+        at temporaryDownloadURL: URL,
+        reason: String
+    ) {
+        do {
+            try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+        } catch {
+            let tempPath = AppLogSanitizer.path(temporaryDownloadURL.path)
+            cacheLogger.warning(
+                "Remote partial download reset failed reason=\(reason, privacy: .public) tempPath=\(tempPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     private func preparePartialDownload(
@@ -2742,7 +2849,10 @@ final class RemoteServerBrowsingService {
         if hasPartialFile && !hasCompatibleMetadata {
             try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
         } else if !hasPartialFile {
-            try? removePartialDownloadMetadata(at: temporaryDownloadURL)
+            removePartialDownloadMetadataIfPossible(
+                at: temporaryDownloadURL,
+                reason: "stalePartialMetadata"
+            )
         }
 
         if !fileManager.fileExists(atPath: temporaryDownloadURL.path) {

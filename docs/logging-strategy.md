@@ -50,7 +50,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
 - Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback、远程进度读取 fallback 和坏缓存清理失败。
 - Reader support services：已记录页面磁盘缓存异常、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败、按需启用的 reader trace。
-- Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略、缓存清理和自动裁剪摘要。
+- Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略、缓存清理、metadata/partial sidecar 维护、空目录清理和自动裁剪摘要。
 - Remote WebDAV range probing：已记录 byte-range 探测结果和每个服务器作用域首次探测失败的 fallback。
 - Remote SMB connection pool：已记录连接创建/复用/失败/驱逐/空闲清理，端点仅输出脱敏哈希 ID。
 - Remote background import：已记录后台导入开始、拒绝、完成、取消和反馈展示。
