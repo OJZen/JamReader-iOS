@@ -60,7 +60,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。
 - Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本，以及离线快照过滤摘要。
 - Saved remote folders：已记录收藏远程文件夹列表加载、快照过滤、收藏状态判断 fallback、重命名和删除。
-- Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、维护状态记录的失败边界。
+- Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、SQLite summary inspection、维护状态记录的失败边界。
 
 ## 后续建议补测试的区域
 
