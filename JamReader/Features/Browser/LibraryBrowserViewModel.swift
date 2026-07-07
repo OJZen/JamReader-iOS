@@ -49,6 +49,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private var scanCompletionDismissTask: Task<Void, Never>?
     private var hasLoaded = false
     private var hasAttemptedAutomaticImportRecovery = false
+    private var hasLoggedSourceRootResolutionFailure = false
     private let previewCollectionLimit = 6
     nonisolated private static let searchResultLimit = 40
     nonisolated private static let liveImportNotificationLibraryIDKey = "libraryID"
@@ -984,7 +985,12 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     private func resolvedSourceRootURLIfAvailable() -> URL? {
-        try? resolvedSourceRootURL()
+        do {
+            return try resolvedSourceRootURL()
+        } catch {
+            logSourceRootResolutionFailureOnce(error: error)
+            return nil
+        }
     }
 
     private func resolveComicFileURL(
@@ -1031,6 +1037,17 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
 
         return preferredURL
+    }
+
+    private func logSourceRootResolutionFailureOnce(error: Error) {
+        guard !hasLoggedSourceRootResolutionFailure else {
+            return
+        }
+
+        hasLoggedSourceRootResolutionFailure = true
+        logger.warning(
+            "Library browser source root resolution failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.descriptor.kind.rawValue, privacy: .public) root=\(AppLogSanitizer.path(self.descriptor.rootPath), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+        )
     }
 
     private func configureSearch() {

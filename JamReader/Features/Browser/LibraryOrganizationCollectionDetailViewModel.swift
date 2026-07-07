@@ -21,6 +21,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     private let metadataRootURL: URL
     private var hasLoaded = false
     private var accessSession: LibraryAccessSession?
+    private var hasLoggedSourceRootResolutionFailure = false
     private let logger = AppLog.library
 
     init(
@@ -509,14 +510,30 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     }
 
     private func resolvedSourceRootURLIfAvailable() -> URL? {
-        if accessSession == nil {
-            accessSession = try? storageManager.makeAccessSession(for: descriptor)
+        do {
+            if accessSession == nil {
+                accessSession = try storageManager.makeAccessSession(for: descriptor)
+            }
+
+            if let sourceURL = accessSession?.sourceURL {
+                return sourceURL
+            }
+
+            return try storageManager.restoreSourceURL(for: descriptor)
+        } catch {
+            logSourceRootResolutionFailureOnce(error: error)
+            return nil
+        }
+    }
+
+    private func logSourceRootResolutionFailureOnce(error: Error) {
+        guard !hasLoggedSourceRootResolutionFailure else {
+            return
         }
 
-        if let sourceURL = accessSession?.sourceURL {
-            return sourceURL
-        }
-
-        return try? storageManager.restoreSourceURL(for: descriptor)
+        hasLoggedSourceRootResolutionFailure = true
+        logger.warning(
+            "Library collection source root resolution failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) kind=\(self.descriptor.kind.rawValue, privacy: .public) root=\(AppLogSanitizer.path(self.descriptor.rootPath), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+        )
     }
 }

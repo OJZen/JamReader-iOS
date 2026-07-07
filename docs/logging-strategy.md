@@ -46,7 +46,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Library comic removal：已记录单本/批量漫画从本地书库移除、只读拒绝、封面清理失败和删除失败原因。
 - Library import/indexing：已记录导入、复制移动、索引恢复、导入书库健康检查失败、扫描同步、导入书库清空、导入后残留清理失败、索引资产/文件夹封面维护失败、封面路径规划失败、ComicInfo 批量导入等结果摘要。
 - Library metadata batch editing：已记录批量元数据保存的选中数量、字段数量和失败原因。
-- Library browser previews：已记录首页 Continue/Recent/Favorites 预览和计数 fallback。
+- Library browser previews：已记录首页 Continue/Recent/Favorites 预览和计数 fallback，以及浏览/集合页源路径解析失败。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
 - Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback、远程进度读取 fallback、坏缓存清理失败、远程 stream cleanup 失败和远程 ZIP page source cleanup 失败。
 - Reader support services：已记录页面磁盘缓存异常、损坏缓存清理失败、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败/旧解包目录清理失败、按需启用的 reader trace。
