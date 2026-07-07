@@ -334,7 +334,15 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     ) async -> ProgressStateSnapshot {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
-                let sessions = (try? readingProgressStore.loadSessions()) ?? []
+                let sessions: [RemoteComicReadingSession]
+                do {
+                    sessions = try readingProgressStore.loadSessions()
+                } catch {
+                    AppLog.remote.warning(
+                        "Remote browser progress snapshot fallback provider=\(profile.providerKind.rawValue, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                    sessions = []
+                }
                 let recentSessions = sessions.filter { $0.matches(profile: profile) }
                 let sessionsByContentPath = sessions.reduce(into: [String: RemoteComicReadingSession]()) { result, session in
                     guard session.matches(profile: profile),
@@ -1254,7 +1262,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     }
 
     private func recentSessionsForProfile() -> [RemoteComicReadingSession] {
-        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.matches(profile: profile) }
+        do {
+            return try readingProgressStore.loadSessions().filter { $0.matches(profile: profile) }
+        } catch {
+            logger.warning(
+                "Remote browser recent sessions fallback provider=\(self.profile.providerKind.rawValue, privacy: .public) serverID=\(self.profile.id.uuidString, privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return []
+        }
     }
 
     private func makeLoadIssue(from error: Error) -> RemoteBrowserLoadIssue {
