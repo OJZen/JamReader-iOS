@@ -1,4 +1,5 @@
 import Foundation
+import os
 import zlib
 
 nonisolated struct RemoteZIPArchiveReader {
@@ -257,7 +258,13 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
         }
 
         hasClosed = true
-        try? await fileReaderBox.fileReader.close()
+        do {
+            try await fileReaderBox.fileReader.close()
+        } catch {
+            AppLog.reader.warning(
+                "Remote ZIP page source cleanup failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     private func data(for entry: ZIPArchiveEntry) async throws -> Data {

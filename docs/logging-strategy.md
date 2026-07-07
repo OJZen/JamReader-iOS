@@ -48,7 +48,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Library metadata batch editing：已记录批量元数据保存的选中数量、字段数量和失败原因。
 - Library browser previews：已记录首页 Continue/Recent/Favorites 预览和计数 fallback。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
-- Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback、远程进度读取 fallback、坏缓存清理失败和远程 stream cleanup 失败。
+- Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback、远程进度读取 fallback、坏缓存清理失败、远程 stream cleanup 失败和远程 ZIP page source cleanup 失败。
 - Reader support services：已记录页面磁盘缓存异常、损坏缓存清理失败、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败/旧解包目录清理失败、按需启用的 reader trace。
 - Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略、缓存清理、metadata/partial sidecar 维护、临时目录/空目录清理和自动裁剪摘要。
 - Remote WebDAV range probing：已记录 byte-range 探测结果和每个服务器作用域首次探测失败的 fallback。
