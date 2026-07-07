@@ -452,7 +452,7 @@ final class LibraryIndexingService {
 
                     currentCoverAssetKeys.insert(comic.coverAssetKey)
                     if let coverImage = comic.metadata?.coverImage,
-                       let coverURL = try? assetStore.plannedCoverURL(assetKey: comic.coverAssetKey, libraryID: libraryID) {
+                       let coverURL = plannedComicCoverURL(for: comic, libraryID: libraryID) {
                         try metadataExtractor.saveCover(coverImage, to: coverURL)
                     }
                 }
@@ -956,10 +956,18 @@ final class LibraryIndexingService {
         }
         let desiredFileNames = Set(plans.map { "\($0.folderID).jpg" })
 
-        let existingFileURLs = (try? fileManager.contentsOfDirectory(
-            at: folderCoversRootURL,
-            includingPropertiesForKeys: nil
-        )) ?? []
+        let existingFileURLs: [URL]
+        do {
+            existingFileURLs = try fileManager.contentsOfDirectory(
+                at: folderCoversRootURL,
+                includingPropertiesForKeys: nil
+            )
+        } catch {
+            existingFileURLs = []
+            logger.warning(
+                "Library folder cover stale file scan failed libraryID=\(libraryID.uuidString, privacy: .public) root=\(AppLogSanitizer.path(folderCoversRootURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
 
         for fileURL in existingFileURLs where !desiredFileNames.contains(fileURL.lastPathComponent) {
             do {
@@ -972,7 +980,7 @@ final class LibraryIndexingService {
         }
 
         for plan in plans {
-            guard let coverURL = try? assetStore.plannedFolderCoverURL(folderID: plan.folderID, libraryID: libraryID) else {
+            guard let coverURL = plannedFolderCoverURL(for: plan, libraryID: libraryID) else {
                 continue
             }
 
@@ -1006,7 +1014,7 @@ final class LibraryIndexingService {
         var images: [UIImage] = []
 
         for source in sources {
-            guard let coverURL = try? assetStore.plannedCoverURL(assetKey: source.assetKey, libraryID: libraryID) else {
+            guard let coverURL = plannedFolderSourceCoverURL(for: source, libraryID: libraryID) else {
                 continue
             }
 
@@ -1037,6 +1045,39 @@ final class LibraryIndexingService {
         }
 
         return images
+    }
+
+    private func plannedComicCoverURL(for comic: ScannedComic, libraryID: UUID) -> URL? {
+        do {
+            return try assetStore.plannedCoverURL(assetKey: comic.coverAssetKey, libraryID: libraryID)
+        } catch {
+            logger.warning(
+                "Library comic cover path planning failed libraryID=\(libraryID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(comic.relativePath), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return nil
+        }
+    }
+
+    private func plannedFolderCoverURL(for plan: FolderCoverPlan, libraryID: UUID) -> URL? {
+        do {
+            return try assetStore.plannedFolderCoverURL(folderID: plan.folderID, libraryID: libraryID)
+        } catch {
+            logger.warning(
+                "Library folder cover path planning failed libraryID=\(libraryID.uuidString, privacy: .public) folderID=\(plan.folderID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return nil
+        }
+    }
+
+    private func plannedFolderSourceCoverURL(for source: FolderCoverSource, libraryID: UUID) -> URL? {
+        do {
+            return try assetStore.plannedCoverURL(assetKey: source.assetKey, libraryID: libraryID)
+        } catch {
+            logger.warning(
+                "Library folder cover source path planning failed libraryID=\(libraryID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(source.relativePath), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return nil
+        }
     }
 
     private func makeFolderCoverImage(from images: [UIImage]) -> UIImage? {

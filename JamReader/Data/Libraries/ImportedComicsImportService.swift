@@ -562,7 +562,15 @@ final class ImportedComicsImportService {
             return false
         }
 
-        return (try? databaseReader.loadFolderContent(databaseURL: databaseURL, folderID: 1)) != nil
+        do {
+            _ = try databaseReader.loadFolderContent(databaseURL: databaseURL, folderID: 1)
+            return true
+        } catch {
+            logger.warning(
+                "Imported comics library health check failed database=\(AppLogSanitizer.path(databaseURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return false
+        }
     }
 
     private func indexedComicCount(databaseURL: URL) -> Int {
