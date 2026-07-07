@@ -1,6 +1,6 @@
 import CryptoKit
 import Foundation
-import os.log
+import os
 import UIKit
 
 #if canImport(SQLite3)
@@ -50,7 +50,7 @@ final class LibraryIndexingService {
     private let fileManager: FileManager
     private let metadataExtractor: LibraryComicMetadataExtractor
     private let directoryImageSequenceInspector: DirectoryImageSequenceInspector
-    private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "LibraryIndexing")
+    private let logger = AppLog.libraryIndexing
     private let supportedExtensions = SupportedComicFormats.comicFileExtensions
     private let folderCoverRenderSize = CGSize(width: 480, height: 640)
 
@@ -160,20 +160,24 @@ final class LibraryIndexingService {
                 progressHandler: progressHandler
             )
         } catch {
+            let sourcePath = AppLogSanitizer.path(sourceRootURL.path)
+            let errorDescription = AppLogSanitizer.errorDescription(error)
             logger.error(
-                "Library discovery failed for library \(libraryID.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                "Library discovery failed for library \(libraryID.uuidString, privacy: .public) at \(sourcePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
             )
             throw error
         }
 
         if discovery.comics.isEmpty {
-            let topLevelEntries = ((try? fileManager.contentsOfDirectory(
+            let topLevelEntryNames = ((try? fileManager.contentsOfDirectory(
                 at: sourceRootURL,
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles]
-            )) ?? []).map(\.lastPathComponent).sorted().joined(separator: ", ")
+            )) ?? []).map(\.lastPathComponent).sorted()
+            let sourcePath = AppLogSanitizer.path(sourceRootURL.path)
+            let topLevelEntries = AppLogSanitizer.namesPreview(topLevelEntryNames)
             logger.warning(
-                "Library scan discovered zero comics for library \(libraryID.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Top-level entries: \(topLevelEntries, privacy: .public)"
+                "Library scan discovered zero comics for library \(libraryID.uuidString, privacy: .public) at \(sourcePath, privacy: .public). Top-level entries: \(topLevelEntries, privacy: .public)"
             )
         }
 
@@ -195,8 +199,10 @@ final class LibraryIndexingService {
             )
             return summary
         } catch {
+            let sourcePath = AppLogSanitizer.path(sourceRootURL.path)
+            let errorDescription = AppLogSanitizer.errorDescription(error)
             logger.error(
-                "Library sync failed for library \(libraryID.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                "Library sync failed for library \(libraryID.uuidString, privacy: .public) at \(sourcePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
             )
             throw error
         }
@@ -313,8 +319,10 @@ final class LibraryIndexingService {
             do {
                 hash = try fileFingerprint(for: standardizedURL)
             } catch {
+                let candidatePath = AppLogSanitizer.path(standardizedURL.path)
+                let errorDescription = AppLogSanitizer.errorDescription(error)
                 logger.error(
-                    "Failed to fingerprint comic candidate \(standardizedURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                    "Failed to fingerprint comic candidate \(candidatePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
                 )
                 throw error
             }

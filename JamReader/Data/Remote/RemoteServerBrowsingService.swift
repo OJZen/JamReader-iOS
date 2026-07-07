@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import os
 import UIKit
 
 private struct RemoteListedDirectoryEntry: Sendable {
@@ -68,6 +69,8 @@ final class RemoteServerBrowsingService {
     private let smbClientSemaphore = AsyncSemaphore(maxConcurrent: 3)
     private let smbConnectionPool = SMBConnectionPool()
     private let webDAVRangeSupportStore = RemoteWebDAVRangeSupportStore()
+    private let logger = AppLog.remote
+    private let cacheLogger = AppLog.remoteCache
 
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
@@ -121,29 +124,97 @@ final class RemoteServerBrowsingService {
         }
 
         let requestedPath = normalizeDisplayPath(path ?? profile.normalizedBaseDirectoryPath)
-        switch profile.providerKind {
-        case .smb:
-            return try await withConnectedSMBClient(for: profile, priority: .userInitiated) { client in
-                let shareRelativePath = smbRelativePath(forDisplayPath: requestedPath)
-                let entries = try await client.listDirectory(path: shareRelativePath)
+        let logPath = logRemotePath(requestedPath)
+        logger.info(
+            "Remote directory listing requested provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(logPath, privacy: .public)"
+        )
 
-                var items: [RemoteDirectoryItem] = []
-                items.reserveCapacity(entries.count)
+        do {
+            let items: [RemoteDirectoryItem]
+            switch profile.providerKind {
+            case .smb:
+                items = try await withConnectedSMBClient(for: profile, priority: .userInitiated) { client in
+                    let shareRelativePath = smbRelativePath(forDisplayPath: requestedPath)
+                    let entries = try await client.listDirectory(path: shareRelativePath)
+
+                    var items: [RemoteDirectoryItem] = []
+                    items.reserveCapacity(entries.count)
+                    var consecutiveDirectoryInspectionSkips = 0
+                    var canInspectDirectories = true
+
+                    for entry in entries {
+                        guard !isSkippableDirectoryEntry(entry.name) else {
+                            continue
+                        }
+
+                        let fullPath = appendPathComponent(entry.name, to: requestedPath)
+                        let inspection: RemoteDirectoryPresentationInspection?
+                        if entry.isDirectory, canInspectDirectories {
+                            inspection = try await inspectSMBDirectoryPresentationWithTimeout(
+                                with: client,
+                                directoryPath: fullPath,
+                                profile: profile
+                            )
+                            if inspection == nil {
+                                consecutiveDirectoryInspectionSkips += 1
+                                if consecutiveDirectoryInspectionSkips >= Self.maxConsecutiveDirectoryInspectionSkips {
+                                    canInspectDirectories = false
+                                }
+                            } else {
+                                consecutiveDirectoryInspectionSkips = 0
+                            }
+                        } else {
+                            inspection = nil
+                        }
+                        items.append(
+                            classifyDirectoryEntry(
+                                named: entry.name,
+                                fullPath: fullPath,
+                                isDirectory: entry.isDirectory,
+                                in: profile,
+                                fileSize: Int64(clamping: entry.size),
+                                modifiedAt: entry.lastWriteTime,
+                                imageComicInspection: inspection?.imageComicInspection,
+                                previewItems: inspection?.previewItems ?? []
+                            )
+                        )
+                    }
+
+                    return items
+                }
+            case .webdav:
+                let directoryURL = try webDAVURL(
+                    for: profile,
+                    displayPath: requestedPath,
+                    isDirectory: true
+                )
+                let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
+                let collectionRootPath = profile.webDAVBaseURL?.path ?? "/"
+                let entries = try await webDAVClient.listDirectory(
+                    at: directoryURL,
+                    authorizationHeader: authorizationHeader
+                )
+
+                var webDAVItems: [RemoteDirectoryItem] = []
+                webDAVItems.reserveCapacity(entries.count)
                 var consecutiveDirectoryInspectionSkips = 0
                 var canInspectDirectories = true
 
                 for entry in entries {
-                    guard !isSkippableDirectoryEntry(entry.name) else {
+                    guard let fullPath = displayPath(
+                        forWebDAVEntryURL: entry.url,
+                        collectionRootPath: collectionRootPath
+                    ),
+                    fullPath != requestedPath,
+                    !isSkippableDirectoryEntry(entry.name) else {
                         continue
                     }
 
-                    let fullPath = appendPathComponent(entry.name, to: requestedPath)
                     let inspection: RemoteDirectoryPresentationInspection?
                     if entry.isDirectory, canInspectDirectories {
-                        inspection = try await inspectSMBDirectoryPresentationWithTimeout(
-                            with: client,
-                            directoryPath: fullPath,
-                            profile: profile
+                        inspection = try await inspectWebDAVDirectoryPresentationWithTimeout(
+                            for: profile,
+                            directoryPath: fullPath
                         )
                         if inspection == nil {
                             consecutiveDirectoryInspectionSkips += 1
@@ -156,83 +227,36 @@ final class RemoteServerBrowsingService {
                     } else {
                         inspection = nil
                     }
-                    items.append(
+
+                    webDAVItems.append(
                         classifyDirectoryEntry(
                             named: entry.name,
                             fullPath: fullPath,
                             isDirectory: entry.isDirectory,
                             in: profile,
-                            fileSize: Int64(clamping: entry.size),
-                            modifiedAt: entry.lastWriteTime,
+                            fileSize: entry.fileSize,
+                            modifiedAt: entry.modifiedAt,
                             imageComicInspection: inspection?.imageComicInspection,
                             previewItems: inspection?.previewItems ?? []
                         )
                     )
                 }
 
-                return items
-            }
-        case .webdav:
-            let directoryURL = try webDAVURL(
-                for: profile,
-                displayPath: requestedPath,
-                isDirectory: true
-            )
-            let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
-            let collectionRootPath = profile.webDAVBaseURL?.path ?? "/"
-            let entries = try await webDAVClient.listDirectory(
-                at: directoryURL,
-                authorizationHeader: authorizationHeader
-            )
-
-            var items: [RemoteDirectoryItem] = []
-            items.reserveCapacity(entries.count)
-            var consecutiveDirectoryInspectionSkips = 0
-            var canInspectDirectories = true
-
-            for entry in entries {
-                guard let fullPath = displayPath(
-                    forWebDAVEntryURL: entry.url,
-                    collectionRootPath: collectionRootPath
-                ),
-                fullPath != requestedPath,
-                !isSkippableDirectoryEntry(entry.name) else {
-                    continue
-                }
-
-                let inspection: RemoteDirectoryPresentationInspection?
-                if entry.isDirectory, canInspectDirectories {
-                    inspection = try await inspectWebDAVDirectoryPresentationWithTimeout(
-                        for: profile,
-                        directoryPath: fullPath
-                    )
-                    if inspection == nil {
-                        consecutiveDirectoryInspectionSkips += 1
-                        if consecutiveDirectoryInspectionSkips >= Self.maxConsecutiveDirectoryInspectionSkips {
-                            canInspectDirectories = false
-                        }
-                    } else {
-                        consecutiveDirectoryInspectionSkips = 0
-                    }
-                } else {
-                    inspection = nil
-                }
-
-                items.append(
-                    classifyDirectoryEntry(
-                        named: entry.name,
-                        fullPath: fullPath,
-                        isDirectory: entry.isDirectory,
-                        in: profile,
-                        fileSize: entry.fileSize,
-                        modifiedAt: entry.modifiedAt,
-                        imageComicInspection: inspection?.imageComicInspection,
-                        previewItems: inspection?.previewItems ?? []
-                    )
-                )
+                items = webDAVItems
             }
 
+            let comicCount = items.filter { $0.canOpenAsComic }.count
+            let directoryCount = items.filter { $0.isDirectory }.count
+            logger.info(
+                "Remote directory listing completed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(logPath, privacy: .public) items=\(items.count) comics=\(comicCount) directories=\(directoryCount)"
+            )
             return items
+        } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            logger.error(
+                "Remote directory listing failed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(logPath, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
+            throw error
         }
     }
 
@@ -296,53 +320,73 @@ final class RemoteServerBrowsingService {
             throw RemoteServerBrowsingError.invalidProfile("The remote server profile is incomplete.")
         }
 
-        switch profile.providerKind {
-        case .smb:
-            return try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
-                try await withConnectedSMBClient(for: profile, priority: .utility) { client in
-                    try await downloadComicFileCore(
-                        for: profile,
-                        reference: reference,
-                        forceRefresh: forceRefresh,
-                        trimCacheAfterDownload: trimCacheAfterDownload,
-                        progressHandler: progressHandler
-                    ) { temporaryDownloadURL, resumeOffset in
-                        let reader = client.fileReader(
-                            path: smbRelativePath(forDisplayPath: reference.path)
-                        )
-                        try await downloadRemoteFile(
-                            using: reader,
-                            to: temporaryDownloadURL,
-                            resumeOffset: resumeOffset,
+        let logPath = logRemotePath(reference.path)
+        logger.info(
+            "Remote comic download requested provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(logPath, privacy: .public) forceRefresh=\(forceRefresh)"
+        )
+
+        do {
+            let result: RemoteComicDownloadResult
+            switch profile.providerKind {
+            case .smb:
+                result = try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
+                    try await withConnectedSMBClient(for: profile, priority: .utility) { client in
+                        try await downloadComicFileCore(
+                            for: profile,
+                            reference: reference,
+                            forceRefresh: forceRefresh,
+                            trimCacheAfterDownload: trimCacheAfterDownload,
                             progressHandler: progressHandler
-                        )
+                        ) { temporaryDownloadURL, resumeOffset in
+                            let reader = client.fileReader(
+                                path: smbRelativePath(forDisplayPath: reference.path)
+                            )
+                            try await downloadRemoteFile(
+                                using: reader,
+                                to: temporaryDownloadURL,
+                                resumeOffset: resumeOffset,
+                                progressHandler: progressHandler
+                            )
+                        }
                     }
                 }
-            }
-        case .webdav:
-            let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
-            return try await downloadComicFileCore(
-                for: profile,
-                reference: reference,
-                forceRefresh: forceRefresh,
-                trimCacheAfterDownload: trimCacheAfterDownload,
-                progressHandler: progressHandler
-            ) { temporaryDownloadURL, resumeOffset in
-                let fileURL = try webDAVURL(
+            case .webdav:
+                let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
+                result = try await downloadComicFileCore(
                     for: profile,
-                    displayPath: reference.path,
-                    isDirectory: false
-                )
-                if resumeOffset > 0 {
-                    try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+                    reference: reference,
+                    forceRefresh: forceRefresh,
+                    trimCacheAfterDownload: trimCacheAfterDownload,
+                    progressHandler: progressHandler
+                ) { temporaryDownloadURL, resumeOffset in
+                    let fileURL = try webDAVURL(
+                        for: profile,
+                        displayPath: reference.path,
+                        isDirectory: false
+                    )
+                    if resumeOffset > 0 {
+                        try resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+                    }
+                    try await webDAVClient.download(
+                        from: fileURL,
+                        authorizationHeader: authorizationHeader,
+                        to: temporaryDownloadURL
+                    )
+                    progressHandler(1.0)
                 }
-                try await webDAVClient.download(
-                    from: fileURL,
-                    authorizationHeader: authorizationHeader,
-                    to: temporaryDownloadURL
-                )
-                progressHandler(1.0)
             }
+
+            let localPath = AppLogSanitizer.path(result.localFileURL.path)
+            logger.info(
+                "Remote comic download completed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(logPath, privacy: .public) source=\(self.downloadSourceDescription(result.source), privacy: .public) local=\(localPath, privacy: .public)"
+            )
+            return result
+        } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            logger.error(
+                "Remote comic download failed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) path=\(logPath, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
+            throw error
         }
     }
 
@@ -358,103 +402,120 @@ final class RemoteServerBrowsingService {
             throw RemoteServerBrowsingError.invalidProfile("The remote server profile is incomplete.")
         }
 
-        switch profile.providerKind {
-        case .smb:
-            let outcomes = await concurrentBatchDownloadOutcomes(
-                for: references,
-                maximumConcurrency: Self.batchDownloadWorkerLimit
-            ) { [downloadSemaphore] reference in
-                await downloadSemaphore.wait(priority: .utility)
-                defer { Task { await downloadSemaphore.signal() } }
+        logger.info(
+            "Remote batch download requested provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) count=\(references.count) forceRefresh=\(forceRefresh)"
+        )
 
-                guard !Task.isCancelled else {
-                    return RemoteComicBatchDownloadOutcome(
-                        reference: reference,
-                        result: nil,
-                        error: CancellationError()
-                    )
-                }
+        do {
+            let outcomes: [RemoteComicBatchDownloadOutcome]
+            switch profile.providerKind {
+            case .smb:
+                outcomes = await concurrentBatchDownloadOutcomes(
+                    for: references,
+                    maximumConcurrency: Self.batchDownloadWorkerLimit
+                ) { [downloadSemaphore] reference in
+                    await downloadSemaphore.wait(priority: .utility)
+                    defer { Task { await downloadSemaphore.signal() } }
 
-                return await self.batchDownloadOutcome(for: reference) {
-                    let result = try await self.withRetry(maxAttempts: 3, baseDelay: 1.0) {
-                        try await self.withConnectedSMBClient(for: profile, priority: .utility) { client in
-                            try await self.downloadComicFileCore(
-                                for: profile,
-                                reference: reference,
-                                forceRefresh: forceRefresh,
-                                trimCacheAfterDownload: trimCacheAfterDownload,
-                                progressHandler: { fraction in
-                                    progressHandler(reference, fraction)
-                                }
-                            ) { temporaryDownloadURL, resumeOffset in
-                                let reader = client.fileReader(
-                                    path: self.smbRelativePath(forDisplayPath: reference.path)
-                                )
-                                try await self.downloadRemoteFile(
-                                    using: reader,
-                                    to: temporaryDownloadURL,
-                                    resumeOffset: resumeOffset,
+                    guard !Task.isCancelled else {
+                        return RemoteComicBatchDownloadOutcome(
+                            reference: reference,
+                            result: nil,
+                            error: CancellationError()
+                        )
+                    }
+
+                    return await self.batchDownloadOutcome(for: reference) {
+                        let result = try await self.withRetry(maxAttempts: 3, baseDelay: 1.0) {
+                            try await self.withConnectedSMBClient(for: profile, priority: .utility) { client in
+                                try await self.downloadComicFileCore(
+                                    for: profile,
+                                    reference: reference,
+                                    forceRefresh: forceRefresh,
+                                    trimCacheAfterDownload: trimCacheAfterDownload,
                                     progressHandler: { fraction in
                                         progressHandler(reference, fraction)
                                     }
-                                )
+                                ) { temporaryDownloadURL, resumeOffset in
+                                    let reader = client.fileReader(
+                                        path: self.smbRelativePath(forDisplayPath: reference.path)
+                                    )
+                                    try await self.downloadRemoteFile(
+                                        using: reader,
+                                        to: temporaryDownloadURL,
+                                        resumeOffset: resumeOffset,
+                                        progressHandler: { fraction in
+                                            progressHandler(reference, fraction)
+                                        }
+                                    )
+                                }
                             }
                         }
-                    }
-                    progressHandler(reference, 1.0)
-                    return result
-                }
-            }
-            try Task.checkCancellation()
-            return outcomes
-        case .webdav:
-            let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
-            let outcomes = await concurrentBatchDownloadOutcomes(
-                for: references,
-                maximumConcurrency: Self.batchDownloadWorkerLimit
-            ) { [downloadSemaphore] reference in
-                await downloadSemaphore.wait(priority: .utility)
-                defer { Task { await downloadSemaphore.signal() } }
-
-                guard !Task.isCancelled else {
-                    return RemoteComicBatchDownloadOutcome(
-                        reference: reference,
-                        result: nil,
-                        error: CancellationError()
-                    )
-                }
-
-                return await self.batchDownloadOutcome(for: reference) {
-                    let result = try await self.downloadComicFileCore(
-                        for: profile,
-                        reference: reference,
-                        forceRefresh: forceRefresh,
-                        trimCacheAfterDownload: trimCacheAfterDownload,
-                        progressHandler: { fraction in
-                            progressHandler(reference, fraction)
-                        }
-                    ) { temporaryDownloadURL, resumeOffset in
-                        let fileURL = try self.webDAVURL(
-                            for: profile,
-                            displayPath: reference.path,
-                            isDirectory: false
-                        )
-                        if resumeOffset > 0 {
-                            try self.resetPartialDownloadArtifacts(at: temporaryDownloadURL)
-                        }
-                        try await self.webDAVClient.download(
-                            from: fileURL,
-                            authorizationHeader: authorizationHeader,
-                            to: temporaryDownloadURL
-                        )
                         progressHandler(reference, 1.0)
+                        return result
                     }
-                    progressHandler(reference, 1.0)
-                    return result
                 }
+                try Task.checkCancellation()
+            case .webdav:
+                let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
+                outcomes = await concurrentBatchDownloadOutcomes(
+                    for: references,
+                    maximumConcurrency: Self.batchDownloadWorkerLimit
+                ) { [downloadSemaphore] reference in
+                    await downloadSemaphore.wait(priority: .utility)
+                    defer { Task { await downloadSemaphore.signal() } }
+
+                    guard !Task.isCancelled else {
+                        return RemoteComicBatchDownloadOutcome(
+                            reference: reference,
+                            result: nil,
+                            error: CancellationError()
+                        )
+                    }
+
+                    return await self.batchDownloadOutcome(for: reference) {
+                        let result = try await self.downloadComicFileCore(
+                            for: profile,
+                            reference: reference,
+                            forceRefresh: forceRefresh,
+                            trimCacheAfterDownload: trimCacheAfterDownload,
+                            progressHandler: { fraction in
+                                progressHandler(reference, fraction)
+                            }
+                        ) { temporaryDownloadURL, resumeOffset in
+                            let fileURL = try self.webDAVURL(
+                                for: profile,
+                                displayPath: reference.path,
+                                isDirectory: false
+                            )
+                            if resumeOffset > 0 {
+                                try self.resetPartialDownloadArtifacts(at: temporaryDownloadURL)
+                            }
+                            try await self.webDAVClient.download(
+                                from: fileURL,
+                                authorizationHeader: authorizationHeader,
+                                to: temporaryDownloadURL
+                            )
+                            progressHandler(reference, 1.0)
+                        }
+                        progressHandler(reference, 1.0)
+                        return result
+                    }
+                }
+                try Task.checkCancellation()
             }
-            try Task.checkCancellation()
+
+            let failedCount = outcomes.filter { $0.error != nil }.count
+            logger.info(
+                "Remote batch download completed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) count=\(outcomes.count) failed=\(failedCount)"
+            )
             return outcomes
+        } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            logger.error(
+                "Remote batch download failed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) count=\(references.count) error=\(errorDescription, privacy: .public)"
+            )
+            throw error
         }
     }
 
@@ -520,28 +581,52 @@ final class RemoteServerBrowsingService {
     }
 
     func applyCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) throws {
+        cacheLogger.notice("Remote cache policy preset applying preset=\(preset.rawValue, privacy: .public)")
         cachePolicyStore.savePreset(preset)
-        try trimCacheIfNeeded()
-        invalidateCachedSummaries()
+        do {
+            try trimCacheIfNeeded()
+            invalidateCachedSummaries()
+            cacheLogger.notice("Remote cache policy preset applied preset=\(preset.rawValue, privacy: .public)")
+        } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            cacheLogger.error(
+                "Remote cache policy preset failed preset=\(preset.rawValue, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
+            throw error
+        }
     }
 
     func clearCachedComics(for profile: RemoteServerProfile? = nil) throws {
+        let scope = cacheScopeDescription(for: profile)
+        cacheLogger.notice("Remote cached comics clear requested scope=\(scope, privacy: .public)")
         do {
             cancelAutomaticCacheTasks(forServerID: profile?.id)
             guard !hasActiveReaderLease(forServerID: profile?.id) else {
+                cacheLogger.warning(
+                    "Remote cached comics clear blocked by active reader lease scope=\(scope, privacy: .public)"
+                )
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                     "Close the active reader before clearing downloaded comics."
                 )
             }
+            var removedRootCount = 0
             for cacheURL in cacheRootURLs(for: profile) {
                 guard fileManager.fileExists(atPath: cacheURL.path) else {
                     continue
                 }
 
                 try fileManager.removeItem(at: cacheURL)
+                removedRootCount += 1
             }
             invalidateCachedSummaries()
+            cacheLogger.notice(
+                "Remote cached comics clear completed scope=\(scope, privacy: .public) removedRoots=\(removedRootCount)"
+            )
         } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            cacheLogger.error(
+                "Remote cached comics clear failed scope=\(scope, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                 "The downloaded remote comic cache could not be cleared. \(error.userFacingMessage)"
             )
@@ -549,13 +634,19 @@ final class RemoteServerBrowsingService {
     }
 
     func clearOtherCachedData(for profile: RemoteServerProfile? = nil) throws {
+        let scope = cacheScopeDescription(for: profile)
+        cacheLogger.notice("Remote auxiliary cache clear requested scope=\(scope, privacy: .public)")
         do {
             cancelAutomaticCacheTasks(forServerID: profile?.id)
             guard !hasActiveReaderLease(forServerID: profile?.id) else {
+                cacheLogger.warning(
+                    "Remote auxiliary cache clear blocked by active reader lease scope=\(scope, privacy: .public)"
+                )
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                     "Close the active reader before clearing leftover remote cache data."
                 )
             }
+            var removedResourceCount = 0
             for cacheURL in cacheRootURLs(for: profile) {
                 guard fileManager.fileExists(atPath: cacheURL.path) else {
                     continue
@@ -568,6 +659,7 @@ final class RemoteServerBrowsingService {
                     }
 
                     try fileManager.removeItem(at: resource.resourceURL)
+                    removedResourceCount += 1
                     try? removeEmptyParentDirectories(
                         from: resource.resourceURL.deletingLastPathComponent(),
                         stoppingAt: cacheURL
@@ -575,7 +667,14 @@ final class RemoteServerBrowsingService {
                 }
             }
             invalidateCachedSummaries()
+            cacheLogger.notice(
+                "Remote auxiliary cache clear completed scope=\(scope, privacy: .public) removedResources=\(removedResourceCount)"
+            )
         } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            cacheLogger.error(
+                "Remote auxiliary cache clear failed scope=\(scope, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                 "The leftover remote cache data could not be cleared. \(error.userFacingMessage)"
             )
@@ -589,16 +688,29 @@ final class RemoteServerBrowsingService {
             return
         }
 
+        cacheLogger.notice(
+            "Remote cached comics clear requested scope=server:\(serverID.uuidString, privacy: .public)"
+        )
         do {
             cancelAutomaticCacheTasks(forServerID: serverID)
             guard !hasActiveReaderLease(forServerID: serverID) else {
+                cacheLogger.warning(
+                    "Remote cached comics clear blocked by active reader lease scope=server:\(serverID.uuidString, privacy: .public)"
+                )
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                     "Close the active reader before clearing downloaded comics."
                 )
             }
             try fileManager.removeItem(at: cacheURL)
             invalidateCachedSummaries()
+            cacheLogger.notice(
+                "Remote cached comics clear completed scope=server:\(serverID.uuidString, privacy: .public) removedRoots=1"
+            )
         } catch {
+            let errorDescription = AppLogSanitizer.errorDescription(error)
+            cacheLogger.error(
+                "Remote cached comics clear failed scope=server:\(serverID.uuidString, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
             throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                 "The downloaded remote comic cache could not be cleared. \(error.userFacingMessage)"
             )
@@ -640,11 +752,19 @@ final class RemoteServerBrowsingService {
     }
 
     func clearCachedComic(for reference: RemoteComicFileReference) throws {
+        let logPath = logRemotePath(reference.path)
+        cacheLogger.info(
+            "Remote cached comic clear requested server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public)"
+        )
         cancelAutomaticCacheTask(for: reference)
         guard !hasActiveReaderLease(for: reference) else {
+            cacheLogger.info(
+                "Remote cached comic clear skipped by active reader lease server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public)"
+            )
             return
         }
         var removedAnyCachedFile = false
+        var removedFileCount = 0
 
         for fileURL in allCachedResourceURLs(for: reference) {
             guard fileManager.fileExists(atPath: fileURL.path) else {
@@ -662,7 +782,12 @@ final class RemoteServerBrowsingService {
                     stoppingAt: cacheRootURL(for: nil)
                 )
                 removedAnyCachedFile = true
+                removedFileCount += 1
             } catch {
+                let errorDescription = AppLogSanitizer.errorDescription(error)
+                cacheLogger.error(
+                    "Remote cached comic clear failed server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public) error=\(errorDescription, privacy: .public)"
+                )
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                     "The downloaded copy could not be removed from this device. \(error.userFacingMessage)"
                 )
@@ -672,6 +797,9 @@ final class RemoteServerBrowsingService {
         if removedAnyCachedFile {
             invalidateCachedSummaries()
         }
+        cacheLogger.info(
+            "Remote cached comic clear completed server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public) removedFiles=\(removedFileCount)"
+        )
     }
 
     func cachedAvailability(for reference: RemoteComicFileReference) -> RemoteComicCachedAvailability {
@@ -1635,6 +1763,32 @@ final class RemoteServerBrowsingService {
         }
 
         return normalizeDisplayPath("\(normalizedBasePath)/\(component)")
+    }
+
+    private func logRemotePath(_ path: String) -> String {
+        AppLogSanitizer.path(
+            normalizeDisplayPath(path),
+            preservingLastComponents: 6
+        )
+    }
+
+    private func cacheScopeDescription(for profile: RemoteServerProfile?) -> String {
+        guard let profile else {
+            return "all"
+        }
+
+        return "\(profile.providerKind.rawValue):\(profile.id.uuidString)"
+    }
+
+    private func downloadSourceDescription(_ source: RemoteComicDownloadResult.Source) -> String {
+        switch source {
+        case .downloaded:
+            return "downloaded"
+        case .cachedCurrent:
+            return "cachedCurrent"
+        case .cachedFallback:
+            return "cachedFallback"
+        }
     }
 
     private func isSkippableDirectoryEntry(_ name: String) -> Bool {

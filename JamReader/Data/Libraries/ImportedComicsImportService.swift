@@ -1,6 +1,6 @@
 import CryptoKit
 import Foundation
-import os.log
+import os
 
 extension Notification.Name {
     nonisolated static let libraryContentsDidChange = Notification.Name("LibraryContentsDidChange")
@@ -31,7 +31,7 @@ final class ImportedComicsImportService {
     private let fileManager: FileManager
     private let databaseInspector: SQLiteDatabaseInspector
     private let databaseReader: LibraryDatabaseReader
-    private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "ImportedComicsImport")
+    private let logger = AppLog.libraryImport
 
     private let supportedComicFileExtensions = SupportedComicFormats.comicFileExtensions
     init(
@@ -76,7 +76,7 @@ final class ImportedComicsImportService {
             for: destinationResolution.descriptor
         )
         let destinationDirectoryURL = destinationAccessSession.sourceURL.standardizedFileURL
-        let destinationDirectoryPath = destinationDirectoryURL.path
+        let destinationDirectoryPath = AppLogSanitizer.path(destinationDirectoryURL.path)
         let destinationDatabaseURL = storageManager.databaseURL(for: destinationResolution.descriptor)
 
         var importedComicCount = 0
@@ -154,9 +154,12 @@ final class ImportedComicsImportService {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                let importedFileNames = importedDestinationFileURLs.map { $0.lastPathComponent }.joined(separator: ", ")
+                let importedFileNames = AppLogSanitizer.namesPreview(
+                    importedDestinationFileURLs.map(\.lastPathComponent)
+                )
+                let errorDescription = AppLogSanitizer.errorDescription(error)
                 logger.error(
-                    "Automatic indexing failed for library \(destinationResolution.descriptor.id.uuidString, privacy: .public) at \(destinationDirectoryPath, privacy: .public). Imported files: \(importedFileNames, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                    "Automatic indexing failed for library \(destinationResolution.descriptor.id.uuidString, privacy: .public) at \(destinationDirectoryPath, privacy: .public). Imported files: \(importedFileNames, privacy: .public). Error: \(errorDescription, privacy: .public)"
                 )
                 scanSummary = nil
                 scanErrorMessage = error.userFacingMessage
@@ -468,8 +471,10 @@ final class ImportedComicsImportService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            let sourcePath = AppLogSanitizer.path(sourceRootURL.path)
+            let errorDescription = AppLogSanitizer.errorDescription(error)
             logger.warning(
-                "Progressive import indexing failed for library \(descriptor.id.uuidString, privacy: .public) at \(sourceRootURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                "Progressive import indexing failed for library \(descriptor.id.uuidString, privacy: .public) at \(sourcePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
             )
         }
     }
@@ -492,8 +497,9 @@ final class ImportedComicsImportService {
             return initialSummary
         }
 
+        let sourcePath = AppLogSanitizer.path(sourceRootURL.path)
         logger.warning(
-            "Imported comics validation requested recovery for library \(descriptor.id.uuidString, privacy: .public). Expected comics >= \(expectedMinimumComicCount), current indexed comics=\(currentIndexedComicCount), sourceRoot=\(sourceRootURL.path, privacy: .public)"
+            "Imported comics validation requested recovery for library \(descriptor.id.uuidString, privacy: .public). Expected comics >= \(expectedMinimumComicCount), current indexed comics=\(currentIndexedComicCount), sourceRoot=\(sourcePath, privacy: .public)"
         )
 
         try databaseBootstrapper.ensureDatabaseExists(at: databaseURL)
@@ -520,7 +526,7 @@ final class ImportedComicsImportService {
         else {
             let summary = databaseInspector.inspectDatabase(at: databaseURL)
             logger.error(
-                "Imported comics recovery scan did not index expected content for library \(descriptor.id.uuidString, privacy: .public). Summary exists=\(summary.exists) folders=\(summary.folderCount) comics=\(summary.comicCount) sourceRoot=\(sourceRootURL.path, privacy: .public)"
+                "Imported comics recovery scan did not index expected content for library \(descriptor.id.uuidString, privacy: .public). Summary exists=\(summary.exists) folders=\(summary.folderCount) comics=\(summary.comicCount) sourceRoot=\(sourcePath, privacy: .public)"
             )
             throw NSError(
                 domain: "ImportedComicsImportService",

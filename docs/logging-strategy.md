@@ -1,0 +1,47 @@
+# JamReader 日志策略
+
+更新时间：2026-07-07
+
+目标：日志用于追踪 App 动作和复盘问题，不用于记录用户内容全文。日志应覆盖关键业务入口、成功/失败结果、缓存和持久化边界，同时避免在滚动、缩略图预热、分块读取等高频路径中产生噪声。
+
+## 统一入口
+
+运行时代码统一使用 `AppLog` 中的 category：
+
+- `AppLog.library`：书库加载、刷新、删除、组织关系等。
+- `AppLog.libraryImport`：本地/远程导入、目标库解析、复制移动、索引恢复。
+- `AppLog.libraryIndexing`：扫描、hash、数据库同步、封面索引。
+- `AppLog.remote`：SMB/WebDAV 浏览、在线打开、下载、批量离线。
+- `AppLog.remoteCache`：离线缓存、辅助缓存、cache policy、active reader lease。
+- `AppLog.reader`：打开 reader、远程/本地 session、保存进度、页面保存。
+- `AppLog.persistence`：UserDefaults、SQLite、文件持久化失败边界。
+- `AppLog.ui`：只记录影响业务状态的 UI 协调，不记录普通点击和滚动。
+
+## 输出规则
+
+- 使用 `AppLogSanitizer.path` 打印本地路径或远程路径，只保留末尾关键组件。
+- 使用 `AppLogSanitizer.url` 打印 URL，自动去掉 username、password、query、fragment。
+- 使用 `AppLogSanitizer.namesPreview` 打印文件列表，默认最多 8 个条目。
+- 使用 `AppLogSanitizer.errorDescription` 打印错误，默认最多 500 个字符。
+- 不打印密码、token、authorization header、完整用户目录、完整书名列表、图片数据、XML/HTML/PDF/EPUB 内容。
+
+## 推荐日志级别
+
+- `notice`：用户可感知的重要动作，例如清缓存、应用缓存策略。
+- `info`：普通业务动作，例如远程目录加载完成、单本下载完成。
+- `warning`：可恢复但需要关注，例如索引恢复、active lease 阻止清理、零漫画扫描结果。
+- `error`：失败且需要用户提示或开发排查，例如数据库同步失败、远程连接失败、下载失败。
+
+## 需要继续补的区域
+
+- Reader open pipeline：记录本地、远程流式、远程缓存 fallback、失败原因。
+- Library list ViewModel：记录新增/删除/重命名 library 和 bookmark 恢复失败。
+- Remote ViewModel：记录远程导入、本地离线、浏览历史删除和缓存清理后的 UI 状态刷新。
+- Persistence stores：记录读取失败和写入失败，但不要记录完整持久化 payload。
+
+## 不建议补日志的区域
+
+- 每一页图片解码、缩放、滚动、预热和 cell 复用。
+- SMB/WebDAV 分块读取每个 chunk。
+- 缩略图列表中每个 item 的成功加载。
+- SwiftUI body、UIKit layout pass、频繁触发的 progress 回调。

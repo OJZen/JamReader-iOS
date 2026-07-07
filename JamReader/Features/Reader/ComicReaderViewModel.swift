@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 @MainActor
 final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
@@ -34,6 +35,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     private var saveCurrentPageToken: UUID?
     private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     private var pendingProgressPersistenceTask: Task<Void, Never>?
+    private let logger = AppLog.reader
 
     init(
         request: ComicOpenRequest,
@@ -265,6 +267,12 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         startLoadWatchdog(token: token)
 
         let request = request
+        let requestTitle = AppLogSanitizer.truncated(request.displayTitle)
+        let fallbackPath = AppLogSanitizer.path(request.fallbackDocumentURL.path)
+        logger.info(
+            "Reader open requested kind=\(Self.logRequestKind(request), privacy: .public) title=\(requestTitle, privacy: .public) fallback=\(fallbackPath, privacy: .public)"
+        )
+
         loadTask = Task { [weak self] in
             guard let self else {
                 return
@@ -325,6 +333,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         currentLoadToken = nil
         loadState = .failed("Opening was canceled.")
         alert = nil
+        logger.notice(
+            "Reader open canceled title=\(AppLogSanitizer.truncated(self.request.displayTitle), privacy: .public)"
+        )
     }
 
     func setSpreadMode(_ spreadMode: ReaderSpreadMode) {
@@ -548,6 +559,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 guard self?.saveCurrentPageToken == token else {
                     return
                 }
+                self?.logger.info(
+                    "Reader page saved to Photos page=\(pageIndex + 1) name=\(AppLogSanitizer.truncated(pageName), privacy: .public)"
+                )
                 self?.saveCurrentPageTask = nil
                 self?.saveCurrentPageToken = nil
                 self?.isSavingCurrentPageToPhotoLibrary = false
@@ -557,6 +571,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 guard self?.saveCurrentPageToken == token else {
                     return
                 }
+                self?.logger.notice("Reader page save canceled page=\(pageIndex + 1)")
                 self?.saveCurrentPageTask = nil
                 self?.saveCurrentPageToken = nil
                 self?.isSavingCurrentPageToPhotoLibrary = false
@@ -565,6 +580,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 guard self?.saveCurrentPageToken == token else {
                     return
                 }
+                let errorDescription = AppLogSanitizer.errorDescription(error)
+                self?.logger.error(
+                    "Reader page save failed page=\(pageIndex + 1) name=\(AppLogSanitizer.truncated(pageName), privacy: .public) error=\(errorDescription, privacy: .public)"
+                )
                 self?.saveCurrentPageTask = nil
                 self?.saveCurrentPageToken = nil
                 self?.isSavingCurrentPageToPhotoLibrary = false
@@ -693,6 +712,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         loadTask = nil
         currentLoadToken = nil
         applyReadySession(session, document: document, replacingCurrentDocument: true)
+        let documentPath = AppLogSanitizer.path(document.fileURL.path)
+        logger.info(
+            "Reader open completed session=\(session.id, privacy: .public) scope=\(Self.logSessionScope(session), privacy: .public) pages=\(document.pageCount ?? -1) path=\(documentPath, privacy: .public)"
+        )
         persistProgress()
         startBackgroundDownloadIfNeeded(for: session)
     }
@@ -705,6 +728,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         guard currentLoadToken == token else {
             return
         }
+        logger.error(
+            "Reader open failed title=\(AppLogSanitizer.truncated(self.request.displayTitle), privacy: .public) message=\(AppLogSanitizer.truncated(message), privacy: .public)"
+        )
         loadWatchdogTask?.cancel()
         loadTask = nil
         currentLoadToken = nil
@@ -760,6 +786,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             guard self?.currentLoadToken == token else {
                 return
             }
+            self?.logger.error(
+                "Reader open timed out title=\(AppLogSanitizer.truncated(self?.request.displayTitle ?? "<unknown>"), privacy: .public)"
+            )
             self?.loadTask?.cancel()
             self?.loadTask = nil
             self?.currentLoadToken = nil
@@ -893,6 +922,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             lastPersistedProgressSnapshot = snapshot
             applyStateWriteResult(result)
         } catch {
+            logger.error(
+                "Reader progress save failed session=\(session.id, privacy: .public) page=\(snapshot.pageIndex + 1) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Save Progress", message: error.userFacingMessage)
         }
     }
@@ -1074,5 +1106,28 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             return 0
         }
         return min(max(Int(rating.rounded()), 0), 5)
+    }
+
+    nonisolated private static func logRequestKind(_ request: ComicOpenRequest) -> String {
+        switch request {
+        case .library:
+            return "library"
+        case .remote:
+            return "remote"
+        case .file:
+            return "file"
+        }
+    }
+
+    nonisolated private static func logSessionScope(_ session: ComicReaderSession) -> String {
+        switch session.stateScope {
+        case .library(let descriptor, _, let comicID):
+            return "library:\(descriptor.id.uuidString):comic:\(comicID)"
+        case .remote(let profile, let reference):
+            let path = AppLogSanitizer.path(reference.path, preservingLastComponents: 3)
+            return "remote:\(profile.providerKind.rawValue):\(profile.id.uuidString):\(path)"
+        case .transient:
+            return "transient"
+        }
     }
 }

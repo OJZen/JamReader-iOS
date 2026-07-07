@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import os.log
+import os
 import UIKit
 
 @MainActor
@@ -39,7 +39,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private let importedComicsImportService: ImportedComicsImportService
     private let comicRemovalService: LibraryComicRemovalService
     private let databaseInspector = SQLiteDatabaseInspector()
-    private let logger = Logger(subsystem: "ooou.fun.jamreader", category: "LibraryBrowser")
+    private let logger = AppLog.library
 
     private let metadataRootURL: URL
     private let databaseURL: URL
@@ -616,8 +616,11 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                             summary: summary
                         )
                     case .failure(let error):
+                        let sourcePath = AppLogSanitizer.path(sourceURL.path)
+                        let databasePath = AppLogSanitizer.path(databaseURL.path)
+                        let errorDescription = AppLogSanitizer.errorDescription(error)
                         self.logger.error(
-                            "Failed to initialize library \(self.descriptor.id.uuidString, privacy: .public) from \(sourceURL.path, privacy: .public). Database: \(databaseURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                            "Failed to initialize library \(self.descriptor.id.uuidString, privacy: .public) from \(sourcePath, privacy: .public). Database: \(databasePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
                         )
                         self.alert = AppAlertState(
                             title: "Failed to Initialize Library",
@@ -690,8 +693,11 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                             summary: summary
                         )
                     case .failure(let error):
+                        let sourcePath = AppLogSanitizer.path(sourceURL.path)
+                        let databasePath = AppLogSanitizer.path(databaseURL.path)
+                        let errorDescription = AppLogSanitizer.errorDescription(error)
                         self.logger.error(
-                            "Failed to refresh library \(self.descriptor.id.uuidString, privacy: .public) from \(sourceURL.path, privacy: .public). Database: \(databaseURL.path, privacy: .public). Error: \(String(describing: error), privacy: .public)"
+                            "Failed to refresh library \(self.descriptor.id.uuidString, privacy: .public) from \(sourcePath, privacy: .public). Database: \(databasePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
                         )
                         self.alert = AppAlertState(
                             title: "Failed to Refresh Library",
