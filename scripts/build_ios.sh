@@ -8,6 +8,9 @@ MUPDF_ROOT="${MUPDF_ROOT:-$PROJECT_ROOT/.mupdf/mupdf-1.27.2}"
 MUPDF_LIB_DIR="$MUPDF_ROOT/build/ios-arm64"
 MUPDF_XCODE_ARGS=()
 
+echo "[build_ios] Running logging hygiene checks..."
+"$PROJECT_ROOT/scripts/check_logging_hygiene.sh"
+
 if [[ -f "$MUPDF_ROOT/include/mupdf/fitz.h" \
   && -f "$MUPDF_LIB_DIR/libmupdf.a" \
   && -f "$MUPDF_LIB_DIR/libmupdf-third.a" ]]; then

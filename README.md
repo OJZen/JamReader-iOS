@@ -51,6 +51,12 @@ Supported format policy check:
 ./scripts/check_supported_formats_consistency.sh
 ```
 
+Logging hygiene check:
+
+```bash
+./scripts/check_logging_hygiene.sh
+```
+
 ## Maintenance Notes
 
 - [Maintenance pitfalls and regression checklist](docs/maintenance-pitfalls.md)
