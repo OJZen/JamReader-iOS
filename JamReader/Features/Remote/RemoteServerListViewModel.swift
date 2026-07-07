@@ -405,7 +405,7 @@ final class RemoteServerListViewModel: ObservableObject {
 
     func refreshRecentActivity() {
         let activeServerIDs = Set(profiles.map(\.id))
-        let allSessions = (try? readingProgressStore.loadSessions()) ?? []
+        let allSessions = loadReadingSessionsForViewState(reason: "recentActivity")
 
         latestSessionsByServerID = allSessions.reduce(into: [:]) { result, session in
             guard activeServerIDs.contains(session.serverID),
@@ -425,7 +425,7 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func recentSessions(for profile: RemoteServerProfile) -> [RemoteComicReadingSession] {
-        ((try? readingProgressStore.loadSessions()) ?? []).filter { $0.matches(profile: profile) }
+        loadReadingSessionsForViewState(reason: "profileHistory").filter { $0.matches(profile: profile) }
     }
 
     func deleteRecentSession(_ session: RemoteComicReadingSession) {
@@ -540,7 +540,7 @@ final class RemoteServerListViewModel: ObservableObject {
 
     private func refreshShortcutCount() {
         let activeProfilesByServerID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-        let allShortcuts = (try? folderShortcutStore.load()) ?? []
+        let allShortcuts = loadFolderShortcutsForViewState(reason: "shortcutCount")
         let scopedShortcuts = allShortcuts.filter { shortcut in
             guard let profile = activeProfilesByServerID[shortcut.serverID] else {
                 return false
@@ -556,7 +556,7 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     private func refreshCacheSummaries() {
-        let allSessions = (try? readingProgressStore.loadSessions()) ?? []
+        let allSessions = loadReadingSessionsForViewState(reason: "cacheSummary")
 
         cacheSummaryByServerID = profiles.reduce(into: [:]) { result, profile in
             var fileCount = 0
@@ -578,6 +578,28 @@ final class RemoteServerListViewModel: ObservableObject {
                 fileCount: fileCount,
                 totalBytes: totalBytes
             )
+        }
+    }
+
+    private func loadReadingSessionsForViewState(reason: String) -> [RemoteComicReadingSession] {
+        do {
+            return try readingProgressStore.loadSessions()
+        } catch {
+            logger.warning(
+                "Remote server list reading history fallback reason=\(reason, privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return []
+        }
+    }
+
+    private func loadFolderShortcutsForViewState(reason: String) -> [RemoteFolderShortcut] {
+        do {
+            return try folderShortcutStore.load()
+        } catch {
+            logger.warning(
+                "Remote server list folder shortcuts fallback reason=\(reason, privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return []
         }
     }
 }
