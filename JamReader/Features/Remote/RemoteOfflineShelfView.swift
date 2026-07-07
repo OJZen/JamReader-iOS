@@ -1,6 +1,7 @@
 import Combine
 import SwiftUI
 import UIKit
+import os
 
 private enum RemoteOfflineShelfLayoutMetrics {
     static let horizontalInset: CGFloat = 12
@@ -113,6 +114,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private let remoteReadingProgressStore: RemoteReadingProgressStore
     private var hasLoaded = false
+    private let logger = AppLog.remoteCache
 
     init(dependencies: AppDependencies) {
         self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
@@ -139,10 +141,17 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             isLoading = false
         }
 
+        logger.info("Remote offline shelf load requested forceRefresh=\(forceRefresh)")
         do {
             try rebuildEntries(forceRefresh: forceRefresh)
+            logger.info(
+                "Remote offline shelf load completed entries=\(self.entries.count) cacheFiles=\(self.cacheSummary.fileCount) cacheBytes=\(self.cacheSummary.totalBytes)"
+            )
             alert = nil
         } catch {
+            logger.error(
+                "Remote offline shelf load failed forceRefresh=\(forceRefresh) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             entries = []
             cacheSummary = .empty
             alert = BrowseHomeAlert(
@@ -154,6 +163,10 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     func refreshDownloadedCopy(for entry: RemoteOfflineComicEntry) async {
         feedback = nil
+        let pathForLog = AppLogSanitizer.path(entry.session.path)
+        logger.notice(
+            "Remote offline copy refresh requested serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public)"
+        )
 
         await activeOperation {
             let result = try await remoteServerBrowsingService.downloadComicFile(
@@ -162,6 +175,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 forceRefresh: true
             )
             try rebuildEntries(forceRefresh: true)
+            logger.info(
+                "Remote offline copy refresh completed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) source=\(Self.downloadSourceLogValue(result.source), privacy: .public)"
+            )
 
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Updated",
@@ -174,12 +190,19 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     func removeDownloadedCopy(for entry: RemoteOfflineComicEntry) {
         feedback = nil
+        let pathForLog = AppLogSanitizer.path(entry.session.path)
+        logger.notice(
+            "Remote offline copy remove requested serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public)"
+        )
 
         do {
             try remoteServerBrowsingService.clearCachedComic(
                 for: entry.session.resolvedComicFileReference(for: entry.profile)
             )
             try rebuildEntries(forceRefresh: true)
+            logger.info(
+                "Remote offline copy remove completed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) remaining=\(self.entries.count)"
+            )
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Removed",
                 message: "\(entry.session.displayName) was removed from this device.",
@@ -187,6 +210,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 autoDismissAfter: 2.6
             )
         } catch {
+            logger.error(
+                "Remote offline copy remove failed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = BrowseHomeAlert(
                 title: "Remove Downloaded Copy Failed",
                 message: error.userFacingMessage
@@ -196,12 +222,18 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     func clearDownloadedCopies(for profile: RemoteServerProfile, removedCount: Int) {
         feedback = nil
+        logger.notice(
+            "Remote offline copies clear requested serverID=\(profile.id.uuidString, privacy: .public) count=\(removedCount)"
+        )
 
         do {
             try remoteServerBrowsingService.clearCachedComics(for: profile)
             try remoteReadingProgressStore.deleteSessions(for: profile)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             try rebuildEntries(forceRefresh: true)
+            logger.info(
+                "Remote offline copies clear completed serverID=\(profile.id.uuidString, privacy: .public) requestedCount=\(removedCount) remaining=\(self.entries.count)"
+            )
             let copyWord = removedCount == 1 ? "copy" : "copies"
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copies Removed",
@@ -210,6 +242,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 autoDismissAfter: 3.0
             )
         } catch {
+            logger.error(
+                "Remote offline copies clear failed serverID=\(profile.id.uuidString, privacy: .public) requestedCount=\(removedCount) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = BrowseHomeAlert(
                 title: "Clear Downloaded Copies Failed",
                 message: error.userFacingMessage
@@ -227,6 +262,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         do {
             try await operation()
         } catch {
+            logger.error(
+                "Remote offline shelf action failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             try? rebuildEntries(forceRefresh: true)
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Action Failed",
@@ -256,6 +294,17 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             return "\(entry.session.displayName) is already current on this device."
         case .cachedFallback(let message):
             return message
+        }
+    }
+
+    nonisolated private static func downloadSourceLogValue(_ source: RemoteComicDownloadResult.Source) -> String {
+        switch source {
+        case .downloaded:
+            return "downloaded"
+        case .cachedCurrent:
+            return "cachedCurrent"
+        case .cachedFallback:
+            return "cachedFallback"
         }
     }
 }
