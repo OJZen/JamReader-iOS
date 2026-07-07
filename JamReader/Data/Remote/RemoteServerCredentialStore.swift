@@ -40,7 +40,7 @@ final class RemoteServerCredentialStore {
             guard let data = item as? Data,
                   let password = String(data: data, encoding: .utf8) else {
                 AppLog.persistence.error(
-                    "Remote credential load failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) reason=invalidPasswordData"
+                    "Remote credential load failed referenceID=\(Self.logIdentifier(for: referenceKey), privacy: .public) reason=invalidPasswordData"
                 )
                 throw RemoteServerCredentialStoreError.invalidPasswordData
             }
@@ -49,7 +49,7 @@ final class RemoteServerCredentialStore {
             return nil
         default:
             AppLog.persistence.error(
-                "Remote credential load failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) status=\(status)"
+                "Remote credential load failed referenceID=\(Self.logIdentifier(for: referenceKey), privacy: .public) status=\(status)"
             )
             throw RemoteServerCredentialStoreError.unexpectedStatus(status)
         }
@@ -75,7 +75,7 @@ final class RemoteServerCredentialStore {
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         guard status == errSecSuccess else {
             AppLog.persistence.error(
-                "Remote credential save failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) status=\(status)"
+                "Remote credential save failed referenceID=\(Self.logIdentifier(for: referenceKey), privacy: .public) status=\(status)"
             )
             throw RemoteServerCredentialStoreError.unexpectedStatus(status)
         }
@@ -91,9 +91,13 @@ final class RemoteServerCredentialStore {
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             AppLog.persistence.error(
-                "Remote credential delete failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) status=\(status)"
+                "Remote credential delete failed referenceID=\(Self.logIdentifier(for: referenceKey), privacy: .public) status=\(status)"
             )
             throw RemoteServerCredentialStoreError.unexpectedStatus(status)
         }
+    }
+
+    private static func logIdentifier(for referenceKey: String) -> String {
+        AppLogSanitizer.hashedIdentifier(referenceKey)
     }
 }

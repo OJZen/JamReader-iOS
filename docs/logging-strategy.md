@@ -25,7 +25,9 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - 使用 `AppLogSanitizer.url` 打印 URL，自动去掉 username、password、query、fragment。
 - 使用 `AppLogSanitizer.namesPreview` 打印文件列表，默认最多 8 个条目。
 - 使用 `AppLogSanitizer.errorDescription` 打印错误，默认最多 500 个字符。
+- 使用 `AppLogSanitizer.hashedIdentifier` 打印凭据引用、端点标识等可关联但不应原样公开的稳定 ID。
 - 不打印密码、token、authorization header、完整用户目录、完整书名列表、图片数据、XML/HTML/PDF/EPUB 内容。
+- 修改日志相关代码后运行 `scripts/check_logging_hygiene.sh`，用于静态拦截直接输出、绕过 `AppLog`、默认 os_log 和明显凭据字段。
 
 ## 推荐日志级别
 
@@ -61,7 +63,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。
 - Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本、失败后列表重建失败，以及离线快照过滤摘要。
 - Saved remote folders：已记录收藏远程文件夹列表加载、快照过滤、收藏状态判断 fallback、重命名和删除。
-- Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、SQLite summary inspection、维护状态记录的失败边界。
+- Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、SQLite summary inspection、维护状态记录的失败边界；Keychain 凭据引用只输出哈希 ID。
 
 ## 后续建议补测试的区域
 
