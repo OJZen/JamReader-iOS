@@ -54,7 +54,7 @@
 - Remote cache settings：已记录设置页发起的缓存策略变更、下载/辅助缓存/缩略图/导入书库清理。
 - Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理和浏览历史删除。
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
-- Remote/browser reader preferences：已记录远程浏览显示/排序偏好、阅读器布局偏好保存，以及异常 rawValue 忽略。
+- Remote/browser reader preferences：已记录远程浏览显示/排序偏好、阅读器布局偏好保存、cache policy legacy/异常值处理，以及异常 rawValue 忽略。
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。
 - Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本。
 - Saved remote folders：已记录收藏远程文件夹列表加载、重命名和删除。

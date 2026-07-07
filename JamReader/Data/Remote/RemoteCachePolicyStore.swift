@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum RemoteComicCachePolicyPreset: String, CaseIterable, Identifiable {
     case fiveHundredMB = "500mb"
@@ -62,30 +63,33 @@ struct RemoteComicCachePolicy: Hashable {
 
 final class RemoteCachePolicyStore {
     private let userDefaults: UserDefaults
+    private let logger = AppLog.remoteCache
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
     }
 
     func loadPreset() -> RemoteComicCachePolicyPreset {
-        if let rawValue = userDefaults.string(forKey: storageKey),
-           let preset = RemoteComicCachePolicyPreset(rawValue: rawValue) {
+        guard let rawValue = userDefaults.string(forKey: storageKey) else {
+            return .oneGigabyte
+        }
+
+        if let preset = RemoteComicCachePolicyPreset(rawValue: rawValue) {
             return preset
         }
 
-        if let legacyRawValue = userDefaults.string(forKey: storageKey) {
-            switch legacyRawValue {
-            case "compact":
-                return .fiveHundredMB
-            case "balanced":
-                return .twoGigabytes
-            case "extended":
-                return .fourGigabytes
-            default:
-                break
-            }
+        if let migratedPreset = legacyPreset(for: rawValue) {
+            userDefaults.set(migratedPreset.rawValue, forKey: storageKey)
+            logger.info(
+                "Remote cache policy legacy preset migrated from=\(AppLogSanitizer.truncated(rawValue), privacy: .public) to=\(migratedPreset.rawValue, privacy: .public)"
+            )
+            return migratedPreset
         }
 
+        userDefaults.set(RemoteComicCachePolicyPreset.oneGigabyte.rawValue, forKey: storageKey)
+        logger.warning(
+            "Remote cache policy preset ignored rawValue=\(AppLogSanitizer.truncated(rawValue), privacy: .public) fallback=\(RemoteComicCachePolicyPreset.oneGigabyte.rawValue, privacy: .public)"
+        )
         return .oneGigabyte
     }
 
@@ -95,6 +99,19 @@ final class RemoteCachePolicyStore {
 
     func savePreset(_ preset: RemoteComicCachePolicyPreset) {
         userDefaults.set(preset.rawValue, forKey: storageKey)
+    }
+
+    private func legacyPreset(for rawValue: String) -> RemoteComicCachePolicyPreset? {
+        switch rawValue {
+        case "compact":
+            return .fiveHundredMB
+        case "balanced":
+            return .twoGigabytes
+        case "extended":
+            return .fourGigabytes
+        default:
+            return nil
+        }
     }
 
     private let storageKey = "remoteBrowser.cachePolicyPreset"
