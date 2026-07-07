@@ -55,11 +55,11 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Remote SMB connection pool：已记录连接创建/复用/失败/驱逐/空闲清理、远程 file reader cleanup 失败，端点仅输出脱敏哈希 ID。
 - Remote background import：已记录后台导入开始、拒绝、完成、取消和反馈展示。
 - Remote cache settings：已记录设置页发起的缓存策略变更、下载/辅助缓存/缩略图/导入书库清理，以及维护动作附带状态清理 fallback。
-- Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理、浏览历史删除、历史/收藏状态读取 fallback，以及服务器变更/删除后的附带清理失败。
+- Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理、浏览历史删除、历史/收藏状态读取 fallback、已保存密码状态读取失败，以及服务器变更/删除后的附带清理失败。
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存、删除离线副本、临时导入下载清理失败，以及进度/历史状态读取 fallback。
 - Remote/browser reader preferences：已记录远程浏览显示/排序偏好、阅读器布局偏好保存、cache policy legacy/异常值处理，以及异常 rawValue 忽略。
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。
-- Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本，以及离线快照过滤摘要。
+- Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本、失败后列表重建失败，以及离线快照过滤摘要。
 - Saved remote folders：已记录收藏远程文件夹列表加载、快照过滤、收藏状态判断 fallback、重命名和删除。
 - Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、SQLite summary inspection、维护状态记录的失败边界。
 

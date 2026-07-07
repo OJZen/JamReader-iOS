@@ -265,7 +265,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             logger.error(
                 "Remote offline shelf action failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            try? rebuildEntries(forceRefresh: true)
+            do {
+                try rebuildEntries(forceRefresh: true)
+            } catch {
+                logger.warning(
+                    "Remote offline shelf rebuild after action failure failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Action Failed",
                 message: error.userFacingMessage

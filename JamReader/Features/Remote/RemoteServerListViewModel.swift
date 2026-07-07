@@ -156,7 +156,14 @@ final class RemoteServerListViewModel: ObservableObject {
     func makeEditDraft(for profile: RemoteServerProfile) -> RemoteServerEditorDraft {
         let hasStoredPassword: Bool
         if let passwordReferenceKey = profile.passwordReferenceKey {
-            hasStoredPassword = (try? credentialStore.loadPassword(for: passwordReferenceKey)) != nil
+            do {
+                hasStoredPassword = try credentialStore.loadPassword(for: passwordReferenceKey) != nil
+            } catch {
+                hasStoredPassword = false
+                logger.warning(
+                    "Remote server stored password status load failed serverID=\(profile.id.uuidString, privacy: .public) provider=\(profile.providerKind.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
         } else {
             hasStoredPassword = false
         }
