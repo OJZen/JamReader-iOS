@@ -936,9 +936,22 @@ final class LibraryIndexingService {
         libraryID: UUID,
         sourceRootURL: URL
     ) {
-        guard (try? assetStore.ensureLibraryDirectories(for: libraryID)) != nil,
-              let folderCoversRootURL = try? assetStore.folderCoversRootURL(for: libraryID)
-        else {
+        do {
+            try assetStore.ensureLibraryDirectories(for: libraryID)
+        } catch {
+            logger.warning(
+                "Library folder cover reconcile skipped libraryID=\(libraryID.uuidString, privacy: .public) reason=ensureDirectoriesFailed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return
+        }
+
+        let folderCoversRootURL: URL
+        do {
+            folderCoversRootURL = try assetStore.folderCoversRootURL(for: libraryID)
+        } catch {
+            logger.warning(
+                "Library folder cover reconcile skipped libraryID=\(libraryID.uuidString, privacy: .public) reason=rootURLFailed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             return
         }
         let desiredFileNames = Set(plans.map { "\($0.folderID).jpg" })
@@ -949,7 +962,13 @@ final class LibraryIndexingService {
         )) ?? []
 
         for fileURL in existingFileURLs where !desiredFileNames.contains(fileURL.lastPathComponent) {
-            try? fileManager.removeItem(at: fileURL)
+            do {
+                try fileManager.removeItem(at: fileURL)
+            } catch {
+                logger.warning(
+                    "Library folder cover stale file remove failed libraryID=\(libraryID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(fileURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
         }
 
         for plan in plans {
@@ -971,6 +990,9 @@ final class LibraryIndexingService {
             do {
                 try metadataExtractor.saveCover(image, to: coverURL)
             } catch {
+                logger.warning(
+                    "Library folder cover save failed libraryID=\(libraryID.uuidString, privacy: .public) folderID=\(plan.folderID, privacy: .public) path=\(AppLogSanitizer.path(coverURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
                 assetStore.deleteFolderCover(folderID: plan.folderID, libraryID: libraryID)
             }
         }
@@ -1004,7 +1026,13 @@ final class LibraryIndexingService {
                 continue
             }
 
-            try? metadataExtractor.saveCover(coverImage, to: coverURL)
+            do {
+                try metadataExtractor.saveCover(coverImage, to: coverURL)
+            } catch {
+                logger.warning(
+                    "Library folder cover source cache save failed libraryID=\(libraryID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(coverURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             images.append(coverImage)
         }
 

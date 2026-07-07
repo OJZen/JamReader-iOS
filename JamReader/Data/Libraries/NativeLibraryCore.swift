@@ -383,43 +383,132 @@ final class LibraryAssetStore {
     }
 
     func deleteAssets(for libraryID: UUID) {
-        guard let rootURL = try? rootURL(for: libraryID),
-              fileManager.fileExists(atPath: rootURL.path)
-        else {
+        let rootURL: URL
+        do {
+            rootURL = try self.rootURL(for: libraryID)
+        } catch {
+            logAssetCleanupFailure(
+                libraryID: libraryID,
+                item: "assetsRoot",
+                path: nil,
+                error: error
+            )
             return
         }
 
-        try? fileManager.removeItem(at: rootURL)
+        guard fileManager.fileExists(atPath: rootURL.path) else {
+            return
+        }
+
+        removeAssetIfPossible(
+            at: rootURL,
+            libraryID: libraryID,
+            item: "assetsRoot"
+        )
     }
 
     func deleteCover(hash: String, libraryID: UUID) {
-        guard let coverURL = try? plannedCoverURL(hash: hash, libraryID: libraryID),
-              fileManager.fileExists(atPath: coverURL.path)
-        else {
+        let coverURL: URL
+        do {
+            coverURL = try plannedCoverURL(hash: hash, libraryID: libraryID)
+        } catch {
+            logAssetCleanupFailure(
+                libraryID: libraryID,
+                item: "coverHash",
+                path: nil,
+                error: error
+            )
             return
         }
 
-        try? fileManager.removeItem(at: coverURL)
+        guard fileManager.fileExists(atPath: coverURL.path) else {
+            return
+        }
+
+        removeAssetIfPossible(
+            at: coverURL,
+            libraryID: libraryID,
+            item: "coverHash"
+        )
     }
 
     func deleteCover(assetKey: String, libraryID: UUID) {
-        guard let coverURL = try? plannedCoverURL(assetKey: assetKey, libraryID: libraryID),
-              fileManager.fileExists(atPath: coverURL.path)
-        else {
+        let coverURL: URL
+        do {
+            coverURL = try plannedCoverURL(assetKey: assetKey, libraryID: libraryID)
+        } catch {
+            logAssetCleanupFailure(
+                libraryID: libraryID,
+                item: "coverAssetKey",
+                path: nil,
+                error: error
+            )
             return
         }
 
-        try? fileManager.removeItem(at: coverURL)
+        guard fileManager.fileExists(atPath: coverURL.path) else {
+            return
+        }
+
+        removeAssetIfPossible(
+            at: coverURL,
+            libraryID: libraryID,
+            item: "coverAssetKey"
+        )
     }
 
     func deleteFolderCover(folderID: Int64, libraryID: UUID) {
-        guard let coverURL = try? plannedFolderCoverURL(folderID: folderID, libraryID: libraryID),
-              fileManager.fileExists(atPath: coverURL.path)
-        else {
+        let coverURL: URL
+        do {
+            coverURL = try plannedFolderCoverURL(folderID: folderID, libraryID: libraryID)
+        } catch {
+            logAssetCleanupFailure(
+                libraryID: libraryID,
+                item: "folderCover",
+                path: nil,
+                error: error
+            )
             return
         }
 
-        try? fileManager.removeItem(at: coverURL)
+        guard fileManager.fileExists(atPath: coverURL.path) else {
+            return
+        }
+
+        removeAssetIfPossible(
+            at: coverURL,
+            libraryID: libraryID,
+            item: "folderCover"
+        )
+    }
+
+    private func removeAssetIfPossible(
+        at url: URL,
+        libraryID: UUID,
+        item: String
+    ) {
+        do {
+            try fileManager.removeItem(at: url)
+        } catch {
+            logAssetCleanupFailure(
+                libraryID: libraryID,
+                item: item,
+                path: url.path,
+                error: error
+            )
+        }
+    }
+
+    private func logAssetCleanupFailure(
+        libraryID: UUID,
+        item: String,
+        path: String?,
+        error: Error
+    ) {
+        let pathText = path.map { AppLogSanitizer.path($0) } ?? "<unresolved>"
+        AppLog.libraryIndexing.warning(
+            "Library asset cleanup failed libraryID=\(libraryID.uuidString, privacy: .public) item=\(item, privacy: .public) path=\(pathText, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+        )
     }
 }
 
