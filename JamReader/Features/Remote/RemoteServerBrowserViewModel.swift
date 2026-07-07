@@ -305,9 +305,16 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        if let session = try? readingProgressStore.loadProgress(for: reference) {
-            progressByItemID[item.id] = session
-        } else {
+        do {
+            if let session = try readingProgressStore.loadProgress(for: reference) {
+                progressByItemID[item.id] = session
+            } else {
+                progressByItemID.removeValue(forKey: item.id)
+            }
+        } catch {
+            logger.warning(
+                "Remote browser item progress fallback provider=\(self.profile.providerKind.rawValue, privacy: .public) serverID=\(self.profile.id.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             progressByItemID.removeValue(forKey: item.id)
         }
 
