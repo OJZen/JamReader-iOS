@@ -1,13 +1,14 @@
 # JamReader 代码结构与测试建设评估
 
-更新时间：2026-07-06
+更新时间：2026-07-07
 
-本文面向最后开发阶段的维护和回归防护。结论先行：当前项目已经具备较完整的产品功能，但核心业务仍集中在少数超大文件中；在继续拆分前，应先补 XCTest target 和核心业务测试，避免重构过程中误伤远程导入、缓存、书库索引和阅读器状态。
+本文面向最后开发阶段的维护和回归防护。结论先行：当前项目已经具备较完整的产品功能，也已经建立 `JamReaderTests` 回归测试 target；下一阶段应继续补齐高风险业务测试，并在测试保护下拆分远程浏览、导入索引、书库浏览和阅读器 UI 的超大文件。
 
 ## 当前快照
 
 - Swift 文件约 297 个，总量约 7.2 万行。
-- Xcode project 目前只有 `JamReader` 一个 app target，没有 XCTest / UI test target。
+- Xcode project 目前包含 `JamReader` app target 和 `JamReaderTests` XCTest target，暂未建立 UI test target。
+- 已有测试覆盖格式策略、阅读布局、远程 profile/path/cache/WebDAV、远程阅读 session、导入集成、书库扫描数据库、偏好持久化等核心回归点。
 - 体量最大的运行时代码集中在：
   - `JamReader/Data/Remote/RemoteServerBrowsingService.swift`：远程校验、目录浏览、SMB/WebDAV 细节、下载、缓存、封面、递归扫描、range 能力、active lease、缓存裁剪混在一起。
   - `JamReader/Features/Browser/LibraryBrowserView.swift`：书库内容、搜索、选择、多种展示、批量操作、sheet/presenter 桥接、导入入口集中在一个 view。
@@ -20,7 +21,7 @@
 
 ## 拆分原则
 
-1. 先补测试 target，再拆业务文件。没有测试时直接拆 `RemoteServerBrowsingService` / `NativeLibraryState` / reader 容器，回归风险过高。
+1. 先补足高风险测试，再拆业务文件。不要在没有对应测试保护时直接拆 `RemoteServerBrowsingService` / `NativeLibraryState` / reader 容器。
 2. 保留 facade，逐步内部分流。外部调用点先继续使用现有服务名，内部拆成小服务，降低一次性改动范围。
 3. View 只保留状态表达和轻量编排。排序、section 构建、导入计划、缓存策略、路径归一化、文件类型判断都应移到可单测类型。
 4. UIKit 继续负责高频交互。阅读器页面、远程大列表、缩略图列表和手势不要回到 SwiftUI gesture。
@@ -28,17 +29,20 @@
 
 ## 建议拆分路线
 
-### P0：测试基础设施
+### P0：测试基础设施和已完成安全网
 
-先新增 `JamReaderTests` target，使用 XCTest，不必先引入 UI test target。测试目标需要能 `@testable import JamReader`，并提供临时目录、临时 UserDefaults、可替换 FileManager/URLSession/fake remote reader 等测试工具。
+`JamReaderTests` target 已建立，使用 XCTest 和 `@testable import JamReader`。当前已经提供临时目录、临时数据库、可替换 FileManager、URLProtocol stub 等基础设施。短期不急着引入 UI test target，先继续扩展业务回归测试。
 
-建议新增：
+已具备或已经开始沉淀：
 
-- `JamReaderTests/Support/TestTempDirectory.swift`
-- `JamReaderTests/Support/TestFixtures.swift`
-- `JamReaderTests/Support/FakeRemoteRandomAccessFileReader.swift`
 - `JamReaderTests/Support/URLProtocolStub.swift`
-- `JamReaderTests/Support/SQLiteTestHarness.swift`
+- `JamReaderTests/Support/LibraryDatabaseTestHarness.swift`
+- `RemoteHTTPRangeFileReaderTests`
+- `RemoteWebDAVClientTests`
+- `RemoteServerBrowsingServiceCacheTests`
+- `RemoteServerBrowsingServiceWebDAVTests`
+- `ImportedComicsImportServiceIntegrationTests`
+- `LibraryScannerDatabaseTests`
 
 CI 最小命令：
 
@@ -255,13 +259,13 @@ UI test 只保留少量端到端 smoke：
 
 ### M1：测试 target 和第一批纯逻辑测试
 
-目标：不改业务行为，新增测试工程和 20-30 个纯逻辑测试。
+状态：已完成基础目标，`JamReaderTests` 已建立，纯逻辑测试和多组远程/导入/数据库回归测试已经落地。
 
-验收：
+后续补强：
 
-- `xcodebuild test` 可运行。
-- `ComicPageNameSorter`、`ReaderDisplayLayout`、`RemoteServerProfile`、`RemoteDirectoryItem` 有覆盖。
-- 支持格式一致性有测试或脚本约束。
+- 继续把新拆出的 path/cache/download/import coordinator 逻辑放进可单测类型。
+- 对新增支持格式、远程 provider、缓存策略继续同步补测试。
+- 保持 `scripts/check_supported_formats_consistency.sh` 与测试双重约束。
 
 ### M2：远程缓存/导入测试安全网
 
@@ -319,10 +323,9 @@ UI test 只保留少量端到端 smoke：
 
 短期不要先做大规模 View 重构。更合理的顺序是：
 
-1. 新增 XCTest target。
-2. 补纯逻辑测试和格式一致性检查。
-3. 补远程缓存/导入/索引测试。
-4. 保留 facade 拆远程服务和导入索引服务。
-5. 最后拆大 View 和阅读器 UI 文件。
+1. 继续补远程缓存/导入/索引的边界测试。
+2. 保留 facade 拆远程服务和导入索引服务。
+3. 把可测试的 ViewModel/section builder/路径解析逻辑从大 View 中抽出。
+4. 最后拆阅读器 UI 和其他高交互 UIKit 文件，避免在没有真机回归时重写行为。
 
 这样能把“代码更好看”和“未来不再误伤业务”绑定在一起，而不是只做表面整理。

@@ -232,20 +232,20 @@ final class ImportedComicsImportService {
             contentsOf: sortedDescriptors
                 .filter { $0.sourcePath != importedComicsRootPath }
                 .map { descriptor in
-                let accessSnapshot = sourceAccessSnapshot(for: descriptor)
-                let availability = importAvailability(for: descriptor, accessSnapshot: accessSnapshot)
-                return LibraryImportDestinationOption(
-                    selection: .library(descriptor.id),
-                    title: descriptor.name,
-                    status: importStatus(
-                        for: descriptor,
-                        accessSnapshot: accessSnapshot,
+                    let accessSnapshot = sourceAccessSnapshot(for: descriptor)
+                    let availability = importAvailability(for: descriptor, accessSnapshot: accessSnapshot)
+                    return LibraryImportDestinationOption(
+                        selection: .library(descriptor.id),
+                        title: descriptor.name,
+                        status: importStatus(
+                            for: descriptor,
+                            accessSnapshot: accessSnapshot,
+                            availability: availability
+                        ),
+                        detail: nil,
                         availability: availability
-                    ),
-                    detail: nil,
-                    availability: availability
-                )
-            }
+                    )
+                }
         )
 
         return options
@@ -289,8 +289,7 @@ final class ImportedComicsImportService {
     }
 
     private func resolveDestinationLibrary(
-        in descriptors: inout [LibraryDescriptor]
-        ,
+        in descriptors: inout [LibraryDescriptor],
         selection: LibraryImportDestinationSelection
     ) throws -> (descriptor: LibraryDescriptor, wasCreated: Bool) {
         switch selection {
