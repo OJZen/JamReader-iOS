@@ -1621,7 +1621,13 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 continue
             }
 
-            try? browsingService.clearCachedComic(for: reference)
+            do {
+                try browsingService.clearCachedComic(for: reference)
+            } catch {
+                cacheLogger.warning(
+                    "Remote import staged download cleanup failed provider=\(reference.providerKind.rawValue, privacy: .public) serverID=\(reference.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
         }
     }
 

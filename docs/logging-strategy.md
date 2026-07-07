@@ -48,7 +48,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Library metadata batch editing：已记录批量元数据保存的选中数量、字段数量和失败原因。
 - Library browser previews：已记录首页 Continue/Recent/Favorites 预览和计数 fallback。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
-- Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback 和失败原因。
+- Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback、远程进度读取 fallback 和坏缓存清理失败。
 - Reader support services：已记录页面磁盘缓存异常、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败、按需启用的 reader trace。
 - Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略、缓存清理和自动裁剪摘要。
 - Remote WebDAV range probing：已记录 byte-range 探测结果和每个服务器作用域首次探测失败的 fallback。
@@ -56,7 +56,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Remote background import：已记录后台导入开始、拒绝、完成、取消和反馈展示。
 - Remote cache settings：已记录设置页发起的缓存策略变更、下载/辅助缓存/缩略图/导入书库清理，以及维护动作附带状态清理 fallback。
 - Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理、浏览历史删除、历史/收藏状态读取 fallback，以及服务器变更/删除后的附带清理失败。
-- Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存、删除离线副本，以及进度/历史状态读取 fallback。
+- Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存、删除离线副本、临时导入下载清理失败，以及进度/历史状态读取 fallback。
 - Remote/browser reader preferences：已记录远程浏览显示/排序偏好、阅读器布局偏好保存、cache policy legacy/异常值处理，以及异常 rawValue 忽略。
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。
 - Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本，以及离线快照过滤摘要。

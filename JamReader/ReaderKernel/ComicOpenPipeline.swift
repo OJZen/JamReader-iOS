@@ -528,7 +528,13 @@ final class ComicOpenCoordinator {
                 logger.warning(
                     "Reader pipeline remote cache failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=preferLocalCache error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
                 )
-                try? remoteServerBrowsingService.clearCachedComic(for: reference)
+                clearStaleRemoteCacheAfterOpenFailure(
+                    reference,
+                    provider: provider,
+                    serverID: serverID,
+                    remotePath: remotePath,
+                    reason: "preferLocalCache"
+                )
             }
         }
 
@@ -556,7 +562,13 @@ final class ComicOpenCoordinator {
                 logger.warning(
                     "Reader pipeline remote cache failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=currentCache error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
                 )
-                try? remoteServerBrowsingService.clearCachedComic(for: reference)
+                clearStaleRemoteCacheAfterOpenFailure(
+                    reference,
+                    provider: provider,
+                    serverID: serverID,
+                    remotePath: remotePath,
+                    reason: "currentCache"
+                )
             }
         }
 
@@ -727,7 +739,15 @@ final class ComicOpenCoordinator {
         noticeMessage: String?,
         shouldStartBackgroundDownload: Bool
     ) -> ComicReaderSession {
-        let storedProgress = try? remoteReadingProgressStore.loadProgress(for: reference)
+        let storedProgress: RemoteComicReadingSession?
+        do {
+            storedProgress = try remoteReadingProgressStore.loadProgress(for: reference)
+        } catch {
+            logger.warning(
+                "Reader remote progress load fallback provider=\(reference.providerKind.rawValue, privacy: .public) serverID=\(reference.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) result=firstPage error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            storedProgress = nil
+        }
         let initialPageIndex = storedProgress?.pageIndex ?? 0
         return ComicReaderSession(
             id: "remote:\(reference.id)",
@@ -747,6 +767,22 @@ final class ComicOpenCoordinator {
             noticeMessage: noticeMessage,
             shouldStartBackgroundDownload: shouldStartBackgroundDownload
         )
+    }
+
+    private func clearStaleRemoteCacheAfterOpenFailure(
+        _ reference: RemoteComicFileReference,
+        provider: String,
+        serverID: String,
+        remotePath: String,
+        reason: String
+    ) {
+        do {
+            try remoteServerBrowsingService.clearCachedComic(for: reference)
+        } catch {
+            logger.warning(
+                "Reader pipeline stale cache clear failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=\(reason, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     private func makeFileSession(request: ComicFileOpenRequest) -> ComicReaderSession {
