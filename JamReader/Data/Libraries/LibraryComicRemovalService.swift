@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum LibraryComicRemovalError: LocalizedError {
     case unavailable(String)
@@ -16,6 +17,7 @@ final class LibraryComicRemovalService {
     private let databaseWriter: LibraryDatabaseWriter
     private let coverLocator: LibraryCoverLocator
     private let fileManager: FileManager
+    private let logger = AppLog.library
 
     init(
         storageManager: LibraryStorageManager,
@@ -49,39 +51,59 @@ final class LibraryComicRemovalService {
             return
         }
 
+        let libraryID = descriptor.id.uuidString
+        let comicNames = AppLogSanitizer.namesPreview(uniqueComics.map(\.displayTitle))
+        logger.info(
+            "Library comic removal requested libraryID=\(libraryID, privacy: .public) count=\(uniqueComics.count) comics=\(comicNames, privacy: .public)"
+        )
+
         if let message = removalAvailabilityMessage(for: descriptor) {
+            logger.warning(
+                "Library comic removal rejected libraryID=\(libraryID, privacy: .public) count=\(uniqueComics.count) reason=\(AppLogSanitizer.truncated(message), privacy: .public)"
+            )
             throw LibraryComicRemovalError.unavailable(message)
         }
 
         let databaseURL = storageManager.databaseURL(for: descriptor)
         let metadataRootURL = storageManager.metadataRootURL(for: descriptor)
 
-        try storageManager.withScopedSourceAccess(for: descriptor) { session in
-            let sourceRootURL = session.sourceURL.standardizedFileURL
+        do {
+            try storageManager.withScopedSourceAccess(for: descriptor) { session in
+                let sourceRootURL = session.sourceURL.standardizedFileURL
 
-            for comic in uniqueComics {
-                let comicFileURL = resolveComicFileURL(
-                    for: comic,
-                    sourceRootURL: sourceRootURL
-                )
+                for comic in uniqueComics {
+                    let comicFileURL = resolveComicFileURL(
+                        for: comic,
+                        sourceRootURL: sourceRootURL
+                    )
 
-                if fileManager.fileExists(atPath: comicFileURL.path) {
-                    try fileManager.removeItem(at: comicFileURL)
+                    if fileManager.fileExists(atPath: comicFileURL.path) {
+                        try fileManager.removeItem(at: comicFileURL)
+                    }
+
+                    let coverURL = coverLocator.plannedCoverURL(
+                        for: comic,
+                        metadataRootURL: metadataRootURL
+                    )
+                    if fileManager.fileExists(atPath: coverURL.path) {
+                        try? fileManager.removeItem(at: coverURL)
+                    }
                 }
 
-                let coverURL = coverLocator.plannedCoverURL(
-                    for: comic,
-                    metadataRootURL: metadataRootURL
+                try databaseWriter.deleteComics(
+                    uniqueComics.map(\.id),
+                    in: databaseURL
                 )
-                if fileManager.fileExists(atPath: coverURL.path) {
-                    try? fileManager.removeItem(at: coverURL)
-                }
             }
 
-            try databaseWriter.deleteComics(
-                uniqueComics.map(\.id),
-                in: databaseURL
+            logger.info(
+                "Library comic removal completed libraryID=\(libraryID, privacy: .public) count=\(uniqueComics.count)"
             )
+        } catch {
+            logger.error(
+                "Library comic removal failed libraryID=\(libraryID, privacy: .public) count=\(uniqueComics.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
         }
     }
 

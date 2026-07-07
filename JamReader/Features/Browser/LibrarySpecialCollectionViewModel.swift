@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 import UIKit
 
 @MainActor
@@ -22,6 +23,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
     private var accessSession: LibraryAccessSession?
     private var hasLoaded = false
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
+    private let logger = AppLog.library
 
     init(
         descriptor: LibraryDescriptor,
@@ -80,7 +82,13 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 in: databaseURL
             )
             applyUpdatedComic(comic.updatingFavorite(updatedValue))
+            logger.info(
+                "Library special collection favorite updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) value=\(updatedValue)"
+            )
         } catch {
+            logger.error(
+                "Library special collection favorite update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Favorites",
                 message: error.userFacingMessage
@@ -113,8 +121,14 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 ) ? updatedComic : nil
             }
 
+            logger.info(
+                "Library special collection favorite batch updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(selectedComicIDs.count) value=\(isFavorite)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library special collection favorite batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(selectedComicIDs.count) value=\(isFavorite) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Favorites",
                 message: error.userFacingMessage
@@ -134,7 +148,13 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 in: databaseURL
             )
             applyUpdatedComic(comic.updatingReadState(updatedValue))
+            logger.info(
+                "Library special collection read status updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) value=\(updatedValue)"
+            )
         } catch {
+            logger.error(
+                "Library special collection read status update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Read Status",
                 message: error.userFacingMessage
@@ -159,7 +179,13 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 in: databaseURL
             )
             applyUpdatedComic(comic.updatingRating(ratingValue))
+            logger.info(
+                "Library special collection rating updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) rating=\(normalizedRating)"
+            )
         } catch {
+            logger.error(
+                "Library special collection rating update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) rating=\(normalizedRating) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Rating",
                 message: error.userFacingMessage
@@ -195,8 +221,14 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 ) ? updatedComic : nil
             }
 
+            logger.info(
+                "Library special collection read status batch updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(selectedComicIDs.count) value=\(isRead)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library special collection read status batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(selectedComicIDs.count) value=\(isRead) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Read Status",
                 message: error.userFacingMessage
@@ -206,12 +238,22 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
     }
 
     func removeComic(_ comic: LibraryComic) -> Bool {
+        logger.info(
+            "Library special collection remove comic requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id)"
+        )
+
         do {
             try comicRemovalService.removeComic(comic, from: descriptor)
             AppHaptics.warning()
             load()
+            logger.info(
+                "Library special collection remove comic completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library special collection remove comic failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Remove Comic",
                 message: error.userFacingMessage
@@ -260,8 +302,14 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 kind: kind,
                 recentDays: recentDays
             )
+            logger.info(
+                "Library special collection loaded libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(self.comics.count) recentDays=\(self.recentDays)"
+            )
         } catch {
             comics = []
+            logger.error(
+                "Library special collection load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) recentDays=\(self.recentDays) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Load Collection", message: error.userFacingMessage)
         }
     }

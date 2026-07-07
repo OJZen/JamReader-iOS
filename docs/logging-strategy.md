@@ -39,6 +39,8 @@
 ## 当前已覆盖的高价值区域
 
 - Library list ViewModel：已记录书库加载、新增文件夹、创建托管书库、重命名等低频动作。
+- Library organization：已记录标签、书单、集合成员关系、收藏/阅读状态、评分、元数据保存和 ComicInfo 导入。
+- Library comic removal：已记录单本/批量漫画从本地书库移除、只读拒绝和删除失败原因。
 - Library import/indexing：已记录导入、复制移动、索引恢复、扫描同步等结果摘要。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
 - Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback 和失败原因。
@@ -46,6 +48,13 @@
 - Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理和浏览历史删除。
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
 - Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、维护状态记录的失败边界。
+
+## 后续建议补测试的区域
+
+- Library comic removal：需要覆盖只读书库拒绝、去重删除、漫画文件缺失但数据库删除继续执行、封面删除失败不阻断主流程。
+- Library organization：需要覆盖标签/书单增删改、重复名称拦截、集合成员批量移除、批量收藏/阅读状态变更。
+- Metadata editor：需要覆盖 ComicInfo `fillMissing` 和 `overwriteExisting` 两种导入策略，以及保存失败时不更新原始快照。
+- Remote cache/import：需要覆盖不同服务器同名路径隔离、清缓存同时清历史、在线封面读取失败 fallback。
 
 ## 不建议补日志的区域
 

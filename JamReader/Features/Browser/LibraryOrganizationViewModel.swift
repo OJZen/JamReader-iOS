@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 @MainActor
 final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
@@ -18,6 +19,7 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
     private let storageManager: LibraryStorageManager
     private let databaseURL: URL
     private var hasLoaded = false
+    private let logger = AppLog.library
 
     init(
         descriptor: LibraryDescriptor,
@@ -68,8 +70,14 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
         do {
             let snapshot = try databaseReader.loadOrganizationSnapshot(databaseURL: databaseURL)
             collections = snapshot.collections(for: sectionKind)
+            logger.info(
+                "Library organization loaded libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) count=\(self.collections.count)"
+            )
         } catch {
             collections = []
+            logger.error(
+                "Library organization load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Load \(sectionKind.title)",
                 message: error.userFacingMessage
@@ -97,6 +105,10 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             return
         }
 
+        logger.info(
+            "Library organization create requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+        )
+
         do {
             switch sectionKind {
             case .labels:
@@ -113,8 +125,14 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             }
 
             isShowingCreateSheet = false
+            logger.info(
+                "Library organization create completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+            )
             load()
         } catch {
+            logger.error(
+                "Library organization create failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Create \(sectionKind == .labels ? "Tag" : "Reading List")",
                 message: error.userFacingMessage
@@ -139,12 +157,19 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
         if collections.contains(where: {
             $0.id != collection.id && $0.displayTitle.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
+            logger.warning(
+                "Library organization update rejected libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) reason=duplicateName name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Name Already Used",
                 message: trimmedName
             )
             return false
         }
+
+        logger.info(
+            "Library organization update requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+        )
 
         do {
             switch collection.type {
@@ -173,8 +198,14 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
                     labelColor: labelColor
                 )
             }
+            logger.info(
+                "Library organization update completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library organization update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update \(collection.type == .label ? "Tag" : "Reading List")",
                 message: error.userFacingMessage
@@ -184,6 +215,10 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
     }
 
     func deleteCollection(_ collection: LibraryOrganizationCollection) -> Bool {
+        logger.info(
+            "Library organization delete requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(collection.displayTitle), privacy: .public)"
+        )
+
         do {
             switch collection.type {
             case .label:
@@ -199,8 +234,14 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
             }
 
             collections.removeAll { $0.id == collection.id }
+            logger.info(
+                "Library organization delete completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library organization delete failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Delete \(collection.type == .label ? "Tag" : "Reading List")",
                 message: error.userFacingMessage

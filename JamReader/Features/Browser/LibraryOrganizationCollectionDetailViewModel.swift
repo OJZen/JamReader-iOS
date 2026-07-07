@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 import UIKit
 
 @MainActor
@@ -20,6 +21,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     private let metadataRootURL: URL
     private var hasLoaded = false
     private var accessSession: LibraryAccessSession?
+    private let logger = AppLog.library
 
     init(
         descriptor: LibraryDescriptor,
@@ -66,6 +68,10 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             return false
         }
 
+        logger.info(
+            "Library collection detail update requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+        )
+
         do {
             switch collection.type {
             case .label:
@@ -87,8 +93,14 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 name: trimmedName,
                 labelColor: labelColor
             )
+            logger.info(
+                "Library collection detail update completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library collection detail update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update \(collection.type == .label ? "Tag" : "Reading List")",
                 message: error.userFacingMessage
@@ -98,6 +110,10 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     }
 
     func deleteCollection() -> Bool {
+        logger.info(
+            "Library collection detail delete requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(self.collection.displayTitle), privacy: .public)"
+        )
+
         do {
             switch collection.type {
             case .label:
@@ -111,8 +127,14 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                     in: databaseURL
                 )
             }
+            logger.info(
+                "Library collection detail delete completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library collection detail delete failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Delete \(collection.type == .label ? "Tag" : "Reading List")",
                 message: error.userFacingMessage
@@ -138,7 +160,13 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 in: databaseURL
             )
             applyUpdatedComic(comic.updatingFavorite(updatedValue))
+            logger.info(
+                "Library collection detail favorite updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) value=\(updatedValue)"
+            )
         } catch {
+            logger.error(
+                "Library collection detail favorite update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Favorites",
                 message: error.userFacingMessage
@@ -165,8 +193,14 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 selectedComicIDs.contains(comic.id) ? comic.updatingFavorite(isFavorite) : comic
             }
 
+            logger.info(
+                "Library collection detail favorite batch updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) count=\(selectedComicIDs.count) value=\(isFavorite)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library collection detail favorite batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) count=\(selectedComicIDs.count) value=\(isFavorite) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Favorites",
                 message: error.userFacingMessage
@@ -186,7 +220,13 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 in: databaseURL
             )
             applyUpdatedComic(comic.updatingReadState(updatedValue))
+            logger.info(
+                "Library collection detail read status updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) value=\(updatedValue)"
+            )
         } catch {
+            logger.error(
+                "Library collection detail read status update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Read Status",
                 message: error.userFacingMessage
@@ -211,7 +251,13 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 in: databaseURL
             )
             applyUpdatedComic(comic.updatingRating(ratingValue))
+            logger.info(
+                "Library collection detail rating updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) rating=\(normalizedRating)"
+            )
         } catch {
+            logger.error(
+                "Library collection detail rating update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) rating=\(normalizedRating) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Rating",
                 message: error.userFacingMessage
@@ -241,8 +287,14 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                     : comic
             }
 
+            logger.info(
+                "Library collection detail read status batch updated libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) count=\(selectedComicIDs.count) value=\(isRead)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library collection detail read status batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) count=\(selectedComicIDs.count) value=\(isRead) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Read Status",
                 message: error.userFacingMessage
@@ -283,8 +335,14 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 isAssigned: collection.isAssigned,
                 labelColor: collection.labelColor
             )
+            logger.info(
+                "Library collection detail loaded libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) count=\(self.comics.count)"
+            )
         } catch {
             comics = []
+            logger.error(
+                "Library collection detail load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Load Collection",
                 message: error.userFacingMessage
@@ -293,6 +351,10 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     }
 
     func remove(_ comic: LibraryComic) {
+        logger.info(
+            "Library collection membership remove requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) comicID=\(comic.id)"
+        )
+
         do {
             switch collection.type {
             case .label:
@@ -320,7 +382,13 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 isAssigned: collection.isAssigned,
                 labelColor: collection.labelColor
             )
+            logger.info(
+                "Library collection membership remove completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) comicID=\(comic.id)"
+            )
         } catch {
+            logger.error(
+                "Library collection membership remove failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) comicID=\(comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Collection",
                 message: error.userFacingMessage
@@ -333,6 +401,10 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         guard !uniqueComicIDs.isEmpty else {
             return true
         }
+
+        logger.info(
+            "Library collection membership batch remove requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) count=\(uniqueComicIDs.count)"
+        )
 
         do {
             switch collection.type {
@@ -362,8 +434,14 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 isAssigned: collection.isAssigned,
                 labelColor: collection.labelColor
             )
+            logger.info(
+                "Library collection membership batch remove completed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) count=\(uniqueComicIDs.count)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library collection membership batch remove failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) count=\(uniqueComicIDs.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Collection",
                 message: error.userFacingMessage
