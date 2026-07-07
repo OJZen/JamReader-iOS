@@ -47,7 +47,7 @@ invalid_os_log_create_matches="$(
 report_matches "Found os_log_create without the JamReader subsystem." "$invalid_os_log_create_matches"
 
 credential_literal_matches="$(
-  rg -n '"[^"]*(referenceKey=|password=|authorizationHeader=|Authorization=|token=|secret=)' \
+  rg -n '"[^"]*(referenceKey=|username=|userName=|password=|authorizationHeader=|Authorization=|token=|secret=|credential=|credentials=)' \
     "$TARGET_DIR" \
     --glob '*.{swift,m,mm,c,cpp}' \
     || true
