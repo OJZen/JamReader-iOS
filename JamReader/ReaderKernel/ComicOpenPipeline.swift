@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum RemoteComicOpenMode: Hashable {
     case automatic
@@ -405,6 +406,7 @@ final class ComicOpenCoordinator {
     private let documentService: ComicDocumentService
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private let remoteReadingProgressStore: RemoteReadingProgressStore
+    private let logger = AppLog.reader
 
     init(
         storageManager: LibraryStorageManager,
@@ -464,15 +466,33 @@ final class ComicOpenCoordinator {
     private func openLibrary(
         _ request: ComicLibraryOpenRequest
     ) async throws -> (session: ComicReaderSession, document: ComicDocument) {
-        let accessSession = try storageManager.makeAccessSession(for: request.descriptor)
-        let fileURL = Self.resolvedFileURL(for: request.comic, sourceRootURL: accessSession.sourceURL)
-        let session = makeLibrarySession(
-            request: request,
-            source: .file(fileURL),
-            lease: ComicReaderResourceLease(libraryAccessSession: accessSession)
+        let libraryID = request.descriptor.id.uuidString
+        let comicID = request.comic.id
+        logger.info(
+            "Reader pipeline library open resolving libraryID=\(libraryID, privacy: .public) comicID=\(comicID)"
         )
-        let document = try await documentService.loadDocument(from: session.source)
-        return (session.withDocumentDefaults(from: document), document)
+        do {
+            let accessSession = try storageManager.makeAccessSession(for: request.descriptor)
+            let fileURL = Self.resolvedFileURL(for: request.comic, sourceRootURL: accessSession.sourceURL)
+            logger.info(
+                "Reader pipeline library source resolved libraryID=\(libraryID, privacy: .public) comicID=\(comicID) path=\(AppLogSanitizer.path(fileURL.path), privacy: .public)"
+            )
+            let session = makeLibrarySession(
+                request: request,
+                source: .file(fileURL),
+                lease: ComicReaderResourceLease(libraryAccessSession: accessSession)
+            )
+            let document = try await documentService.loadDocument(from: session.source)
+            logger.info(
+                "Reader pipeline library open loaded libraryID=\(libraryID, privacy: .public) comicID=\(comicID) pages=\(document.pageCount ?? -1)"
+            )
+            return (session.withDocumentDefaults(from: document), document)
+        } catch {
+            logger.error(
+                "Reader pipeline library open failed libraryID=\(libraryID, privacy: .public) comicID=\(comicID) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
+        }
     }
 
     private func openRemote(
@@ -481,32 +501,61 @@ final class ComicOpenCoordinator {
     ) async throws -> (session: ComicReaderSession, document: ComicDocument) {
         let reference = try request.referenceOverride
             ?? remoteServerBrowsingService.makeComicFileReference(from: request.item)
+        let provider = request.profile.providerKind.rawValue
+        let serverID = request.profile.id.uuidString
+        let remotePath = AppLogSanitizer.path(reference.path)
+        logger.info(
+            "Reader pipeline remote reference resolved provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) mode=\(Self.remoteOpenModeLogValue(request.openMode), privacy: .public) contentKind=\(reference.contentKind.rawValue, privacy: .public)"
+        )
 
         if request.openMode == .preferLocalCache,
            let cachedFileURL = remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
             do {
-                return try await openRemoteCachedFile(
+                logger.info(
+                    "Reader pipeline remote cache attempt provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=preferLocalCache cachePath=\(AppLogSanitizer.path(cachedFileURL.path), privacy: .public)"
+                )
+                let result = try await openRemoteCachedFile(
                     request: request,
                     reference: reference,
                     cachedFileURL: cachedFileURL,
                     noticeMessage: noticeMessage(for: reference)
                 )
+                logger.info(
+                    "Reader pipeline remote cache loaded provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=preferLocalCache pages=\(result.document.pageCount ?? -1)"
+                )
+                return result
             } catch {
+                logger.warning(
+                    "Reader pipeline remote cache failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=preferLocalCache error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
                 try? remoteServerBrowsingService.clearCachedComic(for: reference)
             }
         }
 
         let availability = remoteServerBrowsingService.cachedAvailability(for: reference)
+        logger.info(
+            "Reader pipeline remote cache availability provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) kind=\(Self.cachedAvailabilityLogValue(availability.kind), privacy: .public)"
+        )
         if availability.kind == .current,
            let cachedFileURL = remoteServerBrowsingService.cachedFileURLIfAvailable(for: reference) {
             do {
-                return try await openRemoteCachedFile(
+                logger.info(
+                    "Reader pipeline remote cache attempt provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=currentCache cachePath=\(AppLogSanitizer.path(cachedFileURL.path), privacy: .public)"
+                )
+                let result = try await openRemoteCachedFile(
                     request: request,
                     reference: reference,
                     cachedFileURL: cachedFileURL,
                     noticeMessage: "Opened the downloaded copy saved on this device."
                 )
+                logger.info(
+                    "Reader pipeline remote cache loaded provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=currentCache pages=\(result.document.pageCount ?? -1)"
+                )
+                return result
             } catch {
+                logger.warning(
+                    "Reader pipeline remote cache failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=currentCache error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
                 try? remoteServerBrowsingService.clearCachedComic(for: reference)
             }
         }
@@ -514,56 +563,82 @@ final class ComicOpenCoordinator {
         if await remoteServerBrowsingService.supportsStreamingOpen(for: reference, profile: request.profile),
            ComicDocumentLoader().supportsRemoteStreaming(for: reference.fileName) {
             progress("Preparing Pages", nil)
-            let documentURL = remoteServerBrowsingService.plannedCachedFileURL(for: reference)
-            let reader = try await remoteServerBrowsingService.makeStreamingFileReader(
-                for: request.profile,
-                reference: reference
+            logger.info(
+                "Reader pipeline remote streaming attempt provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public)"
             )
-            let lease = ComicReaderResourceLease(
-                remoteReaderLease: RemoteReaderCacheLease(
-                    reference: reference,
-                    browsingService: remoteServerBrowsingService
+            do {
+                let documentURL = remoteServerBrowsingService.plannedCachedFileURL(for: reference)
+                let reader = try await remoteServerBrowsingService.makeStreamingFileReader(
+                    for: request.profile,
+                    reference: reference
                 )
+                let lease = ComicReaderResourceLease(
+                    remoteReaderLease: RemoteReaderCacheLease(
+                        reference: reference,
+                        browsingService: remoteServerBrowsingService
+                    )
+                )
+                let session = makeRemoteSession(
+                    request: request,
+                    reference: reference,
+                    source: .remoteStreaming(
+                        fileName: reference.fileName,
+                        documentURL: documentURL,
+                        reader: reader
+                    ),
+                    lease: lease,
+                    noticeMessage: nil,
+                    shouldStartBackgroundDownload: true
+                )
+                let document = try await documentService.loadDocument(from: session.source)
+                logger.info(
+                    "Reader pipeline remote streaming loaded provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) pages=\(document.pageCount ?? -1)"
+                )
+                return (session.withDocumentDefaults(from: document), document)
+            } catch {
+                logger.error(
+                    "Reader pipeline remote streaming failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+                throw error
+            }
+        }
+
+        progress("Downloading", 0)
+        logger.info(
+            "Reader pipeline remote download fallback requested provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public)"
+        )
+        do {
+            let result = try await remoteServerBrowsingService.downloadComicFile(
+                for: request.profile,
+                reference: reference,
+                progressHandler: { fraction in
+                    progress("Downloading", fraction)
+                }
             )
             let session = makeRemoteSession(
                 request: request,
                 reference: reference,
-                source: .remoteStreaming(
-                    fileName: reference.fileName,
-                    documentURL: documentURL,
-                    reader: reader
+                source: .file(result.localFileURL),
+                lease: ComicReaderResourceLease(
+                    remoteReaderLease: RemoteReaderCacheLease(
+                        reference: reference,
+                        browsingService: remoteServerBrowsingService
+                    )
                 ),
-                lease: lease,
-                noticeMessage: nil,
-                shouldStartBackgroundDownload: true
+                noticeMessage: noticeMessage(for: result.source),
+                shouldStartBackgroundDownload: false
             )
             let document = try await documentService.loadDocument(from: session.source)
+            logger.info(
+                "Reader pipeline remote download loaded provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) source=\(Self.downloadSourceLogValue(result.source), privacy: .public) pages=\(document.pageCount ?? -1)"
+            )
             return (session.withDocumentDefaults(from: document), document)
+        } catch {
+            logger.error(
+                "Reader pipeline remote download failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
         }
-
-        progress("Downloading", 0)
-        let result = try await remoteServerBrowsingService.downloadComicFile(
-            for: request.profile,
-            reference: reference,
-            progressHandler: { fraction in
-                progress("Downloading", fraction)
-            }
-        )
-        let session = makeRemoteSession(
-            request: request,
-            reference: reference,
-            source: .file(result.localFileURL),
-            lease: ComicReaderResourceLease(
-                remoteReaderLease: RemoteReaderCacheLease(
-                    reference: reference,
-                    browsingService: remoteServerBrowsingService
-                )
-            ),
-            noticeMessage: noticeMessage(for: result.source),
-            shouldStartBackgroundDownload: false
-        )
-        let document = try await documentService.loadDocument(from: session.source)
-        return (session.withDocumentDefaults(from: document), document)
     }
 
     private func openRemoteCachedFile(
@@ -592,9 +667,23 @@ final class ComicOpenCoordinator {
     private func openFile(
         _ request: ComicFileOpenRequest
     ) async throws -> (session: ComicReaderSession, document: ComicDocument) {
-        let session = makeFileSession(request: request)
-        let document = try await documentService.loadDocument(from: session.source)
-        return (session.withDocumentDefaults(from: document), document)
+        let path = AppLogSanitizer.path(request.fileURL.path)
+        logger.info(
+            "Reader pipeline file open resolving path=\(path, privacy: .public)"
+        )
+        do {
+            let session = makeFileSession(request: request)
+            let document = try await documentService.loadDocument(from: session.source)
+            logger.info(
+                "Reader pipeline file open loaded path=\(path, privacy: .public) pages=\(document.pageCount ?? -1)"
+            )
+            return (session.withDocumentDefaults(from: document), document)
+        } catch {
+            logger.error(
+                "Reader pipeline file open failed path=\(path, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
+        }
     }
 
     private func makeLibrarySession(
@@ -718,6 +807,37 @@ final class ComicOpenCoordinator {
             return sourceRootURL.appendingPathComponent(String(relativePath.dropFirst()))
         }
         return sourceRootURL.appendingPathComponent(relativePath)
+    }
+
+    nonisolated private static func remoteOpenModeLogValue(_ mode: RemoteComicOpenMode) -> String {
+        switch mode {
+        case .automatic:
+            return "automatic"
+        case .preferLocalCache:
+            return "preferLocalCache"
+        }
+    }
+
+    nonisolated private static func downloadSourceLogValue(_ source: RemoteComicDownloadResult.Source) -> String {
+        switch source {
+        case .downloaded:
+            return "downloaded"
+        case .cachedCurrent:
+            return "cachedCurrent"
+        case .cachedFallback:
+            return "cachedFallback"
+        }
+    }
+
+    nonisolated private static func cachedAvailabilityLogValue(_ kind: RemoteComicCachedAvailability.Kind) -> String {
+        switch kind {
+        case .unavailable:
+            return "unavailable"
+        case .current:
+            return "current"
+        case .stale:
+            return "stale"
+        }
     }
 }
 
