@@ -1,7 +1,9 @@
 import Foundation
+import os
 
 final class RemoteFolderShortcutStore {
     private let storage: FileBackedJSONStore
+    private let logger = AppLog.remote
 
     init(fileManager: FileManager = .default) {
         self.storage = FileBackedJSONStore(fileName: "remote_folder_shortcuts.json", fileManager: fileManager)
@@ -32,16 +34,19 @@ final class RemoteFolderShortcutStore {
         providerRootIdentifier: String,
         path: String
     ) -> Bool {
-        guard let shortcuts = try? load() else {
+        do {
+            return try load().contains(where: {
+                $0.serverID == serverID
+                    && $0.providerKind == providerKind
+                    && $0.providerRootIdentifier == providerRootIdentifier
+                    && $0.path == path
+            })
+        } catch {
+            logger.warning(
+                "Remote folder shortcut contains fallback provider=\(providerKind.rawValue, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) root=\(AppLogSanitizer.truncated(providerRootIdentifier), privacy: .public) path=\(AppLogSanitizer.path(path), privacy: .public) result=false error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             return false
         }
-
-        return shortcuts.contains(where: {
-            $0.serverID == serverID
-                && $0.providerKind == providerKind
-                && $0.providerRootIdentifier == providerRootIdentifier
-                && $0.path == path
-        })
     }
 
     func upsertShortcut(

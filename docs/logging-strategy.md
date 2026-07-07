@@ -58,8 +58,8 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
 - Remote/browser reader preferences：已记录远程浏览显示/排序偏好、阅读器布局偏好保存、cache policy legacy/异常值处理，以及异常 rawValue 忽略。
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。
-- Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本。
-- Saved remote folders：已记录收藏远程文件夹列表加载、重命名和删除。
+- Remote offline shelf：已记录离线书架加载、刷新离线副本、删除单本离线副本、清空服务器离线副本，以及离线快照过滤摘要。
+- Saved remote folders：已记录收藏远程文件夹列表加载、快照过滤、收藏状态判断 fallback、重命名和删除。
 - Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、维护状态记录的失败边界。
 
 ## 后续建议补测试的区域
