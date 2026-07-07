@@ -67,8 +67,11 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 
 - Library comic removal：需要覆盖只读书库拒绝、去重删除、漫画文件缺失但数据库删除继续执行、封面删除失败不阻断主流程。
 - Library organization：需要覆盖标签/书单增删改、重复名称拦截、集合成员批量移除、批量收藏/阅读状态变更。
+- Library storage/source resolution：需要覆盖 metadata/database/covers URL fallback 不改变既有返回语义、同一错误限频记录，以及源路径解析失败不会导致列表崩溃。
 - Metadata editor：需要覆盖 ComicInfo `fillMissing` 和 `overwriteExisting` 两种导入策略，以及保存失败时不更新原始快照。
 - Remote cache/import：需要覆盖不同服务器同名路径隔离、清缓存同时清历史、在线封面读取失败 fallback。
+- Remote state fallbacks：需要覆盖 Keychain 状态读取失败时编辑页不暴露凭据、不误判为可复用密码，以及离线书架失败后重建列表失败不吞掉主错误提示。
+- Logging sanitizer：需要覆盖 path/url/error/namesPreview 截断和脱敏规则，防止后续新增日志泄露完整路径、URL query、authorization 或超长错误。
 
 ## 不建议补日志的区域
 
@@ -76,3 +79,10 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - SMB/WebDAV 分块读取每个 chunk。
 - 缩略图列表中每个 item 的成功加载。
 - SwiftUI body、UIKit layout pass、频繁触发的 progress 回调。
+
+## 当前保留的静默 fallback
+
+- 格式探测链：目录图片序列、ZIP/libarchive/TAR 页数探测和 MuPDF PDF 探测失败会继续尝试下一种 reader；逐项记录会放大正常探测噪声。
+- 归档内部候选选择：ComicInfo 入口选择、归档 page entry 过滤、远程 libarchive 缩略图入口过滤属于内容枚举细节，失败最终会由外层打开/索引错误记录。
+- 远程封面在线探测：SMB/WebDAV 在线封面路径查找、URL 组装和 range 下载失败是缩略图热路径，当前由远程目录加载、封面 fallback 和缓存层日志覆盖。
+- 缩略图缓存维护：本地封面缩略图写入和陈旧缩略图清理失败不阻断 UI，且可能在滚动中高频触发，暂不逐项记录。
