@@ -325,7 +325,15 @@ struct RemoteCacheSettingsView: View {
                 try dependencies.remoteServerBrowsingService.clearCachedComics()
                 try dependencies.remoteReadingProgressStore.clearAllSessions()
                 dependencies.remoteOfflineLibrarySnapshotStore.invalidate()
-                let profiles = (try? dependencies.remoteServerProfileStore.load()) ?? []
+                let profiles: [RemoteServerProfile]
+                do {
+                    profiles = try dependencies.remoteServerProfileStore.load()
+                } catch {
+                    logger.warning(
+                        "Remote cache settings maintenance fallback action=downloads item=rememberedPaths result=skipped error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                    profiles = []
+                }
                 for profile in profiles {
                     RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
                 }
