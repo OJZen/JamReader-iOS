@@ -54,6 +54,22 @@ credential_literal_matches="$(
 )"
 report_matches "Found log/string literals that may expose credential fields. Hash or omit these values." "$credential_literal_matches"
 
+unsanitized_error_matches="$(
+  {
+    rg -n 'error=\\\([^"\\]*(localizedDescription)' \
+      "$TARGET_DIR" \
+      --glob '*.swift' \
+      || true
+    rg -n 'error=\\\([^"\\]*(String[[:space:]]*\([[:space:]]*describing:)' \
+      "$TARGET_DIR" \
+      --glob '*.swift' \
+      || true
+  } \
+    | sort -u \
+    || true
+)"
+report_matches "Found log error fields that bypass AppLogSanitizer.errorDescription." "$unsanitized_error_matches"
+
 if [[ "$failed" -ne 0 ]]; then
   exit 1
 fi

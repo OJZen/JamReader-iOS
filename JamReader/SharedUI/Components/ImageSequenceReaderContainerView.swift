@@ -992,7 +992,7 @@ private final class ComicImageSpreadViewController: UIViewController {
                 }
             case .failure(let error):
                 ReaderPerformanceTrace.log(
-                    "spread=\(self.spreadIndex) loadFailure elapsed=\(ReaderPerformanceTrace.format(nanoseconds: DispatchTime.now().uptimeNanoseconds - loadStart))ms error=\(error.localizedDescription)"
+                    "spread=\(self.spreadIndex) loadFailure elapsed=\(ReaderPerformanceTrace.format(nanoseconds: DispatchTime.now().uptimeNanoseconds - loadStart))ms error=\(AppLogSanitizer.errorDescription(error))"
                 )
                 let fallbackMessage = pageNames.joined(separator: ", ")
                 self.presentError(
