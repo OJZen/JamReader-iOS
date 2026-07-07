@@ -52,7 +52,7 @@
 - Remote SMB connection pool：已记录连接创建/复用/失败/驱逐/空闲清理，端点仅输出脱敏哈希 ID。
 - Remote background import：已记录后台导入开始、拒绝、完成、取消和反馈展示。
 - Remote cache settings：已记录设置页发起的缓存策略变更、下载/辅助缓存/缩略图/导入书库清理。
-- Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理和浏览历史删除。
+- Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理、浏览历史删除，以及服务器变更/删除后的附带清理失败。
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
 - Remote/browser reader preferences：已记录远程浏览显示/排序偏好、阅读器布局偏好保存、cache policy legacy/异常值处理，以及异常 rawValue 忽略。
 - Remote reading history：已记录远程阅读历史裁剪、按服务器/配置/单条删除和清空结果。

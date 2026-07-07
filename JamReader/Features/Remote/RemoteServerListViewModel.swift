@@ -277,14 +277,7 @@ final class RemoteServerListViewModel: ObservableObject {
 
             if let previousProfile {
                 if didChangeRemoteLocation || didChangeCredentialIdentity {
-                    RemoteServerBrowserViewModel.clearRememberedPath(for: previousProfile)
-                    try? readingProgressStore.deleteSessions(for: previousProfile)
-                    try? folderShortcutStore.removeShortcuts(
-                        for: previousProfile.id,
-                        providerKind: previousProfile.providerKind,
-                        providerRootIdentifier: previousProfile.normalizedProviderRootIdentifier
-                    )
-                    try? browsingService.clearCachedComicsForServer(id: previousProfile.id)
+                    cleanupStateAfterProfileScopeChange(previousProfile)
                 }
 
                 if didChangeRemoteLocation || didChangeCredentialIdentity || didRotatePassword {
@@ -329,10 +322,8 @@ final class RemoteServerListViewModel: ObservableObject {
                 try credentialStore.deletePassword(for: passwordReferenceKey)
             }
 
-            try? browsingService.clearCachedComicsForServer(id: profile.id)
+            cleanupStateAfterServerDelete(profile)
             browsingService.evictActiveConnections(for: profile)
-            try? readingProgressStore.deleteSessions(for: profile.id)
-            try? folderShortcutStore.removeShortcuts(for: profile.id)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             profiles = updatedProfiles.sorted {
                 $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
@@ -482,6 +473,69 @@ final class RemoteServerListViewModel: ObservableObject {
 
     func profile(withID profileID: UUID) -> RemoteServerProfile? {
         profiles.first { $0.id == profileID }
+    }
+
+    private func cleanupStateAfterProfileScopeChange(_ previousProfile: RemoteServerProfile) {
+        RemoteServerBrowserViewModel.clearRememberedPath(for: previousProfile)
+        let provider = previousProfile.providerKind.rawValue
+        let serverID = previousProfile.id.uuidString
+
+        do {
+            try readingProgressStore.deleteSessions(for: previousProfile)
+        } catch {
+            logger.warning(
+                "Remote server scope change cleanup failed item=readingHistory provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        do {
+            try folderShortcutStore.removeShortcuts(
+                for: previousProfile.id,
+                providerKind: previousProfile.providerKind,
+                providerRootIdentifier: previousProfile.normalizedProviderRootIdentifier
+            )
+        } catch {
+            logger.warning(
+                "Remote server scope change cleanup failed item=folderShortcuts provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        do {
+            try browsingService.clearCachedComicsForServer(id: previousProfile.id)
+        } catch {
+            cacheLogger.warning(
+                "Remote server scope change cleanup failed item=cachedComics provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+    }
+
+    private func cleanupStateAfterServerDelete(_ profile: RemoteServerProfile) {
+        let provider = profile.providerKind.rawValue
+        let serverID = profile.id.uuidString
+
+        do {
+            try browsingService.clearCachedComicsForServer(id: profile.id)
+        } catch {
+            cacheLogger.warning(
+                "Remote server delete cleanup failed item=cachedComics provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        do {
+            try readingProgressStore.deleteSessions(for: profile.id)
+        } catch {
+            logger.warning(
+                "Remote server delete cleanup failed item=readingHistory provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        do {
+            try folderShortcutStore.removeShortcuts(for: profile.id)
+        } catch {
+            logger.warning(
+                "Remote server delete cleanup failed item=folderShortcuts provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     private func refreshShortcutCount() {
