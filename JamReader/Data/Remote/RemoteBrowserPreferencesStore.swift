@@ -1,7 +1,9 @@
 import Foundation
+import os
 
 final class RemoteBrowserPreferencesStore {
     private let userDefaults: UserDefaults
+    private let logger = AppLog.remote
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -16,31 +18,50 @@ final class RemoteBrowserPreferencesStore {
 
     func saveDisplayMode(_ mode: LibraryComicDisplayMode, for serverID: UUID) {
         userDefaults.set(mode.rawValue, forKey: key(for: serverID, field: "displayMode"))
+        logger.info(
+            "Remote browser preference saved serverID=\(serverID.uuidString, privacy: .public) field=displayMode value=\(mode.rawValue, privacy: .public)"
+        )
     }
 
     func storedDisplayMode(for serverID: UUID) -> LibraryComicDisplayMode? {
-        if let rawValue = userDefaults.string(forKey: key(for: serverID, field: "displayMode")),
-           let mode = LibraryComicDisplayMode(rawValue: rawValue) {
-            return mode
+        if let rawValue = userDefaults.string(forKey: key(for: serverID, field: "displayMode")) {
+            if let mode = LibraryComicDisplayMode(rawValue: rawValue) {
+                return mode
+            }
+            logger.warning(
+                "Remote browser preference ignored serverID=\(serverID.uuidString, privacy: .public) field=displayMode rawValue=\(AppLogSanitizer.truncated(rawValue), privacy: .public)"
+            )
         }
 
-        if let legacyRawValue = userDefaults.string(forKey: legacyDisplayModeKey),
-           let legacyMode = LibraryComicDisplayMode(rawValue: legacyRawValue) {
-            return legacyMode
+        if let legacyRawValue = userDefaults.string(forKey: legacyDisplayModeKey) {
+            if let legacyMode = LibraryComicDisplayMode(rawValue: legacyRawValue) {
+                return legacyMode
+            }
+            logger.warning(
+                "Remote browser legacy preference ignored field=displayMode rawValue=\(AppLogSanitizer.truncated(legacyRawValue), privacy: .public)"
+            )
         }
 
         return nil
     }
 
     func loadSortMode(for serverID: UUID) -> RemoteDirectorySortMode {
-        if let rawValue = userDefaults.string(forKey: key(for: serverID, field: "sortMode")),
-           let mode = RemoteDirectorySortMode(rawValue: rawValue) {
-            return mode
+        if let rawValue = userDefaults.string(forKey: key(for: serverID, field: "sortMode")) {
+            if let mode = RemoteDirectorySortMode(rawValue: rawValue) {
+                return mode
+            }
+            logger.warning(
+                "Remote browser preference ignored serverID=\(serverID.uuidString, privacy: .public) field=sortMode rawValue=\(AppLogSanitizer.truncated(rawValue), privacy: .public)"
+            )
         }
 
-        if let legacyRawValue = userDefaults.string(forKey: legacySortModeKey),
-           let legacyMode = RemoteDirectorySortMode(rawValue: legacyRawValue) {
-            return legacyMode
+        if let legacyRawValue = userDefaults.string(forKey: legacySortModeKey) {
+            if let legacyMode = RemoteDirectorySortMode(rawValue: legacyRawValue) {
+                return legacyMode
+            }
+            logger.warning(
+                "Remote browser legacy preference ignored field=sortMode rawValue=\(AppLogSanitizer.truncated(legacyRawValue), privacy: .public)"
+            )
         }
 
         return .nameAscending
@@ -48,6 +69,9 @@ final class RemoteBrowserPreferencesStore {
 
     func saveSortMode(_ mode: RemoteDirectorySortMode, for serverID: UUID) {
         userDefaults.set(mode.rawValue, forKey: key(for: serverID, field: "sortMode"))
+        logger.info(
+            "Remote browser preference saved serverID=\(serverID.uuidString, privacy: .public) field=sortMode value=\(mode.rawValue, privacy: .public)"
+        )
     }
 
     private func key(for serverID: UUID, field: String) -> String {
