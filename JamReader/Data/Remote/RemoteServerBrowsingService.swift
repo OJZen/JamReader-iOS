@@ -1485,8 +1485,22 @@ final class RemoteServerBrowsingService {
                 authorizationHeader: authorizationHeader
             )
             await webDAVRangeSupportStore.store(isSupported, for: cacheKey)
+            if isSupported {
+                logger.debug(
+                    "WebDAV range probe completed serverID=\(profile.id.uuidString, privacy: .public) path=\(AppLogSanitizer.path(probePath), privacy: .public) supported=true"
+                )
+            } else {
+                logger.info(
+                    "WebDAV range probe completed serverID=\(profile.id.uuidString, privacy: .public) path=\(AppLogSanitizer.path(probePath), privacy: .public) supported=false fallback=download"
+                )
+            }
             return isSupported
         } catch {
+            if await webDAVRangeSupportStore.markProbeFailureLogged(for: cacheKey) {
+                logger.warning(
+                    "WebDAV range probe failed serverID=\(profile.id.uuidString, privacy: .public) path=\(AppLogSanitizer.path(probePath), privacy: .public) fallback=optimistic error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             return true
         }
     }
@@ -3111,6 +3125,7 @@ private final class RecursiveListProgressState {
 
 private actor RemoteWebDAVRangeSupportStore {
     private var valuesByScopeKey: [String: Bool] = [:]
+    private var loggedProbeFailures: Set<String> = []
 
     func value(for scopeKey: String) -> Bool? {
         valuesByScopeKey[scopeKey]
@@ -3118,6 +3133,10 @@ private actor RemoteWebDAVRangeSupportStore {
 
     func store(_ value: Bool, for scopeKey: String) {
         valuesByScopeKey[scopeKey] = value
+    }
+
+    func markProbeFailureLogged(for scopeKey: String) -> Bool {
+        loggedProbeFailures.insert(scopeKey).inserted
     }
 }
 
