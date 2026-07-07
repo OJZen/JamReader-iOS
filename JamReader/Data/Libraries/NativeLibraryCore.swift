@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 #if canImport(SQLite3)
 import SQLite3
@@ -557,9 +558,18 @@ final class LibraryCatalogRepository {
                   let title = sqliteString(statement, index: 0),
                   let summaryData = sqliteData(statement, index: 1),
                   let rawScope = sqliteString(statement, index: 2),
-                  let scope = LibraryMaintenanceRecord.Scope(rawValue: rawScope),
-                  let summary = try? decoder.decode(LibraryScanSummary.self, from: summaryData)
+                  let scope = LibraryMaintenanceRecord.Scope(rawValue: rawScope)
             else {
+                return nil
+            }
+
+            let summary: LibraryScanSummary
+            do {
+                summary = try decoder.decode(LibraryScanSummary.self, from: summaryData)
+            } catch {
+                AppLog.persistence.warning(
+                    "Library maintenance record decode failed libraryID=\(libraryID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
                 return nil
             }
 

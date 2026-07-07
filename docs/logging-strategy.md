@@ -35,7 +35,6 @@
 ## 需要继续补的区域
 
 - Reader open pipeline：记录本地、远程流式、远程缓存 fallback、失败原因。
-- Persistence stores：记录读取失败和写入失败，但不要记录完整持久化 payload。
 
 ## 当前已覆盖的高价值区域
 
@@ -45,6 +44,7 @@
 - Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略和缓存清理。
 - Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理和浏览历史删除。
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
+- Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、维护状态记录的失败边界。
 
 ## 不建议补日志的区域
 

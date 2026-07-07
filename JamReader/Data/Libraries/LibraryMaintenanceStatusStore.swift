@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 final class LibraryMaintenanceStatusStore {
     private let repository: LibraryCatalogRepository
@@ -10,14 +11,33 @@ final class LibraryMaintenanceStatusStore {
     }
 
     func loadRecord(for libraryID: UUID) -> LibraryMaintenanceRecord? {
-        try? repository.loadMaintenanceRecord(for: libraryID)
+        do {
+            return try repository.loadMaintenanceRecord(for: libraryID)
+        } catch {
+            AppLog.persistence.error(
+                "Library maintenance record load failed libraryID=\(libraryID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return nil
+        }
     }
 
     func saveRecord(_ record: LibraryMaintenanceRecord) {
-        try? repository.saveMaintenanceRecord(record)
+        do {
+            try repository.saveMaintenanceRecord(record)
+        } catch {
+            AppLog.persistence.error(
+                "Library maintenance record save failed libraryID=\(record.libraryID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     func clearRecord(for libraryID: UUID) {
-        try? repository.clearMaintenanceRecord(for: libraryID)
+        do {
+            try repository.clearMaintenanceRecord(for: libraryID)
+        } catch {
+            AppLog.persistence.error(
+                "Library maintenance record clear failed libraryID=\(libraryID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 }

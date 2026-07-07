@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Security
 
 enum RemoteServerCredentialStoreError: LocalizedError {
@@ -38,12 +39,18 @@ final class RemoteServerCredentialStore {
         case errSecSuccess:
             guard let data = item as? Data,
                   let password = String(data: data, encoding: .utf8) else {
+                AppLog.persistence.error(
+                    "Remote credential load failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) reason=invalidPasswordData"
+                )
                 throw RemoteServerCredentialStoreError.invalidPasswordData
             }
             return password
         case errSecItemNotFound:
             return nil
         default:
+            AppLog.persistence.error(
+                "Remote credential load failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) status=\(status)"
+            )
             throw RemoteServerCredentialStoreError.unexpectedStatus(status)
         }
     }
@@ -67,6 +74,9 @@ final class RemoteServerCredentialStore {
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         guard status == errSecSuccess else {
+            AppLog.persistence.error(
+                "Remote credential save failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) status=\(status)"
+            )
             throw RemoteServerCredentialStoreError.unexpectedStatus(status)
         }
     }
@@ -80,6 +90,9 @@ final class RemoteServerCredentialStore {
 
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
+            AppLog.persistence.error(
+                "Remote credential delete failed referenceKey=\(AppLogSanitizer.truncated(referenceKey), privacy: .public) status=\(status)"
+            )
             throw RemoteServerCredentialStoreError.unexpectedStatus(status)
         }
     }
