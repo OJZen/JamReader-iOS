@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import os
 
 enum BatchOrganizationMode: String, CaseIterable, Identifiable {
     case add
@@ -60,12 +61,14 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
 
     let selectedComicCount: Int
 
+    private let libraryID: String
     private let selectedComicIDs: [Int64]
     private let databaseReader: LibraryDatabaseReader
     private let databaseWriter: LibraryDatabaseWriter
     private let storageManager: LibraryStorageManager
     private let databaseURL: URL
     private var hasLoaded = false
+    private let logger = AppLog.library
 
     init(
         descriptor: LibraryDescriptor,
@@ -74,6 +77,7 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
         databaseWriter: LibraryDatabaseWriter,
         storageManager: LibraryStorageManager
     ) {
+        self.libraryID = descriptor.id.uuidString
         self.selectedComicIDs = Array(Set(comicIDs))
         self.selectedComicCount = Set(comicIDs).count
         self.databaseReader = databaseReader
@@ -115,8 +119,14 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
 
         do {
             snapshot = try databaseReader.loadOrganizationSnapshot(databaseURL: databaseURL)
+            logger.info(
+                "Library batch organization loaded libraryID=\(self.libraryID, privacy: .public) labels=\(self.snapshot.labels.count) readingLists=\(self.snapshot.readingLists.count) selected=\(self.selectedComicCount)"
+            )
         } catch {
             snapshot = .empty
+            logger.error(
+                "Library batch organization load failed libraryID=\(self.libraryID, privacy: .public) selected=\(self.selectedComicCount) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Load Organization",
                 message: error.userFacingMessage
@@ -128,6 +138,10 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
         guard !selectedComicIDs.isEmpty else {
             return false
         }
+
+        logger.info(
+            "Library batch organization membership update requested libraryID=\(self.libraryID, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) mode=\(self.mode.rawValue, privacy: .public) count=\(self.selectedComicIDs.count)"
+        )
 
         do {
             switch collection.type {
@@ -147,8 +161,14 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
                 )
             }
 
+            logger.info(
+                "Library batch organization membership update completed libraryID=\(self.libraryID, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) mode=\(self.mode.rawValue, privacy: .public) count=\(self.selectedComicIDs.count)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library batch organization membership update failed libraryID=\(self.libraryID, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) mode=\(self.mode.rawValue, privacy: .public) count=\(self.selectedComicIDs.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Organization",
                 message: error.userFacingMessage
@@ -302,9 +322,11 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
 
     let selectedComicCount: Int
 
+    private let libraryID: String
     private let selectedComicIDs: [Int64]
     private let databaseWriter: LibraryDatabaseWriter
     private let databaseURL: URL
+    private let logger = AppLog.library
 
     init(
         descriptor: LibraryDescriptor,
@@ -312,6 +334,7 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
         databaseWriter: LibraryDatabaseWriter,
         storageManager: LibraryStorageManager
     ) {
+        self.libraryID = descriptor.id.uuidString
         self.selectedComicIDs = Array(Set(comicIDs))
         self.selectedComicCount = Set(comicIDs).count
         self.databaseWriter = databaseWriter
@@ -340,14 +363,24 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
             isSaving = false
         }
 
+        logger.info(
+            "Library batch metadata update requested libraryID=\(self.libraryID, privacy: .public) count=\(self.selectedComicIDs.count) fields=\(self.patch.enabledFieldCount)"
+        )
+
         do {
             try databaseWriter.updateComicMetadata(
                 patch,
                 for: selectedComicIDs,
                 in: databaseURL
             )
+            logger.info(
+                "Library batch metadata update completed libraryID=\(self.libraryID, privacy: .public) count=\(self.selectedComicIDs.count) fields=\(self.patch.enabledFieldCount)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library batch metadata update failed libraryID=\(self.libraryID, privacy: .public) count=\(self.selectedComicIDs.count) fields=\(self.patch.enabledFieldCount) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Metadata",
                 message: error.userFacingMessage

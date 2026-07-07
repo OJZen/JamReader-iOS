@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 @MainActor
 final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel {
@@ -9,11 +10,13 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
 
     let comic: LibraryComic
 
+    private let libraryID: String
     private let databaseReader: LibraryDatabaseReader
     private let databaseWriter: LibraryDatabaseWriter
     private let storageManager: LibraryStorageManager
     private let databaseURL: URL
     private var hasLoaded = false
+    private let logger = AppLog.library
 
     init(
         descriptor: LibraryDescriptor,
@@ -22,6 +25,7 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
         databaseWriter: LibraryDatabaseWriter,
         storageManager: LibraryStorageManager
     ) {
+        self.libraryID = descriptor.id.uuidString
         self.comic = comic
         self.databaseReader = databaseReader
         self.databaseWriter = databaseWriter
@@ -61,8 +65,14 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
                 databaseURL: databaseURL,
                 comicID: comic.id
             )
+            logger.info(
+                "Library comic organization loaded libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) labels=\(self.snapshot.labels.count) readingLists=\(self.snapshot.readingLists.count)"
+            )
         } catch {
             snapshot = .empty
+            logger.error(
+                "Library comic organization load failed libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Load Organization",
                 message: error.userFacingMessage
@@ -72,6 +82,9 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
 
     func toggleMembership(for collection: LibraryOrganizationCollection) {
         let updatedMembership = !collection.isAssigned
+        logger.info(
+            "Library comic organization membership update requested libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) value=\(updatedMembership)"
+        )
 
         do {
             switch collection.type {
@@ -92,7 +105,13 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
             }
 
             snapshot.update(collection.updatingAssignment(updatedMembership))
+            logger.info(
+                "Library comic organization membership update completed libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) value=\(updatedMembership)"
+            )
         } catch {
+            logger.error(
+                "Library comic organization membership update failed libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) value=\(updatedMembership) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Organization",
                 message: error.userFacingMessage

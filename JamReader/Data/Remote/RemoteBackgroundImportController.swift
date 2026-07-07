@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 @MainActor
 final class RemoteBackgroundImportController: ObservableObject {
@@ -15,6 +16,7 @@ final class RemoteBackgroundImportController: ObservableObject {
     private var lastPublishedProgressState: RemoteBrowserProgressState?
     private var lastProgressPublishInstant: ContinuousClock.Instant?
     private let progressClock = ContinuousClock()
+    private let logger = AppLog.remote
 
     var isImportRunning: Bool {
         activeTask != nil
@@ -31,18 +33,22 @@ final class RemoteBackgroundImportController: ObservableObject {
         ) async -> Void
     ) -> Bool {
         guard activeTask == nil else {
+            logger.warning("Remote background import start rejected reason=alreadyRunning")
             return false
         }
 
+        logger.info("Remote background import started")
         feedback = nil
         let cancellationController = RemoteImportCancellationController()
         activeCancellationController = cancellationController
+        let logger = self.logger
         activeTask = Task { @MainActor [weak self] in
             guard let self else {
                 return
             }
 
             await operation(self, cancellationController)
+            logger.info("Remote background import completed")
             self.activeTask = nil
             self.activeCancellationController = nil
             self.clearActiveProgress()
@@ -104,6 +110,9 @@ final class RemoteBackgroundImportController: ObservableObject {
     }
 
     func presentFeedback(_ feedback: RemoteBrowserFeedbackState) {
+        logger.info(
+            "Remote background import feedback presented kind=\(Self.feedbackKindLogValue(feedback.kind), privacy: .public)"
+        )
         self.feedback = feedback
     }
 
@@ -112,6 +121,10 @@ final class RemoteBackgroundImportController: ObservableObject {
     }
 
     func cancelActiveImport() {
+        let wasCancellable = activeProgress?.isCancellable == true
+        logger.notice(
+            "Remote background import cancel requested cancellable=\(wasCancellable)"
+        )
         activeCancellationController?.cancel()
         activeTask?.cancel()
 
@@ -130,6 +143,15 @@ final class RemoteBackgroundImportController: ObservableObject {
         pendingProgressCommitTask?.cancel()
         pendingProgressCommitTask = nil
         pendingProgressState = nil
+    }
+
+    nonisolated private static func feedbackKindLogValue(_ kind: RemoteBrowserFeedbackState.Kind) -> String {
+        switch kind {
+        case .success:
+            return "success"
+        case .info:
+            return "info"
+        }
     }
 
     private func shouldPublishProgressImmediately(

@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct ComicInfoImportBatchResult: Equatable {
     let totalCount: Int
@@ -42,6 +43,7 @@ final class ComicInfoImportService {
     private let storageManager: LibraryStorageManager
     private let databaseWriter: LibraryDatabaseWriter
     private let metadataExtractor: LibraryComicMetadataExtractor
+    private let logger = AppLog.libraryImport
 
     init(
         storageManager: LibraryStorageManager,
@@ -111,42 +113,54 @@ final class ComicInfoImportService {
             )
         }
 
+        let libraryID = descriptor.id.uuidString
+        logger.info(
+            "ComicInfo batch import requested libraryID=\(libraryID, privacy: .public) count=\(uniqueComics.count) policy=\(policy.rawValue, privacy: .public)"
+        )
+
         let databaseURL = storageManager.databaseURL(for: descriptor)
         var importedCount = 0
         var skippedCount = 0
         var failedTitles: [String] = []
 
-        try storageManager.withScopedSourceAccess(for: descriptor) { session in
-            for (index, comic) in uniqueComics.enumerated() {
-                progressHandler?(
-                    LibraryScanProgress(
-                        phase: .importingMetadata,
-                        currentPath: progressPath(for: comic),
-                        processedFolderCount: 0,
-                        processedComicCount: index + 1
+        do {
+            try storageManager.withScopedSourceAccess(for: descriptor) { session in
+                for (index, comic) in uniqueComics.enumerated() {
+                    progressHandler?(
+                        LibraryScanProgress(
+                            phase: .importingMetadata,
+                            currentPath: progressPath(for: comic),
+                            processedFolderCount: 0,
+                            processedComicCount: index + 1
+                        )
                     )
-                )
 
-                do {
-                    let fileURL = resolveFileURL(for: comic, sourceRootURL: session.sourceURL)
-                    guard let extractedMetadata = try metadataExtractor.extractMetadata(for: fileURL),
-                          let importedComicInfo = extractedMetadata.importedComicInfo
-                    else {
-                        skippedCount += 1
-                        continue
+                    do {
+                        let fileURL = resolveFileURL(for: comic, sourceRootURL: session.sourceURL)
+                        guard let extractedMetadata = try metadataExtractor.extractMetadata(for: fileURL),
+                              let importedComicInfo = extractedMetadata.importedComicInfo
+                        else {
+                            skippedCount += 1
+                            continue
+                        }
+
+                        try databaseWriter.applyImportedComicInfo(
+                            importedComicInfo,
+                            for: comic.id,
+                            in: databaseURL,
+                            policy: policy
+                        )
+                        importedCount += 1
+                    } catch {
+                        failedTitles.append(comic.displayTitle)
                     }
-
-                    try databaseWriter.applyImportedComicInfo(
-                        importedComicInfo,
-                        for: comic.id,
-                        in: databaseURL,
-                        policy: policy
-                    )
-                    importedCount += 1
-                } catch {
-                    failedTitles.append(comic.displayTitle)
                 }
             }
+        } catch {
+            logger.error(
+                "ComicInfo batch import failed libraryID=\(libraryID, privacy: .public) count=\(uniqueComics.count) policy=\(policy.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
         }
 
         progressHandler?(
@@ -156,6 +170,10 @@ final class ComicInfoImportService {
                 processedFolderCount: 0,
                 processedComicCount: uniqueComics.count
             )
+        )
+
+        logger.info(
+            "ComicInfo batch import completed libraryID=\(libraryID, privacy: .public) total=\(uniqueComics.count) imported=\(importedCount) skipped=\(skippedCount) failed=\(failedTitles.count)"
         )
 
         return ComicInfoImportBatchResult(
