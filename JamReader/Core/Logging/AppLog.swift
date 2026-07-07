@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 
@@ -94,5 +95,15 @@ enum AppLogSanitizer {
             preview += ", ...(+\(names.count - visibleNames.count) more)"
         }
         return truncated(preview, limit: limit)
+    }
+
+    nonisolated static func hashedIdentifier(
+        _ value: String,
+        prefixLength: Int = 12
+    ) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return String(digest.prefix(max(1, prefixLength)))
     }
 }
