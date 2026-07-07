@@ -1257,35 +1257,44 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             return
         }
 
-        continueReadingComics = (try? databaseReader.loadSpecialListComics(
-            databaseURL: databaseURL,
-            kind: .reading,
-            recentDays: recentDays
-        )) ?? []
+        continueReadingComics = loadSpecialCollectionPreview(kind: .reading)
+        recentComics = loadSpecialCollectionPreview(kind: .recent)
+        favoritesComics = loadSpecialCollectionPreview(kind: .favorites)
+        specialCollectionCounts = loadSpecialCollectionCounts()
+    }
 
-        recentComics = (try? databaseReader.loadSpecialListComics(
-            databaseURL: databaseURL,
-            kind: .recent,
-            recentDays: recentDays
-        )) ?? []
+    private func loadSpecialCollectionPreview(kind: LibrarySpecialCollectionKind) -> [LibraryComic] {
+        do {
+            return try databaseReader.loadSpecialListComics(
+                databaseURL: databaseURL,
+                kind: kind,
+                recentDays: recentDays
+            )
+        } catch {
+            logger.warning(
+                "Library special preview fallback libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(kind.rawValue, privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return []
+        }
+    }
 
-        favoritesComics = (try? databaseReader.loadSpecialListComics(
-            databaseURL: databaseURL,
-            kind: .favorites,
-            recentDays: recentDays
-        )) ?? []
+    private func loadSpecialCollectionCounts() -> [LibrarySpecialCollectionKind: Int] {
+        let fallbackCounts: [LibrarySpecialCollectionKind: Int] = [
+            .reading: continueReadingComics.count,
+            .favorites: favoritesComics.count,
+            .recent: recentComics.count
+        ]
 
-        if let counts = try? databaseReader.loadSpecialListCounts(
-            databaseURL: databaseURL,
-            recentDays: recentDays
-        ) {
-            specialCollectionCounts = counts
-        } else {
-            specialCollectionCounts = [
-                .reading: continueReadingComics.count,
-                .favorites: favoritesComics.count,
-                .recent: recentComics.count
-            ]
+        do {
+            return try databaseReader.loadSpecialListCounts(
+                databaseURL: databaseURL,
+                recentDays: recentDays
+            )
+        } catch {
+            logger.warning(
+                "Library special counts fallback libraryID=\(self.descriptor.id.uuidString, privacy: .public) result=previewCounts error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return fallbackCounts
         }
     }
 
