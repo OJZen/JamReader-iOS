@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum ReaderPerformanceTrace {
 #if DEBUG
@@ -17,7 +18,10 @@ enum ReaderPerformanceTrace {
         let now = DispatchTime.now().uptimeNanoseconds
         let elapsedMilliseconds = milliseconds(from: now - launchUptimeNanoseconds)
         let threadName = Thread.isMainThread ? "main" : "bg"
-        NSLog("[ReaderTrace %@ms %@] %@", format(milliseconds: elapsedMilliseconds), threadName, message())
+        let traceMessage = AppLogSanitizer.truncated(message())
+        AppLog.reader.debug(
+            "Reader trace elapsedMs=\(format(milliseconds: elapsedMilliseconds), privacy: .public) thread=\(threadName, privacy: .public) message=\(traceMessage, privacy: .public)"
+        )
     }
 
     static func measure<T>(_ label: String, _ work: () -> T) -> T {

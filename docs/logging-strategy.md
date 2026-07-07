@@ -17,6 +17,8 @@
 - `AppLog.persistence`：UserDefaults、SQLite、文件持久化失败边界。
 - `AppLog.ui`：只记录影响业务状态的 UI 协调，不记录普通点击和滚动。
 
+Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 subsystem `ooou.fun.jamreader` 和匹配 category 创建 `os_log_t`，不要使用 `OS_LOG_DEFAULT`。
+
 ## 输出规则
 
 - 使用 `AppLogSanitizer.path` 打印本地路径或远程路径，只保留末尾关键组件。
@@ -46,7 +48,7 @@
 - Library metadata batch editing：已记录批量元数据保存的选中数量、字段数量和失败原因。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
 - Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback 和失败原因。
-- Reader support services：已记录页面磁盘缓存异常、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败。
+- Reader support services：已记录页面磁盘缓存异常、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败、按需启用的 reader trace。
 - Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略、缓存清理和自动裁剪摘要。
 - Remote WebDAV range probing：已记录 byte-range 探测结果和每个服务器作用域首次探测失败的 fallback。
 - Remote SMB connection pool：已记录连接创建/复用/失败/驱逐/空闲清理，端点仅输出脱敏哈希 ID。

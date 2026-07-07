@@ -5,6 +5,15 @@
 
 static NSString * const YRLibArchiveReaderErrorDomain = @"YRLibArchiveReaderErrorDomain";
 
+static os_log_t YRLibArchiveReaderLog(void) {
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("ooou.fun.jamreader", "Reader");
+    });
+    return log;
+}
+
 typedef NS_ENUM(NSInteger, YRLibArchiveReaderErrorCode) {
     YRLibArchiveReaderErrorOpenFailed = 1,
     YRLibArchiveReaderErrorReadFailed = 2,
@@ -267,8 +276,8 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
         }
 
         if (bytesRead < (NSUInteger)size) {
-            os_log_error(OS_LOG_DEFAULT,
-                         "YRLibArchiveReader: incomplete read — expected %lu bytes, got %lu (entry index %ld)",
+            os_log_error(YRLibArchiveReaderLog(),
+                         "YRLibArchiveReader incomplete read expectedBytes=%{public}lu actualBytes=%{public}lu entryIndex=%{public}ld",
                          (unsigned long)size, (unsigned long)bytesRead, (long)(self.nextReadableEntryIndex));
             [data setLength:bytesRead];
         }
