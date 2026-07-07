@@ -112,7 +112,14 @@ final class LibraryStorageManager {
 
     func normalizeDescriptors(_ descriptors: [LibraryDescriptor]) -> [LibraryDescriptor] {
         descriptors.map { descriptor in
-            (try? normalizedDescriptor(for: descriptor)) ?? descriptor
+            do {
+                return try normalizedDescriptor(for: descriptor)
+            } catch {
+                logger.warning(
+                    "Library descriptor normalize fallback libraryID=\(descriptor.id.uuidString, privacy: .public) kind=\(descriptor.kind.rawValue, privacy: .public) root=\(AppLogSanitizer.path(descriptor.rootPath), privacy: .public) result=unchanged error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+                return descriptor
+            }
         }
     }
 
@@ -224,23 +231,25 @@ final class LibraryStorageManager {
         case .linkedFolder:
             return
         case .importedComics:
-            guard let rootURL = try? importedComicsLibraryRootURL(createIfNeeded: false),
-                  fileManager.fileExists(atPath: rootURL.path)
-            else {
+            let rootURL = try importedComicsLibraryRootURL(createIfNeeded: false)
+            guard fileManager.fileExists(atPath: rootURL.path) else {
                 return
             }
             try fileManager.removeItem(at: rootURL)
         case .appManaged:
-            guard let libraryRootURL = try? appManagedLibraryRootURL(for: descriptor, createIfNeeded: false),
-                  let managedRootURL = try? managedLibrariesRootURL(createIfNeeded: false) else {
-                return
-            }
+            let libraryRootURL = try appManagedLibraryRootURL(for: descriptor, createIfNeeded: false)
+            let managedRootURL = try managedLibrariesRootURL(createIfNeeded: false)
 
             let managedRootPath = managedRootURL.path
             let libraryRootPath = libraryRootURL.path
-            guard libraryRootPath.hasPrefix(managedRootPath + "/"),
-                  fileManager.fileExists(atPath: libraryRootPath)
-            else {
+            guard libraryRootPath.hasPrefix(managedRootPath + "/") else {
+                logger.warning(
+                    "Library managed files delete skipped libraryID=\(descriptor.id.uuidString, privacy: .public) reason=outsideManagedRoot root=\(AppLogSanitizer.path(libraryRootPath), privacy: .public)"
+                )
+                return
+            }
+
+            guard fileManager.fileExists(atPath: libraryRootPath) else {
                 return
             }
 
