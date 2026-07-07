@@ -40,6 +40,8 @@ final class LibraryStorageManager {
     private let database: AppLibraryDatabase
     private let assetStore: LibraryAssetStore
     private let logger = AppLog.library
+    private let fallbackLogLock = NSLock()
+    private var loggedFallbackKeys: Set<String> = []
 
     init(
         fileManager: FileManager = .default,
@@ -168,19 +170,49 @@ final class LibraryStorageManager {
     }
 
     func metadataRootURL(for descriptor: LibraryDescriptor) -> URL {
-        (try? assetStore.rootURL(for: descriptor.id))
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        do {
+            return try assetStore.rootURL(for: descriptor.id)
+        } catch {
+            let fallbackURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
                 .appendingPathComponent(descriptor.id.uuidString, isDirectory: true)
+            logStorageFallbackOnce(
+                reason: "metadataRootURL",
+                descriptor: descriptor,
+                fallbackURL: fallbackURL,
+                error: error
+            )
+            return fallbackURL
+        }
     }
 
     func databaseURL(for descriptor: LibraryDescriptor) -> URL {
-        (try? database.contextualDatabaseURL(for: descriptor.id))
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: false)
+        do {
+            return try database.contextualDatabaseURL(for: descriptor.id)
+        } catch {
+            let fallbackURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: false)
+            logStorageFallbackOnce(
+                reason: "databaseURL",
+                descriptor: descriptor,
+                fallbackURL: fallbackURL,
+                error: error
+            )
+            return fallbackURL
+        }
     }
 
     func coversURL(for descriptor: LibraryDescriptor) -> URL {
-        (try? assetStore.coversRootURL(for: descriptor.id))
-            ?? metadataRootURL(for: descriptor).appendingPathComponent("covers", isDirectory: true)
+        do {
+            return try assetStore.coversRootURL(for: descriptor.id)
+        } catch {
+            let fallbackURL = metadataRootURL(for: descriptor).appendingPathComponent("covers", isDirectory: true)
+            logStorageFallbackOnce(
+                reason: "coversURL",
+                descriptor: descriptor,
+                fallbackURL: fallbackURL,
+                error: error
+            )
+            return fallbackURL
+        }
     }
 
     func ensureImportedComicsLibraryRootURL() throws -> URL {
@@ -192,9 +224,20 @@ final class LibraryStorageManager {
     }
 
     func importedComicsLibraryStorageSummary() -> LibraryStorageFootprintSummary {
-        guard let importedRootURL = try? importedComicsLibraryRootURL(createIfNeeded: false),
-              fileManager.fileExists(atPath: importedRootURL.path)
-        else {
+        let importedRootURL: URL
+        do {
+            importedRootURL = try importedComicsLibraryRootURL(createIfNeeded: false)
+        } catch {
+            logStorageFallbackOnce(
+                reason: "importedComicsStorageSummaryRoot",
+                descriptor: nil,
+                fallbackURL: nil,
+                error: error
+            )
+            return .empty
+        }
+
+        guard fileManager.fileExists(atPath: importedRootURL.path) else {
             return .empty
         }
 
@@ -335,7 +378,16 @@ final class LibraryStorageManager {
     }
 
     private func isImportedComicsLibraryURL(_ url: URL) -> Bool {
-        guard let importedURL = try? importedComicsLibraryRootURL(createIfNeeded: false) else {
+        let importedURL: URL
+        do {
+            importedURL = try importedComicsLibraryRootURL(createIfNeeded: false)
+        } catch {
+            logStorageFallbackOnce(
+                reason: "importedComicsKindCheckRoot",
+                descriptor: nil,
+                fallbackURL: nil,
+                error: error
+            )
             return false
         }
 
@@ -373,7 +425,16 @@ final class LibraryStorageManager {
     }
 
     private func isManagedLocalLibraryURL(_ url: URL) -> Bool {
-        guard let rootURL = try? database.storageRootURL() else {
+        let rootURL: URL
+        do {
+            rootURL = try database.storageRootURL()
+        } catch {
+            logStorageFallbackOnce(
+                reason: "managedLibraryKindCheckRoot",
+                descriptor: nil,
+                fallbackURL: nil,
+                error: error
+            )
             return false
         }
 
@@ -465,6 +526,46 @@ final class LibraryStorageManager {
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
+    }
+
+    private func logStorageFallbackOnce(
+        reason: String,
+        descriptor: LibraryDescriptor?,
+        fallbackURL: URL?,
+        error: Error
+    ) {
+        let descriptorKey = descriptor?.id.uuidString ?? "global"
+        let key = "\(reason):\(descriptorKey)"
+        guard shouldLogStorageFallback(key: key) else {
+            return
+        }
+
+        let fallbackPath = fallbackURL.map { AppLogSanitizer.path($0.path) } ?? "none"
+        let errorDescription = AppLogSanitizer.errorDescription(error)
+
+        if let descriptor {
+            logger.warning(
+                "Library storage fallback reason=\(reason, privacy: .public) libraryID=\(descriptor.id.uuidString, privacy: .public) kind=\(descriptor.kind.rawValue, privacy: .public) root=\(AppLogSanitizer.path(descriptor.rootPath), privacy: .public) fallback=\(fallbackPath, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
+        } else {
+            logger.warning(
+                "Library storage fallback reason=\(reason, privacy: .public) fallback=\(fallbackPath, privacy: .public) error=\(errorDescription, privacy: .public)"
+            )
+        }
+    }
+
+    private func shouldLogStorageFallback(key: String) -> Bool {
+        fallbackLogLock.lock()
+        defer {
+            fallbackLogLock.unlock()
+        }
+
+        guard !loggedFallbackKeys.contains(key) else {
+            return false
+        }
+
+        loggedFallbackKeys.insert(key)
+        return true
     }
 
     private func directoryFootprint(at rootURL: URL) -> LibraryStorageFootprintSummary {
