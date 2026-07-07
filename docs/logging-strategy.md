@@ -35,9 +35,16 @@
 ## 需要继续补的区域
 
 - Reader open pipeline：记录本地、远程流式、远程缓存 fallback、失败原因。
-- Library list ViewModel：记录新增/删除/重命名 library 和 bookmark 恢复失败。
-- Remote ViewModel：记录远程导入、本地离线、浏览历史删除和缓存清理后的 UI 状态刷新。
 - Persistence stores：记录读取失败和写入失败，但不要记录完整持久化 payload。
+
+## 当前已覆盖的高价值区域
+
+- Library list ViewModel：已记录书库加载、新增文件夹、创建托管书库、重命名等低频动作。
+- Library import/indexing：已记录导入、复制移动、索引恢复、扫描同步等结果摘要。
+- Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
+- Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略和缓存清理。
+- Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理和浏览历史删除。
+- Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
 
 ## 不建议补日志的区域
 

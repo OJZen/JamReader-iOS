@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 struct RemoteBrowserFeedbackState: Identifiable, Equatable {
     enum Kind: Equatable {
@@ -71,6 +72,8 @@ final class RemoteServerListViewModel: ObservableObject {
     private let credentialStore: RemoteServerCredentialStore
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
+    private let logger = AppLog.remote
+    private let cacheLogger = AppLog.remoteCache
     private var hasLoaded = false
 
     init(
@@ -114,10 +117,16 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
+            let profileCount = profiles.count
+            let recentCount = latestSessionsByServerID.count
+            logger.info("Remote server list loaded count=\(profileCount) recent=\(recentCount)")
         } catch {
             profiles = []
             shortcutCount = 0
             cacheSummaryByServerID = [:]
+            logger.error(
+                "Remote server list load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Load Remote Servers",
                 message: error.userFacingMessage
@@ -177,8 +186,10 @@ final class RemoteServerListViewModel: ObservableObject {
         let baseDirectoryPath = draft.baseDirectoryPath.trimmingCharacters(in: .whitespacesAndNewlines)
         let username = draft.username.trimmingCharacters(in: .whitespacesAndNewlines)
         let password = draft.password.trimmingCharacters(in: .whitespacesAndNewlines)
+        let saveAction = draft.existingProfileID == nil ? "create" : "update"
 
         guard let port = Int(draft.portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            logger.warning("Remote server save rejected action=\(saveAction, privacy: .public) reason=invalidPort")
             return AppAlertState(
                 title: "Invalid Port",
                 message: "Enter a numeric port for this remote server."
@@ -206,12 +217,20 @@ final class RemoteServerListViewModel: ObservableObject {
             createdAt: draft.createdAt ?? Date(),
             updatedAt: Date()
         )
+        let provider = profile.providerKind.rawValue
+        let endpointHost = AppLogSanitizer.truncated(profile.endpointDisplayHost)
+        logger.notice(
+            "Remote server save requested action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) host=\(endpointHost, privacy: .public)"
+        )
 
         let blockingIssues = browsingService.validateProfile(profile)
             .filter { $0.severity == .error }
             .map(\.message)
 
         if draft.authenticationMode.requiresPassword && password.isEmpty && !draft.hasStoredPassword {
+            logger.warning(
+                "Remote server save rejected action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) reason=missingPassword"
+            )
             return AppAlertState(
                 title: "Password Required",
                 message: "Enter a password for this remote server, or switch the connection to Guest."
@@ -219,6 +238,9 @@ final class RemoteServerListViewModel: ObservableObject {
         }
 
         if !blockingIssues.isEmpty {
+            logger.warning(
+                "Remote server save rejected action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) validationErrors=\(blockingIssues.count)"
+            )
             return AppAlertState(
                 title: "Incomplete Server",
                 message: blockingIssues.joined(separator: "\n")
@@ -277,8 +299,15 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
+            let profileCount = profiles.count
+            logger.info(
+                "Remote server save completed action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) locationChanged=\(didChangeRemoteLocation) credentialsChanged=\(didChangeCredentialIdentity) passwordRotated=\(didRotatePassword) count=\(profileCount)"
+            )
             return nil
         } catch {
+            logger.error(
+                "Remote server save failed action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             return AppAlertState(
                 title: "Failed to Save Server",
                 message: error.userFacingMessage
@@ -287,6 +316,10 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func delete(_ profile: RemoteServerProfile) {
+        let provider = profile.providerKind.rawValue
+        logger.notice(
+            "Remote server delete requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+        )
         do {
             var updatedProfiles = profiles
             updatedProfiles.removeAll { $0.id == profile.id }
@@ -307,7 +340,14 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
+            let profileCount = profiles.count
+            logger.info(
+                "Remote server delete completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) remaining=\(profileCount)"
+            )
         } catch {
+            logger.error(
+                "Remote server delete failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Remove Server",
                 message: error.userFacingMessage
@@ -324,6 +364,10 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func clearCache(for profile: RemoteServerProfile) {
+        let provider = profile.providerKind.rawValue
+        cacheLogger.notice(
+            "Remote server comic cache clear requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+        )
         do {
             try browsingService.clearCachedComics(for: profile)
             browsingService.evictActiveConnections(for: profile)
@@ -331,7 +375,13 @@ final class RemoteServerListViewModel: ObservableObject {
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             refreshCacheSummaries()
             refreshRecentActivity()
+            cacheLogger.info(
+                "Remote server comic cache clear completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+            )
         } catch {
+            cacheLogger.error(
+                "Remote server comic cache clear failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Clear Cache",
                 message: error.userFacingMessage
@@ -340,11 +390,21 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func clearOtherCache(for profile: RemoteServerProfile) {
+        let provider = profile.providerKind.rawValue
+        cacheLogger.notice(
+            "Remote server auxiliary cache clear requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+        )
         do {
             try browsingService.clearOtherCachedData(for: profile)
             browsingService.evictActiveConnections(for: profile)
             refreshCacheSummaries()
+            cacheLogger.info(
+                "Remote server auxiliary cache clear completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+            )
         } catch {
+            cacheLogger.error(
+                "Remote server auxiliary cache clear failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Clear Other Cache Data",
                 message: error.userFacingMessage
@@ -378,10 +438,19 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func deleteRecentSession(_ session: RemoteComicReadingSession) {
+        logger.info(
+            "Remote recent session delete requested serverID=\(session.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(session.path), privacy: .public)"
+        )
         do {
             try readingProgressStore.deleteSession(session)
             refreshRecentActivity()
+            logger.info(
+                "Remote recent session delete completed serverID=\(session.serverID.uuidString, privacy: .public)"
+            )
         } catch {
+            logger.error(
+                "Remote recent session delete failed serverID=\(session.serverID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Delete History",
                 message: error.userFacingMessage
@@ -390,10 +459,20 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func clearRecentHistory(for profile: RemoteServerProfile) {
+        let provider = profile.providerKind.rawValue
+        logger.notice(
+            "Remote recent history clear requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+        )
         do {
             try readingProgressStore.deleteSessions(for: profile)
             refreshRecentActivity()
+            logger.info(
+                "Remote recent history clear completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
+            )
         } catch {
+            logger.error(
+                "Remote recent history clear failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Clear History",
                 message: error.userFacingMessage
