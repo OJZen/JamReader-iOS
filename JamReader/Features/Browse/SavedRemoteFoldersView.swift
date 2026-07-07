@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import os
 
 private enum SavedRemoteFoldersLayoutMetrics {
     static let horizontalInset: CGFloat = 12
@@ -314,6 +315,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
     private let shortcutSnapshotStore: RemoteFolderShortcutSnapshotStore
     private let shortcutStore: RemoteFolderShortcutStore
     private var hasLoaded = false
+    private let logger = AppLog.remote
 
     init(dependencies: AppDependencies) {
         self.shortcutSnapshotStore = dependencies.remoteFolderShortcutSnapshotStore
@@ -333,10 +335,17 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
-            entries = try shortcutSnapshotStore.loadEntries()
+            let loadedEntries = try shortcutSnapshotStore.loadEntries()
+            entries = loadedEntries
             alert = nil
+            logger.info(
+                "Saved remote folders loaded count=\(loadedEntries.count)"
+            )
         } catch {
             entries = []
+            logger.error(
+                "Saved remote folders load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = BrowseHomeAlert(
                 title: "Saved Folders Unavailable",
                 message: error.userFacingMessage
@@ -354,6 +363,15 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
             return
         }
 
+        let shortcutID = entry.shortcut.id.uuidString
+        let serverID = entry.shortcut.serverID.uuidString
+        let provider = entry.shortcut.providerKind.rawValue
+        let path = AppLogSanitizer.path(entry.shortcut.path)
+        let sanitizedTitle = AppLogSanitizer.truncated(title)
+        logger.info(
+            "Saved remote folder rename requested shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public) path=\(path, privacy: .public) title=\(sanitizedTitle, privacy: .public)"
+        )
+
         do {
             try shortcutStore.renameShortcut(id: entry.shortcut.id, title: title)
             if let index = entries.firstIndex(where: { $0.id == entry.id }) {
@@ -362,7 +380,13 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
                 updatedShortcut.updatedAt = Date()
                 entries[index] = ShortcutEntry(shortcut: updatedShortcut, profile: entries[index].profile)
             }
+            logger.info(
+                "Saved remote folder rename completed shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public)"
+            )
         } catch {
+            logger.error(
+                "Saved remote folder rename failed shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = BrowseHomeAlert(
                 title: "Failed to Rename Shortcut",
                 message: error.userFacingMessage
@@ -371,10 +395,24 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
     }
 
     func removeShortcut(_ entry: ShortcutEntry) {
+        let shortcutID = entry.shortcut.id.uuidString
+        let serverID = entry.shortcut.serverID.uuidString
+        let provider = entry.shortcut.providerKind.rawValue
+        let path = AppLogSanitizer.path(entry.shortcut.path)
+        logger.info(
+            "Saved remote folder remove requested shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public) path=\(path, privacy: .public)"
+        )
+
         do {
             try shortcutStore.removeShortcut(id: entry.shortcut.id)
             entries.removeAll { $0.id == entry.id }
+            logger.info(
+                "Saved remote folder remove completed shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public)"
+            )
         } catch {
+            logger.error(
+                "Saved remote folder remove failed shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = BrowseHomeAlert(
                 title: "Failed to Remove Shortcut",
                 message: error.userFacingMessage

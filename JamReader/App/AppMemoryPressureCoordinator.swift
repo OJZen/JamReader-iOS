@@ -1,11 +1,13 @@
 import Combine
 import SwiftUI
 import UIKit
+import os
 
 @MainActor
 final class AppMemoryPressureCoordinator: ObservableObject {
     let objectWillChange = ObservableObjectPublisher()
     private var memoryWarningObserver: NSObjectProtocol?
+    private let logger = AppLog.app
 
     init() {
         memoryWarningObserver = NotificationCenter.default.addObserver(
@@ -14,7 +16,7 @@ final class AppMemoryPressureCoordinator: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.purgeVolatileCaches()
+                self?.purgeVolatileCaches(reason: "memoryWarning")
             }
         }
     }
@@ -34,27 +36,39 @@ final class AppMemoryPressureCoordinator: ObservableObject {
     }
 
     func purgeVolatileCaches() {
+        purgeVolatileCaches(reason: "manual")
+    }
+
+    private func purgeVolatileCaches(reason: String) {
+        logger.notice(
+            "App volatile cache purge requested reason=\(reason, privacy: .public)"
+        )
         LocalCoverTransitionCache.shared.clear()
         purgeReaderDisplayCaches()
         RemoteComicThumbnailPipeline.shared.clearMemoryCache()
-        purgeAsyncImageCaches()
+        purgeAsyncImageCaches(reason: reason)
     }
 
     func purgeBackgroundCaches() {
+        logger.info("App background cache purge requested")
         purgeReaderDisplayCaches()
         RemoteComicThumbnailPipeline.shared.clearDisplayMemoryCache()
-        purgeAsyncImageCaches()
+        purgeAsyncImageCaches(reason: "background")
     }
 
     private func purgeReaderDisplayCaches() {
         ReaderPagePreviewStore.shared.clear()
     }
 
-    private func purgeAsyncImageCaches() {
+    private func purgeAsyncImageCaches(reason: String) {
+        let logger = self.logger
         Task {
             await ReaderPageCache.shared.clearMemoryCache()
             await LocalCoverImagePipeline.shared.clearMemoryCache()
             await ReaderImageSequenceThumbnailPipeline.shared.clearMemoryCache()
+            logger.info(
+                "App async image cache purge completed reason=\(reason, privacy: .public)"
+            )
         }
     }
 }

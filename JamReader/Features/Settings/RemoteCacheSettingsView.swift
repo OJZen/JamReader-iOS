@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 struct RemoteCacheSettingsView: View {
     private struct CacheSettingsSnapshot {
@@ -55,6 +56,7 @@ struct RemoteCacheSettingsView: View {
     }
 
     let dependencies: AppDependencies
+    private let logger = AppLog.remoteCache
 
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .oneGigabyte
@@ -369,13 +371,22 @@ struct RemoteCacheSettingsView: View {
         failureTitle: String,
         work: @escaping () throws -> Void
     ) async {
+        logger.notice(
+            "Remote cache settings maintenance requested action=\(action.id, privacy: .public)"
+        )
         maintenanceAction = action
         await Task.yield()
 
         do {
             try await runMaintenanceWork(work)
             await refresh()
+            logger.notice(
+                "Remote cache settings maintenance completed action=\(action.id, privacy: .public)"
+            )
         } catch {
+            logger.error(
+                "Remote cache settings maintenance failed action=\(action.id, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: failureTitle,
                 message: error.userFacingMessage
@@ -401,12 +412,21 @@ struct RemoteCacheSettingsView: View {
     }
 
     private func applyRemoteCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) {
+        logger.notice(
+            "Remote cache settings policy change requested preset=\(preset.rawValue, privacy: .public)"
+        )
         do {
             try dependencies.remoteServerBrowsingService.applyCachePolicyPreset(preset)
+            logger.notice(
+                "Remote cache settings policy change completed preset=\(preset.rawValue, privacy: .public)"
+            )
             Task {
                 await refresh()
             }
         } catch {
+            logger.error(
+                "Remote cache settings policy change failed preset=\(preset.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Update Cache Policy",
                 message: error.userFacingMessage

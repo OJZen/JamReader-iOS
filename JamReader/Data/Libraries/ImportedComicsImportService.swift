@@ -255,33 +255,47 @@ final class ImportedComicsImportService {
     }
 
     func clearImportedComicsLibrary() throws {
-        var descriptors = try loadNormalizedDescriptors()
-        let destinationResolution = try ensureImportedComicsLibrary(in: &descriptors)
-        let descriptor = destinationResolution.descriptor
-        let rootURL = try storageManager.restoreSourceURL(for: descriptor).standardizedFileURL
+        logger.notice("Imported comics library clear requested")
+        do {
+            var descriptors = try loadNormalizedDescriptors()
+            let destinationResolution = try ensureImportedComicsLibrary(in: &descriptors)
+            let descriptor = destinationResolution.descriptor
+            let rootURL = try storageManager.restoreSourceURL(for: descriptor).standardizedFileURL
+            let rootPath = AppLogSanitizer.path(rootURL.path)
+            var removedItemCount = 0
 
-        if fileManager.fileExists(atPath: rootURL.path) {
-            let contents = try fileManager.contentsOfDirectory(
-                at: rootURL,
-                includingPropertiesForKeys: nil,
-                options: [.skipsSubdirectoryDescendants]
-            )
-            for itemURL in contents {
-                try fileManager.removeItem(at: itemURL)
+            if fileManager.fileExists(atPath: rootURL.path) {
+                let contents = try fileManager.contentsOfDirectory(
+                    at: rootURL,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsSubdirectoryDescendants]
+                )
+                removedItemCount = contents.count
+                for itemURL in contents {
+                    try fileManager.removeItem(at: itemURL)
+                }
+            } else {
+                try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
             }
-        } else {
-            try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
-        }
 
-        try storageManager.ensureLibraryMetadataStructure(for: descriptor)
-        try databaseBootstrapper.ensureDatabaseExists(
-            at: storageManager.databaseURL(for: descriptor)
-        )
-        _ = try libraryScanner.rescanLibrary(
-            sourceRootURL: rootURL,
-            databaseURL: storageManager.databaseURL(for: descriptor)
-        )
-        maintenanceStatusStore.clearRecord(for: descriptor.id)
+            try storageManager.ensureLibraryMetadataStructure(for: descriptor)
+            try databaseBootstrapper.ensureDatabaseExists(
+                at: storageManager.databaseURL(for: descriptor)
+            )
+            _ = try libraryScanner.rescanLibrary(
+                sourceRootURL: rootURL,
+                databaseURL: storageManager.databaseURL(for: descriptor)
+            )
+            maintenanceStatusStore.clearRecord(for: descriptor.id)
+            logger.notice(
+                "Imported comics library clear completed libraryID=\(descriptor.id.uuidString, privacy: .public) removedItems=\(removedItemCount) path=\(rootPath, privacy: .public)"
+            )
+        } catch {
+            logger.error(
+                "Imported comics library clear failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
+        }
     }
 
     func importAvailability(for descriptor: LibraryDescriptor) -> LibraryImportDestinationOption.Availability {

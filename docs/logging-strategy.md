@@ -38,15 +38,18 @@
 
 ## 当前已覆盖的高价值区域
 
+- App lifecycle/cache pressure：已记录内存警告、后台切换触发的内存缓存清理。
 - Library list ViewModel：已记录书库加载、新增文件夹、创建托管书库、重命名等低频动作。
 - Library organization：已记录标签、书单、集合成员关系、收藏/阅读状态、评分、元数据保存和 ComicInfo 导入。
 - Library comic removal：已记录单本/批量漫画从本地书库移除、只读拒绝和删除失败原因。
-- Library import/indexing：已记录导入、复制移动、索引恢复、扫描同步等结果摘要。
+- Library import/indexing：已记录导入、复制移动、索引恢复、扫描同步、导入书库清空等结果摘要。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
 - Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback 和失败原因。
 - Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略和缓存清理。
+- Remote cache settings：已记录设置页发起的缓存策略变更、下载/辅助缓存/缩略图/导入书库清理。
 - Remote server list ViewModel：已记录服务器加载、保存、删除、缓存清理和浏览历史删除。
 - Remote browser ViewModel：已记录目录加载、收藏文件夹、远程导入、离线保存和删除离线副本。
+- Saved remote folders：已记录收藏远程文件夹列表加载、重命名和删除。
 - Persistence stores：已记录 JSON 文件 store、UserDefaults Codable helper、Keychain、维护状态记录的失败边界。
 
 ## 后续建议补测试的区域
