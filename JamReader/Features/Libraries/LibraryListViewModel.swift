@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import os
 
 struct LibraryListItem: Identifiable, Equatable {
     let descriptor: LibraryDescriptor
@@ -41,6 +42,7 @@ final class LibraryListViewModel: ObservableObject {
     private let libraryScanner: LibraryScanner
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let importedComicsImportService: ImportedComicsImportService
+    private let logger = AppLog.library
 
     private var descriptors: [LibraryDescriptor] = []
     private var cancellables = Set<AnyCancellable>()
@@ -74,12 +76,17 @@ final class LibraryListViewModel: ObservableObject {
             }
             descriptors = normalizedDescriptors
             rebuildItems()
+            logger.info("Library list loaded count=\(self.descriptors.count)")
         } catch {
+            logger.error(
+                "Library list load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Load Libraries", message: error.userFacingMessage)
         }
     }
 
     func addLibraryFolders(from urls: [URL]) {
+        logger.info("Library folders add requested count=\(urls.count)")
         var addedCount = 0
         var duplicateNames: [String] = []
         var failedItemNames: [String] = []
@@ -117,9 +124,16 @@ final class LibraryListViewModel: ObservableObject {
             try store.save(descriptors)
             rebuildItems()
         } catch {
+            logger.error(
+                "Library folders add failed while saving added=\(addedCount) duplicates=\(duplicateNames.count) failed=\(failedItemNames.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Save Libraries", message: error.userFacingMessage)
             return
         }
+
+        logger.info(
+            "Library folders add completed added=\(addedCount) duplicates=\(duplicateNames.count) failed=\(failedItemNames.count) duplicateNames=\(AppLogSanitizer.namesPreview(duplicateNames), privacy: .public) failedNames=\(AppLogSanitizer.namesPreview(failedItemNames), privacy: .public)"
+        )
 
         if addedCount == 0, !duplicateNames.isEmpty, failedItemNames.isEmpty {
             let names = duplicateNames.sorted().joined(separator: ", ")
@@ -175,6 +189,7 @@ final class LibraryListViewModel: ObservableObject {
             return nil
         }
 
+        logger.info("Managed library create requested name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)")
         do {
             let descriptor = try storageManager.createManagedLibrary(named: trimmedName)
             descriptors.append(descriptor)
@@ -194,8 +209,14 @@ final class LibraryListViewModel: ObservableObject {
                 throw error
             }
             rebuildItems()
+            logger.info(
+                "Managed library create completed id=\(descriptor.id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(descriptor.name), privacy: .public)"
+            )
             return descriptor.id
         } catch {
+            logger.error(
+                "Managed library create failed name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Create Library", message: error.userFacingMessage)
             return nil
         }
@@ -252,8 +273,14 @@ final class LibraryListViewModel: ObservableObject {
         do {
             try store.save(descriptors)
             rebuildItems()
+            logger.info(
+                "Library rename completed id=\(id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
+            )
             return true
         } catch {
+            logger.error(
+                "Library rename failed id=\(id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(title: "Failed to Rename Library", message: error.userFacingMessage)
             return false
         }
