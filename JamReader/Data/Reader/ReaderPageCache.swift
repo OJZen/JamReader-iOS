@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 
 struct ReaderPageCacheKey: Sendable {
     let namespace: String
@@ -20,6 +21,8 @@ actor ReaderPageCache {
 
     private var hasPreparedDiskRoot = false
     private var lastTrimDate = Date.distantPast
+    private var lastDiskFailureLogDate = Date.distantPast
+    private let logger = AppLog.reader
 
     init(
         fileManager: FileManager = .default,
@@ -64,6 +67,10 @@ actor ReaderPageCache {
         do {
             try prepareDiskRootIfNeeded()
         } catch {
+            logDiskFailureIfNeeded(
+                "Reader page cache prepare failed",
+                error: error
+            )
             return nil
         }
 
@@ -79,6 +86,10 @@ actor ReaderPageCache {
             return data
         } catch {
             try? fileManager.removeItem(at: fileURL)
+            logDiskFailureIfNeeded(
+                "Reader page cache read failed",
+                error: error
+            )
             return nil
         }
     }
@@ -94,6 +105,10 @@ actor ReaderPageCache {
             touch(fileURL)
             trimIfNeeded()
         } catch {
+            logDiskFailureIfNeeded(
+                "Reader page cache store failed bytes=\(data.count)",
+                error: error
+            )
             return
         }
     }
@@ -152,6 +167,9 @@ actor ReaderPageCache {
             includingPropertiesForKeys: Array(resourceKeys),
             options: [.skipsHiddenFiles]
         ) else {
+            AppLog.reader.warning(
+                "Reader page cache trim skipped reason=enumeratorUnavailable root=\(AppLogSanitizer.path(diskRootURL.path), privacy: .public)"
+            )
             return
         }
 
@@ -174,15 +192,42 @@ actor ReaderPageCache {
 
         guard totalSize > maxDiskBytes else { return }
 
+        let originalSize = totalSize
+        var removedCount = 0
+        var failedRemovalCount = 0
+
         for file in files.sorted(by: { $0.lastAccess < $1.lastAccess }) {
             do {
                 try fileManager.removeItem(at: file.url)
                 totalSize -= file.size
+                removedCount += 1
             } catch {
+                failedRemovalCount += 1
                 continue
             }
             if totalSize <= maxDiskBytes { break }
         }
+
+        if removedCount > 0 {
+            AppLog.reader.info(
+                "Reader page cache trim completed removed=\(removedCount) failed=\(failedRemovalCount) beforeBytes=\(originalSize) afterBytes=\(totalSize) maxBytes=\(maxDiskBytes)"
+            )
+        } else if failedRemovalCount > 0 {
+            AppLog.reader.warning(
+                "Reader page cache trim failed removed=0 failed=\(failedRemovalCount) bytes=\(originalSize) maxBytes=\(maxDiskBytes)"
+            )
+        }
+    }
+
+    private func logDiskFailureIfNeeded(_ message: String, error: Error) {
+        let now = Date()
+        guard now.timeIntervalSince(lastDiskFailureLogDate) >= 60 else {
+            return
+        }
+        lastDiskFailureLogDate = now
+        logger.warning(
+            "\(message, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+        )
     }
 
     private func touch(_ fileURL: URL) {

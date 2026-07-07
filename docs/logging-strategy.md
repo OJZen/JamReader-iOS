@@ -46,6 +46,7 @@
 - Library metadata batch editing：已记录批量元数据保存的选中数量、字段数量和失败原因。
 - Reader ViewModel：已记录 reader 打开、取消、超时、保存页面和进度保存失败。
 - Reader open pipeline：已记录本地文件、本地书库、远程缓存、远程流式、远程下载 fallback 和失败原因。
+- Reader support services：已记录页面磁盘缓存异常、磁盘缓存 trim 摘要、EPUB 准备/解包/复用/失败。
 - Remote browsing service：已记录远程目录加载、单本下载、批量下载、缓存策略和缓存清理。
 - Remote background import：已记录后台导入开始、拒绝、完成、取消和反馈展示。
 - Remote cache settings：已记录设置页发起的缓存策略变更、下载/辅助缓存/缩略图/导入书库清理。

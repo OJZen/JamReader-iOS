@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 struct EPUBPreparedDocument: Equatable {
     let documentID: String
@@ -36,31 +37,47 @@ actor EPUBDocumentPreparationService {
     private let fileManager: FileManager
     private let assetDirectoryName = "SharedAssets"
     private let booksDirectoryName = "Books"
+    private let logger = AppLog.reader
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
     }
 
     func prepare(document: EBookComicDocument) async throws -> EPUBPreparedDocument {
-        let rootURL = try preparationRootURL()
-        try ensureSharedAssets(in: rootURL)
-
-        let bookRootURL = try ensureBookExtraction(for: document, in: rootURL)
-        let packageDocumentURL = try await locatePackageDocument(in: bookRootURL)
-        let readerHTMLURL = rootURL
-            .appendingPathComponent(assetDirectoryName, isDirectory: true)
-            .appendingPathComponent("reader.html", isDirectory: false)
-        let packageRelativePath = relativePath(
-            from: readerHTMLURL.deletingLastPathComponent(),
-            to: packageDocumentURL
+        logger.info(
+            "EPUB preparation requested documentID=\(document.documentID, privacy: .public)"
         )
 
-        return EPUBPreparedDocument(
-            documentID: document.documentID,
-            readerHTMLURL: readerHTMLURL,
-            readAccessRootURL: rootURL,
-            packageRelativePath: packageRelativePath
-        )
+        do {
+            let rootURL = try preparationRootURL()
+            try ensureSharedAssets(in: rootURL)
+
+            let bookRootURL = try ensureBookExtraction(for: document, in: rootURL)
+            let packageDocumentURL = try await locatePackageDocument(in: bookRootURL)
+            let readerHTMLURL = rootURL
+                .appendingPathComponent(assetDirectoryName, isDirectory: true)
+                .appendingPathComponent("reader.html", isDirectory: false)
+            let packageRelativePath = relativePath(
+                from: readerHTMLURL.deletingLastPathComponent(),
+                to: packageDocumentURL
+            )
+
+            logger.info(
+                "EPUB preparation completed documentID=\(document.documentID, privacy: .public)"
+            )
+
+            return EPUBPreparedDocument(
+                documentID: document.documentID,
+                readerHTMLURL: readerHTMLURL,
+                readAccessRootURL: rootURL,
+                packageRelativePath: packageRelativePath
+            )
+        } catch {
+            logger.error(
+                "EPUB preparation failed documentID=\(document.documentID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
+        }
     }
 
     private func preparationRootURL() throws -> URL {
@@ -109,18 +126,27 @@ actor EPUBDocumentPreparationService {
                 .appendingPathComponent("META-INF", isDirectory: true)
                 .appendingPathComponent("container.xml", isDirectory: false)
             if fileManager.fileExists(atPath: containerURL.path) {
+                logger.debug(
+                    "EPUB extraction reused documentID=\(document.documentID, privacy: .public)"
+                )
                 return bookRootURL
             }
 
             try? fileManager.removeItem(at: documentRootURL)
+            logger.notice(
+                "EPUB extraction cache reset documentID=\(document.documentID, privacy: .public) reason=missingContainerXML"
+            )
         }
 
         try fileManager.createDirectory(at: bookRootURL, withIntermediateDirectories: true)
-        try extractEPUB(from: document.url, into: bookRootURL)
+        let entryCount = try extractEPUB(from: document.url, into: bookRootURL)
+        logger.info(
+            "EPUB extraction completed documentID=\(document.documentID, privacy: .public) entries=\(entryCount)"
+        )
         return bookRootURL
     }
 
-    private func extractEPUB(from sourceURL: URL, into destinationURL: URL) throws {
+    private func extractEPUB(from sourceURL: URL, into destinationURL: URL) throws -> Int {
         let archiveReader = try YRLibArchiveReader(archiveURL: sourceURL)
 
         for (index, entryPath) in archiveReader.entryPaths.enumerated() {
@@ -135,6 +161,8 @@ actor EPUBDocumentPreparationService {
             let entryData = try archiveReader.dataForEntry(at: index)
             try entryData.write(to: destinationFileURL, options: .atomic)
         }
+
+        return archiveReader.entryPaths.count
     }
 
     private func locatePackageDocument(in extractedBookRootURL: URL) async throws -> URL {
