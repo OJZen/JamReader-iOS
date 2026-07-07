@@ -394,7 +394,13 @@ final class ComicDocumentService {
                     reader: reader
                 )
             } catch {
-                try? await reader.close()
+                do {
+                    try await reader.close()
+                } catch {
+                    AppLog.reader.warning(
+                        "Reader remote stream cleanup failed fileName=\(AppLogSanitizer.truncated(fileName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
                 throw error
             }
         }

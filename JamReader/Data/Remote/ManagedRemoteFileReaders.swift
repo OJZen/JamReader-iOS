@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked Sendable {
     private struct Resources: @unchecked Sendable {
@@ -32,12 +33,7 @@ final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked
             return
         }
 
-        try? await resources.fileReader.close()
-        _ = try? await resources.client.disconnectShare()
-        _ = try? await resources.client.logoff()
-        await MainActor.run {
-            resources.client.session.disconnect()
-        }
+        await Self.closeResources(resources, context: "explicitClose")
     }
 
     deinit {
@@ -47,12 +43,37 @@ final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked
         }
 
         Task {
-            try? await resources.fileReader.close()
-            _ = try? await resources.client.disconnectShare()
-            _ = try? await resources.client.logoff()
-            await MainActor.run {
-                resources.client.session.disconnect()
-            }
+            await Self.closeResources(resources, context: "deinit")
+        }
+    }
+
+    private static func closeResources(_ resources: Resources, context: String) async {
+        do {
+            try await resources.fileReader.close()
+        } catch {
+            AppLog.smb.warning(
+                "SMB remote file reader cleanup failed context=\(context, privacy: .public) step=fileReaderClose error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        do {
+            _ = try await resources.client.disconnectShare()
+        } catch {
+            AppLog.smb.warning(
+                "SMB remote file reader cleanup failed context=\(context, privacy: .public) step=disconnectShare error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        do {
+            _ = try await resources.client.logoff()
+        } catch {
+            AppLog.smb.warning(
+                "SMB remote file reader cleanup failed context=\(context, privacy: .public) step=logoff error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+
+        await MainActor.run {
+            resources.client.session.disconnect()
         }
     }
 
