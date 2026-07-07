@@ -86,7 +86,13 @@ final class LibraryComicRemovalService {
                         metadataRootURL: metadataRootURL
                     )
                     if fileManager.fileExists(atPath: coverURL.path) {
-                        try? fileManager.removeItem(at: coverURL)
+                        do {
+                            try fileManager.removeItem(at: coverURL)
+                        } catch {
+                            logger.warning(
+                                "Library comic cover cleanup failed libraryID=\(libraryID, privacy: .public) comicID=\(comic.id, privacy: .public) path=\(AppLogSanitizer.path(coverURL.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                            )
+                        }
                     }
                 }
 
