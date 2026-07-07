@@ -1062,7 +1062,10 @@ final class ImportedComicsImportService {
                 continue
             }
 
-            try? fileManager.removeItem(at: normalizedCandidateURL)
+            removeCleanupItemIfPossible(
+                at: normalizedCandidateURL,
+                reason: "duplicateFileCopy"
+            )
         }
     }
 
@@ -1099,7 +1102,10 @@ final class ImportedComicsImportService {
                 continue
             }
 
-            try? fileManager.removeItem(at: normalizedCandidateURL)
+            removeCleanupItemIfPossible(
+                at: normalizedCandidateURL,
+                reason: "duplicateDirectoryCopy"
+            )
         }
     }
 
@@ -1192,12 +1198,25 @@ final class ImportedComicsImportService {
                 return
             } catch {
                 try fileManager.copyItem(at: normalizedSourceURL, to: destinationURL)
-                try? fileManager.removeItem(at: normalizedSourceURL)
+                removeCleanupItemIfPossible(
+                    at: normalizedSourceURL,
+                    reason: "consumedSourceAfterCopy"
+                )
                 return
             }
         }
 
         try fileManager.copyItem(at: normalizedSourceURL, to: destinationURL)
+    }
+
+    private func removeCleanupItemIfPossible(at url: URL, reason: String) {
+        do {
+            try fileManager.removeItem(at: url)
+        } catch {
+            logger.warning(
+                "Imported comics cleanup remove failed reason=\(reason, privacy: .public) path=\(AppLogSanitizer.path(url.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
     }
 
     private func supportsComicFile(at url: URL) -> Bool {
