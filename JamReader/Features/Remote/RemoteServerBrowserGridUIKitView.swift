@@ -6,6 +6,32 @@ enum RemoteBrowserGridPresentationStyle: Equatable {
     case listGrid
 }
 
+enum RemoteBrowserGridLayoutFactory {
+    static func makeHorizontalGroup(
+        itemWidth: CGFloat,
+        itemHeight: CGFloat,
+        columns: Int,
+        interItemSpacing: CGFloat
+    ) -> NSCollectionLayoutGroup {
+        let itemSize = NSCollectionLayoutSize(
+            widthDimension: .absolute(max(itemWidth, 1)),
+            heightDimension: .fractionalHeight(1.0)
+        )
+        let item = NSCollectionLayoutItem(layoutSize: itemSize)
+        let groupSize = NSCollectionLayoutSize(
+            widthDimension: .fractionalWidth(1.0),
+            heightDimension: .absolute(max(itemHeight, 1))
+        )
+        let group = NSCollectionLayoutGroup.horizontal(
+            layoutSize: groupSize,
+            repeatingSubitem: item,
+            count: max(columns, 1)
+        )
+        group.interItemSpacing = .fixed(max(interItemSpacing, 0))
+        return group
+    }
+}
+
 struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     let sections: [RemoteBrowserListSectionModel]
     let profile: RemoteServerProfile
@@ -374,14 +400,15 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 ? noticeInsets
                 : standardSectionInsets
             let interItemSpacing = interitemSpacing(for: sectionIndex)
-            let columns = usesNoticeLayout
-                ? 1
-                : max(itemMetrics(for: effectiveWidth).columns, 1)
-
-            let horizontalInset = contentInsets.left + contentInsets.right
-            let availableWidth = max(effectiveWidth - horizontalInset, 1)
-            let totalSpacing = CGFloat(max(columns - 1, 0)) * interItemSpacing
-            let itemWidth = floor((availableWidth - totalSpacing) / CGFloat(columns))
+            let resolvedItemMetrics: (columns: Int, itemWidth: CGFloat)
+            if usesNoticeLayout {
+                let horizontalInset = contentInsets.left + contentInsets.right
+                resolvedItemMetrics = (1, max(effectiveWidth - horizontalInset, 1))
+            } else {
+                resolvedItemMetrics = itemMetrics(for: effectiveWidth)
+            }
+            let columns = max(resolvedItemMetrics.columns, 1)
+            let itemWidth = max(resolvedItemMetrics.itemWidth, 1)
             let itemHeight: CGFloat
             switch presentationStyle {
             case .grid:
@@ -390,22 +417,12 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 itemHeight = RemoteBrowserListItemCardView.Metrics.preferredHeight
             }
 
-            let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1.0),
-                heightDimension: .fractionalHeight(1.0)
+            let group = RemoteBrowserGridLayoutFactory.makeHorizontalGroup(
+                itemWidth: itemWidth,
+                itemHeight: itemHeight,
+                columns: columns,
+                interItemSpacing: interItemSpacing
             )
-            let item = NSCollectionLayoutItem(layoutSize: itemSize)
-
-            let groupSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1.0),
-                heightDimension: .absolute(itemHeight)
-            )
-            let group = NSCollectionLayoutGroup.horizontal(
-                layoutSize: groupSize,
-                repeatingSubitem: item,
-                count: columns
-            )
-            group.interItemSpacing = NSCollectionLayoutSpacing.fixed(interItemSpacing)
 
             let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = NSDirectionalEdgeInsets(
