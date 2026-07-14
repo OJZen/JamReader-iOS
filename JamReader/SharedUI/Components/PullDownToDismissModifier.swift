@@ -54,7 +54,6 @@ private struct PullDownToDismissModifier: ViewModifier {
         }
         .opacity(isEnabled ? contentOpacity : 1)
         .offset(y: isEnabled ? dragOffset.height : 0)
-        .scaleEffect(isEnabled ? scaleForDrag : 1)
         .background {
             PullDownGestureLayer(
                 isEnabled: isEnabled && !isZoomed && !isCompletingDismiss,
@@ -73,11 +72,6 @@ private struct PullDownToDismissModifier: ViewModifier {
         guard dragOffset.height > 0 else { return 1.0 }
         let progress = min(dragOffset.height / 350, 1.0)
         return max(0, 1.0 - progress)
-    }
-
-    private var scaleForDrag: CGFloat {
-        let progress = min(abs(dragOffset.height) / 400, 1)
-        return 1 - progress * 0.15
     }
 
     private var dismissGestureState: Bool {

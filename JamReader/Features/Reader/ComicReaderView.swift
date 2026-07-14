@@ -50,7 +50,7 @@ struct ComicReaderView: View {
     var body: some View {
         ReaderSurface(
             isInteractionLocked: readerSession.state.isPageJumpPresented,
-            isChromeHidden: !readerSession.state.isChromeVisible
+            isChromeHidden: !readerSession.state.isChromeVisible || isDismissGestureActive
         ) {
             ZStack {
                 if let document = viewModel.document {
