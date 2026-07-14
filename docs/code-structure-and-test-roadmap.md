@@ -49,7 +49,7 @@ CI 最小命令：
 ```bash
 xcodebuild -project JamReader.xcodeproj -scheme JamReader -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 xcodebuild -project JamReader.xcodeproj -scheme JamReader -destination 'platform=iOS Simulator,name=iPhone 17' test
-./scripts/check_no_swiftui_gestures.sh
+./scripts/check_project_static_guards.sh
 ```
 
 如果本机没有固定 simulator，可以先用 `generic/platform=iOS Simulator` 做 build，把 test 放到开发机/CI 的可用模拟器矩阵里。
@@ -248,10 +248,9 @@ UI test 只保留少量端到端 smoke：
 
 ## 静态检查建议
 
-在现有 `check_no_swiftui_gestures.sh` 基础上新增：
+现有静态检查已通过 `scripts/check_project_static_guards.sh` 统一入口串联。后续可继续新增：
 
 - `check_no_legacy_yacreader_terms.sh`：防止旧兼容词回流到运行时代码。
-- `check_supported_formats_consistency.sh`：对齐 `ComicDocumentLoader`、导入支持列表、远程支持列表、README。
 - `check_database_write_scope.sh`：粗扫 `WHERE id = ?`、`DELETE FROM ... WHERE id = ?`，提示人工确认 `library_id` 作用域。
 - `check_no_large_view_growth.sh`：列出超过 800 行的 SwiftUI view 文件，作为 review 提醒。
 
@@ -265,7 +264,7 @@ UI test 只保留少量端到端 smoke：
 
 - 继续把新拆出的 path/cache/download/import coordinator 逻辑放进可单测类型。
 - 对新增支持格式、远程 provider、缓存策略继续同步补测试。
-- 保持 `scripts/check_supported_formats_consistency.sh` 与测试双重约束。
+- 保持 `scripts/check_supported_formats_consistency.sh` 与测试双重约束，并通过 `scripts/check_project_static_guards.sh` 纳入统一验证。
 
 ### M2：远程缓存/导入测试安全网
 
@@ -306,7 +305,7 @@ UI test 只保留少量端到端 smoke：
 
 - 大文件数量明显下降。
 - 阅读器手势仍全部在 UIKit 原生手势层。
-- `check_no_swiftui_gestures.sh` 通过。
+- `check_project_static_guards.sh` 通过。
 - 本地测试漫画翻页、缩放、跳页、退出重进不回归。
 
 ## 已处理的产品/代码口径不一致

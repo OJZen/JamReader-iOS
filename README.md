@@ -39,21 +39,17 @@ at `.mupdf/mupdf-1.27.2`, or at the path provided by `MUPDF_ROOT`. Without that
 local artifact the app still builds, but PDF reader support falls back to the
 "MuPDF engine is not linked" message.
 
-Gesture architecture check:
+Project static guards:
+
+```bash
+./scripts/check_project_static_guards.sh
+```
+
+The guard runner executes the gesture architecture, supported format policy, and logging hygiene checks. Individual scripts are also available when narrowing a failure:
 
 ```bash
 ./scripts/check_no_swiftui_gestures.sh
-```
-
-Supported format policy check:
-
-```bash
 ./scripts/check_supported_formats_consistency.sh
-```
-
-Logging hygiene check:
-
-```bash
 ./scripts/check_logging_hygiene.sh
 ```
 

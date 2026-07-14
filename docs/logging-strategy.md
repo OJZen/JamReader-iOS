@@ -28,7 +28,7 @@ Objective-C/C 桥接层无法直接使用 Swift `AppLog` 时，应使用相同 s
 - 使用 `AppLogSanitizer.hashedIdentifier` 打印凭据引用、端点标识等可关联但不应原样公开的稳定 ID。
 - 日志里的 `error=` 字段必须使用 `AppLogSanitizer.errorDescription`，不要直接拼 `localizedDescription` 或 `String(describing:)`。
 - 不打印用户名、密码、token、authorization header、凭据引用原文、完整用户目录、完整书名列表、图片数据、XML/HTML/PDF/EPUB 内容。
-- 修改日志相关代码后运行 `scripts/check_logging_hygiene.sh`，用于静态拦截直接输出、绕过 `AppLog`、默认 os_log 和明显凭据字段。
+- 修改日志相关代码后运行 `scripts/check_project_static_guards.sh`；其中 `scripts/check_logging_hygiene.sh` 用于静态拦截直接输出、绕过 `AppLog`、默认 os_log 和明显凭据字段。
 
 ## 推荐日志级别
 

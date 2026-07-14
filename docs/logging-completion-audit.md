@@ -9,22 +9,22 @@
 - 运行时代码统一使用 `AppLog` 和项目 subsystem `ooou.fun.jamreader`。
 - Swift 代码禁止直接构造 `Logger`；Objective-C/C 桥接层只允许使用项目 subsystem 创建 `os_log_t`。
 - 日志中的路径、URL、错误、名称列表、凭据引用等字段已有统一 sanitizer 或哈希策略。
-- `scripts/build_ios.sh` 已在 `xcodebuild` 前运行 `scripts/check_logging_hygiene.sh`，日志卫生检查已进入常规构建链路。
+- `scripts/build_ios.sh` 已在 `xcodebuild` 前运行 `scripts/check_project_static_guards.sh`，日志卫生检查随项目静态 guard 进入常规构建链路。
 - 当前没有发现必须继续补的高价值日志入口；剩余静默 fallback 已在 `docs/logging-strategy.md` 中归类为格式探测、归档枚举、远程封面热路径和缩略图缓存维护。
 
 ## 已验证命令
 
 ```bash
-scripts/check_logging_hygiene.sh
+scripts/check_project_static_guards.sh
 ```
 
-结果：通过。覆盖直接输出、绕过 `AppLog`、默认 `os_log`、明显凭据字段、未走 `AppLogSanitizer.errorDescription` 的 `error=` 日志字段。
+结果：通过。覆盖 SwiftUI 手势禁用策略、支持格式口径，以及直接输出、绕过 `AppLog`、默认 `os_log`、明显凭据字段、未走 `AppLogSanitizer.errorDescription` 的 `error=` 日志字段。
 
 ```bash
 scripts/build_ios.sh
 ```
 
-结果：通过。构建期间会先执行 `check_logging_hygiene`。当前仅有既有 AppIntents metadata warning。
+结果：通过。构建期间会先执行 `check_project_static_guards`。当前仅有既有 AppIntents metadata warning。
 
 ```bash
 rg -n "NSLog\(|OS_LOG_DEFAULT|\bprint\(|\bdebugPrint\(" JamReader -g '*.{swift,m,h,mm,c,cpp}'
