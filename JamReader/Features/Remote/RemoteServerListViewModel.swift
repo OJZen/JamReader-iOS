@@ -30,7 +30,7 @@ struct RemoteBrowserFeedbackState: Identifiable, Equatable {
     }
 }
 
-struct RemoteServerEditorDraft: Identifiable {
+struct RemoteServerEditorDraft: Identifiable, Equatable {
     let id: UUID
     let existingProfileID: UUID?
     let createdAt: Date?
@@ -72,6 +72,7 @@ final class RemoteServerListViewModel: ObservableObject {
     private let credentialStore: RemoteServerCredentialStore
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
     private let logger = AppLog.remote
     private let cacheLogger = AppLog.remoteCache
     private var hasLoaded = false
@@ -81,13 +82,15 @@ final class RemoteServerListViewModel: ObservableObject {
         folderShortcutStore: RemoteFolderShortcutStore,
         credentialStore: RemoteServerCredentialStore,
         browsingService: RemoteServerBrowsingService,
-        readingProgressStore: RemoteReadingProgressStore
+        readingProgressStore: RemoteReadingProgressStore,
+        remoteBackgroundImportController: RemoteBackgroundImportController
     ) {
         self.profileStore = profileStore
         self.folderShortcutStore = folderShortcutStore
         self.credentialStore = credentialStore
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
+        self.remoteBackgroundImportController = remoteBackgroundImportController
     }
 
     var serverCountText: String {
@@ -204,10 +207,14 @@ final class RemoteServerListViewModel: ObservableObject {
         }
 
         let serverID = draft.existingProfileID ?? draft.id
-        let passwordReferenceKey = credentialStore.passwordReferenceKey(for: serverID)
         let shouldPersistPassword = draft.authenticationMode.requiresPassword && !password.isEmpty
+        let retainedPasswordReferenceKey = draft.existingPasswordReferenceKey
+            ?? (draft.hasStoredPassword ? credentialStore.passwordReferenceKey(for: serverID) : nil)
+        let stagedPasswordReferenceKey = shouldPersistPassword
+            ? credentialStore.replacementPasswordReferenceKey(for: serverID)
+            : nil
         let resolvedPasswordReferenceKey = draft.authenticationMode.requiresPassword
-            ? (shouldPersistPassword || draft.hasStoredPassword ? passwordReferenceKey : nil)
+            ? (stagedPasswordReferenceKey ?? retainedPasswordReferenceKey)
             : nil
 
         let profile = RemoteServerProfile(
@@ -254,6 +261,16 @@ final class RemoteServerListViewModel: ObservableObject {
             )
         }
 
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            logger.warning(
+                "Remote server save rejected action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) reason=remoteTaskInProgress"
+            )
+            return remoteTaskInProgressAlert
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         do {
             let previousProfile = profiles.first(where: { $0.id == serverID })
             let didChangeRemoteLocation = previousProfile.map {
@@ -265,12 +282,8 @@ final class RemoteServerListViewModel: ObservableObject {
             } ?? false
             let didRotatePassword = previousProfile != nil && shouldPersistPassword
 
-            if draft.authenticationMode.requiresPassword {
-                if shouldPersistPassword {
-                    try credentialStore.savePassword(password, for: passwordReferenceKey)
-                }
-            } else if let existingPasswordReferenceKey = draft.existingPasswordReferenceKey {
-                try credentialStore.deletePassword(for: existingPasswordReferenceKey)
+            if let stagedPasswordReferenceKey {
+                try credentialStore.savePassword(password, for: stagedPasswordReferenceKey)
             }
 
             var updatedProfiles = profiles
@@ -280,7 +293,33 @@ final class RemoteServerListViewModel: ObservableObject {
                 updatedProfiles.append(profile)
             }
 
-            try profileStore.save(updatedProfiles)
+            do {
+                try profileStore.save(updatedProfiles)
+            } catch {
+                if let stagedPasswordReferenceKey {
+                    do {
+                        try credentialStore.deletePassword(for: stagedPasswordReferenceKey)
+                    } catch {
+                        logger.warning(
+                            "Remote server save rollback failed item=stagedCredential action=\(saveAction, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                        )
+                    }
+                }
+                throw error
+            }
+
+            let previousPasswordReferenceKey = previousProfile?.passwordReferenceKey
+                ?? draft.existingPasswordReferenceKey
+            if let previousPasswordReferenceKey,
+               previousPasswordReferenceKey != resolvedPasswordReferenceKey {
+                do {
+                    try credentialStore.deletePassword(for: previousPasswordReferenceKey)
+                } catch {
+                    logger.warning(
+                        "Remote server save cleanup failed item=previousCredential action=\(saveAction, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
+            }
 
             if let previousProfile {
                 if didChangeRemoteLocation || didChangeCredentialIdentity {
@@ -315,7 +354,15 @@ final class RemoteServerListViewModel: ObservableObject {
         }
     }
 
-    func delete(_ profile: RemoteServerProfile) {
+    @discardableResult
+    func delete(_ profile: RemoteServerProfile) -> Bool {
+        guard beginStorageMaintenance() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let provider = profile.providerKind.rawValue
         logger.notice(
             "Remote server delete requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
@@ -326,7 +373,13 @@ final class RemoteServerListViewModel: ObservableObject {
             try profileStore.save(updatedProfiles)
 
             if let passwordReferenceKey = profile.passwordReferenceKey {
-                try credentialStore.deletePassword(for: passwordReferenceKey)
+                do {
+                    try credentialStore.deletePassword(for: passwordReferenceKey)
+                } catch {
+                    logger.warning(
+                        "Remote server delete cleanup failed item=credential provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
             }
 
             cleanupStateAfterServerDelete(profile)
@@ -342,6 +395,7 @@ final class RemoteServerListViewModel: ObservableObject {
             logger.info(
                 "Remote server delete completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) remaining=\(profileCount)"
             )
+            return true
         } catch {
             logger.error(
                 "Remote server delete failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
@@ -350,6 +404,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 title: "Failed to Remove Server",
                 message: error.userFacingMessage
             )
+            return false
         }
     }
 
@@ -362,6 +417,13 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func clearCache(for profile: RemoteServerProfile) {
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let provider = profile.providerKind.rawValue
         cacheLogger.notice(
             "Remote server comic cache clear requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
@@ -369,8 +431,6 @@ final class RemoteServerListViewModel: ObservableObject {
         do {
             try browsingService.clearCachedComics(for: profile)
             browsingService.evictActiveConnections(for: profile)
-            try readingProgressStore.deleteSessions(for: profile)
-            RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             refreshCacheSummaries()
             refreshRecentActivity()
             cacheLogger.info(
@@ -388,6 +448,13 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     func clearOtherCache(for profile: RemoteServerProfile) {
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let provider = profile.providerKind.rawValue
         cacheLogger.notice(
             "Remote server auxiliary cache clear requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
@@ -563,29 +630,25 @@ final class RemoteServerListViewModel: ObservableObject {
     }
 
     private func refreshCacheSummaries() {
-        let allSessions = loadReadingSessionsForViewState(reason: "cacheSummary")
-
         cacheSummaryByServerID = profiles.reduce(into: [:]) { result, profile in
-            var fileCount = 0
-            var totalBytes: Int64 = 0
-
-            for session in allSessions where session.matches(profile: profile) {
-                let availability = browsingService.cachedAvailability(
-                    for: session.resolvedComicFileReference(for: profile)
-                )
-                guard availability.hasLocalCopy else {
-                    continue
-                }
-
-                fileCount += 1
-                totalBytes += max(session.fileSize ?? 0, 0)
-            }
-
-            result[profile.id] = RemoteComicCacheSummary(
-                fileCount: fileCount,
-                totalBytes: totalBytes
-            )
+            result[profile.id] = browsingService.cacheSummary(for: profile)
         }
+    }
+
+    private func beginStorageMaintenance() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = remoteTaskInProgressAlert
+            return false
+        }
+
+        return true
+    }
+
+    private var remoteTaskInProgressAlert: AppAlertState {
+        AppAlertState(
+            title: "Remote Task in Progress",
+            message: "Wait for the current remote task to finish."
+        )
     }
 
     private func loadReadingSessionsForViewState(reason: String) -> [RemoteComicReadingSession] {

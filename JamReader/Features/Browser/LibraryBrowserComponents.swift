@@ -57,9 +57,11 @@ struct ScanCompletionBanner: View {
                 Image(systemName: "xmark")
                     .font(AppFont.caption(.bold))
                     .foregroundStyle(Color.textSecondary)
-                    .padding(Spacing.xxs + Spacing.xxxs)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss Scan Result")
         }
         .padding(Spacing.sm + Spacing.xxxs)
         .background(

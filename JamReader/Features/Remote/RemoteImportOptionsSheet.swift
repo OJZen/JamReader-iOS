@@ -23,11 +23,11 @@ enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
     var summaryText: String {
         switch self {
         case .visibleResults:
-            return "Import only the remote comics currently visible in this browser, including search results."
+            return "Only comics shown here."
         case .currentFolderOnly:
-            return "Import only the supported comics that are directly inside this folder."
+            return "Comics directly in this folder."
         case .includeSubfolders:
-            return "Recursively import supported comics from this folder and every nested subfolder."
+            return "This folder and nested folders."
         }
     }
 }
@@ -83,6 +83,14 @@ struct RemoteImportOptionsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(AppFont.subheadline())
+                            .foregroundStyle(Color.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     scopeSection
                     destinationSection
                 }
@@ -159,7 +167,10 @@ struct RemoteImportOptionsSheet: View {
     }
 
     private var destinationSection: some View {
-        ImportSection(title: "Destination") {
+        ImportSection(
+            title: "Destination",
+            footer: supplementaryNotice ?? ImportDestinationSheetCopy.destinationFooter
+        ) {
             ForEach(destinationViewModel.options) { option in
                 Button {
                     guard option.isSelectable else {
@@ -212,6 +223,7 @@ private struct RemoteImportScopeRow: View {
                     .foregroundStyle(.blue)
             }
             .frame(width: 42, height: 42)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(scope.title)
@@ -230,6 +242,7 @@ private struct RemoteImportScopeRow: View {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(isSelected ? .blue : Color.textTertiary)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.md)
@@ -242,6 +255,9 @@ private struct RemoteImportScopeRow: View {
                 .strokeBorder(isSelected ? Color.blue.opacity(0.55) : Color.black.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(isSelected ? "Selected" : "Not Selected")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var iconName: String {

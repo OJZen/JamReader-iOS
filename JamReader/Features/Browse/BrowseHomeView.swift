@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BrowseHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
@@ -38,7 +39,13 @@ struct BrowseHomeView: View {
             restoreSelectionIfNeeded()
         }
         .onChange(of: displayedProfiles.map(\.id)) { _, _ in
-            restoreSelectionIfNeeded()
+            synchronizeSelection()
+        }
+        .onChange(of: quickAccessItems.map(\.id)) { _, _ in
+            synchronizeSelection()
+        }
+        .onChange(of: storedSelectionRawValue) { _, _ in
+            synchronizeSelection(preferStoredSelection: true)
         }
         .onChange(of: splitSelection) { _, newValue in
             persistSelection(newValue)
@@ -56,9 +63,7 @@ struct BrowseHomeView: View {
         ) {
             if let pendingDeletionProfile {
                 Button("Delete \(pendingDeletionProfile.name)", role: .destructive) {
-                    viewModel.delete(pendingDeletionProfile)
-                    self.pendingDeletionProfile = nil
-                    restoreSelectionIfNeeded()
+                    performServerDeletion(pendingDeletionProfile)
                 }
             }
 
@@ -98,23 +103,30 @@ struct BrowseHomeView: View {
                 Button {
                     open(.server(profile.id))
                 } label: {
-                    BrowseHomeServerRow(profile: profile)
+                    BrowseHomeServerRow(
+                        profile: profile,
+                        isSelected: usesPersistentSelection && splitSelection == .server(profile.id),
+                        showsDisclosureIndicator: !usesPersistentSelection,
+                        trailingAccessoryReservedWidth: usesPersistentSelection
+                            ? AppLayout.persistentRowActionReservedWidth
+                            : 0
+                    )
                 }
                 .buttonStyle(.plain)
+                .overlay(alignment: .trailing) {
+                    if usesPersistentSelection {
+                        Menu {
+                            serverActionMenuContent(for: profile)
+                        } label: {
+                            PersistentRowActionButtonLabel()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Manage \(profile.displayTitle)")
+                        .padding(.trailing, Spacing.xs)
+                    }
+                }
                 .contextMenu {
-                    Button {
-                        requestEditorPresentation(viewModel.makeEditDraft(for: profile))
-                    } label: {
-                        Label("Edit", systemImage: "square.and.pencil")
-                    }
-
-                    Divider()
-
-                    Button(role: .destructive) {
-                        pendingDeletionProfile = profile
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+                    serverActionMenuContent(for: profile)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
@@ -144,7 +156,11 @@ struct BrowseHomeView: View {
                 Button {
                     open(item.splitSelection)
                 } label: {
-                    BrowseHomeQuickAccessRow(item: item)
+                    BrowseHomeQuickAccessRow(
+                        item: item,
+                        isSelected: usesPersistentSelection && splitSelection == item.splitSelection,
+                        showsDisclosureIndicator: !usesPersistentSelection
+                    )
                 }
                 .buttonStyle(.plain)
             }
@@ -171,6 +187,27 @@ struct BrowseHomeView: View {
 
     private var showsQuickAccess: Bool {
         !quickAccessItems.isEmpty
+    }
+
+    private var usesPersistentSelection: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    @ViewBuilder
+    private func serverActionMenuContent(for profile: RemoteServerProfile) -> some View {
+        Button {
+            requestEditorPresentation(viewModel.makeEditDraft(for: profile))
+        } label: {
+            Label("Edit", systemImage: "square.and.pencil")
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            pendingDeletionProfile = profile
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     private var quickAccessItems: [BrowseHomeShortcutItem] {
@@ -228,17 +265,48 @@ struct BrowseHomeView: View {
     }
 
     private func restoreSelectionIfNeeded() {
-        guard splitSelection == nil else {
-            return
-        }
+        synchronizeSelection()
+    }
 
+    private func synchronizeSelection(preferStoredSelection: Bool = false) {
         let restoredSelection = BrowseHomeSplitSelection(storageValue: storedSelectionRawValue)
         let validSelections = Set(
             displayedProfiles.map { BrowseHomeSplitSelection.server($0.id) }
             + quickAccessItems.map(\.splitSelection)
         )
-        if let restoredSelection, validSelections.contains(restoredSelection) {
+
+        if preferStoredSelection,
+           let restoredSelection,
+           validSelections.contains(restoredSelection) {
             splitSelection = restoredSelection
+        } else if let splitSelection, validSelections.contains(splitSelection) {
+            return
+        } else if let restoredSelection, validSelections.contains(restoredSelection) {
+            splitSelection = restoredSelection
+        } else {
+            splitSelection = nil
+        }
+    }
+
+    private func performServerDeletion(_ profile: RemoteServerProfile) {
+        pendingDeletionProfile = nil
+        let deletedCurrentSelection = splitSelection == .server(profile.id)
+        guard viewModel.delete(profile) else {
+            return
+        }
+
+        guard deletedCurrentSelection else {
+            synchronizeSelection()
+            return
+        }
+
+        if let replacementProfile = displayedProfiles.first {
+            open(.server(replacementProfile.id))
+        } else if let replacementShortcut = quickAccessItems.first {
+            open(replacementShortcut.splitSelection)
+        } else {
+            splitSelection = nil
+            appNavigator?.navigate(.browse(.home))
         }
     }
 
@@ -257,33 +325,24 @@ struct BrowseHomeView: View {
 
 // MARK: - Navigation
 
-private enum BrowseHomeSplitSelection: Hashable {
+enum BrowseHomeSplitSelection: Hashable {
     case server(UUID)
     case savedFolders
     case offlineShelf
 
     init?(storageValue: String) {
-        if storageValue == "saved-folders" {
+        guard let storedSelection = BrowseStoredNavigationSelection(storageValue: storageValue) else {
+            return nil
+        }
+
+        switch storedSelection {
+        case .serverDetail(let serverID), .serverBrowser(let serverID):
+            self = .server(serverID)
+        case .savedFolders:
             self = .savedFolders
-            return
-        }
-
-        if storageValue == "offline-shelf" {
+        case .offlineShelf:
             self = .offlineShelf
-            return
         }
-
-        let prefix = "server:"
-        guard storageValue.hasPrefix(prefix) else {
-            return nil
-        }
-
-        let rawIdentifier = String(storageValue.dropFirst(prefix.count))
-        guard let serverID = UUID(uuidString: rawIdentifier) else {
-            return nil
-        }
-
-        self = .server(serverID)
     }
 
     var storageValue: String {
@@ -313,7 +372,9 @@ private struct BrowseHomeShortcutItem: Identifiable {
 
 private struct BrowseHomeServerRow: View {
     let profile: RemoteServerProfile
+    var isSelected = false
     var showsDisclosureIndicator = true
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
@@ -345,8 +406,15 @@ private struct BrowseHomeServerRow: View {
             }
         }
         .padding(.vertical, Spacing.xxs)
+        .padding(.horizontal, isSelected ? Spacing.xs : 0)
+        .padding(.trailing, trailingAccessoryReservedWidth)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+            in: RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+        )
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var protocolSystemImage: String {
@@ -363,6 +431,7 @@ private struct BrowseHomeServerRow: View {
 
 private struct BrowseHomeQuickAccessRow: View {
     let item: BrowseHomeShortcutItem
+    var isSelected = false
     var showsDisclosureIndicator = true
 
     var body: some View {
@@ -388,8 +457,14 @@ private struct BrowseHomeQuickAccessRow: View {
             }
         }
         .padding(.vertical, Spacing.xxs)
+        .padding(.horizontal, isSelected ? Spacing.xs : 0)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+            in: RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+        )
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

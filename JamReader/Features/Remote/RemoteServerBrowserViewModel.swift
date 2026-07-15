@@ -806,6 +806,13 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         forceRefresh: Bool = false
     ) async {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let provider = profile.providerKind.rawValue
         let serverID = profile.id.uuidString
         let itemPath = AppLogSanitizer.path(item.path)
@@ -886,6 +893,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func saveComicsForOffline(_ items: [RemoteDirectoryItem]) async {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
 
         let comics = items.filter(\.canOpenAsComic)
         let provider = profile.providerKind.rawValue
@@ -1018,6 +1031,13 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func removeOfflineCopy(for item: RemoteDirectoryItem) {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let provider = profile.providerKind.rawValue
         let serverID = profile.id.uuidString
         let itemPath = AppLogSanitizer.path(item.path)
@@ -1068,6 +1088,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func removeOfflineCopies(for items: [RemoteDirectoryItem]) {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
 
         let comics = items.filter(\.canOpenAsComic)
         let provider = profile.providerKind.rawValue
@@ -1150,6 +1176,18 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     func dismissFeedback() {
         feedback = nil
+    }
+
+    private func beginStorageMaintenance() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = AppAlertState(
+                title: "Remote Task in Progress",
+                message: "Wait for the current remote task to finish."
+            )
+            return false
+        }
+
+        return true
     }
 
     private static func initialPath(for profile: RemoteServerProfile, explicitPath: String?) -> String {

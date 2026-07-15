@@ -336,10 +336,17 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             switch presentationStyle {
             case .grid:
                 let imageHeight = width / AppLayout.coverAspectRatio
-                let labelHeight: CGFloat = 72
+                let labelHeight = gridLabelHeight(
+                    for: collectionView.traitCollection.preferredContentSizeCategory
+                )
                 return CGSize(width: width, height: imageHeight + labelHeight)
             case .listGrid:
-                return CGSize(width: width, height: RemoteBrowserListItemCardView.Metrics.preferredHeight)
+                return CGSize(
+                    width: width,
+                    height: RemoteBrowserListItemCardView.Metrics.preferredHeight(
+                        for: collectionView.traitCollection.preferredContentSizeCategory
+                    )
+                )
             }
         }
 
@@ -351,7 +358,14 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             guard sections[section].kind != .notice else {
                 return .zero
             }
-            return CGSize(width: collectionView.bounds.width, height: headerHeight(for: section))
+            return CGSize(
+                width: collectionView.bounds.width,
+                height: headerHeight(
+                    for: section,
+                    availableWidth: collectionView.bounds.width,
+                    contentSizeCategory: collectionView.traitCollection.preferredContentSizeCategory
+                )
+            )
         }
 
         func collectionView(
@@ -362,7 +376,14 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             guard let footerText = sections[section].footerText, !footerText.isEmpty else {
                 return .zero
             }
-            return CGSize(width: collectionView.bounds.width, height: 24)
+            return CGSize(
+                width: collectionView.bounds.width,
+                height: footerHeight(
+                    for: section,
+                    availableWidth: collectionView.bounds.width,
+                    contentSizeCategory: collectionView.traitCollection.preferredContentSizeCategory
+                )
+            )
         }
 
         func collectionView(
@@ -400,21 +421,38 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 ? noticeInsets
                 : standardSectionInsets
             let interItemSpacing = interitemSpacing(for: sectionIndex)
-            let resolvedItemMetrics: (columns: Int, itemWidth: CGFloat)
+            let contentSizeCategory = environment.traitCollection.preferredContentSizeCategory
+            var resolvedItemMetrics: (columns: Int, itemWidth: CGFloat)
             if usesNoticeLayout {
                 let horizontalInset = contentInsets.left + contentInsets.right
                 resolvedItemMetrics = (1, max(effectiveWidth - horizontalInset, 1))
             } else {
                 resolvedItemMetrics = itemMetrics(for: effectiveWidth)
             }
+
+            if !usesNoticeLayout, contentSizeCategory.isAccessibilityCategory {
+                let maximumColumns = environment.traitCollection.userInterfaceIdiom == .pad ? 2 : 1
+                let columns = min(max(resolvedItemMetrics.columns, 1), maximumColumns)
+                let availableWidth = max(
+                    effectiveWidth
+                        - contentInsets.left
+                        - contentInsets.right
+                        - CGFloat(columns - 1) * interItemSpacing,
+                    1
+                )
+                resolvedItemMetrics = (columns, availableWidth / CGFloat(columns))
+            }
             let columns = max(resolvedItemMetrics.columns, 1)
             let itemWidth = max(resolvedItemMetrics.itemWidth, 1)
             let itemHeight: CGFloat
             switch presentationStyle {
             case .grid:
-                itemHeight = itemWidth / AppLayout.coverAspectRatio + 72
+                itemHeight = itemWidth / AppLayout.coverAspectRatio
+                    + gridLabelHeight(for: contentSizeCategory)
             case .listGrid:
-                itemHeight = RemoteBrowserListItemCardView.Metrics.preferredHeight
+                itemHeight = RemoteBrowserListItemCardView.Metrics.preferredHeight(
+                    for: contentSizeCategory
+                )
             }
 
             let group = RemoteBrowserGridLayoutFactory.makeHorizontalGroup(
@@ -439,7 +477,13 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 let header = NSCollectionLayoutBoundarySupplementaryItem(
                     layoutSize: NSCollectionLayoutSize(
                         widthDimension: .fractionalWidth(1.0),
-                        heightDimension: .absolute(headerHeight(for: sectionIndex))
+                        heightDimension: .absolute(
+                            headerHeight(
+                                for: sectionIndex,
+                                availableWidth: effectiveWidth - contentInsets.left - contentInsets.right,
+                                contentSizeCategory: contentSizeCategory
+                            )
+                        )
                     ),
                     elementKind: UICollectionView.elementKindSectionHeader,
                     alignment: .top
@@ -451,7 +495,13 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 let footer = NSCollectionLayoutBoundarySupplementaryItem(
                     layoutSize: NSCollectionLayoutSize(
                         widthDimension: .fractionalWidth(1.0),
-                        heightDimension: .absolute(24)
+                        heightDimension: .absolute(
+                            footerHeight(
+                                for: sectionIndex,
+                                availableWidth: effectiveWidth - contentInsets.left - contentInsets.right,
+                                contentSizeCategory: contentSizeCategory
+                            )
+                        )
                     ),
                     elementKind: UICollectionView.elementKindSectionFooter,
                     alignment: .bottom
@@ -464,7 +514,25 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         }
 
         private func itemWidth(for collectionView: UICollectionView) -> CGFloat {
-            itemMetrics(for: collectionView.bounds.width).itemWidth
+            let metrics = itemMetrics(for: collectionView.bounds.width)
+            let contentSizeCategory = collectionView.traitCollection.preferredContentSizeCategory
+            guard contentSizeCategory.isAccessibilityCategory else {
+                return metrics.itemWidth
+            }
+
+            let columns = min(
+                max(metrics.columns, 1),
+                collectionView.traitCollection.userInterfaceIdiom == .pad ? 2 : 1
+            )
+            let sectionInsets = standardSectionInsets
+            let availableWidth = max(
+                collectionView.bounds.width
+                    - sectionInsets.left
+                    - sectionInsets.right
+                    - CGFloat(columns - 1) * layoutContext.gridInteritemSpacing,
+                1
+            )
+            return availableWidth / CGFloat(columns)
         }
 
         private var standardSectionInsets: UIEdgeInsets {
@@ -528,9 +596,18 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             }
         }
 
-        private func headerHeight(for sectionIndex: Int) -> CGFloat {
+        private func headerHeight(
+            for sectionIndex: Int,
+            availableWidth: CGFloat,
+            contentSizeCategory: UIContentSizeCategory
+        ) -> CGFloat {
             guard sectionIndex < sections.count else {
-                return 34
+                return RemoteBrowserDynamicTypeLayoutMetrics.sectionHeaderHeight(
+                    title: "",
+                    metadata: nil,
+                    availableWidth: availableWidth,
+                    contentSizeCategory: contentSizeCategory
+                )
             }
 
             let section = sections[sectionIndex]
@@ -538,7 +615,36 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 return 0
             }
 
-            return (section.metadataText?.isEmpty == false) ? 52 : 34
+            return RemoteBrowserDynamicTypeLayoutMetrics.sectionHeaderHeight(
+                title: section.title,
+                metadata: section.metadataText,
+                availableWidth: availableWidth,
+                contentSizeCategory: contentSizeCategory
+            )
+        }
+
+        private func gridLabelHeight(for contentSizeCategory: UIContentSizeCategory) -> CGFloat {
+            RemoteBrowserDynamicTypeLayoutMetrics.gridLabelHeight(
+                for: contentSizeCategory
+            )
+        }
+
+        private func footerHeight(
+            for sectionIndex: Int,
+            availableWidth: CGFloat,
+            contentSizeCategory: UIContentSizeCategory
+        ) -> CGFloat {
+            guard sectionIndex < sections.count,
+                  let footerText = sections[sectionIndex].footerText,
+                  !footerText.isEmpty else {
+                return 0
+            }
+
+            return RemoteBrowserDynamicTypeLayoutMetrics.footerHeight(
+                text: footerText,
+                availableWidth: availableWidth,
+                contentSizeCategory: contentSizeCategory
+            )
         }
 
         private func menuElements(for row: RemoteBrowserListRowModel) -> [UIMenuElement] {
@@ -791,6 +897,11 @@ final class RemoteBrowserGridViewController: UIViewController {
 
         collectionView.dataSource = coordinator
         collectionView.delegate = coordinator
+
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (self: RemoteBrowserGridViewController, _) in
+            self.refreshLayout()
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -1197,6 +1308,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = UIFont.preferredFont(forTextStyle: .subheadline).bold()
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 2
 
@@ -1213,8 +1325,9 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
 
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = UIFont.preferredFont(forTextStyle: .footnote)
+        metadataLabel.adjustsFontForContentSizeCategory = true
         metadataLabel.textColor = .secondaryLabel
-        metadataLabel.numberOfLines = 1
+        metadataLabel.numberOfLines = 2
         metadataLabel.lineBreakMode = .byTruncatingTail
 
         cacheBadgeView.translatesAutoresizingMaskIntoConstraints = false
@@ -1516,14 +1629,19 @@ private final class RemoteBrowserGridSectionHeaderView: UICollectionReusableView
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
+        isAccessibilityElement = true
+        accessibilityTraits = [.header]
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
 
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = .preferredFont(forTextStyle: .caption1)
+        metadataLabel.adjustsFontForContentSizeCategory = true
         metadataLabel.textColor = .secondaryLabel
+        metadataLabel.numberOfLines = 2
 
         let stack = UIStackView(arrangedSubviews: [titleLabel, metadataLabel])
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -1548,6 +1666,10 @@ private final class RemoteBrowserGridSectionHeaderView: UICollectionReusableView
         titleLabel.text = section.title
         metadataLabel.text = section.metadataText
         metadataLabel.isHidden = section.metadataText?.isEmpty ?? true
+        accessibilityLabel = [section.title, section.metadataText]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 }
 
@@ -1562,7 +1684,9 @@ private final class RemoteBrowserGridSectionFooterView: UICollectionReusableView
 
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
+        label.numberOfLines = 0
         addSubview(label)
 
         NSLayoutConstraint.activate([

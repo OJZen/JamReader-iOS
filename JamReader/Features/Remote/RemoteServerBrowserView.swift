@@ -268,6 +268,7 @@ struct RemoteServerBrowserView: View {
             } label: {
                 Image(systemName: displayMode == .list ? "square.grid.2x2" : "list.bullet")
             }
+            .accessibilityLabel(displayMode == .list ? "Show Grid" : "Show List")
 
             Menu {
                 ForEach(RemoteDirectorySortMode.allCases) { mode in
@@ -287,6 +288,7 @@ struct RemoteServerBrowserView: View {
             } label: {
                 Image(systemName: "arrow.up.arrow.down")
             }
+            .accessibilityLabel("Sort")
 
             Menu {
                 Section {
@@ -350,6 +352,7 @@ struct RemoteServerBrowserView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
+            .accessibilityLabel("Folder Actions")
         }
     }
 
@@ -1632,11 +1635,11 @@ enum RemoteBrowserImportRequest: Identifiable {
     var destinationPickerMessage: String {
         switch self {
         case .currentFolder:
-            return "Choose where to copy comics from this folder."
+            return "Current folder"
         case .directory(let item):
-            return "Choose where to copy comics from \(item.name)."
+            return item.name
         case .comic(let item):
-            return "Choose where to copy \(item.name)."
+            return item.name
         }
     }
 }

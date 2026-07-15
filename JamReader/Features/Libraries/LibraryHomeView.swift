@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct LibraryHomeView: View {
@@ -16,6 +17,7 @@ struct LibraryHomeView: View {
     @State private var selectedLibraryID: UUID?
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
+    @State private var pendingLibraryRemoval: LibraryRemovalRequest?
 
     var body: some View {
         Group {
@@ -23,9 +25,9 @@ struct LibraryHomeView: View {
                 EmptyStateView(
                     systemImage: "books.vertical",
                     title: "No Libraries Yet",
-                    description: "Create a library on this device, add a linked folder, or import comics to get started.",
-                    actionTitle: "New Library",
-                    action: { presentCreateLibrarySheet() }
+                    description: isPad ? nil : "Add a library or import comics.",
+                    actionTitle: isPad ? nil : "New Library",
+                    action: isPad ? nil : { presentCreateLibrarySheet() }
                 )
                 .background(Color.surfaceGrouped)
             } else {
@@ -67,6 +69,9 @@ struct LibraryHomeView: View {
         .onChange(of: selectedLibraryID) { _, newValue in
             storedSelectedLibraryID = newValue?.uuidString ?? ""
         }
+        .onChange(of: storedSelectedLibraryID) { _, _ in
+            synchronizeSelection(preferStoredSelection: true)
+        }
         .onChange(of: pendingFocusedLibraryID) { _, _ in
             handlePendingLibraryFocusIfNeeded()
         }
@@ -76,6 +81,29 @@ struct LibraryHomeView: View {
         .alert(item: $viewModel.alert) { alert in
             makeLibraryAlert(for: alert)
         }
+        .confirmationDialog(
+            pendingLibraryRemoval?.title ?? "Remove Library?",
+            isPresented: pendingLibraryRemovalBinding,
+            titleVisibility: .visible
+        ) {
+            if let pendingLibraryRemoval {
+                Button(pendingLibraryRemoval.actionTitle, role: .destructive) {
+                    performLibraryRemoval(pendingLibraryRemoval)
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingLibraryRemoval = nil
+            }
+        } message: {
+            if let pendingLibraryRemoval {
+                Text(pendingLibraryRemoval.message)
+            }
+        }
+    }
+
+    private var isPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
     }
 
     private var content: some View {
@@ -138,9 +166,13 @@ struct LibraryHomeView: View {
         return viewModel.items.first
     }
 
-    private func synchronizeSelection() {
+    private func synchronizeSelection(preferStoredSelection: Bool = false) {
         if viewModel.items.isEmpty {
             selectedLibraryID = nil
+        } else if preferStoredSelection,
+                  let storedLibraryID = UUID(uuidString: storedSelectedLibraryID),
+                  viewModel.items.contains(where: { $0.id == storedLibraryID }) {
+            selectedLibraryID = storedLibraryID
         } else if let selectedLibraryID,
                   viewModel.items.contains(where: { $0.id == selectedLibraryID }) {
             return
@@ -297,16 +329,29 @@ struct LibraryHomeView: View {
                 Button {
                     openLibrary(item.id)
                 } label: {
-                    LibraryRowView(item: item)
+                    LibraryRowView(
+                        item: item,
+                        isSelected: usesPersistentSelection && selectedLibraryID == item.id,
+                        showsDisclosureIndicator: !usesPersistentSelection,
+                        trailingAccessoryReservedWidth: usesPersistentSelection
+                            ? AppLayout.persistentRowActionReservedWidth
+                            : 0
+                    )
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+                .overlay(alignment: .trailing) {
+                    if usesPersistentSelection {
+                        libraryManagementMenu(for: item)
+                            .padding(.trailing, Spacing.xs)
+                    }
+                }
                 .contextMenu {
                     libraryContextMenuActions(for: item)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
-                        viewModel.removeLibrary(id: item.id)
+                        requestLibraryRemoval([item])
                     } label: {
                         Label(item.removalActionTitle, systemImage: "trash")
                     }
@@ -318,9 +363,60 @@ struct LibraryHomeView: View {
                     .tint(.blue)
                 }
             }
-            .onDelete(perform: viewModel.removeLibraries)
+            .onDelete { offsets in
+                let items = offsets.compactMap { index in
+                    viewModel.items.indices.contains(index) ? viewModel.items[index] : nil
+                }
+                requestLibraryRemoval(items)
+            }
         } header: {
             Text("Libraries")
+        }
+    }
+
+    private var usesPersistentSelection: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    private var pendingLibraryRemovalBinding: Binding<Bool> {
+        Binding(
+            get: { pendingLibraryRemoval != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingLibraryRemoval = nil
+                }
+            }
+        )
+    }
+
+    private func requestLibraryRemoval(_ items: [LibraryListItem]) {
+        guard !items.isEmpty else {
+            return
+        }
+
+        pendingLibraryRemoval = LibraryRemovalRequest(items: items)
+    }
+
+    private func performLibraryRemoval(_ request: LibraryRemovalRequest) {
+        pendingLibraryRemoval = nil
+        AppHaptics.warning()
+        let removedIDs = Set(request.items.map(\.id))
+        let removedCurrentSelection = selectedLibraryID.map(removedIDs.contains) ?? false
+        guard viewModel.removeLibraries(ids: Array(removedIDs)) else {
+            return
+        }
+
+        guard usesPersistentSelection, removedCurrentSelection else {
+            synchronizeSelection()
+            return
+        }
+
+        if let replacementID = viewModel.items.first?.id {
+            selectedLibraryID = replacementID
+            appNavigator?.navigate(.library(.openLibrary(replacementID, folderID: nil)))
+        } else {
+            selectedLibraryID = nil
+            appNavigator?.navigate(.library(.home))
         }
     }
 
@@ -341,10 +437,20 @@ struct LibraryHomeView: View {
         Divider()
 
         Button(role: .destructive) {
-            viewModel.removeLibrary(id: item.id)
+            requestLibraryRemoval([item])
         } label: {
             Label(item.removalActionTitle, systemImage: "trash")
         }
+    }
+
+    private func libraryManagementMenu(for item: LibraryListItem) -> some View {
+        Menu {
+            libraryContextMenuActions(for: item)
+        } label: {
+            PersistentRowActionButtonLabel()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Manage \(item.descriptor.name)")
     }
 
     private func openLibrary(_ libraryID: UUID) {
@@ -376,8 +482,10 @@ struct LibraryHomeView: View {
                         onRename: { presentRenameSheet(for: item) },
                         onViewInfo: { presentInfoSheet(for: item) },
                         onRemove: {
-                            viewModel.removeLibrary(id: item.id)
                             appPresenter?.dismissSheet()
+                            DispatchQueue.main.async {
+                                requestLibraryRemoval([item])
+                            }
                         }
                     )
                 )
@@ -414,7 +522,6 @@ struct LibraryHomeView: View {
                 content: AnyView(
                     LibraryImportDestinationSheet(
                         title: route.destinationPickerTitle,
-                        message: route.destinationPickerMessage,
                         dependencies: dependencies,
                         preferredSelection: preferredImportDestinationSelection
                     ) { selection in
@@ -455,20 +562,13 @@ private enum LibraryHomeImportRoute: Identifiable {
         }
     }
 
-    var destinationPickerMessage: String {
-        switch self {
-        case .libraryFolder:
-            return "Choose where imported comics should be copied."
-        case .comicFiles:
-            return "Choose which local library should receive the selected comic files."
-        case .comicFolder:
-            return "Choose which local library should receive the comic files found in the selected folder."
-        }
-    }
 }
 
 private struct LibraryRowView: View {
     let item: LibraryListItem
+    var isSelected = false
+    var showsDisclosureIndicator = true
+    var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
@@ -491,14 +591,23 @@ private struct LibraryRowView: View {
 
             Spacer()
 
-            Image(systemName: "chevron.right")
-                .font(AppFont.caption(.semibold))
-                .foregroundStyle(Color.textTertiary)
+            if showsDisclosureIndicator {
+                Image(systemName: "chevron.right")
+                    .font(AppFont.caption(.semibold))
+                    .foregroundStyle(Color.textTertiary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
+        .padding(.horizontal, isSelected ? Spacing.xs : 0)
+        .padding(.trailing, trailingAccessoryReservedWidth)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+            in: RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
+        )
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -578,7 +687,7 @@ struct LibraryHomeDetailPlaceholder: View {
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Create a local library, add a linked folder, or import comics."
+            return "Create a library, link a folder, or import comics."
         }
 
         return "Choose a library from the sidebar."
@@ -589,6 +698,52 @@ private struct LibraryStatusNote {
     let text: String
     let systemImage: String
     let tint: Color
+}
+
+private struct LibraryRemovalRequest {
+    let items: [LibraryListItem]
+
+    private var managedCount: Int {
+        items.count { $0.descriptor.kind.isManagedByApp }
+    }
+
+    var title: String {
+        if items.count == 1 {
+            return managedCount == 1 ? "Delete Library from Device?" : "Remove Library from App?"
+        }
+
+        return managedCount == items.count ? "Delete Libraries from Device?" : "Remove Libraries?"
+    }
+
+    var actionTitle: String {
+        if items.count == 1 {
+            return managedCount == 1 ? "Delete from Device" : "Remove from App"
+        }
+
+        return managedCount == items.count
+            ? "Delete \(items.count) Libraries"
+            : "Remove \(items.count) Libraries"
+    }
+
+    var message: String {
+        if items.count == 1, let item = items.first {
+            if item.descriptor.kind.isManagedByApp {
+                return "This permanently deletes \(item.descriptor.name) and its files from this device."
+            }
+
+            return "This removes \(item.descriptor.name) from JamReader. Files remain in the original folder."
+        }
+
+        if managedCount == items.count {
+            return "This permanently deletes the selected libraries and their files from this device."
+        }
+
+        if managedCount == 0 {
+            return "This removes the selected libraries from JamReader. Files remain in their original folders."
+        }
+
+        return "App-managed library files will be deleted from this device. Files in linked folders will remain in place."
+    }
 }
 
 private extension LibraryListItem {

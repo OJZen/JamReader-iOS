@@ -146,6 +146,8 @@ enum AppLayout {
     static let listThumbnailSize: CGFloat = 48
 
     static let bottomBarHeight: CGFloat = 49
+    static let overlayMaxWidth: CGFloat = 520
+    static let persistentRowActionReservedWidth: CGFloat = 52
 
     static func usesRegularWidthLayout(
         horizontalSizeClass: UserInterfaceSizeClass?,
@@ -334,7 +336,7 @@ struct PersistentRowActionButtonLabel: View {
         Image(systemName: systemImage)
             .font(.title3.weight(.semibold))
             .foregroundStyle(.secondary)
-            .frame(width: 32, height: 32)
+            .frame(width: 44, height: 44)
             .contentShape(Rectangle())
     }
 }

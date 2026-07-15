@@ -4,7 +4,7 @@ import os
 
 private enum SavedRemoteFoldersLayoutMetrics {
     static let horizontalInset: CGFloat = 12
-    static let rowAccessoryReservedWidth: CGFloat = 36
+    static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
 }
 
 struct SavedRemoteFoldersView: View {

@@ -38,6 +38,8 @@ extension View {
 // MARK: - Skeleton Loading
 
 struct SkeletonView: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+
     var cornerRadius: CGFloat = CornerRadius.md
 
     @State private var shimmerOffset: CGFloat = -1
@@ -45,26 +47,28 @@ struct SkeletonView: View {
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius)
             .fill(Color(.systemGray5))
-            .overlay(
-                GeometryReader { geometry in
-                    let width = geometry.size.width
-                    LinearGradient(
-                        colors: [.clear, Color.white.opacity(0.25), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: width * 0.6)
-                    .offset(x: shimmerOffset * width)
-                    .onAppear {
-                        withAnimation(
-                            .linear(duration: 1.2)
-                            .repeatForever(autoreverses: false)
-                        ) {
-                            shimmerOffset = 1.4
+            .overlay {
+                if !accessibilityReduceMotion {
+                    GeometryReader { geometry in
+                        let width = geometry.size.width
+                        LinearGradient(
+                            colors: [.clear, Color.white.opacity(0.25), .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: width * 0.6)
+                        .offset(x: shimmerOffset * width)
+                        .onAppear {
+                            withAnimation(
+                                .linear(duration: 1.2)
+                                .repeatForever(autoreverses: false)
+                            ) {
+                                shimmerOffset = 1.4
+                            }
                         }
                     }
                 }
-            )
+            }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
     }
 }

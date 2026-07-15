@@ -168,6 +168,8 @@ struct LibraryCreateSheet: View {
 }
 
 struct LibraryInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
     let item: LibraryListItem
 
     var body: some View {
@@ -209,6 +211,13 @@ struct LibraryInfoSheet: View {
             }
             .navigationTitle("Info")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
         }
         .adaptiveFormSheet(720)
         .presentationDragIndicator(.visible)
@@ -223,7 +232,7 @@ struct LibraryHomeQuickActionButton: View {
             Image(systemName: "ellipsis.circle")
                 .font(.title3)
                 .foregroundStyle(.secondary)
-                .padding(6)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

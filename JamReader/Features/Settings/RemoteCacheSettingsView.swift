@@ -1,5 +1,12 @@
 import SwiftUI
+import UIKit
 import os
+
+extension Notification.Name {
+    static let remoteCacheSettingsDidChange = Notification.Name(
+        "JamReader.remoteCacheSettingsDidChange"
+    )
+}
 
 struct RemoteCacheSettingsView: View {
     private struct CacheSettingsSnapshot {
@@ -9,162 +16,223 @@ struct RemoteCacheSettingsView: View {
         let importedComicsLibrarySummary: LibraryStorageFootprintSummary
     }
 
-    private enum CacheMaintenanceAction: Identifiable {
-        case clearingDownloads
-        case clearingOtherCache
-        case clearingThumbnails
-        case clearingImported
+    fileprivate enum CacheMaintenanceAction: String, Identifiable {
+        case downloads
+        case temporaryCache
+        case thumbnails
+        case imported
 
-        var id: String {
+        var id: String { rawValue }
+
+        var buttonTitle: String {
             switch self {
-            case .clearingDownloads:
-                return "downloads"
-            case .clearingOtherCache:
-                return "other-cache"
-            case .clearingThumbnails:
-                return "thumbnails"
-            case .clearingImported:
-                return "imported"
+            case .downloads:
+                return String(localized: "Clear Downloaded Copies")
+            case .temporaryCache:
+                return String(localized: "Clear Temporary Cache")
+            case .thumbnails:
+                return String(localized: "Clear Cover Thumbnails")
+            case .imported:
+                return String(localized: "Clear Imported Comics")
             }
         }
 
-        var title: String {
+        var confirmationTitle: String {
             switch self {
-            case .clearingDownloads:
-                return "Clearing Downloads"
-            case .clearingOtherCache:
-                return "Clearing Other Cache Data"
-            case .clearingThumbnails:
-                return "Clearing Thumbnails"
-            case .clearingImported:
-                return "Clearing Imported Comics"
+            case .downloads:
+                return String(localized: "Clear downloaded copies?")
+            case .temporaryCache:
+                return String(localized: "Clear temporary cache?")
+            case .thumbnails:
+                return String(localized: "Clear cover thumbnails?")
+            case .imported:
+                return String(localized: "Clear imported comics?")
             }
         }
 
-        var message: String {
+        var confirmationMessage: String {
             switch self {
-            case .clearingDownloads:
-                return "Removing remote downloads and cleaning browsing history."
-            case .clearingOtherCache:
-                return "Removing unfinished downloads and leftover remote cache files."
-            case .clearingThumbnails:
-                return "Deleting generated remote cover images."
-            case .clearingImported:
-                return "Removing imported files and rebuilding the local library."
+            case .downloads:
+                return String(localized: "Downloaded remote files are removed. Servers and reading progress stay intact.")
+            case .temporaryCache:
+                return String(localized: "Unfinished downloads and leftover remote cache files are removed.")
+            case .thumbnails:
+                return String(localized: "Generated remote cover images are removed and recreated as needed.")
+            case .imported:
+                return String(localized: "Imported files are removed. The Imported Comics library remains available.")
             }
+        }
+
+        var progressTitle: String {
+            switch self {
+            case .downloads:
+                return String(localized: "Clearing Downloads")
+            case .temporaryCache:
+                return String(localized: "Clearing Temporary Cache")
+            case .thumbnails:
+                return String(localized: "Clearing Thumbnails")
+            case .imported:
+                return String(localized: "Clearing Imported Comics")
+            }
+        }
+
+        var progressMessage: String {
+            switch self {
+            case .downloads:
+                return String(localized: "Removing downloaded remote files.")
+            case .temporaryCache:
+                return String(localized: "Removing incomplete and leftover cache data.")
+            case .thumbnails:
+                return String(localized: "Removing generated remote cover images.")
+            case .imported:
+                return String(localized: "Removing imported files and refreshing the library.")
+            }
+        }
+
+        var failureTitle: String {
+            switch self {
+            case .downloads:
+                return String(localized: "Failed to Clear Downloads")
+            case .temporaryCache:
+                return String(localized: "Failed to Clear Temporary Cache")
+            case .thumbnails:
+                return String(localized: "Failed to Clear Thumbnails")
+            case .imported:
+                return String(localized: "Failed to Clear Imported Comics")
+            }
+        }
+
+        var completionAnnouncement: String {
+            switch self {
+            case .downloads:
+                return String(localized: "Downloaded copies cleared.")
+            case .temporaryCache:
+                return String(localized: "Temporary cache cleared.")
+            case .thumbnails:
+                return String(localized: "Cover thumbnails cleared.")
+            case .imported:
+                return String(localized: "Imported comics cleared.")
+            }
+        }
+
+        var conflictsWithRemoteImport: Bool {
+            self != .thumbnails
         }
     }
 
     let dependencies: AppDependencies
-    private let logger = AppLog.remoteCache
 
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .oneGigabyte
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
-    @State private var isShowingClearRemoteDownloadsConfirmation = false
-    @State private var isShowingClearOtherCacheConfirmation = false
-    @State private var isShowingClearRemoteThumbnailsConfirmation = false
-    @State private var isShowingClearImportedComicsConfirmation = false
+    @State private var pendingConfirmation: CacheMaintenanceAction?
     @State private var maintenanceAction: CacheMaintenanceAction?
+    @State private var isApplyingPolicy = false
     @State private var alert: AppAlertState?
+    @State private var refreshGeneration: UInt64 = 0
+    @AccessibilityFocusState private var maintenanceOverlayIsFocused: Bool
+
+    private let logger = AppLog.remoteCache
+
+    init(dependencies: AppDependencies) {
+        self.dependencies = dependencies
+        _remoteCachePolicyPreset = State(
+            initialValue: dependencies.remoteCachePolicyStore.loadPreset()
+        )
+    }
+
+    private var cachePolicyBinding: Binding<RemoteComicCachePolicyPreset> {
+        Binding(
+            get: { remoteCachePolicyPreset },
+            set: setRemoteCachePolicyPreset
+        )
+    }
+
+    private var confirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { pendingConfirmation != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingConfirmation = nil
+                }
+            }
+        )
+    }
+
+    private var isBusy: Bool {
+        maintenanceAction != nil || isApplyingPolicy
+    }
+
+    private var managedStorageBytes: Int64 {
+        remoteCacheSummary.totalBytes
+            + remoteThumbnailCacheSummary.totalBytes
+            + importedComicsLibrarySummary.totalBytes
+    }
 
     var body: some View {
         Form {
+            RemoteCacheSummarySection(
+                remoteCacheSummary: remoteCacheSummary,
+                remoteThumbnailCacheSummary: remoteThumbnailCacheSummary,
+                importedComicsLibrarySummary: importedComicsLibrarySummary,
+                totalBytes: managedStorageBytes
+            )
+
             Section {
-                Picker("Storage Limit", selection: $remoteCachePolicyPreset) {
+                Picker("Download Limit", selection: cachePolicyBinding) {
                     ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
-                        Text(preset.title)
-                            .tag(preset)
+                        Text(preset.settingsLocalizedTitle).tag(preset)
                     }
                 }
-                .pickerStyle(.menu)
 
-                LabeledContent("On Device") {
-                    Text(remoteCacheSummary.hasCachedComics ? remoteCacheSummary.summaryText : "None")
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                if remoteCacheSummary.hasCachedComics {
-                    Button(role: .destructive) {
-                        isShowingClearRemoteDownloadsConfirmation = true
-                    } label: {
-                        Label("Clear Downloads", systemImage: "trash")
+                if isApplyingPolicy {
+                    HStack(spacing: Spacing.sm) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Applying download limit")
+                            .foregroundStyle(Color.textSecondary)
                     }
+                    .accessibilityElement(children: .combine)
                 }
             } header: {
-                Text("Downloads")
-            } footer: {
-                Text(downloadedCopiesFooter)
+                Text("Policy")
             }
 
-            Section {
-                LabeledContent("On Device") {
-                    Text(remoteCacheSummary.hasOtherCacheData ? remoteCacheSummary.otherCacheSizeText : "None")
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
+            DownloadedCopiesCacheSection(
+                summary: remoteCacheSummary,
+                onClearDownloads: {
+                    pendingConfirmation = .downloads
+                },
+                onClearTemporaryCache: {
+                    pendingConfirmation = .temporaryCache
                 }
+            )
 
-                if remoteCacheSummary.hasOtherCacheData {
-                    Button(role: .destructive) {
-                        isShowingClearOtherCacheConfirmation = true
-                    } label: {
-                        Label("Clear Other Cache Data", systemImage: "trash.slash")
-                    }
+            ThumbnailCacheSection(
+                summary: remoteThumbnailCacheSummary,
+                onClear: {
+                    pendingConfirmation = .thumbnails
                 }
-            } header: {
-                Text("Other Cache Data")
-            } footer: {
-                Text(otherCacheFooter)
-            }
+            )
 
-            Section {
-                LabeledContent("On Device") {
-                    Text(remoteThumbnailCacheSummary.isEmpty ? "None" : remoteThumbnailCacheSummary.summaryText)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
+            ImportedComicsCacheSection(
+                summary: importedComicsLibrarySummary,
+                onClear: {
+                    pendingConfirmation = .imported
                 }
-
-                if !remoteThumbnailCacheSummary.isEmpty {
-                    Button(role: .destructive) {
-                        isShowingClearRemoteThumbnailsConfirmation = true
-                    } label: {
-                        Label("Clear Thumbnails", systemImage: "photo.stack")
-                    }
-                }
-            } header: {
-                Text("Thumbnails")
-            } footer: {
-                Text(thumbnailCacheFooter)
-            }
-
-            Section {
-                LabeledContent("On Device") {
-                    Text(importedComicsLibrarySummary.isEmpty ? "None" : importedComicsLibrarySummary.summaryText)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                if !importedComicsLibrarySummary.isEmpty {
-                    Button(role: .destructive) {
-                        isShowingClearImportedComicsConfirmation = true
-                    } label: {
-                        Label("Clear Imported", systemImage: "books.vertical")
-                    }
-                }
-            } header: {
-                Text("Imported")
-            } footer: {
-                Text(importedComicsFooter)
-            }
+            )
         }
-        .navigationTitle("Remote Cache")
+        .scrollContentBackground(.hidden)
+        .background(Color.surfaceGrouped)
+        .navigationTitle("Downloads & Storage")
         .navigationBarTitleDisplayMode(.inline)
-        .disabled(isPerformingMaintenance)
+        .disabled(isBusy)
+        .accessibilityHidden(maintenanceAction != nil)
         .overlay {
             if let maintenanceAction {
-                cacheMaintenanceOverlay(for: maintenanceAction)
+                CacheMaintenanceOverlay(action: maintenanceAction)
+                    .accessibilityFocused($maintenanceOverlayIsFocused)
             }
         }
         .task {
@@ -173,56 +241,21 @@ struct RemoteCacheSettingsView: View {
         .refreshable {
             await refresh()
         }
-        .onChange(of: remoteCachePolicyPreset) { _, newValue in
-            applyRemoteCachePolicyPreset(newValue)
-        }
         .confirmationDialog(
-            "Clear downloads?",
-            isPresented: $isShowingClearRemoteDownloadsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Downloads", role: .destructive) {
-                clearRemoteDownloads()
+            pendingConfirmation?.confirmationTitle ?? "Clear stored data?",
+            isPresented: confirmationIsPresented,
+            titleVisibility: .visible,
+            presenting: pendingConfirmation
+        ) { action in
+            Button(action.buttonTitle, role: .destructive) {
+                pendingConfirmation = nil
+                startMaintenance(action)
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Servers stay intact. Downloads and remote history are removed.")
-        }
-        .confirmationDialog(
-            "Clear other cache data?",
-            isPresented: $isShowingClearOtherCacheConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Other Cache Data", role: .destructive) {
-                clearOtherCache()
+            Button("Cancel", role: .cancel) {
+                pendingConfirmation = nil
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This removes unfinished downloads and leftover remote cache files without touching completed offline copies.")
-        }
-        .confirmationDialog(
-            "Clear thumbnails?",
-            isPresented: $isShowingClearRemoteThumbnailsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Thumbnails", role: .destructive) {
-                clearRemoteThumbnails()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Only remote cover thumbnails are removed.")
-        }
-        .confirmationDialog(
-            "Clear imported comics?",
-            isPresented: $isShowingClearImportedComicsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Imported", role: .destructive) {
-                clearImportedComicsLibrary()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Imported files are removed. The library stays in the app.")
+        } message: { action in
+            Text(action.confirmationMessage)
         }
         .alert(item: $alert) { alert in
             Alert(
@@ -233,67 +266,13 @@ struct RemoteCacheSettingsView: View {
         }
     }
 
-    private var downloadedCopiesFooter: String {
-        if !remoteCacheSummary.hasCachedComics {
-            return "Downloaded comics appear here. Current limit: \(remoteCachePolicyPreset.title)."
-        }
-
-        return "Current limit: \(remoteCachePolicyPreset.title). Clearing downloads also clears remote history."
-    }
-
-    private var otherCacheFooter: String {
-        if !remoteCacheSummary.hasOtherCacheData {
-            return "Unfinished downloads and leftover remote cache files appear here."
-        }
-
-        return "This is usually partially downloaded comics or leftover cache artifacts."
-    }
-
-    private var thumbnailCacheFooter: String {
-        if remoteThumbnailCacheSummary.isEmpty {
-            return "Remote covers appear here as you browse."
-        }
-
-        return "Only affects generated remote covers."
-    }
-
-    private var importedComicsFooter: String {
-        if importedComicsLibrarySummary.isEmpty {
-            return "Imported remote comics appear here."
-        }
-
-        return "Imported comics stay even if you clear downloads or thumbnails."
-    }
-
-    private var isPerformingMaintenance: Bool {
-        maintenanceAction != nil
-    }
-
-    @ViewBuilder
-    private func cacheMaintenanceOverlay(for action: CacheMaintenanceAction) -> some View {
-        ZStack {
-            Color.black.opacity(0.12)
-                .ignoresSafeArea()
-
-            VStack(spacing: 12) {
-                ProgressView()
-                    .controlSize(.large)
-                Text(action.title)
-                    .font(.headline)
-                Text(action.message)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(20)
-            .frame(maxWidth: 320)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
-        }
-    }
-
     private func refresh() async {
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
         let snapshot = await loadSnapshot()
+        guard generation == refreshGeneration else {
+            return
+        }
         remoteCacheSummary = snapshot.remoteCacheSummary
         remoteCachePolicyPreset = snapshot.remoteCachePolicyPreset
         remoteThumbnailCacheSummary = snapshot.remoteThumbnailCacheSummary
@@ -301,107 +280,179 @@ struct RemoteCacheSettingsView: View {
     }
 
     private func loadSnapshot() async -> CacheSettingsSnapshot {
-        let remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummary()
+        async let remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummaryAsync()
 
-        return await withCheckedContinuation { continuation in
+        let diskSnapshot = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let snapshot = CacheSettingsSnapshot(
-                    remoteCacheSummary: dependencies.remoteServerBrowsingService.cacheSummary(),
-                    remoteCachePolicyPreset: dependencies.remoteServerBrowsingService.cachePolicyPreset(),
-                    remoteThumbnailCacheSummary: remoteThumbnailCacheSummary,
-                    importedComicsLibrarySummary: dependencies.libraryStorageManager.importedComicsLibraryStorageSummary()
-                )
-                continuation.resume(returning: snapshot)
-            }
-        }
-    }
-
-    private func clearRemoteDownloads() {
-        Task {
-            await performMaintenance(
-                .clearingDownloads,
-                failureTitle: "Failed to Clear Downloads"
-            ) {
-                try dependencies.remoteServerBrowsingService.clearCachedComics()
-                try dependencies.remoteReadingProgressStore.clearAllSessions()
-                dependencies.remoteOfflineLibrarySnapshotStore.invalidate()
-                let profiles: [RemoteServerProfile]
-                do {
-                    profiles = try dependencies.remoteServerProfileStore.load()
-                } catch {
-                    logger.warning(
-                        "Remote cache settings maintenance fallback action=downloads item=rememberedPaths result=skipped error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                continuation.resume(
+                    returning: (
+                        dependencies.remoteServerBrowsingService.cacheSummary(),
+                        dependencies.remoteServerBrowsingService.cachePolicyPreset(),
+                        dependencies.libraryStorageManager.importedComicsLibraryStorageSummary()
                     )
-                    profiles = []
-                }
-                for profile in profiles {
-                    RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
-                }
+                )
             }
+        }
+
+        return CacheSettingsSnapshot(
+            remoteCacheSummary: diskSnapshot.0,
+            remoteCachePolicyPreset: diskSnapshot.1,
+            remoteThumbnailCacheSummary: await remoteThumbnailCacheSummary,
+            importedComicsLibrarySummary: diskSnapshot.2
+        )
+    }
+
+    private func setRemoteCachePolicyPreset(
+        _ preset: RemoteComicCachePolicyPreset
+    ) {
+        guard preset != remoteCachePolicyPreset else {
+            return
+        }
+        guard dependencies.remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = AppAlertState(
+                title: String(localized: "Import in Progress"),
+                message: String(localized: "Finish or cancel the current remote import before changing the download limit.")
+            )
+            return
+        }
+
+        refreshGeneration &+= 1
+        let previousPreset = remoteCachePolicyPreset
+        remoteCachePolicyPreset = preset
+        isApplyingPolicy = true
+        logger.notice(
+            "Remote cache settings policy change requested preset=\(preset.rawValue, privacy: .public)"
+        )
+
+        Task {
+            await applyRemoteCachePolicyPreset(
+                preset,
+                previousPreset: previousPreset
+            )
         }
     }
 
-    private func clearOtherCache() {
-        Task {
-            await performMaintenance(
-                .clearingOtherCache,
-                failureTitle: "Failed to Clear Other Cache Data"
-            ) {
-                try dependencies.remoteServerBrowsingService.clearOtherCachedData()
-            }
+    private func applyRemoteCachePolicyPreset(
+        _ preset: RemoteComicCachePolicyPreset,
+        previousPreset: RemoteComicCachePolicyPreset
+    ) async {
+        defer {
+            dependencies.remoteBackgroundImportController.endExclusiveStorageMaintenance()
         }
+        do {
+            try await runMaintenanceWork {
+                try dependencies.remoteServerBrowsingService.applyCachePolicyPreset(preset)
+            }
+            await refresh()
+            logger.notice(
+                "Remote cache settings policy change completed preset=\(preset.rawValue, privacy: .public)"
+            )
+            notifySettingsChanged()
+        } catch {
+            dependencies.remoteCachePolicyStore.savePreset(previousPreset)
+            remoteCachePolicyPreset = previousPreset
+            await refresh()
+            logger.error(
+                "Remote cache settings policy change failed preset=\(preset.rawValue, privacy: .public) rollback=\(previousPreset.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            alert = AppAlertState(
+                title: String(localized: "Failed to Update Download Limit"),
+                message: error.userFacingMessage
+            )
+        }
+
+        isApplyingPolicy = false
     }
 
-    private func clearRemoteThumbnails() {
-        Task {
-            await performMaintenance(
-                .clearingThumbnails,
-                failureTitle: "Failed to Clear Thumbnails"
-            ) {
-                try RemoteComicThumbnailPipeline.shared.clearCache()
-            }
+    private func startMaintenance(_ action: CacheMaintenanceAction) {
+        let ownsStorageMaintenance = action.conflictsWithRemoteImport
+            && dependencies.remoteBackgroundImportController.beginExclusiveStorageMaintenance()
+        if action.conflictsWithRemoteImport, !ownsStorageMaintenance {
+            logger.notice(
+                "Remote cache settings maintenance blocked action=\(action.id, privacy: .public) reason=remoteImportRunning"
+            )
+            alert = AppAlertState(
+                title: String(localized: "Import in Progress"),
+                message: String(localized: "Finish or cancel the current remote import before clearing this stored data.")
+            )
+            return
         }
-    }
 
-    private func clearImportedComicsLibrary() {
         Task {
             await performMaintenance(
-                .clearingImported,
-                failureTitle: "Failed to Clear Imported Comics"
-            ) {
-                try dependencies.importedComicsImportService.clearImportedComicsLibrary()
-            }
+                action,
+                ownsStorageMaintenance: ownsStorageMaintenance
+            )
         }
     }
 
     private func performMaintenance(
         _ action: CacheMaintenanceAction,
-        failureTitle: String,
-        work: @escaping () throws -> Void
+        ownsStorageMaintenance: Bool
     ) async {
+        defer {
+            if ownsStorageMaintenance {
+                dependencies.remoteBackgroundImportController.endExclusiveStorageMaintenance()
+            }
+        }
         logger.notice(
             "Remote cache settings maintenance requested action=\(action.id, privacy: .public)"
         )
         maintenanceAction = action
         await Task.yield()
+        maintenanceOverlayIsFocused = true
+        announceForAccessibility(
+            [action.progressTitle, action.progressMessage].joined(separator: ". ")
+        )
 
+        let completionAnnouncement: String
         do {
-            try await runMaintenanceWork(work)
+            try await runMaintenanceWork(for: action)
             await refresh()
+            notifySettingsChanged()
             logger.notice(
                 "Remote cache settings maintenance completed action=\(action.id, privacy: .public)"
             )
+            completionAnnouncement = action.completionAnnouncement
         } catch {
+            let failureMessage = error.userFacingMessage
             logger.error(
                 "Remote cache settings maintenance failed action=\(action.id, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: failureTitle,
-                message: error.userFacingMessage
+                title: action.failureTitle,
+                message: failureMessage
             )
+            completionAnnouncement = [action.failureTitle, failureMessage]
+                .joined(separator: ". ")
         }
 
         maintenanceAction = nil
+        maintenanceOverlayIsFocused = false
+        await Task.yield()
+        announceForAccessibility(completionAnnouncement)
+    }
+
+    private func runMaintenanceWork(
+        for action: CacheMaintenanceAction
+    ) async throws {
+        switch action {
+        case .downloads:
+            try await runMaintenanceWork {
+                try dependencies.remoteServerBrowsingService.clearCachedComics()
+                dependencies.remoteOfflineLibrarySnapshotStore.invalidate()
+            }
+        case .temporaryCache:
+            try await runMaintenanceWork {
+                try dependencies.remoteServerBrowsingService.clearOtherCachedData()
+            }
+        case .thumbnails:
+            try await RemoteComicThumbnailPipeline.shared.clearCacheAsync()
+        case .imported:
+            try await runMaintenanceWork {
+                try dependencies.importedComicsImportService.clearImportedComicsLibrary()
+            }
+        }
     }
 
     private func runMaintenanceWork(
@@ -419,26 +470,201 @@ struct RemoteCacheSettingsView: View {
         }
     }
 
-    private func applyRemoteCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) {
-        logger.notice(
-            "Remote cache settings policy change requested preset=\(preset.rawValue, privacy: .public)"
+    private func notifySettingsChanged() {
+        NotificationCenter.default.post(
+            name: .remoteCacheSettingsDidChange,
+            object: dependencies.remoteCachePolicyStore
         )
-        do {
-            try dependencies.remoteServerBrowsingService.applyCachePolicyPreset(preset)
-            logger.notice(
-                "Remote cache settings policy change completed preset=\(preset.rawValue, privacy: .public)"
-            )
-            Task {
-                await refresh()
-            }
-        } catch {
-            logger.error(
-                "Remote cache settings policy change failed preset=\(preset.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
-            )
-            alert = AppAlertState(
-                title: "Failed to Update Cache Policy",
-                message: error.userFacingMessage
+    }
+
+    private func announceForAccessibility(_ message: String) {
+        guard !message.isEmpty else {
+            return
+        }
+        UIAccessibility.post(notification: .announcement, argument: message)
+    }
+}
+
+private struct RemoteCacheSummarySection: View {
+    let remoteCacheSummary: RemoteComicCacheSummary
+    let remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary
+    let importedComicsLibrarySummary: LibraryStorageFootprintSummary
+    let totalBytes: Int64
+
+    var body: some View {
+        Section("Storage Summary") {
+            SettingsSummaryGrid(
+                metrics: [
+                    SettingsSummaryMetric(
+                        title: "Downloads",
+                        value: remoteCacheSummary.hasCachedComics
+                            ? remoteCacheSummary.cachedComicSizeText
+                            : String(localized: "None"),
+                        systemImage: "arrow.down.circle.fill",
+                        tint: .blue
+                    ),
+                    SettingsSummaryMetric(
+                        title: "Covers",
+                        value: remoteThumbnailCacheSummary.isEmpty
+                            ? String(localized: "None")
+                            : remoteThumbnailCacheSummary.sizeText,
+                        systemImage: "photo.stack.fill",
+                        tint: .orange
+                    ),
+                    SettingsSummaryMetric(
+                        title: "Imported",
+                        value: importedComicsLibrarySummary.isEmpty
+                            ? String(localized: "None")
+                            : importedComicsLibrarySummary.summaryText,
+                        systemImage: "books.vertical.fill",
+                        tint: .purple
+                    ),
+                    SettingsSummaryMetric(
+                        title: "Total",
+                        value: totalBytes > 0
+                            ? ByteCountFormatter.string(
+                                fromByteCount: totalBytes,
+                                countStyle: .file
+                            )
+                            : String(localized: "None"),
+                        systemImage: "internaldrive.fill",
+                        tint: .teal
+                    )
+                ]
             )
         }
+    }
+}
+
+private struct DownloadedCopiesCacheSection: View {
+    let summary: RemoteComicCacheSummary
+    let onClearDownloads: () -> Void
+    let onClearTemporaryCache: () -> Void
+
+    var body: some View {
+        Section {
+            LabeledContent("Downloaded Copies") {
+                Text(
+                    summary.hasCachedComics
+                        ? summary.summaryText
+                        : String(localized: "None")
+                )
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            LabeledContent("Temporary Cache") {
+                Text(
+                    summary.hasOtherCacheData
+                        ? summary.otherCacheSizeText
+                        : String(localized: "None")
+                )
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            if summary.hasCachedComics {
+                Button(role: .destructive, action: onClearDownloads) {
+                    Label("Clear Downloaded Copies", systemImage: "trash")
+                }
+            }
+
+            if summary.hasOtherCacheData {
+                Button(role: .destructive, action: onClearTemporaryCache) {
+                    Label("Clear Temporary Cache", systemImage: "trash.slash")
+                }
+            }
+        } header: {
+            Text("Remote Files")
+        }
+    }
+}
+
+private struct ThumbnailCacheSection: View {
+    let summary: RemoteThumbnailCacheSummary
+    let onClear: () -> Void
+
+    var body: some View {
+        Section {
+            LabeledContent("On Device") {
+                Text(
+                    summary.isEmpty
+                        ? String(localized: "None")
+                        : summary.summaryText
+                )
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            if !summary.isEmpty {
+                Button(role: .destructive, action: onClear) {
+                    Label("Clear Cover Thumbnails", systemImage: "photo.stack")
+                }
+            }
+        } header: {
+            Text("Cover Thumbnails")
+        }
+    }
+}
+
+private struct ImportedComicsCacheSection: View {
+    let summary: LibraryStorageFootprintSummary
+    let onClear: () -> Void
+
+    var body: some View {
+        Section {
+            LabeledContent("On Device") {
+                Text(
+                    summary.isEmpty
+                        ? String(localized: "None")
+                        : summary.summaryText
+                )
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.trailing)
+            }
+
+            if !summary.isEmpty {
+                Button(role: .destructive, action: onClear) {
+                    Label("Clear Imported Comics", systemImage: "books.vertical")
+                }
+            }
+        } header: {
+            Text("Imported Comics")
+        }
+    }
+}
+
+private struct CacheMaintenanceOverlay: View {
+    let action: RemoteCacheSettingsView.CacheMaintenanceAction
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.14)
+                .ignoresSafeArea()
+
+            VStack(spacing: Spacing.sm) {
+                ProgressView()
+                    .controlSize(.large)
+                Text(action.progressTitle)
+                    .font(AppFont.headline())
+                Text(action.progressMessage)
+                    .font(AppFont.subheadline())
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(Spacing.lg)
+            .frame(maxWidth: 320)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(
+                    cornerRadius: CornerRadius.lg,
+                    style: .continuous
+                )
+            )
+            .appShadow(AppShadow.lg)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(action.progressTitle)
+        .accessibilityValue(action.progressMessage)
     }
 }

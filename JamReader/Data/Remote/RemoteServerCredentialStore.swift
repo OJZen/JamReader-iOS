@@ -8,8 +8,8 @@ enum RemoteServerCredentialStoreError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unexpectedStatus(let status):
-            return "Keychain operation failed with status \(status)."
+        case .unexpectedStatus:
+            return "Saved credentials are unavailable. Open the server settings and save the password again."
         case .invalidPasswordData:
             return "Stored remote server credentials could not be decoded."
         }
@@ -21,6 +21,13 @@ final class RemoteServerCredentialStore {
 
     func passwordReferenceKey(for serverID: UUID) -> String {
         "remote-server.\(serverID.uuidString)"
+    }
+
+    func replacementPasswordReferenceKey(
+        for serverID: UUID,
+        credentialID: UUID = UUID()
+    ) -> String {
+        "\(passwordReferenceKey(for: serverID)).\(credentialID.uuidString)"
     }
 
     func loadPassword(for referenceKey: String) throws -> String? {
@@ -58,21 +65,25 @@ final class RemoteServerCredentialStore {
     func savePassword(_ password: String, for referenceKey: String) throws {
         let data = Data(password.utf8)
 
-        let deleteQuery: [CFString: Any] = [
+        let query: [CFString: Any] = [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: service,
             kSecAttrAccount: referenceKey
         ]
-        SecItemDelete(deleteQuery as CFDictionary)
 
-        let addQuery: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: referenceKey,
-            kSecValueData: data
-        ]
+        let updateStatus = SecItemUpdate(
+            query as CFDictionary,
+            [kSecValueData: data] as CFDictionary
+        )
+        let status: OSStatus
+        if updateStatus == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData] = data
+            status = SecItemAdd(addQuery as CFDictionary, nil)
+        } else {
+            status = updateStatus
+        }
 
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
         guard status == errSecSuccess else {
             AppLog.persistence.error(
                 "Remote credential save failed referenceID=\(Self.logIdentifier(for: referenceKey), privacy: .public) status=\(status)"

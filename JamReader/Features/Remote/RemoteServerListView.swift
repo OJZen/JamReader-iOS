@@ -2,7 +2,7 @@ import SwiftUI
 
 struct RemoteServerListView: View {
     private enum LayoutMetrics {
-        static let rowAccessoryReservedWidth: CGFloat = 36
+        static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
     }
 
     @Environment(\.appNavigator) private var appNavigator
@@ -14,6 +14,7 @@ struct RemoteServerListView: View {
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var editorDraft: RemoteServerEditorDraft?
     @State private var containerWidth: CGFloat = 0
+    @State private var pendingDestructiveAction: RemoteServerDestructiveAction?
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -23,7 +24,8 @@ struct RemoteServerListView: View {
                 folderShortcutStore: dependencies.remoteFolderShortcutStore,
                 credentialStore: dependencies.remoteServerCredentialStore,
                 browsingService: dependencies.remoteServerBrowsingService,
-                readingProgressStore: dependencies.remoteReadingProgressStore
+                readingProgressStore: dependencies.remoteReadingProgressStore,
+                remoteBackgroundImportController: dependencies.remoteBackgroundImportController
             )
         )
     }
@@ -75,6 +77,25 @@ struct RemoteServerListView: View {
             viewModel.load()
         }
         .background { presentationObservers }
+        .confirmationDialog(
+            pendingDestructiveAction?.title ?? "Confirm Action",
+            isPresented: pendingDestructiveActionBinding,
+            titleVisibility: .visible
+        ) {
+            if let pendingDestructiveAction {
+                Button(pendingDestructiveAction.buttonTitle, role: .destructive) {
+                    performDestructiveAction(pendingDestructiveAction)
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                pendingDestructiveAction = nil
+            }
+        } message: {
+            if let pendingDestructiveAction {
+                Text(pendingDestructiveAction.message)
+            }
+        }
         .alert(item: $viewModel.alert) { alert in
             makeRemoteAlert(for: alert)
         }
@@ -199,7 +220,10 @@ struct RemoteServerListView: View {
 
         if recentHistoryCount > 0 {
             Button(role: .destructive) {
-                viewModel.clearRecentHistory(for: profile)
+                pendingDestructiveAction = .clearHistory(
+                    profile,
+                    count: recentHistoryCount
+                )
             } label: {
                 Label("Clear History", systemImage: "clock.arrow.circlepath")
             }
@@ -207,7 +231,10 @@ struct RemoteServerListView: View {
 
         if cacheSummary.hasCachedComics {
             Button(role: .destructive) {
-                viewModel.clearCache(for: profile)
+                pendingDestructiveAction = .clearDownloads(
+                    profile,
+                    count: cacheSummary.fileCount
+                )
             } label: {
                 Label("Clear Downloads", systemImage: "trash")
             }
@@ -215,14 +242,14 @@ struct RemoteServerListView: View {
 
         if cacheSummary.hasOtherCacheData {
             Button(role: .destructive) {
-                viewModel.clearOtherCache(for: profile)
+                pendingDestructiveAction = .clearTemporaryCache(profile)
             } label: {
                 Label("Clear Other Cache Data", systemImage: "trash.slash")
             }
         }
 
         Button(role: .destructive) {
-            viewModel.delete(profile)
+            pendingDestructiveAction = .deleteServer(profile)
         } label: {
             Label("Delete Server", systemImage: "trash")
         }
@@ -236,6 +263,33 @@ struct RemoteServerListView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Manage \(profile.displayTitle)")
+    }
+
+    private var pendingDestructiveActionBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDestructiveAction != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDestructiveAction = nil
+                }
+            }
+        )
+    }
+
+    private func performDestructiveAction(_ action: RemoteServerDestructiveAction) {
+        pendingDestructiveAction = nil
+        AppHaptics.warning()
+
+        switch action {
+        case .clearHistory(let profile, _):
+            viewModel.clearRecentHistory(for: profile)
+        case .clearDownloads(let profile, _):
+            viewModel.clearCache(for: profile)
+        case .clearTemporaryCache(let profile):
+            viewModel.clearOtherCache(for: profile)
+        case .deleteServer(let profile):
+            viewModel.delete(profile)
+        }
     }
 }
 

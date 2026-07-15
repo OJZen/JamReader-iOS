@@ -22,7 +22,6 @@ struct InsetCard<Content: View>: View {
                 .strokeBorder(Color.black.opacity(strokeOpacity), lineWidth: 1)
         }
         .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .hoverEffect(.lift)
     }
 }
 
@@ -47,6 +46,8 @@ struct InsetListRowCard<Content: View>: View {
 
 struct AdaptiveCardListRows<Data: RandomAccessCollection, Content: View>: View
 where Data.Element: Identifiable {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private let items: [Data.Element]
     private let columnCount: Int
     private let spacing: CGFloat
@@ -77,7 +78,7 @@ where Data.Element: Identifiable {
     }
 
     var body: some View {
-        if columnCount <= 1 {
+        if effectiveColumnCount <= 1 {
             ForEach(items) { item in
                 if appliesListRowStyling {
                     content(item)
@@ -98,7 +99,7 @@ where Data.Element: Identifiable {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
-                    ForEach(0..<max(0, columnCount - rowItems.count), id: \.self) { _ in
+                    ForEach(0..<max(0, effectiveColumnCount - rowItems.count), id: \.self) { _ in
                         Color.clear
                             .frame(maxWidth: .infinity, minHeight: 1)
                             .allowsHitTesting(false)
@@ -120,18 +121,22 @@ where Data.Element: Identifiable {
     }
 
     private var groupedItems: [[Data.Element]] {
-        guard columnCount > 1 else {
+        guard effectiveColumnCount > 1 else {
             return items.map { [$0] }
         }
 
         var result: [[Data.Element]] = []
         var index = 0
         while index < items.count {
-            let endIndex = min(index + columnCount, items.count)
+            let endIndex = min(index + effectiveColumnCount, items.count)
             result.append(Array(items[index..<endIndex]))
             index = endIndex
         }
         return result
+    }
+
+    private var effectiveColumnCount: Int {
+        dynamicTypeSize.isAccessibilitySize ? 1 : columnCount
     }
 }
 

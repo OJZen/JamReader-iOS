@@ -175,6 +175,12 @@ private final class RemoteComicThumbnailLoader: ObservableObject, ThumbnailLoadi
 
 @MainActor
 final class RemoteComicThumbnailPipeline {
+    private struct InFlightThumbnailTask {
+        let id: UUID
+        let generation: UInt64
+        let task: Task<UIImage?, Never>
+    }
+
     static let shared = RemoteComicThumbnailPipeline()
     private static let semaphore = AsyncSemaphore(maxConcurrent: 6)
 
@@ -184,7 +190,8 @@ final class RemoteComicThumbnailPipeline {
     // switching from grid to list can downsample from this cache instead of
     // re-fetching from the network.
     private let highQualityCache = NSCache<NSString, UIImage>()
-    private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
+    private var inFlightTasks: [String: InFlightThumbnailTask] = [:]
+    private var cacheGeneration: UInt64 = 0
     private let fileManager: FileManager
     private let thumbnailCacheRootURL: URL
     private let maximumCachedThumbnailCount = 600
@@ -227,12 +234,16 @@ final class RemoteComicThumbnailPipeline {
             return nil
         }
 
+        let requestGeneration = cacheGeneration
+        let diskCacheGeneration = diskCache.currentGeneration()
+
         if item.isPDFDocument, !prefersLocalCache {
-            return await cachedThumbnailImage(
+            let image = await cachedThumbnailImage(
                 for: item,
                 browsingService: browsingService,
                 maxPixelSize: maxPixelSize
             )
+            return requestGeneration == cacheGeneration ? image : nil
         }
 
         let requestedMaxPixelSize = maxPixelSize
@@ -250,6 +261,9 @@ final class RemoteComicThumbnailPipeline {
         // Disk check runs on the maintenance queue — never blocks the main thread.
         let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
         if let diskCachedImage = await diskCache.loadCachedImageAsync(at: diskURL) {
+            guard requestGeneration == cacheGeneration else {
+                return nil
+            }
             cache.setObject(
                 diskCachedImage,
                 forKey: nsCacheKey,
@@ -276,6 +290,9 @@ final class RemoteComicThumbnailPipeline {
 
             let legacyDiskURL = cachedThumbnailURL(forCacheKey: legacyCacheKey)
             if let legacyDiskCachedImage = await diskCache.loadCachedImageAsync(at: legacyDiskURL) {
+                guard requestGeneration == cacheGeneration else {
+                    return nil
+                }
                 cache.setObject(
                     legacyDiskCachedImage,
                     forKey: nsCacheKey,
@@ -283,7 +300,11 @@ final class RemoteComicThumbnailPipeline {
                 )
                 promoteToTransitionCache(legacyDiskCachedImage, for: reference)
                 if let thumbnailData = Self.encodedThumbnailData(from: legacyDiskCachedImage) {
-                    try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                    try? diskCache.storeEncodedThumbnailData(
+                        thumbnailData,
+                        at: diskURL,
+                        generation: diskCacheGeneration
+                    )
                 }
                 diskCache.touchCachedThumbnail(at: legacyDiskURL)
                 return legacyDiskCachedImage
@@ -302,12 +323,19 @@ final class RemoteComicThumbnailPipeline {
         }
 
         if let inFlightTask = inFlightTasks[requestKey] {
-            return await inFlightTask.value
+            let image = await inFlightTask.task.value
+            guard requestGeneration == cacheGeneration,
+                  inFlightTask.generation == requestGeneration else {
+                return nil
+            }
+            return image
         }
 
         let worker = RemoteComicThumbnailWorker(
-            diskCache: diskCache
+            diskCache: diskCache,
+            diskCacheGeneration: diskCacheGeneration
         )
+        let taskID = UUID()
         let task = Task<UIImage?, Never> {
             await Self.semaphore.run {
                 await worker.buildThumbnail(
@@ -322,9 +350,19 @@ final class RemoteComicThumbnailPipeline {
             }
         }
 
-        inFlightTasks[requestKey] = task
+        inFlightTasks[requestKey] = InFlightThumbnailTask(
+            id: taskID,
+            generation: requestGeneration,
+            task: task
+        )
         let image = await task.value
-        inFlightTasks[requestKey] = nil
+        if inFlightTasks[requestKey]?.id == taskID {
+            inFlightTasks[requestKey] = nil
+        }
+
+        guard requestGeneration == cacheGeneration else {
+            return nil
+        }
 
         if let image {
             cache.setObject(
@@ -342,24 +380,41 @@ final class RemoteComicThumbnailPipeline {
         diskCache.cacheSummary()
     }
 
+    func cacheSummaryAsync() async -> RemoteThumbnailCacheSummary {
+        await diskCache.cacheSummaryAsync()
+    }
+
     func clearCache() throws {
+        cacheGeneration &+= 1
         cache.removeAllObjects()
         highQualityCache.removeAllObjects()
-        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.values.forEach { $0.task.cancel() }
         inFlightTasks.removeAll()
         try diskCache.clearCache()
     }
 
-    func clearMemoryCache() {
+    func clearCacheAsync() async throws {
+        cacheGeneration &+= 1
         cache.removeAllObjects()
         highQualityCache.removeAllObjects()
-        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.values.forEach { $0.task.cancel() }
+        inFlightTasks.removeAll()
+
+        try await diskCache.clearCacheAsync()
+    }
+
+    func clearMemoryCache() {
+        cacheGeneration &+= 1
+        cache.removeAllObjects()
+        highQualityCache.removeAllObjects()
+        inFlightTasks.values.forEach { $0.task.cancel() }
         inFlightTasks.removeAll()
     }
 
     func clearDisplayMemoryCache() {
+        cacheGeneration &+= 1
         cache.removeAllObjects()
-        inFlightTasks.values.forEach { $0.cancel() }
+        inFlightTasks.values.forEach { $0.task.cancel() }
         inFlightTasks.removeAll()
     }
 
@@ -430,6 +485,7 @@ final class RemoteComicThumbnailPipeline {
         else {
             return nil
         }
+        let requestGeneration = cacheGeneration
 
         let requestedMaxPixelSize = maxPixelSize
         let normalizedMaxPixelSize = Self.normalizedPixelSize(for: requestedMaxPixelSize)
@@ -452,6 +508,9 @@ final class RemoteComicThumbnailPipeline {
 
             let diskURL = cachedThumbnailURL(forCacheKey: cacheKey)
             if let diskCachedImage = await diskCache.loadCachedImageAsync(at: diskURL) {
+                guard requestGeneration == cacheGeneration else {
+                    return nil
+                }
                 cache.setObject(
                     diskCachedImage,
                     forKey: nsCacheKey,
@@ -680,6 +739,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     private let cacheRootURL: URL
     private let maximumCachedThumbnailCount: Int
     private let maximumTotalCacheBytes: Int64
+    private let fileMutationLock = NSRecursiveLock()
     private let summaryLock = NSLock()
     private let touchStateLock = NSLock()
     private let maintenanceQueue = DispatchQueue(
@@ -691,6 +751,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     nonisolated(unsafe) private var cachedSummary: RemoteThumbnailCacheSummary?
     nonisolated(unsafe) private var trimScheduled = false
     nonisolated(unsafe) private var recentTouchDatesByPath: [String: Date] = [:]
+    nonisolated(unsafe) private var cacheGeneration: UInt64 = 0
 
     init(
         fileManager: FileManager,
@@ -705,38 +766,74 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     }
 
     nonisolated func cacheSummary() -> RemoteThumbnailCacheSummary {
+        withFileMutationLock {
+            if let cachedSummary = withSummaryLock({ cachedSummary }) {
+                return cachedSummary
+            }
+
+            let scannedSummary = scanSummaryFromDisk()
+
+            return withSummaryLock {
+                if let cachedSummary {
+                    return cachedSummary
+                }
+
+                cachedSummary = scannedSummary
+                return scannedSummary
+            }
+        }
+    }
+
+    nonisolated func currentGeneration() -> UInt64 {
+        withFileMutationLock { cacheGeneration }
+    }
+
+    nonisolated func cacheSummaryAsync() async -> RemoteThumbnailCacheSummary {
         if let cachedSummary = withSummaryLock({ cachedSummary }) {
             return cachedSummary
         }
 
-        let scannedSummary = scanSummaryFromDisk()
-
-        return withSummaryLock {
-            if let cachedSummary {
-                return cachedSummary
+        return await withCheckedContinuation { continuation in
+            maintenanceQueue.async { [self] in
+                continuation.resume(returning: cacheSummary())
             }
-
-            cachedSummary = scannedSummary
-            return scannedSummary
         }
     }
 
     nonisolated func clearCache() throws {
-        if fileManager.fileExists(atPath: cacheRootURL.path) {
-            try fileManager.removeItem(at: cacheRootURL)
-        }
+        try withFileMutationLock {
+            cacheGeneration &+= 1
+            if fileManager.fileExists(atPath: cacheRootURL.path) {
+                try fileManager.removeItem(at: cacheRootURL)
+            }
 
-        withSummaryLock {
-            cachedSummary = RemoteThumbnailCacheSummary(fileCount: 0, totalBytes: 0)
-            trimScheduled = false
+            withSummaryLock {
+                cachedSummary = RemoteThumbnailCacheSummary(fileCount: 0, totalBytes: 0)
+                trimScheduled = false
+            }
+            withTouchStateLock {
+                recentTouchDatesByPath.removeAll()
+            }
         }
-        withTouchStateLock {
-            recentTouchDatesByPath.removeAll()
+    }
+
+    nonisolated func clearCacheAsync() async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            maintenanceQueue.async { [self] in
+                do {
+                    try clearCache()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
     }
 
     nonisolated func loadCachedImage(at fileURL: URL) -> UIImage? {
-        decodedCachedImage(at: fileURL)
+        withFileMutationLock {
+            decodedCachedImage(at: fileURL)
+        }
     }
 
     /// Async variant — performs the disk read on the maintenance queue so the
@@ -744,7 +841,11 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     nonisolated func loadCachedImageAsync(at fileURL: URL) async -> UIImage? {
         await withCheckedContinuation { continuation in
             maintenanceQueue.async { [self] in
-                continuation.resume(returning: decodedCachedImage(at: fileURL))
+                continuation.resume(
+                    returning: withFileMutationLock {
+                        decodedCachedImage(at: fileURL)
+                    }
+                )
             }
         }
     }
@@ -777,21 +878,31 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         return UIImage(cgImage: decodedThumbnail)
     }
 
-    nonisolated func storeEncodedThumbnailData(_ data: Data, at fileURL: URL) throws {
-        let previousSize = cachedFileSize(at: fileURL)
+    nonisolated func storeEncodedThumbnailData(
+        _ data: Data,
+        at fileURL: URL,
+        generation: UInt64
+    ) throws {
+        try withFileMutationLock {
+            guard generation == cacheGeneration else {
+                return
+            }
 
-        try fileManager.createDirectory(
-            at: cacheRootURL,
-            withIntermediateDirectories: true
-        )
-        try data.write(to: fileURL, options: .atomic)
-        recordTouch(at: fileURL, at: Date())
-        let newSize = DiskUsageScanner.allocatedByteCount(at: fileURL, fileManager: fileManager)
+            let previousSize = cachedFileSize(at: fileURL)
 
-        updateSummaryAfterStore(
-            previousSize: previousSize,
-            newSize: newSize
-        )
+            try fileManager.createDirectory(
+                at: cacheRootURL,
+                withIntermediateDirectories: true
+            )
+            try data.write(to: fileURL, options: .atomic)
+            recordTouch(at: fileURL, at: Date())
+            let newSize = DiskUsageScanner.allocatedByteCount(at: fileURL, fileManager: fileManager)
+
+            updateSummaryAfterStore(
+                previousSize: previousSize,
+                newSize: newSize
+            )
+        }
     }
 
     nonisolated func touchCachedThumbnail(at fileURL: URL) {
@@ -847,7 +958,9 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     }
 
     nonisolated private func performTrimMaintenance() {
-        let trimmedSummary = trimCacheIfNeeded()
+        let trimmedSummary = withFileMutationLock {
+            trimCacheIfNeeded()
+        }
 
         let shouldScheduleAnotherPass = withSummaryLock {
             cachedSummary = trimmedSummary
@@ -975,6 +1088,14 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         return body()
     }
 
+    nonisolated private func withFileMutationLock<T>(
+        _ body: () throws -> T
+    ) rethrows -> T {
+        fileMutationLock.lock()
+        defer { fileMutationLock.unlock() }
+        return try body()
+    }
+
     nonisolated private func shouldScheduleTouch(for path: String, now: Date) -> Bool {
         withTouchStateLock {
             if let lastTouch = recentTouchDatesByPath[path],
@@ -1017,6 +1138,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
 
 private struct RemoteComicThumbnailWorker {
     let diskCache: RemoteThumbnailDiskCacheStore
+    let diskCacheGeneration: UInt64
 
     nonisolated func buildThumbnail(
         for profile: RemoteServerProfile,
@@ -1045,7 +1167,11 @@ private struct RemoteComicThumbnailWorker {
             }
 
             if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
-                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                try? diskCache.storeEncodedThumbnailData(
+                    thumbnailData,
+                    at: diskURL,
+                    generation: diskCacheGeneration
+                )
             }
             return cachedImage
         }
@@ -1058,7 +1184,11 @@ private struct RemoteComicThumbnailWorker {
             }
 
             if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
-                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                try? diskCache.storeEncodedThumbnailData(
+                    thumbnailData,
+                    at: diskURL,
+                    generation: diskCacheGeneration
+                )
             }
             return cachedImage
         }
@@ -1067,7 +1197,11 @@ private struct RemoteComicThumbnailWorker {
            let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
            let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize) {
             if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
-                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                try? diskCache.storeEncodedThumbnailData(
+                    thumbnailData,
+                    at: diskURL,
+                    generation: diskCacheGeneration
+                )
             }
             return cachedImage
         }
@@ -1085,7 +1219,11 @@ private struct RemoteComicThumbnailWorker {
                maxPixelSize: maxPixelSize
            ) {
             if let thumbnailData = Self.encodedThumbnailData(from: remoteImage) {
-                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                try? diskCache.storeEncodedThumbnailData(
+                    thumbnailData,
+                    at: diskURL,
+                    generation: diskCacheGeneration
+                )
             }
             return remoteImage
         }
@@ -1093,7 +1231,11 @@ private struct RemoteComicThumbnailWorker {
         if let cachedFileURL = await browsingService.cachedFileURLIfAvailable(for: reference),
            let cachedImage = await Self.extractThumbnail(from: cachedFileURL, maxPixelSize: maxPixelSize) {
             if let thumbnailData = Self.encodedThumbnailData(from: cachedImage) {
-                try? diskCache.storeEncodedThumbnailData(thumbnailData, at: diskURL)
+                try? diskCache.storeEncodedThumbnailData(
+                    thumbnailData,
+                    at: diskURL,
+                    generation: diskCacheGeneration
+                )
             }
             return cachedImage
         }

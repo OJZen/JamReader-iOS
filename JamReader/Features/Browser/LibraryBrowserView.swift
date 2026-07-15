@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 struct LibraryBrowserView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = Spacing.sm
-        static let rowAccessoryReservedWidth: CGFloat = 36
+        static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
         static let compactGridMinWidth: CGFloat = 165
         static let compactGridMaxWidth: CGFloat = 220
         static let regularGridMinWidth: CGFloat = 240
@@ -16,10 +16,11 @@ struct LibraryBrowserView: View {
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     private let dependencies: AppDependencies
 
-    @AppStorage("libraryRecentWindowDays") private var recentWindowRawValue = LibraryRecentWindowOption.defaultOption.rawValue
+    @AppStorage(LibraryPreferencesStore.recentWindowStorageKey) private var recentWindowRawValue = LibraryRecentWindowOption.defaultOption.rawValue
     @StateObject private var viewModel: LibraryBrowserViewModel
     @State private var comicSortMode: LibraryComicSortMode
     @State private var preferredDisplayMode: LibraryBrowserDisplayMode
@@ -149,11 +150,18 @@ struct LibraryBrowserView: View {
                     completion: scanCompletion,
                     dismiss: viewModel.dismissScanCompletion
                 )
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .transition(
+                    accessibilityReduceMotion
+                        ? .opacity
+                        : .move(edge: .top).combined(with: .opacity)
+                )
                 .padding(.top, Spacing.xs)
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: viewModel.scanCompletion?.id)
+        .animation(
+            accessibilityReduceMotion ? AppAnimation.quickFade : .easeInOut(duration: 0.22),
+            value: viewModel.scanCompletion?.id
+        )
         .navigationTitle(viewModel.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1718,7 +1726,7 @@ struct LibraryBrowserView: View {
 
     private func queueQuickAction(_ action: PendingComicQuickAction) {
         pendingQuickAction = action
-        quickActionsComic = nil
+        appPresenter?.dismissSheet()
     }
 
     private func presentEditingComicSheetIfNeeded() {

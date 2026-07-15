@@ -3,7 +3,7 @@ import SwiftUI
 struct LibraryOrganizationCollectionDetailView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
-        static let rowAccessoryReservedWidth: CGFloat = 36
+        static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
         static let compactGridMinWidth: CGFloat = 165
         static let compactGridMaxWidth: CGFloat = 220
         static let regularGridMinWidth: CGFloat = 240
@@ -894,7 +894,7 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private func queueQuickAction(_ action: PendingComicQuickAction) {
         pendingQuickAction = action
-        quickActionsComic = nil
+        appPresenter?.dismissSheet()
     }
 
     private func presentEditingComicSheetIfNeeded() {

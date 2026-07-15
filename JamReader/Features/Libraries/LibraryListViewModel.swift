@@ -256,9 +256,10 @@ final class LibraryListViewModel: ObservableObject {
         )
     }
 
-    func removeLibraries(at offsets: IndexSet) {
+    @discardableResult
+    func removeLibraries(at offsets: IndexSet) -> Bool {
         let idsToRemove = offsets.map { items[$0].descriptor.id }
-        removeLibraries(withIDs: idsToRemove)
+        return removeLibraries(withIDs: idsToRemove)
     }
 
     func renameLibrary(id: UUID, to proposedName: String) -> Bool {
@@ -298,8 +299,14 @@ final class LibraryListViewModel: ObservableObject {
         }
     }
 
-    func removeLibrary(id: UUID) {
+    @discardableResult
+    func removeLibrary(id: UUID) -> Bool {
         removeLibraries(withIDs: [id])
+    }
+
+    @discardableResult
+    func removeLibraries(ids: [UUID]) -> Bool {
+        removeLibraries(withIDs: ids)
     }
 
     func presentImportError(_ error: Error) {
@@ -382,7 +389,7 @@ final class LibraryListViewModel: ObservableObject {
         }
     }
 
-    private func removeLibraries(withIDs idsToRemove: [UUID]) {
+    private func removeLibraries(withIDs idsToRemove: [UUID]) -> Bool {
         let removedDescriptors = descriptors.filter { idsToRemove.contains($0.id) }
         let removedNames = removedDescriptors.map(\.name)
 
@@ -391,10 +398,11 @@ final class LibraryListViewModel: ObservableObject {
                 "Library remove requested count=\(removedDescriptors.count, privacy: .public) ids=\(AppLogSanitizer.namesPreview(removedDescriptors.map { $0.id.uuidString }), privacy: .public) names=\(AppLogSanitizer.namesPreview(removedNames), privacy: .public)"
             )
         }
-        descriptors.removeAll { idsToRemove.contains($0.id) }
+        let updatedDescriptors = descriptors.filter { !idsToRemove.contains($0.id) }
 
         do {
-            try store.save(descriptors)
+            try store.save(updatedDescriptors)
+            descriptors = updatedDescriptors
             rebuildItems()
             if !removedDescriptors.isEmpty {
                 logger.info(
@@ -406,7 +414,7 @@ final class LibraryListViewModel: ObservableObject {
                 "Library remove failed count=\(removedDescriptors.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(removedNames), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
-            return
+            return false
         }
 
         var fileCleanupFailures: [String] = []
@@ -427,6 +435,7 @@ final class LibraryListViewModel: ObservableObject {
                 message: "Removed the library from JamReader, but failed to delete local files for: \(NamePreviewFormatter.preview(from: fileCleanupFailures))."
             )
         }
+        return true
     }
 
     private func rebuildItems() {

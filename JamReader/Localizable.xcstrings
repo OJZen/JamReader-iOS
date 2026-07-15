@@ -4,23 +4,15 @@
     "" : {
 
     },
-    "·" : {
-
-    },
-    "(%lld)" : {
-
-    },
-    "/ %lld" : {
-
-    },
-    "/Manga/Weekly" : {
-
-    },
-    "/remote.php/dav/files/you/Comics" : {
-
-    },
-    "/Weekly" : {
-
+    "%@ limit · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ limit · %2$@"
+          }
+        }
+      }
     },
     "%lld" : {
 
@@ -35,23 +27,31 @@
         }
       }
     },
+    "%lld Days" : {
+
+    },
     "%lld Stars" : {
 
     },
     "%lld%%" : {
 
     },
-    "%lld%% completed across %lld pages" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld%% completed across %2$lld pages"
-          }
-        }
-      }
+    "(%lld)" : {
+
+    },
+    "/Manga/Weekly" : {
+
+    },
+    "/Weekly" : {
+
+    },
+    "/remote.php/dav/files/you/Comics" : {
+
     },
     "1 Star" : {
+
+    },
+    "A new app-managed library will be created on this device." : {
 
     },
     "About" : {
@@ -73,6 +73,21 @@
     "Add" : {
 
     },
+    "Add Bookmark" : {
+
+    },
+    "Add Favorite" : {
+
+    },
+    "Add Library Folder" : {
+
+    },
+    "Add Remote Server" : {
+
+    },
+    "Add Server" : {
+
+    },
     "Add a Library" : {
 
     },
@@ -82,40 +97,28 @@
     "Add a server to browse comics." : {
 
     },
-    "Add Bookmark" : {
-
-    },
-    "Add Favorite" : {
-
-    },
-    "Add Library" : {
-
-    },
-    "Add Library Folder" : {
-
-    },
     "Add or remove this comic from tags and reading lists." : {
-
-    },
-    "Add Remote Server" : {
-
-    },
-    "Add Server" : {
 
     },
     "Add to Favorites" : {
 
     },
-    "All Pages" : {
+    "Apply" : {
 
     },
-    "Apply" : {
+    "Applying download limit" : {
 
     },
     "Assets" : {
 
     },
+    "At a Glance" : {
+
+    },
     "Authentication" : {
+
+    },
+    "Background download in progress" : {
 
     },
     "Base Directory" : {
@@ -149,9 +152,6 @@
     "Builds this library's local index, adds the root folder, and scans supported comic files." : {
 
     },
-    "Cache Policy" : {
-
-    },
     "Cancel" : {
 
     },
@@ -161,13 +161,16 @@
     "Cast & Tags" : {
 
     },
+    "Changes made inside the reader also update the matching default." : {
+
+    },
+    "Changes made inside the reader continue to update this remembered layout." : {
+
+    },
     "Characters" : {
 
     },
     "Choose a server or shortcut." : {
-
-    },
-    "Choose Destination" : {
 
     },
     "Classification" : {
@@ -176,37 +179,61 @@
     "Clear" : {
 
     },
+    "Clear Cover Thumbnails" : {
+
+    },
     "Clear Download" : {
+
+    },
+    "Clear Downloaded Copies" : {
 
     },
     "Clear Downloads" : {
 
     },
-    "Clear downloads for this server?" : {
-
-    },
-    "Clear downloads?" : {
-
-    },
-    "Clear Filters" : {
-
-    },
     "Clear History" : {
 
     },
-    "Clear Imported" : {
+    "Clear Imported Comics" : {
 
     },
-    "Clear imported comics?" : {
+    "Clear Other Cache Data" : {
 
     },
     "Clear Search" : {
 
     },
-    "Clear Thumbnails" : {
+    "Clear Temporary Cache" : {
 
     },
-    "Clear thumbnails?" : {
+    "Clear cover thumbnails?" : {
+
+    },
+    "Clear downloaded copies?" : {
+
+    },
+    "Clear downloads for this server?" : {
+
+    },
+    "Clear imported comics?" : {
+
+    },
+    "Clear temporary cache?" : {
+
+    },
+    "Clearing Downloads" : {
+
+    },
+    "Clearing Imported Comics" : {
+
+    },
+    "Clearing Temporary Cache" : {
+
+    },
+    "Clearing Thumbnails" : {
+
+    },
+    "Clearing downloads keeps server profiles and reading progress." : {
 
     },
     "Collapse Import" : {
@@ -233,7 +260,7 @@
     "Comics" : {
 
     },
-    "Connecting" : {
+    "Comics Defaults" : {
 
     },
     "Connection" : {
@@ -245,10 +272,25 @@
     "Cover Artist" : {
 
     },
-    "Cover as Single Page" : {
+    "Cover Single" : {
+
+    },
+    "Cover Spread" : {
 
     },
     "Cover Thumbnails" : {
+
+    },
+    "Cover as Single Page" : {
+
+    },
+    "Cover thumbnails cleared." : {
+
+    },
+    "Covers" : {
+
+    },
+    "Covers are generated again as remote folders are browsed." : {
 
     },
     "Create" : {
@@ -266,7 +308,7 @@
     "Current" : {
 
     },
-    "Default reader layout for each type." : {
+    "Defaults for comics, manga, and webcomics" : {
 
     },
     "Delete" : {
@@ -303,9 +345,6 @@
         }
       }
     },
-    "Destination" : {
-
-    },
     "Details" : {
 
     },
@@ -324,7 +363,28 @@
     "Done" : {
 
     },
+    "Double Page" : {
+
+    },
+    "Download Limit" : {
+
+    },
+    "Downloaded Copies" : {
+
+    },
+    "Downloaded copies cleared." : {
+
+    },
+    "Downloaded copies, generated covers, and imported remote files are managed separately." : {
+
+    },
+    "Downloaded remote files are removed. Servers and reading progress stay intact." : {
+
+    },
     "Downloads" : {
+
+    },
+    "Downloads & Storage" : {
 
     },
     "Edit" : {
@@ -348,7 +408,22 @@
     "Expand Import" : {
 
     },
+    "Failed to Clear Downloads" : {
+
+    },
+    "Failed to Clear Imported Comics" : {
+
+    },
+    "Failed to Clear Temporary Cache" : {
+
+    },
+    "Failed to Clear Thumbnails" : {
+
+    },
     "Failed to Load Metadata" : {
+
+    },
+    "Failed to Update Download Limit" : {
 
     },
     "Favorite" : {
@@ -366,10 +441,22 @@
     "Filter" : {
 
     },
-    "Filter comics" : {
+    "Finish or cancel the current remote import before changing the download limit." : {
+
+    },
+    "Finish or cancel the current remote import before clearing this stored data." : {
+
+    },
+    "Fit Height" : {
 
     },
     "Fit Mode" : {
+
+    },
+    "Fit Page" : {
+
+    },
+    "Fit Width" : {
 
     },
     "Folder" : {
@@ -381,7 +468,7 @@
     "Format" : {
 
     },
-    "Go To" : {
+    "Generated remote cover images are removed and recreated as needed." : {
 
     },
     "Go to Page" : {
@@ -391,6 +478,9 @@
 
     },
     "Host" : {
+
+    },
+    "How It Works" : {
 
     },
     "Import" : {
@@ -408,16 +498,13 @@
     "Import Current Folder ComicInfo" : {
 
     },
-    "Import Destination" : {
-
-    },
     "Import Folder to Library" : {
 
     },
     "Import Library ComicInfo" : {
 
     },
-    "Import Options" : {
+    "Import in Progress" : {
 
     },
     "Import to Library" : {
@@ -429,7 +516,10 @@
     "Imported Comics" : {
 
     },
-    "Imported files are removed. The library stays in the app." : {
+    "Imported comics cleared." : {
+
+    },
+    "Imported files are removed. The Imported Comics library remains available." : {
 
     },
     "Imprint" : {
@@ -471,6 +561,9 @@
     "Left" : {
 
     },
+    "Left to Right" : {
+
+    },
     "Letterer" : {
 
     },
@@ -508,9 +601,6 @@
     "Local State" : {
 
     },
-    "Locate" : {
-
-    },
     "Location" : {
 
     },
@@ -526,13 +616,13 @@
     "Manage %@" : {
 
     },
-    "Manage Cache" : {
-
-    },
-    "Manage Cache for cleanup." : {
-
-    },
     "Manage Servers" : {
+
+    },
+    "Manga" : {
+
+    },
+    "Manga Defaults" : {
 
     },
     "Mark Read" : {
@@ -559,16 +649,10 @@
     "Name" : {
 
     },
-    "nas.local" : {
-
-    },
     "Navigate" : {
 
     },
-    "No reading lists yet." : {
-
-    },
-    "No reading lists yet. Create one from the library root." : {
+    "New Library" : {
 
     },
     "No Recent Comics" : {
@@ -580,10 +664,19 @@
     "No Saved Folders" : {
 
     },
+    "No reading lists yet." : {
+
+    },
+    "No reading lists yet. Create one from the library root." : {
+
+    },
     "No tags yet." : {
 
     },
     "No tags yet. Create one from the library root." : {
+
+    },
+    "None" : {
 
     },
     "Not Now" : {
@@ -592,7 +685,7 @@
     "Notes" : {
 
     },
-    "Now Reading" : {
+    "OK" : {
 
     },
     "Offline" : {
@@ -604,19 +697,10 @@
     "Offline Shelf" : {
 
     },
-    "OK" : {
-
-    },
     "On Device" : {
 
     },
     "Only changes the name in the app." : {
-
-    },
-    "Only remote cover thumbnails are removed." : {
-
-    },
-    "Open a comic on this server to keep it here." : {
 
     },
     "Open Downloaded Copy" : {
@@ -628,10 +712,19 @@
     "Open Older Downloaded Copy" : {
 
     },
+    "Open a comic on this server to keep it here." : {
+
+    },
+    "Opens reading defaults" : {
+
+    },
     "Options" : {
 
     },
     "Organize" : {
+
+    },
+    "Original Size" : {
 
     },
     "Overview" : {
@@ -663,10 +756,13 @@
     "Page Layout" : {
 
     },
+    "Page Mode" : {
+
+    },
     "Page layout and rotation are unavailable in vertical scroll." : {
 
     },
-    "Page Mode" : {
+    "Paged" : {
 
     },
     "Pages" : {
@@ -679,6 +775,9 @@
 
     },
     "Penciller" : {
+
+    },
+    "Policy" : {
 
     },
     "Port" : {
@@ -697,9 +796,6 @@
 
     },
     "Quick Edit Metadata" : {
-
-    },
-    "Quick Jump" : {
 
     },
     "Quick Metadata" : {
@@ -721,6 +817,9 @@
         }
       }
     },
+    "Reading Defaults" : {
+
+    },
     "Reading Direction" : {
 
     },
@@ -730,16 +829,28 @@
     "Reading Mode" : {
 
     },
-    "Reading now" : {
+    "Reading Status" : {
 
     },
-    "Reading Status" : {
+    "Reading, library, storage, and app info" : {
+
+    },
+    "Ready for direct imports right away" : {
 
     },
     "Recent" : {
 
     },
+    "Recent Items" : {
+
+    },
+    "Recent Items controls the time range used by the Recent collection." : {
+
+    },
     "Recent Window" : {
+
+    },
+    "Recent items: %@" : {
 
     },
     "Refresh & Scan" : {
@@ -754,10 +865,8 @@
     "Refresh Library" : {
 
     },
-    "Refreshing Remote Copy" : {
-
-    },
     "Remote" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -767,10 +876,7 @@
         }
       }
     },
-    "Remote Cache" : {
-
-    },
-    "Remote Downloads" : {
+    "Remote Files" : {
 
     },
     "Remote Servers" : {
@@ -788,7 +894,7 @@
     "Remove Favorite" : {
 
     },
-    "Remove from App" : {
+    "Remove Shortcut" : {
 
     },
     "Remove from Favorites" : {
@@ -797,13 +903,19 @@
     "Remove saved folder?" : {
 
     },
-    "Remove Shortcut" : {
-
-    },
-    "Removes the library from the app. Files stay on disk." : {
-
-    },
     "Removes the shortcut for \"%@\" only." : {
+
+    },
+    "Removing downloaded remote files." : {
+
+    },
+    "Removing generated remote cover images." : {
+
+    },
+    "Removing imported files and refreshing the library." : {
+
+    },
+    "Removing incomplete and leftover cache data." : {
 
     },
     "Rename" : {
@@ -818,16 +930,19 @@
     "Reset Rotation" : {
 
     },
-    "Resume" : {
+    "Reset to Recommended Defaults" : {
 
     },
-    "Retention" : {
+    "Resume" : {
 
     },
     "Retry" : {
 
     },
     "Right" : {
+
+    },
+    "Right to Left" : {
 
     },
     "Rotate Left" : {
@@ -837,6 +952,9 @@
 
     },
     "Rotation" : {
+
+    },
+    "SMB uses 445." : {
 
     },
     "Save" : {
@@ -854,10 +972,10 @@
     "Saved Folders" : {
 
     },
-    "Saved in Keychain." : {
+    "Saved Password" : {
 
     },
-    "Saved Password" : {
+    "Saved in Keychain." : {
 
     },
     "Scope" : {
@@ -866,13 +984,13 @@
     "Search %@" : {
 
     },
+    "Search comics" : {
+
+    },
     "Search entire library" : {
 
     },
     "Search folders" : {
-
-    },
-    "Search shelf" : {
 
     },
     "Searching Library" : {
@@ -884,13 +1002,13 @@
     "Select" : {
 
     },
+    "Select All" : {
+
+    },
     "Select a Library" : {
 
     },
     "Select a Server" : {
-
-    },
-    "Select All" : {
 
     },
     "Selected" : {
@@ -911,13 +1029,7 @@
     "Server Path" : {
 
     },
-    "Server Unavailable" : {
-
-    },
     "Servers" : {
-
-    },
-    "Servers stay intact. Downloads and remote history are removed." : {
 
     },
     "Settings" : {
@@ -942,7 +1054,7 @@
     "Show File Info" : {
 
     },
-    "SMB uses 445." : {
+    "Single Page" : {
 
     },
     "Something Went Wrong" : {
@@ -982,10 +1094,19 @@
         }
       }
     },
+    "Storage Summary" : {
+
+    },
+    "Stored locally inside JamReader" : {
+
+    },
     "Story Arc" : {
 
     },
     "Strategy" : {
+
+    },
+    "Switch to %@" : {
 
     },
     "Tags" : {
@@ -994,13 +1115,22 @@
     "Tags and Reading Lists" : {
 
     },
-    "Tap any thumbnail to jump instantly." : {
-
-    },
-    "Tap to open" : {
-
-    },
     "Teams" : {
+
+    },
+    "Temporary Cache" : {
+
+    },
+    "Temporary cache cleared." : {
+
+    },
+    "The library remains in place after its imported files are removed." : {
+
+    },
+    "The limit applies to downloaded remote comics. Older copies are removed when space is needed." : {
+
+    },
+    "These values are used the next time this content type opens." : {
 
     },
     "This removes %@ and clears its local offline data on this device." : {
@@ -1009,13 +1139,10 @@
     "This removes the comic file from the library on this device." : {
 
     },
-    "This server is no longer available on this device." : {
-
-    },
-    "Thumbnails" : {
-
-    },
     "Title" : {
+
+    },
+    "Total" : {
 
     },
     "Try Again" : {
@@ -1025,6 +1152,12 @@
 
     },
     "Unfavorite" : {
+
+    },
+    "Unfinished downloads and leftover remote cache files are removed." : {
+
+    },
+    "Unlimited" : {
 
     },
     "Unrated" : {
@@ -1051,13 +1184,28 @@
     "Version" : {
 
     },
+    "Vertical Scroll" : {
+
+    },
     "View" : {
+
+    },
+    "View Controls" : {
 
     },
     "Volume" : {
 
     },
     "WebDAV uses 443 for HTTPS or 80 for HTTP." : {
+
+    },
+    "Webcomics" : {
+
+    },
+    "Webcomics Defaults" : {
+
+    },
+    "Weekend Reads" : {
 
     },
     "When" : {
@@ -1067,6 +1215,15 @@
 
     },
     "Writer" : {
+
+    },
+    "You can rename it later in the app" : {
+
+    },
+    "nas.local" : {
+
+    },
+    "·" : {
 
     }
   },

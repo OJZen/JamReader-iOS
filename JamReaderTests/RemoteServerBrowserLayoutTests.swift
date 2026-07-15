@@ -71,4 +71,38 @@ final class RemoteServerBrowserLayoutTests: XCTestCase {
         let interItemSpacing = try XCTUnwrap(group.interItemSpacing)
         XCTAssertEqual(interItemSpacing.spacing, 12, accuracy: 0.001)
     }
+
+    func testAccessibilityTextExpandsRemoteBrowserCards() {
+        let standardListHeight = RemoteBrowserDynamicTypeLayoutMetrics.listCardHeight(for: .large)
+        let accessibilityListHeight = RemoteBrowserDynamicTypeLayoutMetrics.listCardHeight(
+            for: .accessibilityExtraExtraExtraLarge
+        )
+        let standardGridLabelHeight = RemoteBrowserDynamicTypeLayoutMetrics.gridLabelHeight(for: .large)
+        let accessibilityGridLabelHeight = RemoteBrowserDynamicTypeLayoutMetrics.gridLabelHeight(
+            for: .accessibilityExtraExtraExtraLarge
+        )
+
+        XCTAssertGreaterThan(accessibilityListHeight, standardListHeight)
+        XCTAssertGreaterThan(accessibilityGridLabelHeight, standardGridLabelHeight)
+        XCTAssertGreaterThan(accessibilityListHeight, 156)
+        XCTAssertGreaterThan(accessibilityGridLabelHeight, 124)
+    }
+
+    func testAccessibilitySectionHeaderFitsTitleAndMetadata() {
+        let standardHeight = RemoteBrowserDynamicTypeLayoutMetrics.sectionHeaderHeight(
+            title: "Folders",
+            metadata: "3 folders",
+            availableWidth: 361,
+            contentSizeCategory: .large
+        )
+        let accessibilityHeight = RemoteBrowserDynamicTypeLayoutMetrics.sectionHeaderHeight(
+            title: "Folders",
+            metadata: "3 folders",
+            availableWidth: 361,
+            contentSizeCategory: .accessibilityExtraExtraExtraLarge
+        )
+
+        XCTAssertGreaterThan(accessibilityHeight, standardHeight)
+        XCTAssertGreaterThan(accessibilityHeight, 84)
+    }
 }

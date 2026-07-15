@@ -2,72 +2,8 @@ import Combine
 import SwiftUI
 
 enum ImportDestinationSheetCopy {
-    static let destinationFooter = "Files are copied into the selected library. Linked folders must be writable on this device to receive imported comics."
-    static let remoteImportNotice = "Remote imports download comics to this device before adding them to a local library."
-}
-
-struct ImportSheetContextCard: View {
-    let title: String
-    let message: String
-    let supplementaryNotice: String?
-    var iconSystemName = "square.and.arrow.down.on.square.fill"
-    var accent: Color = .blue
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.md) {
-            HStack(alignment: .top, spacing: Spacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
-                        .fill(accent.opacity(0.14))
-
-                    Image(systemName: iconSystemName)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(accent)
-                }
-                .frame(width: 52, height: 52)
-
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text(title)
-                        .font(AppFont.title3(.semibold))
-                        .foregroundStyle(Color.textPrimary)
-
-                    if let bodyText = trimmed(message) {
-                        Text(bodyText)
-                            .font(AppFont.subheadline())
-                            .foregroundStyle(Color.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-
-            if let notice = trimmed(supplementaryNotice) {
-                Label {
-                    Text(notice)
-                        .font(AppFont.footnote())
-                        .foregroundStyle(Color.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "info.circle.fill")
-                        .foregroundStyle(accent)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous)
-                .fill(Color.surfaceSecondary)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous)
-                .strokeBorder(accent.opacity(0.12), lineWidth: 1)
-        )
-    }
-
-    private func trimmed(_ text: String?) -> String? {
-        let value = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? nil : value
-    }
+    static let destinationFooter = "Imports are copied to the selected library."
+    static let remoteImportNotice = "Remote files download to the selected library on this device."
 }
 
 struct LibraryImportDestinationOptionRow: View {
@@ -86,6 +22,7 @@ struct LibraryImportDestinationOptionRow: View {
                     .foregroundStyle(accentColor)
             }
             .frame(width: 42, height: 42)
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack(alignment: .top, spacing: Spacing.xs) {
@@ -96,10 +33,33 @@ struct LibraryImportDestinationOptionRow: View {
 
                     Spacer(minLength: Spacing.xs)
 
-                if showsSelectionIndicator {
+                    if showsSelectionIndicator {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(isSelected ? accentColor : Color.textTertiary)
+                            .accessibilityHidden(true)
+                    }
+                }
+
+                if let detail = option.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(AppFont.footnote())
+                        .foregroundStyle(Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: Spacing.xs) {
+                    if let status = option.status {
+                        Label(status.title, systemImage: statusSystemImage)
+                            .font(AppFont.caption2(.semibold))
+                            .foregroundStyle(accentColor)
+                    }
+
+                    if let unavailableReason {
+                        Label(unavailableReason, systemImage: "exclamationmark.circle.fill")
+                            .font(AppFont.caption2())
+                            .foregroundStyle(Color.appWarning)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
@@ -116,6 +76,9 @@ struct LibraryImportDestinationOptionRow: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .opacity(option.isSelectable ? 1 : 0.78)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(accessibilityStatus)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var accentColor: Color {
@@ -133,6 +96,33 @@ struct LibraryImportDestinationOptionRow: View {
         case .none:
             return "square.stack.3d.up.fill"
         }
+    }
+
+    private var statusSystemImage: String {
+        switch option.status {
+        case .appManaged:
+            return "checkmark.shield.fill"
+        case .linkedFolder:
+            return "link"
+        case .readOnly:
+            return "lock.fill"
+        case .none:
+            return "square.stack.3d.up.fill"
+        }
+    }
+
+    private var unavailableReason: String? {
+        guard case .unavailable(let reason) = option.availability else {
+            return nil
+        }
+
+        return reason
+    }
+
+    private var accessibilityStatus: String {
+        [option.status?.title, unavailableReason]
+            .compactMap { $0 }
+            .joined(separator: ", ")
     }
 
     private var cardBackgroundColor: Color {
@@ -321,16 +311,18 @@ struct LibraryImportDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let title: String
-    let message: String
+    let message: String?
     let supplementaryNotice: String?
     let confirmLabel: String
     let onSelect: (LibraryImportDestinationSelection) -> Void
 
     @StateObject private var viewModel: LibraryImportDestinationSheetViewModel
+    @State private var selectedDestination: LibraryImportDestinationSelection
+    @State private var hasAppliedSuggestedDestination = false
 
     init(
         title: String,
-        message: String,
+        message: String? = nil,
         supplementaryNotice: String? = nil,
         confirmLabel: String = "Use This Library",
         dependencies: AppDependencies,
@@ -342,6 +334,7 @@ struct LibraryImportDestinationSheet: View {
         self.supplementaryNotice = supplementaryNotice
         self.confirmLabel = confirmLabel
         self.onSelect = onSelect
+        _selectedDestination = State(initialValue: preferredSelection ?? .importedComics)
         _viewModel = StateObject(
             wrappedValue: LibraryImportDestinationSheetViewModel(
                 dependencies: dependencies,
@@ -354,8 +347,17 @@ struct LibraryImportDestinationSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
+                    if let message, !message.isEmpty {
+                        Text(message)
+                            .font(AppFont.subheadline())
+                            .foregroundStyle(Color.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     ImportSection(
                         title: "Choose Destination",
+                        footer: supplementaryNotice ?? ImportDestinationSheetCopy.destinationFooter
                     ) {
                         ForEach(viewModel.options) { option in
                             Button {
@@ -363,17 +365,16 @@ struct LibraryImportDestinationSheet: View {
                                     return
                                 }
 
-                                viewModel.rememberSelection(option.selection)
-                                dismiss()
-                                onSelect(option.selection)
+                                selectedDestination = option.selection
                             } label: {
                                 LibraryImportDestinationOptionRow(
-                                    option: option
+                                    option: option,
+                                    isSelected: selectedDestination == option.selection,
+                                    showsSelectionIndicator: true
                                 )
                             }
                             .buttonStyle(.plain)
                             .disabled(!option.isSelectable)
-                            .accessibilityHint(confirmLabel)
                         }
                     }
                 }
@@ -391,6 +392,10 @@ struct LibraryImportDestinationSheet: View {
             }
             .onAppear {
                 viewModel.loadIfNeeded()
+                applySuggestedDestinationIfNeeded()
+            }
+            .onChange(of: viewModel.options) { _, _ in
+                applySuggestedDestinationIfNeeded()
             }
             .alert(item: $viewModel.alert) { alert in
                 Alert(
@@ -399,9 +404,46 @@ struct LibraryImportDestinationSheet: View {
                     dismissButton: .default(Text("OK"))
                 )
             }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: Spacing.sm) {
+                    Button {
+                        viewModel.rememberSelection(selectedDestination)
+                        let selection = selectedDestination
+                        dismiss()
+                        onSelect(selection)
+                    } label: {
+                        Text(confirmLabel)
+                            .font(AppFont.body(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, Spacing.sm)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!isSelectedDestinationSelectable)
+                }
+                .padding(.horizontal, Spacing.lg)
+                .padding(.top, Spacing.sm)
+                .padding(.bottom, Spacing.md)
+                .background(.regularMaterial)
+            }
         }
         .adaptiveFormSheet(760)
         .presentationBackground(Color.surfaceGrouped)
         .presentationDragIndicator(.visible)
+    }
+
+    private var isSelectedDestinationSelectable: Bool {
+        viewModel.options.contains {
+            $0.selection == selectedDestination && $0.isSelectable
+        }
+    }
+
+    private func applySuggestedDestinationIfNeeded() {
+        guard !hasAppliedSuggestedDestination,
+              !viewModel.options.isEmpty else {
+            return
+        }
+
+        hasAppliedSuggestedDestination = true
+        selectedDestination = viewModel.suggestedSelection
     }
 }

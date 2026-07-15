@@ -952,6 +952,7 @@ struct RemoteBrowserImportProgressView: View {
                     Button("Cancel Import", role: .cancel, action: onCancel)
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .frame(minHeight: 44)
                         .padding(.top, Spacing.xxxs)
                 }
             }
@@ -960,6 +961,8 @@ struct RemoteBrowserImportProgressView: View {
 }
 
 struct RemoteBrowserCollapsibleImportProgressView: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+
     let progress: RemoteBrowserProgressState
     @Binding var isExpanded: Bool
     var onCancel: (() -> Void)? = nil
@@ -968,28 +971,17 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
         ZStack(alignment: .bottomTrailing) {
             if isExpanded {
                 expandedCard
-                    .transition(
-                        .asymmetric(
-                            insertion: .scale(scale: 0.82, anchor: .bottomTrailing)
-                                .combined(with: .opacity),
-                            removal: .scale(scale: 0.9, anchor: .bottomTrailing)
-                                .combined(with: .opacity)
-                        )
-                    )
+                    .transition(expandedTransition)
             } else {
                 compactButton
-                    .transition(
-                        .asymmetric(
-                            insertion: .scale(scale: 0.78, anchor: .bottomTrailing)
-                                .combined(with: .opacity),
-                            removal: .scale(scale: 0.92, anchor: .bottomTrailing)
-                                .combined(with: .opacity)
-                        )
-                    )
+                    .transition(compactTransition)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        .animation(AppAnimation.overlayPop, value: isExpanded)
+        .animation(
+            accessibilityReduceMotion ? AppAnimation.quickFade : AppAnimation.overlayPop,
+            value: isExpanded
+        )
     }
 
     private var expandedCard: some View {
@@ -1020,14 +1012,14 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
                     }
 
                     Button {
-                        withAnimation(AppAnimation.overlayPop) {
+                        withAnimation(accessibilityReduceMotion ? AppAnimation.quickFade : AppAnimation.overlayPop) {
                             isExpanded = false
                         }
                     } label: {
                         Image(systemName: "arrow.down.right.and.arrow.up.left")
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
-                            .frame(width: 28, height: 28)
+                            .frame(width: 44, height: 44)
                             .background(
                                 Circle()
                                     .fill(Color.white.opacity(0.12))
@@ -1055,6 +1047,7 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
                     Button("Cancel Import", role: .cancel, action: onCancel)
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .frame(minHeight: 44)
                         .padding(.top, Spacing.xxxs)
                 }
             }
@@ -1064,7 +1057,7 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
 
     private var compactButton: some View {
         Button {
-            withAnimation(AppAnimation.overlayPop) {
+            withAnimation(accessibilityReduceMotion ? AppAnimation.quickFade : AppAnimation.overlayPop) {
                 isExpanded = true
             }
         } label: {
@@ -1084,6 +1077,33 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Expand Import")
+        .accessibilityValue(
+            progress.clampedFraction.map {
+                "\(Int(($0 * 100).rounded())) percent"
+            } ?? "In progress"
+        )
+    }
+
+    private var expandedTransition: AnyTransition {
+        guard !accessibilityReduceMotion else {
+            return .opacity
+        }
+
+        return .asymmetric(
+            insertion: .scale(scale: 0.82, anchor: .bottomTrailing).combined(with: .opacity),
+            removal: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity)
+        )
+    }
+
+    private var compactTransition: AnyTransition {
+        guard !accessibilityReduceMotion else {
+            return .opacity
+        }
+
+        return .asymmetric(
+            insertion: .scale(scale: 0.78, anchor: .bottomTrailing).combined(with: .opacity),
+            removal: .scale(scale: 0.92, anchor: .bottomTrailing).combined(with: .opacity)
+        )
     }
 }
 
@@ -1099,6 +1119,7 @@ struct RemoteBrowserFeedbackCard: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(iconTint)
                     .frame(width: 24, height: 24)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(feedback.title)
@@ -1117,6 +1138,7 @@ struct RemoteBrowserFeedbackCard: View {
                         Button(primaryAction.title, action: onPrimaryAction)
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
+                            .frame(minHeight: 44)
                     }
                 }
 
@@ -1126,9 +1148,11 @@ struct RemoteBrowserFeedbackCard: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
-                        .padding(Spacing.xs)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
             }
         }
     }

@@ -5,7 +5,7 @@ import os
 
 private enum RemoteOfflineShelfLayoutMetrics {
     static let horizontalInset: CGFloat = 12
-    static let rowAccessoryReservedWidth: CGFloat = 36
+    static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
     static let gridVerticalPadding: CGFloat = 6
 }
 
@@ -113,6 +113,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
     private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private let remoteReadingProgressStore: RemoteReadingProgressStore
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
     private var hasLoaded = false
     private let logger = AppLog.remoteCache
 
@@ -120,6 +121,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
         self.remoteServerBrowsingService = dependencies.remoteServerBrowsingService
         self.remoteReadingProgressStore = dependencies.remoteReadingProgressStore
+        self.remoteBackgroundImportController = dependencies.remoteBackgroundImportController
     }
 
     func loadIfNeeded() async {
@@ -163,6 +165,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     func refreshDownloadedCopy(for entry: RemoteOfflineComicEntry) async {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let pathForLog = AppLogSanitizer.path(entry.session.path)
         logger.notice(
             "Remote offline copy refresh requested serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public)"
@@ -190,6 +199,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     func removeDownloadedCopy(for entry: RemoteOfflineComicEntry) {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         let pathForLog = AppLogSanitizer.path(entry.session.path)
         logger.notice(
             "Remote offline copy remove requested serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public)"
@@ -222,6 +238,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
 
     func clearDownloadedCopies(for profile: RemoteServerProfile, removedCount: Int) {
         feedback = nil
+        guard beginStorageMaintenance() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         logger.notice(
             "Remote offline copies clear requested serverID=\(profile.id.uuidString, privacy: .public) count=\(removedCount)"
         )
@@ -277,6 +300,18 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 message: error.userFacingMessage
             )
         }
+    }
+
+    private func beginStorageMaintenance() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = BrowseHomeAlert(
+                title: "Remote Task in Progress",
+                message: "Wait for the current remote task to finish."
+            )
+            return false
+        }
+
+        return true
     }
 
     private func rebuildEntries(forceRefresh: Bool = false) throws {
@@ -760,7 +795,7 @@ struct RemoteOfflineShelfView: View {
                 Image(systemName: "ellipsis.circle")
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -822,23 +857,24 @@ struct RemoteOfflineShelfView: View {
     private func offlineShelfEntryRow(
         for entry: RemoteOfflineComicEntry
     ) -> some View {
-        let row = RemoteInsetListRowCard(contentPadding: 12) {
-            RemoteOfflineComicCard(
-                session: entry.session,
-                profile: entry.profile,
-                availability: entry.availability,
-                browsingService: dependencies.remoteServerBrowsingService,
-                heroSourceID: entry.session.directoryItem.id,
-                showsNavigationIndicator: false,
-                showsServerName: false,
-                trailingAccessoryReservedWidth: itemAccessoryReservedWidth
-            )
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            prepareHeroTransition(for: entry, fallbackFrame: .zero)
+        let row = HeroTapButton { frame in
+            prepareHeroTransition(for: entry, fallbackFrame: frame)
             presentOfflineEntry(entry)
+        } label: {
+            RemoteInsetListRowCard(contentPadding: 12) {
+                RemoteOfflineComicCard(
+                    session: entry.session,
+                    profile: entry.profile,
+                    availability: entry.availability,
+                    browsingService: dependencies.remoteServerBrowsingService,
+                    heroSourceID: entry.session.directoryItem.id,
+                    showsNavigationIndicator: false,
+                    showsServerName: false,
+                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
+                )
+            }
         }
+        .buttonStyle(.plain)
         .overlay(alignment: .trailing) {
             if showsPersistentItemActions {
                 offlineShelfItemActionMenu(for: entry)

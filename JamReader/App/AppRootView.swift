@@ -1,27 +1,19 @@
 import SwiftUI
+import UIKit
 
 struct AppRootOverlayView: View {
     @ObservedObject var controller: RemoteBackgroundImportController
-    let bottomBarHeight: CGFloat
 
     var body: some View {
-        GeometryReader { proxy in
-            VStack {
-                Spacer()
-
-                RootImportOverlayHost(controller: controller)
-                    .padding(.horizontal, Spacing.sm)
-                    .padding(
-                        .bottom,
-                        proxy.safeAreaInsets.bottom + bottomBarHeight - Spacing.xxs
-                    )
-            }
-        }
-        .allowsHitTesting(true)
+        RootImportOverlayHost(controller: controller)
+            .padding(.horizontal, Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .bottom)
     }
 }
 
 private struct RootImportOverlayHost: View {
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+
     @ObservedObject var controller: RemoteBackgroundImportController
 
     @State private var importFeedbackDismissTask: Task<Void, Never>?
@@ -56,10 +48,13 @@ private struct RootImportOverlayHost: View {
         }
         .onChange(of: controller.feedback?.id) { _, _ in
             scheduleImportFeedbackDismissalIfNeeded()
+            announceFeedbackIfNeeded()
         }
         .onChange(of: controller.activeProgress != nil) { _, hasActiveProgress in
             if hasActiveProgress {
-                withAnimation(AppAnimation.overlayPop) {
+                withAnimation(
+                    accessibilityReduceMotion ? AppAnimation.quickFade : AppAnimation.overlayPop
+                ) {
                     isImportProgressExpanded = true
                 }
             } else {
@@ -90,6 +85,18 @@ private struct RootImportOverlayHost: View {
             controller.dismissFeedback()
             importFeedbackDismissTask = nil
         }
+    }
+
+    private func announceFeedbackIfNeeded() {
+        guard let feedback = controller.feedback else {
+            return
+        }
+
+        let announcement = [feedback.title, feedback.message]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ". ")
+        UIAccessibility.post(notification: .announcement, argument: announcement)
     }
 
     private func handleAppAlertAction(_ action: AppAlertAction) {

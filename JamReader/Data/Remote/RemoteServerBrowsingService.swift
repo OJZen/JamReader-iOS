@@ -581,6 +581,7 @@ final class RemoteServerBrowsingService {
     }
 
     func applyCachePolicyPreset(_ preset: RemoteComicCachePolicyPreset) throws {
+        let previousPreset = cachePolicyStore.loadPreset()
         cacheLogger.notice("Remote cache policy preset applying preset=\(preset.rawValue, privacy: .public)")
         cachePolicyStore.savePreset(preset)
         do {
@@ -588,9 +589,10 @@ final class RemoteServerBrowsingService {
             invalidateCachedSummaries()
             cacheLogger.notice("Remote cache policy preset applied preset=\(preset.rawValue, privacy: .public)")
         } catch {
+            cachePolicyStore.savePreset(previousPreset)
             let errorDescription = AppLogSanitizer.errorDescription(error)
             cacheLogger.error(
-                "Remote cache policy preset failed preset=\(preset.rawValue, privacy: .public) error=\(errorDescription, privacy: .public)"
+                "Remote cache policy preset failed preset=\(preset.rawValue, privacy: .public) rollback=\(previousPreset.rawValue, privacy: .public) error=\(errorDescription, privacy: .public)"
             )
             throw error
         }
@@ -609,18 +611,38 @@ final class RemoteServerBrowsingService {
                     "Close the active reader before clearing downloaded comics."
                 )
             }
-            var removedRootCount = 0
+            var removedResourceCount = 0
             for cacheURL in cacheRootURLs(for: profile) {
                 guard fileManager.fileExists(atPath: cacheURL.path) else {
                     continue
                 }
 
-                try fileManager.removeItem(at: cacheURL)
-                removedRootCount += 1
+                let cachedResources = enumerateCachedComicResources(in: cacheURL)
+                for resource in cachedResources {
+                    guard fileManager.fileExists(atPath: resource.resourceURL.path) else {
+                        removeCachedMetadataIfPossible(
+                            for: resource.resourceURL,
+                            reason: "clearMissingDownloadedComic"
+                        )
+                        continue
+                    }
+
+                    try fileManager.removeItem(at: resource.resourceURL)
+                    removeCachedMetadataIfPossible(
+                        for: resource.resourceURL,
+                        reason: "clearDownloadedComic"
+                    )
+                    removedResourceCount += 1
+                    removeEmptyParentDirectoriesIfPossible(
+                        from: resource.resourceURL.deletingLastPathComponent(),
+                        stoppingAt: cacheURL,
+                        reason: "clearDownloadedComic"
+                    )
+                }
             }
             invalidateCachedSummaries()
             cacheLogger.notice(
-                "Remote cached comics clear completed scope=\(scope, privacy: .public) removedRoots=\(removedRootCount)"
+                "Remote cached comics clear completed scope=\(scope, privacy: .public) removedResources=\(removedResourceCount)"
             )
         } catch {
             let errorDescription = AppLogSanitizer.errorDescription(error)
@@ -2115,6 +2137,10 @@ final class RemoteServerBrowsingService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            if let browsingError = error as? RemoteServerBrowsingError,
+               case .cacheMaintenanceFailed = browsingError {
+                throw browsingError
+            }
             if fileManager.fileExists(atPath: destinationURL.path) {
                 touchCachedFile(at: destinationURL)
                 return RemoteComicDownloadResult(
@@ -2221,6 +2247,10 @@ final class RemoteServerBrowsingService {
                 }
             }
 
+            if let browsingError = error as? RemoteServerBrowsingError,
+               case .cacheMaintenanceFailed = browsingError {
+                throw browsingError
+            }
             if fileManager.fileExists(atPath: destinationURL.path) {
                 touchCachedFile(at: destinationURL)
                 return RemoteComicDownloadResult(
@@ -2913,6 +2943,7 @@ final class RemoteServerBrowsingService {
             at: rootURL,
             includingPropertiesForKeys: [
                 .isRegularFileKey,
+                .isDirectoryKey,
                 .contentModificationDateKey
             ],
             options: [.skipsHiddenFiles]
@@ -2922,16 +2953,43 @@ final class RemoteServerBrowsingService {
 
         var resources: [CachedComicResourceRecord] = []
         resources.reserveCapacity(128)
+        var seenResourcePaths = Set<String>()
 
         for case let candidateURL as URL in enumerator {
-            let values = try? candidateURL.resourceValues(forKeys: [.isRegularFileKey])
-            guard values?.isRegularFile == true,
-                  isCachedMetadataSidecar(candidateURL) else {
+            let values = try? candidateURL.resourceValues(
+                forKeys: [.isRegularFileKey, .isDirectoryKey]
+            )
+            if values?.isDirectory == true,
+               isPartialDownloadFile(candidateURL) {
+                enumerator.skipDescendants()
                 continue
             }
 
-            let resourceURL = candidateURL.deletingPathExtension()
-            guard fileManager.fileExists(atPath: resourceURL.path) else {
+            let resourceURL: URL
+
+            if values?.isRegularFile == true,
+               isCachedMetadataSidecar(candidateURL) {
+                resourceURL = candidateURL.deletingPathExtension()
+                guard fileManager.fileExists(atPath: resourceURL.path) else {
+                    continue
+                }
+            } else if values?.isRegularFile == true,
+                      SupportedComicFormats.supportsComicFileExtension(
+                          candidateURL.pathExtension
+                      ) {
+                resourceURL = candidateURL
+            } else if values?.isDirectory == true,
+                      candidateURL.standardizedFileURL != rootURL.standardizedFileURL,
+                      isUntrackedCachedImageComicDirectory(candidateURL) {
+                resourceURL = candidateURL
+                enumerator.skipDescendants()
+            } else {
+                continue
+            }
+
+            guard seenResourcePaths.insert(
+                resourceURL.standardizedFileURL.path
+            ).inserted else {
                 continue
             }
 
@@ -2949,6 +3007,44 @@ final class RemoteServerBrowsingService {
         }
 
         return resources
+    }
+
+    private func isUntrackedCachedImageComicDirectory(_ directoryURL: URL) -> Bool {
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: [
+                .isRegularFileKey,
+                .isDirectoryKey,
+                .fileSizeKey,
+                .contentModificationDateKey
+            ],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+
+        let entries = contents.compactMap { fileURL -> RemoteListedDirectoryEntry? in
+            guard let values = try? fileURL.resourceValues(
+                forKeys: [
+                    .isRegularFileKey,
+                    .isDirectoryKey,
+                    .fileSizeKey,
+                    .contentModificationDateKey
+                ]
+            ) else {
+                return nil
+            }
+
+            return RemoteListedDirectoryEntry(
+                name: fileURL.lastPathComponent,
+                fullPath: fileURL.path,
+                isDirectory: values.isDirectory == true,
+                fileSize: values.fileSize.map(Int64.init),
+                modifiedAt: values.contentModificationDate
+            )
+        }
+
+        return inspectImageComicDirectory(from: entries) != nil
     }
 
     private func protectedCachedResourcePaths(in rootURL: URL) -> Set<String> {

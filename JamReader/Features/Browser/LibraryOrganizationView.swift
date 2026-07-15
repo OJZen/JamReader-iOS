@@ -3,7 +3,7 @@ import SwiftUI
 struct LibraryOrganizationView: View {
     private enum LayoutMetrics {
         static let horizontalInset: CGFloat = 12
-        static let rowAccessoryReservedWidth: CGFloat = 34
+        static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
         static let compactGridMinWidth: CGFloat = 165
         static let compactGridMaxWidth: CGFloat = 220
         static let regularGridMinWidth: CGFloat = 240
@@ -78,6 +78,7 @@ struct LibraryOrganizationView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel(viewModel.sectionKind.createActionTitle)
             }
 
             if usesCondensedTopBarActions {
@@ -94,6 +95,7 @@ struct LibraryOrganizationView: View {
                         } label: {
                             Image(systemName: displayMode.systemImageName)
                         }
+                        .accessibilityLabel("Display Mode")
                     }
                 }
 
@@ -104,6 +106,7 @@ struct LibraryOrganizationView: View {
                         } label: {
                             Image(systemName: "arrow.up.arrow.down.circle")
                         }
+                        .accessibilityLabel("Sort")
                     }
                 }
             }
@@ -596,12 +599,13 @@ struct LibraryOrganizationView: View {
                     Image(systemName: "ellipsis.circle.fill")
                         .font(.title3)
                         .foregroundStyle(.secondary)
-                        .padding(4)
+                        .frame(width: 44, height: 44)
                         .background(.ultraThinMaterial, in: Circle())
                 } else {
                     Image(systemName: "ellipsis.circle")
                         .font(.title3)
                         .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
                 }
             }
         }

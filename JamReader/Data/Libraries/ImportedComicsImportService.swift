@@ -287,6 +287,7 @@ final class ImportedComicsImportService {
                 databaseURL: storageManager.databaseURL(for: descriptor)
             )
             maintenanceStatusStore.clearRecord(for: descriptor.id)
+            Self.postLibraryContentsDidChange(for: descriptor.id)
             logger.notice(
                 "Imported comics library clear completed libraryID=\(descriptor.id.uuidString, privacy: .public) removedItems=\(removedItemCount) path=\(rootPath, privacy: .public)"
             )

@@ -113,11 +113,29 @@ final class RemoteServerBrowsingServiceCacheTests: XCTestCase {
         try harness.writeCachedComic(for: firstReference, bytes: [1, 2, 3])
         try harness.writeCachedComic(for: firstLegacyReference, bytes: [4, 5, 6])
         try harness.writeCachedComic(for: secondReference, bytes: [7, 8, 9])
+        let firstReferenceURL = harness.resolver.cachedFileURL(for: firstReference)
+        try harness.fileManager.removeItem(
+            at: firstReferenceURL.appendingPathExtension("yacmeta")
+        )
+        let firstAuxiliaryURL = try harness.writeAuxiliaryFile(
+            "unfinished.partial",
+            bytes: [8, 8, 8],
+            under: harness.resolver.cacheRootURL(for: firstProfile)
+        )
+        let nestedPartialComicURL = try harness.writeAuxiliaryFile(
+            "Series/Interrupted.download/bonus.cbz",
+            bytes: [6, 6, 6],
+            under: harness.resolver.cacheRootURL(for: firstProfile)
+        )
 
+        XCTAssertEqual(harness.service.cacheSummary(for: firstProfile).fileCount, 2)
         try harness.service.clearCachedComics(for: firstProfile)
 
         XCTAssertEqual(harness.service.cacheSummary(for: firstProfile).fileCount, 0)
+        XCTAssertTrue(harness.service.cacheSummary(for: firstProfile).hasOtherCacheData)
         XCTAssertEqual(harness.service.cacheSummary(for: secondProfile).fileCount, 1)
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: firstAuxiliaryURL.path))
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: nestedPartialComicURL.path))
         XCTAssertEqual(harness.service.cachedAvailability(for: firstReference).kind, .unavailable)
         XCTAssertEqual(harness.service.cachedAvailability(for: firstLegacyReference).kind, .unavailable)
         XCTAssertEqual(harness.service.cachedAvailability(for: secondReference).kind, .current)

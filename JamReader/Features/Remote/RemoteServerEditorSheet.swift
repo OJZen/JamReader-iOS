@@ -1,16 +1,29 @@
 import SwiftUI
 
 struct RemoteServerEditorSheet: View {
+    private enum Field: Hashable {
+        case name
+        case host
+        case port
+        case share
+        case baseDirectory
+        case username
+        case password
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let onSave: (RemoteServerEditorDraft) -> AppAlertState?
     private let appliesSwiftUIPresentationModifiers: Bool
+    private let initialDraft: RemoteServerEditorDraft
 
     @State private var draft: RemoteServerEditorDraft
     @State private var alert: AppAlertState?
     @State private var containerWidth: CGFloat = 0
-    @FocusState private var isNameFieldFocused: Bool
+    @State private var isShowingDiscardConfirmation = false
+    @FocusState private var focusedField: Field?
 
     init(
         draft: RemoteServerEditorDraft,
@@ -19,6 +32,7 @@ struct RemoteServerEditorSheet: View {
     ) {
         self.appliesSwiftUIPresentationModifiers = appliesSwiftUIPresentationModifiers
         self.onSave = onSave
+        self.initialDraft = draft
         _draft = State(initialValue: draft)
     }
 
@@ -47,7 +61,7 @@ struct RemoteServerEditorSheet: View {
                 return
             }
 
-            isNameFieldFocused = true
+            focusedField = .name
         }
         .onChange(of: draft.providerKind) { oldValue, newValue in
             guard oldValue != newValue else {
@@ -58,6 +72,20 @@ struct RemoteServerEditorSheet: View {
                 draft.portText = String(newValue.defaultPort)
             }
         }
+        .confirmationDialog(
+            "Discard Changes?",
+            isPresented: $isShowingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Your changes to this server have not been saved.")
+        }
+        .interactiveDismissDisabled(hasUnsavedChanges)
 
         if appliesSwiftUIPresentationModifiers {
             content
@@ -83,25 +111,21 @@ struct RemoteServerEditorSheet: View {
     private var editorForm: some View {
         Form {
             Section("Provider") {
-                Picker("Provider", selection: $draft.providerKind) {
-                    ForEach(RemoteProviderKind.allCases) { providerKind in
-                        Text(providerKind.title)
-                            .tag(providerKind)
-                    }
-                }
-                .pickerStyle(.segmented)
+                providerPicker
             }
 
             Section {
                 TextField("Display Name", text: $draft.name)
-                    .focused($isNameFieldFocused)
+                    .focused($focusedField, equals: .name)
 
                 TextField("Host", text: $draft.host, prompt: Text("nas.local"))
+                    .focused($focusedField, equals: .host)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
 
                 TextField("Port", text: $draft.portText)
+                    .focused($focusedField, equals: .port)
                     .keyboardType(.numberPad)
             } header: {
                 Text("Connection")
@@ -123,6 +147,7 @@ struct RemoteServerEditorSheet: View {
                     text: $draft.shareName,
                     prompt: Text(draft.providerKind == .smb ? "Comics" : "/remote.php/dav/files/you/Comics")
                 )
+                    .focused($focusedField, equals: .share)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
@@ -131,6 +156,7 @@ struct RemoteServerEditorSheet: View {
                     text: $draft.baseDirectoryPath,
                     prompt: Text(draft.providerKind == .smb ? "/Manga/Weekly" : "/Weekly")
                 )
+                    .focused($focusedField, equals: .baseDirectory)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
             } header: {
@@ -144,16 +170,11 @@ struct RemoteServerEditorSheet: View {
             }
 
             Section {
-                Picker("Authentication", selection: $draft.authenticationMode) {
-                    ForEach(RemoteServerAuthenticationMode.allCases) { mode in
-                        Text(mode.title)
-                            .tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
+                authenticationPicker
 
                 if draft.authenticationMode.requiresUsername {
                     TextField("Username", text: $draft.username)
+                        .focused($focusedField, equals: .username)
                         .textContentType(.username)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -161,6 +182,7 @@ struct RemoteServerEditorSheet: View {
 
                 if draft.authenticationMode.requiresPassword {
                     SecureField("Password", text: $draft.password)
+                        .focused($focusedField, equals: .password)
                         .textContentType(.password)
 
                     if draft.hasStoredPassword {
@@ -182,11 +204,43 @@ struct RemoteServerEditorSheet: View {
         }
     }
 
+    @ViewBuilder
+    private var providerPicker: some View {
+        let picker = Picker("Provider", selection: $draft.providerKind) {
+            ForEach(RemoteProviderKind.allCases) { providerKind in
+                Text(providerKind.title)
+                    .tag(providerKind)
+            }
+        }
+
+        if dynamicTypeSize.isAccessibilitySize {
+            picker.pickerStyle(.menu)
+        } else {
+            picker.pickerStyle(.segmented)
+        }
+    }
+
+    @ViewBuilder
+    private var authenticationPicker: some View {
+        let picker = Picker("Authentication", selection: $draft.authenticationMode) {
+            ForEach(RemoteServerAuthenticationMode.allCases) { mode in
+                Text(mode.title)
+                    .tag(mode)
+            }
+        }
+
+        if dynamicTypeSize.isAccessibilitySize {
+            picker.pickerStyle(.menu)
+        } else {
+            picker.pickerStyle(.segmented)
+        }
+    }
+
     @ToolbarContentBuilder
     private var sheetToolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
             Button("Cancel") {
-                dismiss()
+                requestDismissal()
             }
         }
 
@@ -194,6 +248,26 @@ struct RemoteServerEditorSheet: View {
             Button(draft.actionTitle) {
                 handleSave()
             }
+        }
+
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+
+            Button("Done") {
+                focusedField = nil
+            }
+        }
+    }
+
+    private var hasUnsavedChanges: Bool {
+        draft != initialDraft
+    }
+
+    private func requestDismissal() {
+        if hasUnsavedChanges {
+            isShowingDiscardConfirmation = true
+        } else {
+            dismiss()
         }
     }
 

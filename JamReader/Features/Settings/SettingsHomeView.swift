@@ -1,43 +1,35 @@
 import SwiftUI
 
 struct SettingsHomeView: View {
+    @ObservedObject var viewModel: LibraryListViewModel
+    let dependencies: AppDependencies
+
+    var body: some View {
+        SettingsContentView(
+            pane: .overview,
+            title: "Settings",
+            titleDisplayMode: .large,
+            viewModel: viewModel,
+            dependencies: dependencies
+        )
+    }
+}
+
+struct SettingsSidebarView: View {
     @Environment(\.appNavigator) private var appNavigator
 
     @AppStorage(AppNavigationStorageKeys.settingsHomeSelectedPane) private var selectedPaneRawValue = SettingsHomePane.overview.rawValue
-
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
-    private let pane: SettingsHomePane?
 
-    @State private var comicLayout = ReaderDisplayLayout(defaultsFor: .comic)
-    @State private var mangaLayout = ReaderDisplayLayout(defaultsFor: .manga)
-    @State private var webcomicLayout = ReaderDisplayLayout(defaultsFor: .webComic)
-    @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
-    @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
-    @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
+    @State private var snapshot = SettingsSnapshot.empty
+    @State private var refreshGeneration: UInt64 = 0
 
-    init(
-        viewModel: LibraryListViewModel,
-        dependencies: AppDependencies,
-        pane: SettingsHomePane? = nil
-    ) {
-        self.viewModel = viewModel
-        self.dependencies = dependencies
-        self.pane = pane
+    private var selectedPane: SettingsHomePane {
+        SettingsHomePane.restored(from: selectedPaneRawValue)
     }
 
     var body: some View {
-        Group {
-            if let pane {
-                content(for: pane)
-            } else {
-                paneList
-            }
-        }
-        .task { refresh() }
-    }
-
-    private var paneList: some View {
         List {
             ForEach(SettingsHomePane.allCases) { pane in
                 Button {
@@ -45,291 +37,102 @@ struct SettingsHomeView: View {
                 } label: {
                     SettingsPaneRow(
                         pane: pane,
-                        detail: detailText(for: pane)
+                        detail: detailText(for: pane),
+                        isSelected: pane == selectedPane
                     )
                 }
                 .buttonStyle(.plain)
+                .pointerHoverEffect()
+                .listRowBackground(
+                    pane == selectedPane
+                        ? Color.accentColor.opacity(0.12)
+                        : Color.clear
+                )
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.sidebar)
         .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
-        .refreshable {
-            refresh()
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await refresh()
         }
-    }
-
-    // MARK: - Reading
-
-    private var readingSection: some View {
-        Section {
-            readerRow(
-                icon: "book.fill",
-                iconColor: .blue,
-                title: "Comics",
-                layout: comicLayout
+        .onChange(of: viewModel.items.count) { _, count in
+            snapshot.localLibraryCount = count
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerLayoutPreferencesDidChange
             )
-            readerRow(
-                icon: "book.closed.fill",
-                iconColor: .purple,
-                title: "Manga",
-                layout: mangaLayout
+        ) { _ in
+            snapshot.reloadReaderPreferences(
+                preferencesStore: dependencies.readerLayoutPreferencesStore
             )
-            readerRow(
-                icon: "scroll.fill",
-                iconColor: .green,
-                title: "Webcomics",
-                layout: webcomicLayout
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .libraryPreferencesDidChange
             )
-        } header: {
-            Text("Reading")
-        } footer: {
-            Text("Default reader layout for each type.")
+        ) { _ in
+            snapshot.reloadLibraryPreferences(
+                preferencesStore: dependencies.libraryPreferencesStore
+            )
         }
-    }
-
-    private func readerRow(
-        icon: String,
-        iconColor: Color,
-        title: String,
-        layout: ReaderDisplayLayout
-    ) -> some View {
-        LabeledContent {
-            Text(layout.pagingMode.title)
-                .font(AppFont.body())
-                .foregroundStyle(Color.textSecondary)
-        } label: {
-            Label {
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    Text(title)
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textPrimary)
-
-                    Text(readerSummary(for: layout))
-                        .font(AppFont.caption())
-                        .foregroundStyle(Color.textTertiary)
-                }
-            } icon: {
-                SettingsIcon(systemName: icon, color: iconColor)
-            }
-        }
-    }
-
-    private func readerSummary(for layout: ReaderDisplayLayout) -> String {
-        [
-            layout.readingDirection.title,
-            layout.fitMode.title,
-            layout.coverAsSinglePage ? "Cover single" : "Cover spread"
-        ].joined(separator: " · ")
-    }
-
-    // MARK: - Remote
-
-    private var remoteSection: some View {
-        Section {
-            Button {
-                appNavigator?.navigate(.settings(.remoteNetwork))
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                        Text("Network")
-                            .font(AppFont.body())
-                            .foregroundStyle(Color.textPrimary)
-
-                        Text("Connection preferences will live here.")
-                            .font(AppFont.footnote())
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(1)
-                    }
-                } icon: {
-                    SettingsIcon(
-                        systemName: "network",
-                        color: .teal
-                    )
-                }
-            }
-            .buttonStyle(.plain)
-        } header: {
-            Text("Remote")
-        }
-    }
-
-    // MARK: - Storage
-
-    private var storageSection: some View {
-        Section {
-            Button {
-                appNavigator?.navigate(.settings(.remoteCache))
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                        Text("Cache Management")
-                            .font(AppFont.body())
-                            .foregroundStyle(Color.textPrimary)
-
-                        Text(storageFooter)
-                            .font(AppFont.footnote())
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(1)
-                    }
-                } icon: {
-                    SettingsIcon(
-                        systemName: "internaldrive.fill",
-                        color: .orange
-                    )
-                }
-            }
-            .buttonStyle(.plain)
-        } header: {
-            Text("Storage")
-        } footer: {
-            Text("Manage downloads, thumbnails, and imported remote files.")
-        }
-    }
-
-    private var storageFooter: String {
-        let total = remoteCacheSummary.totalBytes
-            + remoteThumbnailCacheSummary.totalBytes
-            + importedComicsLibrarySummary.totalBytes
-        guard total > 0 else { return "No remote data." }
-        let size = ByteCountFormatter.string(
-            fromByteCount: total, countStyle: .file
-        )
-        return "\(size) on this device."
-    }
-
-    // MARK: - About
-
-    private var aboutSection: some View {
-        Section {
-            LabeledContent {
-                Text(appVersion)
-                    .font(AppFont.body())
-                    .foregroundStyle(Color.textSecondary)
-            } label: {
-                Label {
-                    Text("Version")
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textPrimary)
-                } icon: {
-                    SettingsIcon(
-                        systemName: "info.circle.fill",
-                        color: .gray
-                    )
-                }
-            }
-
-            LabeledContent {
-                Text("\(viewModel.items.count)")
-                    .font(AppFont.body())
-                    .foregroundStyle(Color.textSecondary)
-            } label: {
-                Label {
-                    Text("Local Libraries")
-                        .font(AppFont.body())
-                        .foregroundStyle(Color.textPrimary)
-                } icon: {
-                    SettingsIcon(
-                        systemName: "books.vertical.fill",
-                        color: .appAccent
-                    )
-                }
-            }
-        } header: {
-            Text("About")
-        }
-    }
-
-    @ViewBuilder
-    private func content(for pane: SettingsHomePane) -> some View {
-        switch pane {
-        case .overview:
-            settingsList(title: "Settings", displayMode: .inline) {
-                readingSection
-                remoteSection
-                storageSection
-                aboutSection
-            }
-        case .reading:
-            settingsList(title: pane.title, displayMode: .inline) {
-                readingSection
-            }
-        case .remote:
-            settingsList(title: pane.title, displayMode: .inline) {
-                remoteSection
-            }
-        case .storage:
-            settingsList(title: pane.title, displayMode: .inline) {
-                storageSection
-            }
-        case .about:
-            settingsList(title: pane.title, displayMode: .inline) {
-                aboutSection
-            }
-        }
-    }
-
-    private func settingsList<Content: View>(
-        title: LocalizedStringKey,
-        displayMode: NavigationBarItem.TitleDisplayMode,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        List {
-            content()
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(displayMode)
-        .refreshable {
-            refresh()
-        }
-    }
-
-    // MARK: - Helpers
-
-    private var appVersion: String {
-        let version = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "–"
-        let build = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleVersion"
-        ) as? String ?? "–"
-        return "\(version) (\(build))"
-    }
-
-    private func refresh() {
-        comicLayout = dependencies.readerLayoutPreferencesStore
-            .loadLayout(for: .comic)
-        mangaLayout = dependencies.readerLayoutPreferencesStore
-            .loadLayout(for: .manga)
-        webcomicLayout = dependencies.readerLayoutPreferencesStore
-            .loadLayout(for: .webComic)
-        remoteCacheSummary = dependencies.remoteServerBrowsingService
-            .cacheSummary()
-        remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared
-            .cacheSummary()
-        importedComicsLibrarySummary = dependencies.libraryStorageManager
-            .importedComicsLibraryStorageSummary()
-    }
-
-    private func detailText(for pane: SettingsHomePane) -> String {
-        switch pane {
-        case .overview:
-            return "Reading, remote, storage, and app info"
-        case .reading:
-            return "Reader defaults by content type"
-        case .remote:
-            return "Connection preferences"
-        case .storage:
-            return storageFooter
-        case .about:
-            return appVersion
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .remoteCacheSettingsDidChange
+            )
+        ) { _ in
+            Task { await refreshStorage() }
         }
     }
 
     private func select(_ pane: SettingsHomePane) {
         selectedPaneRawValue = pane.rawValue
         appNavigator?.navigate(.settings(pane.navigationRoute))
+    }
+
+    private func refresh() async {
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let refreshedSnapshot = await SettingsSnapshot.load(
+            libraryCount: viewModel.items.count,
+            dependencies: dependencies
+        )
+        guard generation == refreshGeneration else {
+            return
+        }
+        snapshot = refreshedSnapshot
+        snapshot.localLibraryCount = viewModel.items.count
+        if selectedPaneRawValue != selectedPane.rawValue {
+            selectedPaneRawValue = selectedPane.rawValue
+        }
+    }
+
+    private func refreshStorage() async {
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let storage = await SettingsSnapshot.loadStorage(dependencies: dependencies)
+        guard generation == refreshGeneration else {
+            return
+        }
+        snapshot.applyStorage(storage)
+    }
+
+    private func detailText(for pane: SettingsHomePane) -> String? {
+        switch pane {
+        case .overview:
+            return nil
+        case .reading:
+            return String(localized: "3 Profiles")
+        case .library:
+            return snapshot.recentWindow.settingsLocalizedTitle
+        case .storage:
+            return String(
+                localized: "\(snapshot.remoteCachePolicyPreset.settingsLocalizedTitle) · \(snapshot.managedStorageText)"
+            )
+        case .about:
+            return snapshot.appVersion
+        }
     }
 }
 
@@ -339,182 +142,113 @@ struct SettingsPaneContentView: View {
     let dependencies: AppDependencies
 
     var body: some View {
-        SettingsHomeView(
+        SettingsContentView(
+            pane: pane,
+            title: pane.title,
+            titleDisplayMode: .inline,
             viewModel: viewModel,
-            dependencies: dependencies,
-            pane: pane
+            dependencies: dependencies
         )
     }
 }
 
-struct RemoteNetworkSettingsView: View {
+private struct SettingsContentView: View {
+    @Environment(\.appNavigator) private var appNavigator
+
+    let pane: SettingsHomePane
+    let title: LocalizedStringKey
+    let titleDisplayMode: NavigationBarItem.TitleDisplayMode
+    @ObservedObject var viewModel: LibraryListViewModel
+    let dependencies: AppDependencies
+
+    @State private var snapshot = SettingsSnapshot.empty
+    @State private var refreshGeneration: UInt64 = 0
+
     var body: some View {
         List {
-            Section {
-                Text("Network preferences will be added here.")
-                    .font(AppFont.body())
-                    .foregroundStyle(Color.textSecondary)
-            } header: {
-                Text("Coming Soon")
-            } footer: {
-                Text("This section is reserved for remote connection settings.")
-            }
+            SettingsPaneSections(
+                pane: pane,
+                snapshot: snapshot,
+                onOpenReaderDefaults: openReaderDefaults,
+                onSetRecentWindow: setRecentWindow,
+                onOpenCacheManagement: openCacheManagement
+            )
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Network")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Settings Icon
-
-enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
-    case overview
-    case reading
-    case remote
-    case storage
-    case about
-
-    var id: String { rawValue }
-
-    var title: LocalizedStringKey {
-        switch self {
-        case .overview:
-            return "Overview"
-        case .reading:
-            return "Reading"
-        case .remote:
-            return "Remote"
-        case .storage:
-            return "Storage"
-        case .about:
-            return "About"
+        .scrollContentBackground(.hidden)
+        .background(Color.surfaceGrouped)
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(titleDisplayMode)
+        .task {
+            await refresh()
         }
-    }
-
-    var titleString: String {
-        switch self {
-        case .overview:
-            return "Settings"
-        case .reading:
-            return "Reading"
-        case .remote:
-            return "Remote"
-        case .storage:
-            return "Storage"
-        case .about:
-            return "About"
+        .refreshable {
+            await refresh()
         }
-    }
-
-    var navigationRoute: SettingsNavigationRoute {
-        switch self {
-        case .overview:
-            return .overview
-        case .reading:
-            return .reading
-        case .remote:
-            return .remote
-        case .storage:
-            return .storage
-        case .about:
-            return .about
+        .onChange(of: viewModel.items.count) { _, count in
+            snapshot.localLibraryCount = count
         }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .overview:
-            return "slider.horizontal.3"
-        case .reading:
-            return "book.closed.fill"
-        case .remote:
-            return "externaldrive.fill"
-        case .storage:
-            return "internaldrive.fill"
-        case .about:
-            return "info.circle.fill"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .overview:
-            return .appAccent
-        case .reading:
-            return .blue
-        case .remote:
-            return .teal
-        case .storage:
-            return .orange
-        case .about:
-            return .gray
-        }
-    }
-}
-
-extension SettingsNavigationRoute {
-    var settingsPane: SettingsHomePane {
-        switch self {
-        case .overview, .remoteNetwork, .remoteCache:
-            return .overview
-        case .reading:
-            return .reading
-        case .remote:
-            return .remote
-        case .storage:
-            return .storage
-        case .about:
-            return .about
-        }
-    }
-
-    var storageValue: String {
-        settingsPane.rawValue
-    }
-}
-
-private struct SettingsPaneRow: View {
-    let pane: SettingsHomePane
-    let detail: String
-
-    var body: some View {
-        HStack(spacing: Spacing.sm) {
-            SettingsIcon(systemName: pane.systemImage, color: pane.tint)
-
-            VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(pane.title)
-                    .font(AppFont.body(.semibold))
-                    .foregroundStyle(Color.textPrimary)
-
-                Text(detail)
-                    .font(AppFont.caption())
-                    .foregroundStyle(Color.textSecondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, Spacing.xxs)
-        .contentShape(Rectangle())
-    }
-}
-
-private struct SettingsIcon: View {
-    let systemName: String
-    let color: Color
-
-    var body: some View {
-        Image(systemName: systemName)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 28, height: 28)
-            .background(
-                RoundedRectangle(
-                    cornerRadius: CornerRadius.sm,
-                    style: .continuous
-                )
-                .fill(color)
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerLayoutPreferencesDidChange
             )
+        ) { _ in
+            snapshot.reloadReaderPreferences(
+                preferencesStore: dependencies.readerLayoutPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .libraryPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadLibraryPreferences(
+                preferencesStore: dependencies.libraryPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .remoteCacheSettingsDidChange
+            )
+        ) { _ in
+            Task { await refreshStorage() }
+        }
+    }
+
+    private func openReaderDefaults(_ profile: ReaderDefaultProfile) {
+        appNavigator?.navigate(.settings(.readerDefaults(profile)))
+    }
+
+    private func setRecentWindow(_ option: LibraryRecentWindowOption) {
+        snapshot.recentWindow = option
+        dependencies.libraryPreferencesStore.saveRecentWindow(option)
+    }
+
+    private func openCacheManagement() {
+        appNavigator?.navigate(.settings(.remoteCache))
+    }
+
+    private func refresh() async {
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let refreshedSnapshot = await SettingsSnapshot.load(
+            libraryCount: viewModel.items.count,
+            dependencies: dependencies
+        )
+        guard generation == refreshGeneration else {
+            return
+        }
+        snapshot = refreshedSnapshot
+        snapshot.localLibraryCount = viewModel.items.count
+    }
+
+    private func refreshStorage() async {
+        refreshGeneration &+= 1
+        let generation = refreshGeneration
+        let storage = await SettingsSnapshot.loadStorage(dependencies: dependencies)
+        guard generation == refreshGeneration else {
+            return
+        }
+        snapshot.applyStorage(storage)
     }
 }

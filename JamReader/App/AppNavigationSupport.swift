@@ -10,6 +10,17 @@ enum AppRootTab: String, Hashable {
     var systemImage: String {
         switch self {
         case .library:
+            return "books.vertical"
+        case .browse:
+            return "globe.asia.australia"
+        case .settings:
+            return "gearshape"
+        }
+    }
+
+    var selectedSystemImage: String {
+        switch self {
+        case .library:
             return "books.vertical.fill"
         case .browse:
             return "globe.asia.australia.fill"
@@ -54,13 +65,75 @@ enum BrowseNavigationRoute {
     case offlineShelf(UUID?)
 }
 
+enum BrowseStoredNavigationSelection: Equatable {
+    private static let serverPrefix = "server:"
+    private static let browserPrefix = "browser:"
+    private static let savedFoldersPrefix = "saved-folders:"
+    private static let offlineShelfPrefix = "offline-shelf:"
+
+    case serverDetail(UUID)
+    case serverBrowser(UUID)
+    case savedFolders(UUID?)
+    case offlineShelf(UUID?)
+
+    init?(storageValue: String) {
+        if storageValue == "saved-folders" {
+            self = .savedFolders(nil)
+        } else if storageValue == "offline-shelf" {
+            self = .offlineShelf(nil)
+        } else if let id = Self.uuid(from: storageValue, prefix: Self.serverPrefix) {
+            self = .serverDetail(id)
+        } else if let id = Self.uuid(from: storageValue, prefix: Self.browserPrefix) {
+            self = .serverBrowser(id)
+        } else if let id = Self.uuid(from: storageValue, prefix: Self.savedFoldersPrefix) {
+            self = .savedFolders(id)
+        } else if let id = Self.uuid(from: storageValue, prefix: Self.offlineShelfPrefix) {
+            self = .offlineShelf(id)
+        } else {
+            return nil
+        }
+    }
+
+    var storageValue: String {
+        switch self {
+        case .serverDetail(let profileID):
+            return "\(Self.serverPrefix)\(profileID.uuidString)"
+        case .serverBrowser(let profileID):
+            return "\(Self.browserPrefix)\(profileID.uuidString)"
+        case .savedFolders(let profileID):
+            return profileID.map { "\(Self.savedFoldersPrefix)\($0.uuidString)" } ?? "saved-folders"
+        case .offlineShelf(let profileID):
+            return profileID.map { "\(Self.offlineShelfPrefix)\($0.uuidString)" } ?? "offline-shelf"
+        }
+    }
+
+    var homeStorageValue: String {
+        switch self {
+        case .serverDetail(let profileID), .serverBrowser(let profileID):
+            return BrowseStoredNavigationSelection.serverDetail(profileID).storageValue
+        case .savedFolders:
+            return "saved-folders"
+        case .offlineShelf:
+            return "offline-shelf"
+        }
+    }
+
+    private static func uuid(from value: String, prefix: String) -> UUID? {
+        guard value.hasPrefix(prefix) else {
+            return nil
+        }
+
+        return UUID(uuidString: String(value.dropFirst(prefix.count)))
+    }
+}
+
 enum SettingsNavigationRoute {
     case overview
     case reading
-    case remote
+    case readerDefaults(ReaderDefaultProfile)
+    case library
     case storage
     case about
-    case remoteNetwork
     case remoteCache
 }
 

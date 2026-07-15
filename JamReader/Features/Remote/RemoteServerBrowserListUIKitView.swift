@@ -25,6 +25,95 @@ struct RemoteBrowserListRowModel: Equatable, Identifiable {
     var id: String { item.id }
 }
 
+enum RemoteBrowserDynamicTypeLayoutMetrics {
+    private static let textSpacing: CGFloat = 4
+
+    static func listCardHeight(for contentSizeCategory: UIContentSizeCategory) -> CGFloat {
+        guard contentSizeCategory.isAccessibilityCategory else {
+            return RemoteBrowserListItemCardView.Metrics.coverHeight + 20
+        }
+
+        let titleHeight = fontLineHeight(.headline, category: contentSizeCategory) * 2
+        let metadataHeight = fontLineHeight(.footnote, category: contentSizeCategory) * 2
+        let textHeight = 24 + titleHeight + textSpacing + metadataHeight
+        return ceil(max(RemoteBrowserListItemCardView.Metrics.coverHeight + 20, textHeight))
+    }
+
+    static func gridLabelHeight(for contentSizeCategory: UIContentSizeCategory) -> CGFloat {
+        guard contentSizeCategory.isAccessibilityCategory else {
+            return 72
+        }
+
+        let titleHeight = fontLineHeight(.subheadline, category: contentSizeCategory) * 2
+        let metadataHeight = fontLineHeight(.footnote, category: contentSizeCategory) * 2
+        return ceil(20 + titleHeight + textSpacing + metadataHeight)
+    }
+
+    static func sectionHeaderHeight(
+        title: String,
+        metadata: String?,
+        availableWidth: CGFloat,
+        contentSizeCategory: UIContentSizeCategory
+    ) -> CGFloat {
+        let titleFont = preferredFont(.headline, category: contentSizeCategory)
+        let metadataFont = preferredFont(.caption1, category: contentSizeCategory)
+        let textWidth = max(availableWidth - 24, 1)
+        let titleHeight = min(
+            measuredHeight(title, font: titleFont, width: textWidth),
+            ceil(titleFont.lineHeight)
+        )
+        guard let metadata, !metadata.isEmpty else {
+            return ceil(8 + titleHeight + 4)
+        }
+
+        let metadataHeight = min(
+            measuredHeight(metadata, font: metadataFont, width: textWidth),
+            ceil(metadataFont.lineHeight * 2)
+        )
+        return ceil(8 + titleHeight + 2 + metadataHeight + 4)
+    }
+
+    static func footerHeight(
+        text: String,
+        availableWidth: CGFloat,
+        contentSizeCategory: UIContentSizeCategory
+    ) -> CGFloat {
+        let font = preferredFont(.footnote, category: contentSizeCategory)
+        return ceil(measuredHeight(text, font: font, width: max(availableWidth - 24, 1)))
+    }
+
+    private static func fontLineHeight(
+        _ textStyle: UIFont.TextStyle,
+        category: UIContentSizeCategory
+    ) -> CGFloat {
+        ceil(preferredFont(textStyle, category: category).lineHeight)
+    }
+
+    private static func preferredFont(
+        _ textStyle: UIFont.TextStyle,
+        category: UIContentSizeCategory
+    ) -> UIFont {
+        UIFont.preferredFont(
+            forTextStyle: textStyle,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: category)
+        )
+    }
+
+    private static func measuredHeight(
+        _ text: String,
+        font: UIFont,
+        width: CGFloat
+    ) -> CGFloat {
+        let bounds = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: font],
+            context: nil
+        )
+        return ceil(bounds.height)
+    }
+}
+
 struct RemoteServerBrowserLayoutContext: Equatable {
     private enum GridDensity {
         case compact
@@ -817,6 +906,11 @@ final class RemoteBrowserListViewController: UIViewController {
 
         tableView.dataSource = coordinator
         tableView.delegate = coordinator
+
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+            (self: RemoteBrowserListViewController, _) in
+            self.refreshLayout()
+        }
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -1002,6 +1096,15 @@ final class RemoteBrowserListItemCardView: UIView {
         static let coverWidth: CGFloat = 58
         static let coverHeight: CGFloat = 87
         static let preferredHeight: CGFloat = 108
+
+        static func preferredHeight(for contentSizeCategory: UIContentSizeCategory) -> CGFloat {
+            max(
+                preferredHeight,
+                RemoteBrowserDynamicTypeLayoutMetrics.listCardHeight(
+                    for: contentSizeCategory
+                )
+            )
+        }
     }
 
     private let cardView = UIView()
@@ -1051,6 +1154,11 @@ final class RemoteBrowserListItemCardView: UIView {
         cardView.alpha = 0
         isUserInteractionEnabled = false
         accessibilityElementsHidden = true
+        isAccessibilityElement = false
+        accessibilityLabel = nil
+        accessibilityValue = nil
+        accessibilityHint = nil
+        accessibilityTraits = []
     }
 
     func configure(
@@ -1079,6 +1187,13 @@ final class RemoteBrowserListItemCardView: UIView {
         cardView.alpha = 1
         isUserInteractionEnabled = true
         accessibilityElementsHidden = false
+        isAccessibilityElement = usesEmbeddedTapHandler
+        accessibilityLabel = usesEmbeddedTapHandler ? row.item.name : nil
+        accessibilityValue = usesEmbeddedTapHandler ? metadataText(for: row) : nil
+        accessibilityHint = usesEmbeddedTapHandler
+            ? (row.item.isDirectory ? "Opens folder" : "Opens comic")
+            : nil
+        accessibilityTraits = usesEmbeddedTapHandler ? [.button] : []
 
         if row.item.isDirectory, !row.item.previewItems.isEmpty {
             configureDirectoryPreview(
@@ -1237,6 +1352,7 @@ final class RemoteBrowserListItemCardView: UIView {
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .preferredFont(forTextStyle: .headline).bold()
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 2
 
@@ -1250,8 +1366,9 @@ final class RemoteBrowserListItemCardView: UIView {
 
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = .preferredFont(forTextStyle: .footnote)
+        metadataLabel.adjustsFontForContentSizeCategory = true
         metadataLabel.textColor = .secondaryLabel
-        metadataLabel.numberOfLines = 1
+        metadataLabel.numberOfLines = 2
 
         let titleRow = UIStackView(arrangedSubviews: [titleIconView, titleLabel])
         titleRow.translatesAutoresizingMaskIntoConstraints = false
@@ -1276,7 +1393,7 @@ final class RemoteBrowserListItemCardView: UIView {
 
             visualContainer.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
             visualContainer.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 10),
-            visualContainer.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -10),
+            visualContainer.bottomAnchor.constraint(lessThanOrEqualTo: cardView.bottomAnchor, constant: -10),
             visualContainer.widthAnchor.constraint(equalToConstant: Metrics.coverWidth),
             visualContainer.heightAnchor.constraint(equalToConstant: Metrics.coverHeight),
 
@@ -1311,7 +1428,7 @@ final class RemoteBrowserListItemCardView: UIView {
 
             textStack.leadingAnchor.constraint(equalTo: visualContainer.trailingAnchor, constant: 14),
             textStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
-            textStack.centerYAnchor.constraint(equalTo: visualContainer.centerYAnchor),
+            textStack.centerYAnchor.constraint(equalTo: cardView.centerYAnchor),
             textStack.topAnchor.constraint(greaterThanOrEqualTo: cardView.topAnchor, constant: 12),
             textStack.bottomAnchor.constraint(lessThanOrEqualTo: cardView.bottomAnchor, constant: -12)
         ])
@@ -1327,6 +1444,16 @@ final class RemoteBrowserListItemCardView: UIView {
         }
 
         onOpenItem?(item)
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard usesEmbeddedTapHandler,
+              let item = rowModel?.item else {
+            return false
+        }
+
+        onOpenItem?(item)
+        return true
     }
 
     private func configureDirectoryPreview(
@@ -1538,19 +1665,27 @@ private final class RemoteBrowserListSectionHeaderView: UITableViewHeaderFooterV
         titleLabel.text = section.title
         metadataLabel.text = section.metadataText
         metadataLabel.isHidden = section.metadataText?.isEmpty ?? true
+        accessibilityLabel = [section.title, section.metadataText]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 
     private func buildUI() {
         contentView.backgroundColor = .clear
+        isAccessibilityElement = true
+        accessibilityTraits = [.header]
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .preferredFont(forTextStyle: .headline)
+        titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
 
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = .preferredFont(forTextStyle: .caption1)
+        metadataLabel.adjustsFontForContentSizeCategory = true
         metadataLabel.textColor = .secondaryLabel
-        metadataLabel.numberOfLines = 1
+        metadataLabel.numberOfLines = 2
 
         let stack = UIStackView(arrangedSubviews: [titleLabel, metadataLabel])
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -1579,7 +1714,9 @@ private final class RemoteBrowserListSectionFooterView: UITableViewHeaderFooterV
 
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
         label.textColor = .secondaryLabel
+        label.numberOfLines = 0
         contentView.addSubview(label)
 
         NSLayoutConstraint.activate([

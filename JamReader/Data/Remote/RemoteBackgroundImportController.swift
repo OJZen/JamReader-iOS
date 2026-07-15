@@ -11,6 +11,7 @@ final class RemoteBackgroundImportController: ObservableObject {
 
     private var activeTask: Task<Void, Never>?
     private var activeCancellationController: RemoteImportCancellationController?
+    private var isStorageMaintenanceRunning = false
     private var pendingProgressCommitTask: Task<Void, Never>?
     private var pendingProgressState: RemoteBrowserProgressState?
     private var lastPublishedProgressState: RemoteBrowserProgressState?
@@ -32,8 +33,11 @@ final class RemoteBackgroundImportController: ObservableObject {
             RemoteImportCancellationController
         ) async -> Void
     ) -> Bool {
-        guard activeTask == nil else {
-            logger.warning("Remote background import start rejected reason=alreadyRunning")
+        guard activeTask == nil, !isStorageMaintenanceRunning else {
+            let reason = activeTask == nil ? "storageMaintenanceRunning" : "alreadyRunning"
+            logger.warning(
+                "Remote background import start rejected reason=\(reason, privacy: .public)"
+            )
             return false
         }
 
@@ -54,6 +58,28 @@ final class RemoteBackgroundImportController: ObservableObject {
             self.clearActiveProgress()
         }
         return true
+    }
+
+    func beginExclusiveStorageMaintenance() -> Bool {
+        guard activeTask == nil, !isStorageMaintenanceRunning else {
+            logger.warning(
+                "Remote storage maintenance start rejected importRunning=\(self.activeTask != nil) maintenanceRunning=\(self.isStorageMaintenanceRunning)"
+            )
+            return false
+        }
+
+        isStorageMaintenanceRunning = true
+        logger.notice("Remote storage maintenance started")
+        return true
+    }
+
+    func endExclusiveStorageMaintenance() {
+        guard isStorageMaintenanceRunning else {
+            return
+        }
+
+        isStorageMaintenanceRunning = false
+        logger.notice("Remote storage maintenance completed")
     }
 
     func setActiveProgress(

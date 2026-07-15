@@ -32,7 +32,8 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
             folderShortcutStore: dependencies.remoteFolderShortcutStore,
             credentialStore: dependencies.remoteServerCredentialStore,
             browsingService: dependencies.remoteServerBrowsingService,
-            readingProgressStore: dependencies.remoteReadingProgressStore
+            readingProgressStore: dependencies.remoteReadingProgressStore,
+            remoteBackgroundImportController: dependencies.remoteBackgroundImportController
         )
 
         let rootViewController = RootTabBarController()
@@ -168,15 +169,18 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
         let overlay = RootTabHostingController(
             rootView: AnyView(
                 AppRootOverlayView(
-                    controller: importController,
-                    bottomBarHeight: AppLayout.bottomBarHeight
+                    controller: importController
                 )
                 .environment(\.appPresenter, presentationCoordinator)
             )
         )
         overlay.view.backgroundColor = .clear
         overlay.view.translatesAutoresizingMaskIntoConstraints = false
-        overlayRootController.embed(overlay)
+        overlay.sizingOptions = [.intrinsicContentSize]
+        overlayRootController.embed(
+            overlay,
+            bottomOffset: AppLayout.bottomBarHeight - Spacing.xxs
+        )
 
         let overlayWindow = PassthroughOverlayWindow(windowScene: windowScene)
         overlayWindow.rootViewController = overlayRootController
@@ -497,7 +501,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         rootViewController.tabBarItem = UITabBarItem(
             title: tab.title,
             image: UIImage(systemName: tab.systemImage),
-            selectedImage: nil
+            selectedImage: UIImage(systemName: tab.selectedSystemImage)
         )
         rootViewController.view.backgroundColor = .systemGroupedBackground
         activeNavigationController?.navigationBar.prefersLargeTitles = true
@@ -563,6 +567,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
     func navigate(_ route: BrowseNavigationRoute) {
         switch route {
         case .home:
+            persistDetailSelection("")
             popToRoot()
         case .serverDetail(let profileID):
             showServerDetail(profileID)
@@ -659,7 +664,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             return
         }
 
-        let selection = BrowseStoredDetailSelection.serverDetail(profileID)
+        let selection = BrowseStoredNavigationSelection.serverDetail(profileID)
         persistHomeSelection(selection.homeStorageValue)
         persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
@@ -688,7 +693,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             return
         }
 
-        persistDetailSelection(BrowseStoredDetailSelection.serverBrowser(profileID).storageValue)
+        persistDetailSelection(BrowseStoredNavigationSelection.serverBrowser(profileID).storageValue)
         let controller = makeHostingController(
             RemoteServerBrowserView(
                 profile: profile,
@@ -712,7 +717,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         } else {
             focusedProfile = nil
         }
-        let selection = BrowseStoredDetailSelection.savedFolders(profileID)
+        let selection = BrowseStoredNavigationSelection.savedFolders(profileID)
         persistHomeSelection(selection.homeStorageValue)
         persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
@@ -730,7 +735,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         } else {
             focusedProfile = nil
         }
-        let selection = BrowseStoredDetailSelection.offlineShelf(profileID)
+        let selection = BrowseStoredNavigationSelection.offlineShelf(profileID)
         persistHomeSelection(selection.homeStorageValue)
         persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
@@ -773,7 +778,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             return
         }
 
-        guard let storedRoute = BrowseStoredDetailSelection(storageValue: storedSelection) else {
+        guard let storedRoute = BrowseStoredNavigationSelection(storageValue: storedSelection) else {
             return
         }
 
@@ -856,7 +861,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         rootViewController.tabBarItem = UITabBarItem(
             title: tab.title,
             image: UIImage(systemName: tab.systemImage),
-            selectedImage: nil
+            selectedImage: UIImage(systemName: tab.selectedSystemImage)
         )
         rootViewController.view.backgroundColor = .systemGroupedBackground
         activeNavigationController?.navigationBar.prefersLargeTitles = true
@@ -864,81 +869,6 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         detailNavigationController?.navigationBar.prefersLargeTitles = true
     }
 
-    private enum BrowseStoredDetailSelection {
-        private static let serverPrefix = "server:"
-        private static let browserPrefix = "browser:"
-        private static let savedFoldersPrefix = "saved-folders:"
-        private static let offlineShelfPrefix = "offline-shelf:"
-
-        case serverDetail(UUID)
-        case serverBrowser(UUID)
-        case savedFolders(UUID?)
-        case offlineShelf(UUID?)
-
-        init?(storageValue: String) {
-            if storageValue == "saved-folders" {
-                self = .savedFolders(nil)
-                return
-            }
-
-            if storageValue == "offline-shelf" {
-                self = .offlineShelf(nil)
-                return
-            }
-
-            if let id = Self.uuid(from: storageValue, prefix: Self.serverPrefix) {
-                self = .serverDetail(id)
-                return
-            }
-
-            if let id = Self.uuid(from: storageValue, prefix: Self.browserPrefix) {
-                self = .serverBrowser(id)
-                return
-            }
-
-            if let id = Self.uuid(from: storageValue, prefix: Self.savedFoldersPrefix) {
-                self = .savedFolders(id)
-                return
-            }
-
-            if let id = Self.uuid(from: storageValue, prefix: Self.offlineShelfPrefix) {
-                self = .offlineShelf(id)
-                return
-            }
-
-            return nil
-        }
-
-        var storageValue: String {
-            switch self {
-            case .serverDetail(let profileID):
-                return "\(Self.serverPrefix)\(profileID.uuidString)"
-            case .serverBrowser(let profileID):
-                return "\(Self.browserPrefix)\(profileID.uuidString)"
-            case .savedFolders(let profileID):
-                return profileID.map { "\(Self.savedFoldersPrefix)\($0.uuidString)" } ?? "saved-folders"
-            case .offlineShelf(let profileID):
-                return profileID.map { "\(Self.offlineShelfPrefix)\($0.uuidString)" } ?? "offline-shelf"
-            }
-        }
-
-        var homeStorageValue: String {
-            switch self {
-            case .serverBrowser(let profileID):
-                return BrowseStoredDetailSelection.serverDetail(profileID).storageValue
-            default:
-                return storageValue
-            }
-        }
-
-        private static func uuid(from value: String, prefix: String) -> UUID? {
-            guard value.hasPrefix(prefix) else {
-                return nil
-            }
-
-            return UUID(uuidString: String(value.dropFirst(prefix.count)))
-        }
-    }
 }
 
 @MainActor
@@ -995,12 +925,22 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
 
     func navigate(_ route: SettingsNavigationRoute) {
         switch route {
-        case .overview, .reading, .remote, .storage, .about:
+        case .overview, .reading, .library, .storage, .about:
             showPane(route)
-        case .remoteNetwork:
-            pushOrSetDetail(makeHostingController(RemoteNetworkSettingsView(), title: "Network"))
+        case .readerDefaults(let profile):
+            showLeaf(
+                ownedBy: .reading,
+                makeHostingController(
+                    ReaderDefaultsSettingsView(
+                        profile: profile,
+                        preferencesStore: dependencies.readerLayoutPreferencesStore
+                    ),
+                    title: profile.navigationTitle
+                )
+            )
         case .remoteCache:
-            pushOrSetDetail(
+            showLeaf(
+                ownedBy: .storage,
                 makeHostingController(
                     RemoteCacheSettingsView(dependencies: dependencies),
                     title: "Cache Management"
@@ -1018,29 +958,46 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
     }
 
     private func installRoot() {
-        let root = makeHostingController(
-            SettingsHomeView(viewModel: viewModel, dependencies: dependencies),
-            title: "Settings"
-        )
-        root.navigationItem.largeTitleDisplayMode = .always
-
         if let compactNavigationController {
+            let root = makeHostingController(
+                SettingsHomeView(
+                    viewModel: viewModel,
+                    dependencies: dependencies
+                ),
+                title: "Settings"
+            )
+            root.navigationItem.largeTitleDisplayMode = .always
             compactNavigationController.setViewControllers([root], animated: false)
         } else {
+            let root = makeHostingController(
+                SettingsSidebarView(
+                    viewModel: viewModel,
+                    dependencies: dependencies
+                ),
+                title: "Settings"
+            )
+            root.navigationItem.largeTitleDisplayMode = .never
             primaryNavigationController?.setViewControllers([root], animated: false)
-            showPane(.overview)
+            showPane(restoredPane.navigationRoute)
         }
     }
 
     private func showPane(_ route: SettingsNavigationRoute) {
-        UserDefaults.standard.set(route.storageValue, forKey: AppNavigationStorageKeys.settingsHomeSelectedPane)
+        let pane = route.settingsPane
+        storeSelectedPane(pane)
+
+        if pane == .overview, let compactNavigationController {
+            compactNavigationController.popToRootViewController(animated: true)
+            return
+        }
+
         let controller = makeHostingController(
             SettingsPaneContentView(
-                pane: route.settingsPane,
+                pane: pane,
                 viewModel: viewModel,
                 dependencies: dependencies
             ),
-            title: route.settingsPane.titleString
+            title: pane.titleString
         )
         controller.navigationItem.largeTitleDisplayMode = .never
 
@@ -1054,11 +1011,30 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         }
     }
 
-    private func pushOrSetDetail(_ controller: UIViewController) {
+    private var restoredPane: SettingsHomePane {
+        SettingsHomePane.restored(
+            from: UserDefaults.standard.string(
+                forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
+            )
+        )
+    }
+
+    private func storeSelectedPane(_ pane: SettingsHomePane) {
+        UserDefaults.standard.set(
+            pane.rawValue,
+            forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
+        )
+    }
+
+    private func showLeaf(
+        ownedBy pane: SettingsHomePane,
+        _ controller: UIViewController
+    ) {
         controller.navigationItem.largeTitleDisplayMode = .never
         if let compactNavigationController {
             compactNavigationController.pushViewController(controller, animated: true)
         } else if let detailNavigationController {
+            showPane(pane.navigationRoute)
             detailNavigationController.pushViewController(controller, animated: true)
         }
     }
@@ -1083,7 +1059,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         rootViewController.tabBarItem = UITabBarItem(
             title: tab.title,
             image: UIImage(systemName: tab.systemImage),
-            selectedImage: nil
+            selectedImage: UIImage(systemName: tab.selectedSystemImage)
         )
         rootViewController.view.backgroundColor = .systemGroupedBackground
         activeNavigationController?.navigationBar.prefersLargeTitles = true
@@ -1138,10 +1114,36 @@ final class RootTabBarController: UITabBarController {
 
     override var keyCommands: [UIKeyCommand]? {
         [
-            UIKeyCommand(input: "1", modifierFlags: .command, action: #selector(selectLibraryTab)),
-            UIKeyCommand(input: "2", modifierFlags: .command, action: #selector(selectBrowseTab)),
-            UIKeyCommand(input: "3", modifierFlags: .command, action: #selector(selectSettingsTab))
+            makeKeyCommand(
+                input: "1",
+                title: "Library",
+                action: #selector(selectLibraryTab)
+            ),
+            makeKeyCommand(
+                input: "2",
+                title: "Browse",
+                action: #selector(selectBrowseTab)
+            ),
+            makeKeyCommand(
+                input: "3",
+                title: "Settings",
+                action: #selector(selectSettingsTab)
+            )
         ]
+    }
+
+    private func makeKeyCommand(
+        input: String,
+        title: String,
+        action: Selector
+    ) -> UIKeyCommand {
+        let command = UIKeyCommand(
+            input: input,
+            modifierFlags: .command,
+            action: action
+        )
+        command.discoverabilityTitle = title
+        return command
     }
 
     @objc private func selectLibraryTab() {
@@ -1166,15 +1168,25 @@ final class RootOverlayWindowController: UIViewController {
         self.view = view
     }
 
-    func embed(_ controller: UIViewController) {
+    func embed(
+        _ controller: UIViewController,
+        bottomOffset: CGFloat = 0
+    ) {
         addChild(controller)
         view.addSubview(controller.view)
         controller.view.translatesAutoresizingMaskIntoConstraints = false
+        controller.view.setContentHuggingPriority(.required, for: .vertical)
+
+        let fillWidth = controller.view.widthAnchor.constraint(equalTo: view.widthAnchor)
+        fillWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            controller.view.topAnchor.constraint(equalTo: view.topAnchor),
-            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            controller.view.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            controller.view.bottomAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.bottomAnchor,
+                constant: -bottomOffset
+            ),
+            controller.view.widthAnchor.constraint(lessThanOrEqualToConstant: AppLayout.overlayMaxWidth),
+            fillWidth
         ])
         controller.didMove(toParent: self)
     }
@@ -1183,54 +1195,16 @@ final class RootOverlayWindowController: UIViewController {
 final class PassthroughOverlayWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hitView = super.hitTest(point, with: event)
-        guard let hitView else {
+        if hitView === self || hitView === rootViewController?.view {
             return nil
         }
-
-        guard let rootView = rootViewController?.view else {
-            return hitView === self ? nil : hitView
-        }
-
-        if hitView === self || hitView === rootView {
-            return nil
-        }
-
-        return hitView.hasOverlayInteractionTarget(stoppingAt: rootView) ? hitView : nil
+        return hitView
     }
 }
 
 final class PassthroughOverlayView: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hitView = super.hitTest(point, with: event)
-        guard let hitView else {
-            return nil
-        }
-
-        let hostingRootView = subviews.first
-        if hitView === self || hitView === hostingRootView {
-            return nil
-        }
-
-        return hitView.hasOverlayInteractionTarget(stoppingAt: hostingRootView ?? self) ? hitView : nil
-    }
-}
-
-private extension UIView {
-    func hasOverlayInteractionTarget(stoppingAt rootView: UIView) -> Bool {
-        var view: UIView? = self
-
-        while let currentView = view, currentView !== rootView {
-            if currentView is UIControl {
-                return true
-            }
-
-            if currentView.gestureRecognizers?.isEmpty == false {
-                return true
-            }
-
-            view = currentView.superview
-        }
-
-        return false
+        return hitView === self ? nil : hitView
     }
 }
