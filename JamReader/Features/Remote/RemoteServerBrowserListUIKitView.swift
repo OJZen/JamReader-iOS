@@ -1189,9 +1189,13 @@ final class RemoteBrowserListItemCardView: UIView {
         accessibilityElementsHidden = false
         isAccessibilityElement = usesEmbeddedTapHandler
         accessibilityLabel = usesEmbeddedTapHandler ? row.item.name : nil
-        accessibilityValue = usesEmbeddedTapHandler ? metadataText(for: row) : nil
+        accessibilityValue = usesEmbeddedTapHandler
+            ? RemoteBrowserGridAccessibility.value(for: row)
+            : nil
         accessibilityHint = usesEmbeddedTapHandler
-            ? (row.item.isDirectory ? "Opens folder" : "Opens comic")
+            ? (row.item.isDirectory
+                ? String(localized: "Opens folder")
+                : String(localized: "Opens comic"))
             : nil
         accessibilityTraits = usesEmbeddedTapHandler ? [.button] : []
 

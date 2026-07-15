@@ -673,15 +673,22 @@ final class LibraryStateRepository {
         let libraryID = try resolvedLibraryID(from: contextualDatabaseURL)
 
         try database.withConnection(readOnly: false) { database in
-            try ensureComicsBelong(ids, libraryID: libraryID, database: database)
-            let statement = try sqlitePrepare("DELETE FROM comics WHERE id = ? AND library_id = ?", database: database)
-            defer { sqlite3_finalize(statement) }
-            for comicID in ids {
-                sqlite3_reset(statement)
-                sqlite3_clear_bindings(statement)
-                sqlite3_bind_int64(statement, 1, comicID)
-                sqliteBindText(libraryID.uuidString, index: 2, statement: statement)
-                try sqliteStepDone(statement, database: database)
+            try sqliteBeginTransaction(database: database)
+            do {
+                try ensureComicsBelong(ids, libraryID: libraryID, database: database)
+                let statement = try sqlitePrepare("DELETE FROM comics WHERE id = ? AND library_id = ?", database: database)
+                defer { sqlite3_finalize(statement) }
+                for comicID in ids {
+                    sqlite3_reset(statement)
+                    sqlite3_clear_bindings(statement)
+                    sqlite3_bind_int64(statement, 1, comicID)
+                    sqliteBindText(libraryID.uuidString, index: 2, statement: statement)
+                    try sqliteStepDone(statement, database: database)
+                }
+                try sqliteCommitTransaction(database: database)
+            } catch {
+                sqliteRollbackTransaction(database: database)
+                throw error
             }
         }
     }

@@ -17,6 +17,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
     private let storageManager: LibraryStorageManager
     private let coverLocator: LibraryCoverLocator
     private let comicRemovalService: LibraryComicRemovalService
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
 
     private let databaseURL: URL
     private let metadataRootURL: URL
@@ -33,7 +34,8 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
         databaseWriter: LibraryDatabaseWriter,
         storageManager: LibraryStorageManager,
         coverLocator: LibraryCoverLocator,
-        comicRemovalService: LibraryComicRemovalService
+        comicRemovalService: LibraryComicRemovalService,
+        remoteBackgroundImportController: RemoteBackgroundImportController
     ) {
         self.descriptor = descriptor
         self.kind = kind
@@ -42,6 +44,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
         self.storageManager = storageManager
         self.coverLocator = coverLocator
         self.comicRemovalService = comicRemovalService
+        self.remoteBackgroundImportController = remoteBackgroundImportController
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
     }
@@ -239,6 +242,13 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
     }
 
     func removeComic(_ comic: LibraryComic) -> Bool {
+        guard beginExclusiveLibraryStorageOperation() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         logger.info(
             "Library special collection remove comic requested libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id)"
         )
@@ -261,6 +271,18 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             )
             return false
         }
+    }
+
+    private func beginExclusiveLibraryStorageOperation() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = AppAlertState(
+                title: "Library Busy",
+                message: "Finish the current import or storage task, then try again."
+            )
+            return false
+        }
+
+        return true
     }
 
     func loadIfNeeded() {

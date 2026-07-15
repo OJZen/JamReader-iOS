@@ -36,6 +36,7 @@ struct BrowseHomeView: View {
             viewModel.loadIfNeeded()
         }
         .onAppear {
+            viewModel.refreshOfflineCopyCounts(forceRefresh: true)
             restoreSelectionIfNeeded()
         }
         .onChange(of: displayedProfiles.map(\.id)) { _, _ in
@@ -80,7 +81,10 @@ struct BrowseHomeView: View {
     private var content: some View {
         Group {
             if displayedProfiles.isEmpty && !showsQuickAccess {
-                BrowseHomeEmptyState(onAddServer: presentCreateServerSheet)
+                BrowseHomeEmptyState(
+                    showsGuidance: !usesPersistentSelection,
+                    onAddServer: presentCreateServerSheet
+                )
             } else {
                 List {
                     serversSection
@@ -182,7 +186,7 @@ struct BrowseHomeView: View {
     }
 
     private var totalOfflineCopyCount: Int {
-        viewModel.profiles.reduce(0) { $0 + viewModel.cacheSummary(for: $1).fileCount }
+        viewModel.totalOfflineCopyCount
     }
 
     private var showsQuickAccess: Bool {
@@ -190,7 +194,9 @@ struct BrowseHomeView: View {
     }
 
     private var usesPersistentSelection: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        AppLayout.usesPersistentSplitSelection(
+            isPad: UIDevice.current.userInterfaceIdiom == .pad
+        )
     }
 
     @ViewBuilder
@@ -469,15 +475,16 @@ private struct BrowseHomeQuickAccessRow: View {
 }
 
 private struct BrowseHomeEmptyState: View {
+    let showsGuidance: Bool
     let onAddServer: () -> Void
 
     var body: some View {
         EmptyStateView(
             systemImage: "server.rack",
             title: "No Servers",
-            description: "Add a server to browse comics.",
-            actionTitle: "Add Server",
-            action: onAddServer
+            description: showsGuidance ? "Add a server to browse comics." : nil,
+            actionTitle: showsGuidance ? "Add Server" : nil,
+            action: showsGuidance ? onAddServer : nil
         )
     }
 }

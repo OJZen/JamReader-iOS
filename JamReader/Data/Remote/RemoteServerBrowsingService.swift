@@ -63,6 +63,8 @@ final class RemoteServerBrowsingService {
     private var automaticCacheTaskRecords: [String: AutomaticCacheTaskRecord] = [:]
     private let activeReaderLeaseLock = NSLock()
     private var activeReaderLeaseRecords: [UUID: ActiveReaderCacheLeaseRecord] = [:]
+    private let stagedCacheMutationLock = NSLock()
+    private var stagedCacheMutationCountsByReferenceID: [String: Int] = [:]
     private let thumbnailSemaphore = AsyncSemaphore(maxConcurrent: 6)
     private let thumbnailSMBClientSemaphore = AsyncSemaphore(maxConcurrent: 2)
     private let downloadSemaphore = AsyncSemaphore(maxConcurrent: 3)
@@ -295,13 +297,15 @@ final class RemoteServerBrowsingService {
         for profile: RemoteServerProfile,
         reference: RemoteComicFileReference,
         forceRefresh: Bool = false,
-        trimCacheAfterDownload: Bool = true
+        trimCacheAfterDownload: Bool = true,
+        stageCacheReplacementForRollback: Bool = false
     ) async throws -> RemoteComicDownloadResult {
         try await downloadComicFile(
             for: profile,
             reference: reference,
             forceRefresh: forceRefresh,
             trimCacheAfterDownload: trimCacheAfterDownload,
+            stageCacheReplacementForRollback: stageCacheReplacementForRollback,
             progressHandler: { _ in }
         )
     }
@@ -311,6 +315,7 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         forceRefresh: Bool = false,
         trimCacheAfterDownload: Bool = true,
+        stageCacheReplacementForRollback: Bool = false,
         progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> RemoteComicDownloadResult {
         await downloadSemaphore.wait()
@@ -336,6 +341,7 @@ final class RemoteServerBrowsingService {
                             reference: reference,
                             forceRefresh: forceRefresh,
                             trimCacheAfterDownload: trimCacheAfterDownload,
+                            stageCacheReplacementForRollback: stageCacheReplacementForRollback,
                             progressHandler: progressHandler
                         ) { temporaryDownloadURL, resumeOffset in
                             let reader = client.fileReader(
@@ -357,6 +363,7 @@ final class RemoteServerBrowsingService {
                     reference: reference,
                     forceRefresh: forceRefresh,
                     trimCacheAfterDownload: trimCacheAfterDownload,
+                    stageCacheReplacementForRollback: stageCacheReplacementForRollback,
                     progressHandler: progressHandler
                 ) { temporaryDownloadURL, resumeOffset in
                     let fileURL = try webDAVURL(
@@ -395,6 +402,7 @@ final class RemoteServerBrowsingService {
         references: [RemoteComicFileReference],
         forceRefresh: Bool = false,
         trimCacheAfterDownload: Bool = true,
+        stageCacheReplacementForRollback: Bool = false,
         progressHandler: @escaping @Sendable (RemoteComicFileReference, Double) -> Void = { _, _ in }
     ) async throws -> [RemoteComicBatchDownloadOutcome] {
         try Task.checkCancellation()
@@ -433,6 +441,7 @@ final class RemoteServerBrowsingService {
                                     reference: reference,
                                     forceRefresh: forceRefresh,
                                     trimCacheAfterDownload: trimCacheAfterDownload,
+                                    stageCacheReplacementForRollback: stageCacheReplacementForRollback,
                                     progressHandler: { fraction in
                                         progressHandler(reference, fraction)
                                     }
@@ -455,7 +464,6 @@ final class RemoteServerBrowsingService {
                         return result
                     }
                 }
-                try Task.checkCancellation()
             case .webdav:
                 let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
                 outcomes = await concurrentBatchDownloadOutcomes(
@@ -479,6 +487,7 @@ final class RemoteServerBrowsingService {
                             reference: reference,
                             forceRefresh: forceRefresh,
                             trimCacheAfterDownload: trimCacheAfterDownload,
+                            stageCacheReplacementForRollback: stageCacheReplacementForRollback,
                             progressHandler: { fraction in
                                 progressHandler(reference, fraction)
                             }
@@ -502,7 +511,13 @@ final class RemoteServerBrowsingService {
                         return result
                     }
                 }
-                try Task.checkCancellation()
+            }
+
+            if Task.isCancelled {
+                if stageCacheReplacementForRollback {
+                    try rollbackStagedBatchCacheMutations(in: outcomes)
+                }
+                throw CancellationError()
             }
 
             let failedCount = outcomes.filter { $0.error != nil }.count
@@ -516,6 +531,33 @@ final class RemoteServerBrowsingService {
                 "Remote batch download failed provider=\(profile.providerKind.rawValue, privacy: .public) server=\(profile.id.uuidString, privacy: .public) count=\(references.count) error=\(errorDescription, privacy: .public)"
             )
             throw error
+        }
+    }
+
+    private func rollbackStagedBatchCacheMutations(
+        in outcomes: [RemoteComicBatchDownloadOutcome]
+    ) throws {
+        var firstRollbackError: Error?
+        for outcome in outcomes {
+            guard let result = outcome.result,
+                  result.cacheMutation.requiresFinalization else {
+                continue
+            }
+
+            do {
+                try rollbackDownloadedComicCache(
+                    for: outcome.reference,
+                    result: result
+                )
+            } catch {
+                if firstRollbackError == nil {
+                    firstRollbackError = error
+                }
+            }
+        }
+
+        if let firstRollbackError {
+            throw firstRollbackError
         }
     }
 
@@ -533,6 +575,45 @@ final class RemoteServerBrowsingService {
         }
 
         return cacheSummary(forRootURL: remoteComicCacheRootURL)
+    }
+
+    func recoverableCachedComicCandidates(
+        for profile: RemoteServerProfile
+    ) -> [RemoteCachedComicRecoveryCandidate] {
+        var candidatesByReferenceID: [String: RemoteCachedComicRecoveryCandidate] = [:]
+
+        for cacheRootURL in cacheRootURLs(for: profile) {
+            for resource in enumerateCachedComicResources(in: cacheRootURL) {
+                guard let reference = recoverableReference(
+                    for: resource.resourceURL,
+                    under: cacheRootURL,
+                    profile: profile
+                ),
+                cachedAvailability(for: reference).hasLocalCopy else {
+                    continue
+                }
+
+                let cachedAt = max(
+                    resource.lastAccessDate,
+                    Date(timeIntervalSince1970: 0)
+                )
+                if candidatesByReferenceID[reference.id] == nil {
+                    candidatesByReferenceID[reference.id] = RemoteCachedComicRecoveryCandidate(
+                        reference: reference,
+                        cachedAt: cachedAt
+                    )
+                }
+            }
+        }
+
+        return candidatesByReferenceID.values.sorted { lhs, rhs in
+            if lhs.cachedAt == rhs.cachedAt {
+                return lhs.reference.fileName.localizedStandardCompare(
+                    rhs.reference.fileName
+                ) == .orderedAscending
+            }
+            return lhs.cachedAt > rhs.cachedAt
+        }
     }
 
     private func cacheSummary(forRootURL cacheURL: URL) -> RemoteComicCacheSummary {
@@ -831,12 +912,106 @@ final class RemoteServerBrowsingService {
         )
     }
 
+    func rollbackDownloadedComicCache(
+        for reference: RemoteComicFileReference,
+        result: RemoteComicDownloadResult
+    ) throws {
+        guard result.cacheMutation.requiresFinalization else {
+            return
+        }
+        defer {
+            endStagedCacheMutation(for: reference)
+        }
+
+        let downloadedURL = result.localFileURL.standardizedFileURL
+        let expectedURL = cachedFileURL(for: reference).standardizedFileURL
+        guard downloadedURL == expectedURL else {
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "The newly downloaded copy could not be identified safely for rollback."
+            )
+        }
+
+        let logPath = logRemotePath(reference.path)
+        do {
+            cancelAutomaticCacheTask(for: reference)
+            guard !hasActiveReaderLease(for: reference) else {
+                throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                    "Close the active reader before removing the newly downloaded copy."
+                )
+            }
+
+            try restoreCachedComicMutation(
+                result.cacheMutation,
+                destinationURL: downloadedURL
+            )
+            resetPartialDownloadArtifactsIfPossible(
+                at: temporaryDownloadURL(for: downloadedURL),
+                reason: "offlineRecordRollback"
+            )
+            removeEmptyParentDirectoriesIfPossible(
+                from: downloadedURL.deletingLastPathComponent(),
+                stoppingAt: cacheRootURL(for: nil),
+                reason: "offlineRecordRollback"
+            )
+            invalidateCachedSummaries()
+            cacheLogger.notice(
+                "Remote downloaded comic rollback completed server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public)"
+            )
+        } catch {
+            cacheLogger.warning(
+                "Remote downloaded comic rollback failed server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
+        }
+    }
+
+    func commitDownloadedComicCache(
+        for reference: RemoteComicFileReference,
+        result: RemoteComicDownloadResult
+    ) throws {
+        guard result.cacheMutation.requiresFinalization else {
+            return
+        }
+        defer {
+            endStagedCacheMutation(for: reference)
+        }
+
+        let downloadedURL = result.localFileURL.standardizedFileURL
+        let expectedURL = cachedFileURL(for: reference).standardizedFileURL
+        guard downloadedURL == expectedURL else {
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "The newly downloaded copy could not be identified safely for completion."
+            )
+        }
+
+        guard case .replacedExisting(let backup) = result.cacheMutation else {
+            return
+        }
+
+        let logPath = logRemotePath(reference.path)
+        do {
+            try removeCacheReplacementBackup(backup)
+            cacheLogger.debug(
+                "Remote downloaded comic replacement committed server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public)"
+            )
+        } catch {
+            cacheLogger.warning(
+                "Remote downloaded comic replacement commit failed server=\(reference.serverID.uuidString, privacy: .public) provider=\(reference.providerKind.rawValue, privacy: .public) path=\(logPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw error
+        }
+    }
+
     func cachedAvailability(for reference: RemoteComicFileReference) -> RemoteComicCachedAvailability {
         if currentCachedFileURL(for: reference) != nil {
             return RemoteComicCachedAvailability(kind: .current)
         }
 
         if anyCompatibleCachedFileURL(for: reference) != nil {
+            return RemoteComicCachedAvailability(kind: .stale)
+        }
+
+        if hasStagedCacheMutation(for: reference) {
             return RemoteComicCachedAvailability(kind: .stale)
         }
 
@@ -2075,11 +2250,209 @@ final class RemoteServerBrowsingService {
         }
     }
 
+    func stageCachedComicReplacementForRollback(
+        at destinationURL: URL,
+        for reference: RemoteComicFileReference
+    ) throws -> RemoteComicCacheMutation {
+        let standardizedDestinationURL = destinationURL.standardizedFileURL
+        guard standardizedDestinationURL == cachedFileURL(for: reference).standardizedFileURL else {
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "The downloaded copy could not be staged safely for replacement."
+            )
+        }
+
+        beginStagedCacheMutation(for: reference)
+        let metadataURL = cachedMetadataURL(for: standardizedDestinationURL)
+        let hasResource = fileManager.fileExists(atPath: standardizedDestinationURL.path)
+        let hasMetadata = fileManager.fileExists(atPath: metadataURL.path)
+        guard hasResource || hasMetadata else {
+            return .createdNew
+        }
+
+        let backupStem = ".jamreader-cache-rollback-\(UUID().uuidString)"
+        let parentURL = standardizedDestinationURL.deletingLastPathComponent()
+        let resourceBackupURL = hasResource
+            ? parentURL.appendingPathComponent("\(backupStem)-resource", isDirectory: false)
+            : nil
+        let metadataBackupURL = hasMetadata
+            ? parentURL.appendingPathComponent("\(backupStem)-metadata", isDirectory: false)
+            : nil
+
+        do {
+            if let resourceBackupURL {
+                try fileManager.moveItem(
+                    at: standardizedDestinationURL,
+                    to: resourceBackupURL
+                )
+            }
+            if let metadataBackupURL {
+                try fileManager.moveItem(at: metadataURL, to: metadataBackupURL)
+            }
+        } catch {
+            let stagingError = error
+            defer {
+                endStagedCacheMutation(for: reference)
+            }
+            if let resourceBackupURL,
+               fileManager.fileExists(atPath: resourceBackupURL.path),
+               !fileManager.fileExists(atPath: standardizedDestinationURL.path) {
+                do {
+                    try fileManager.moveItem(
+                        at: resourceBackupURL,
+                        to: standardizedDestinationURL
+                    )
+                } catch {
+                    throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                        "The previous downloaded copy could not be restored after replacement staging failed. \(error.userFacingMessage)"
+                    )
+                }
+            }
+            throw stagingError
+        }
+
+        return .replacedExisting(
+            RemoteComicCacheReplacementBackup(
+                resourceURL: resourceBackupURL,
+                metadataURL: metadataBackupURL
+            )
+        )
+    }
+
+    private func beginStagedCacheMutation(
+        for reference: RemoteComicFileReference
+    ) {
+        stagedCacheMutationLock.lock()
+        stagedCacheMutationCountsByReferenceID[reference.id, default: 0] += 1
+        stagedCacheMutationLock.unlock()
+    }
+
+    private func endStagedCacheMutation(
+        for reference: RemoteComicFileReference
+    ) {
+        stagedCacheMutationLock.lock()
+        let remainingCount = (stagedCacheMutationCountsByReferenceID[reference.id] ?? 1) - 1
+        if remainingCount > 0 {
+            stagedCacheMutationCountsByReferenceID[reference.id] = remainingCount
+        } else {
+            stagedCacheMutationCountsByReferenceID.removeValue(forKey: reference.id)
+        }
+        stagedCacheMutationLock.unlock()
+    }
+
+    private func hasStagedCacheMutation(
+        for reference: RemoteComicFileReference
+    ) -> Bool {
+        stagedCacheMutationLock.lock()
+        defer { stagedCacheMutationLock.unlock() }
+        return (stagedCacheMutationCountsByReferenceID[reference.id] ?? 0) > 0
+    }
+
+    private func installDownloadedCacheResource(
+        from stagedURL: URL,
+        to destinationURL: URL,
+        reference: RemoteComicFileReference,
+        stageCacheReplacementForRollback: Bool
+    ) throws -> RemoteComicCacheMutation {
+        if stageCacheReplacementForRollback,
+           fileManager.fileExists(atPath: destinationURL.path),
+           hasActiveReaderLease(for: reference) {
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "Close the active reader before updating its downloaded copy."
+            )
+        }
+
+        let mutation: RemoteComicCacheMutation
+        if stageCacheReplacementForRollback {
+            mutation = try stageCachedComicReplacementForRollback(
+                at: destinationURL,
+                for: reference
+            )
+        } else {
+            mutation = .none
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                try fileManager.removeItem(at: destinationURL)
+            }
+        }
+
+        do {
+            try fileManager.moveItem(at: stagedURL, to: destinationURL)
+            return mutation
+        } catch {
+            let installationError = error
+            defer {
+                if stageCacheReplacementForRollback {
+                    endStagedCacheMutation(for: reference)
+                }
+            }
+            if mutation.requiresFinalization {
+                do {
+                    try restoreCachedComicMutation(
+                        mutation,
+                        destinationURL: destinationURL
+                    )
+                } catch {
+                    throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                        "The previous downloaded copy could not be restored after the update failed. \(error.userFacingMessage)"
+                    )
+                }
+            }
+            throw installationError
+        }
+    }
+
+    private func restoreCachedComicMutation(
+        _ mutation: RemoteComicCacheMutation,
+        destinationURL: URL
+    ) throws {
+        guard mutation.requiresFinalization else {
+            return
+        }
+
+        let standardizedDestinationURL = destinationURL.standardizedFileURL
+        let metadataURL = cachedMetadataURL(for: standardizedDestinationURL)
+        if fileManager.fileExists(atPath: standardizedDestinationURL.path) {
+            try fileManager.removeItem(at: standardizedDestinationURL)
+        }
+        if fileManager.fileExists(atPath: metadataURL.path) {
+            try fileManager.removeItem(at: metadataURL)
+        }
+
+        guard case .replacedExisting(let backup) = mutation else {
+            return
+        }
+
+        if let resourceBackupURL = backup.resourceURL,
+           fileManager.fileExists(atPath: resourceBackupURL.path) {
+            try fileManager.moveItem(
+                at: resourceBackupURL,
+                to: standardizedDestinationURL
+            )
+        }
+        if let metadataBackupURL = backup.metadataURL,
+           fileManager.fileExists(atPath: metadataBackupURL.path) {
+            try fileManager.moveItem(at: metadataBackupURL, to: metadataURL)
+        }
+    }
+
+    private func removeCacheReplacementBackup(
+        _ backup: RemoteComicCacheReplacementBackup
+    ) throws {
+        if let resourceBackupURL = backup.resourceURL,
+           fileManager.fileExists(atPath: resourceBackupURL.path) {
+            try fileManager.removeItem(at: resourceBackupURL)
+        }
+        if let metadataBackupURL = backup.metadataURL,
+           fileManager.fileExists(atPath: metadataBackupURL.path) {
+            try fileManager.removeItem(at: metadataBackupURL)
+        }
+    }
+
     private func downloadComicFileCore(
         for profile: RemoteServerProfile,
         reference: RemoteComicFileReference,
         forceRefresh: Bool,
         trimCacheAfterDownload: Bool,
+        stageCacheReplacementForRollback: Bool,
         progressHandler: @escaping @Sendable (Double) -> Void,
         downloader: (URL, UInt64) async throws -> Void
     ) async throws -> RemoteComicDownloadResult {
@@ -2089,6 +2462,7 @@ final class RemoteServerBrowsingService {
                 reference: reference,
                 forceRefresh: forceRefresh,
                 trimCacheAfterDownload: trimCacheAfterDownload,
+                stageCacheReplacementForRollback: stageCacheReplacementForRollback,
                 progressHandler: progressHandler
             )
         }
@@ -2110,33 +2484,60 @@ final class RemoteServerBrowsingService {
             at: temporaryDownloadURL,
             reference: reference
         )
+        var stagedCacheMutation = RemoteComicCacheMutation.none
 
         do {
             try await downloader(temporaryDownloadURL, resumeOffset)
             try Task.checkCancellation()
 
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            try fileManager.moveItem(at: temporaryDownloadURL, to: destinationURL)
+            stagedCacheMutation = try installDownloadedCacheResource(
+                from: temporaryDownloadURL,
+                to: destinationURL,
+                reference: reference,
+                stageCacheReplacementForRollback: stageCacheReplacementForRollback
+            )
             removePartialDownloadMetadataIfPossible(
                 at: temporaryDownloadURL,
                 reason: "downloadCompleted"
             )
-            storeCachedMetadataIfPossible(
-                for: reference,
-                at: destinationURL,
-                reason: "downloadCompleted"
-            )
+            if stageCacheReplacementForRollback {
+                try storeCachedMetadata(for: reference, at: destinationURL)
+            } else {
+                storeCachedMetadataIfPossible(
+                    for: reference,
+                    at: destinationURL,
+                    reason: "downloadCompleted"
+                )
+            }
             touchCachedFile(at: destinationURL)
-            if trimCacheAfterDownload {
+            if trimCacheAfterDownload && !stageCacheReplacementForRollback {
                 trimCacheIfNeededIfPossible(reason: "downloadCompleted")
             }
             invalidateCachedSummaries()
-            return RemoteComicDownloadResult(localFileURL: destinationURL, source: .downloaded)
+            return RemoteComicDownloadResult(
+                localFileURL: destinationURL,
+                source: .downloaded,
+                cacheMutation: stagedCacheMutation
+            )
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            if stagedCacheMutation.requiresFinalization {
+                defer {
+                    endStagedCacheMutation(for: reference)
+                }
+                do {
+                    try restoreCachedComicMutation(
+                        stagedCacheMutation,
+                        destinationURL: destinationURL
+                    )
+                    stagedCacheMutation = .none
+                } catch {
+                    throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                        "The previous downloaded copy could not be restored after the update failed. \(error.userFacingMessage)"
+                    )
+                }
+            }
             if let browsingError = error as? RemoteServerBrowsingError,
                case .cacheMaintenanceFailed = browsingError {
                 throw browsingError
@@ -2162,6 +2563,7 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         forceRefresh: Bool,
         trimCacheAfterDownload: Bool,
+        stageCacheReplacementForRollback: Bool,
         progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> RemoteComicDownloadResult {
         let destinationURL = cachedFileURL(for: reference)
@@ -2172,6 +2574,7 @@ final class RemoteServerBrowsingService {
         }
 
         let temporaryDirectoryURL = temporaryDownloadURL(for: destinationURL)
+        var stagedCacheMutation = RemoteComicCacheMutation.none
 
         do {
             if fileManager.fileExists(atPath: temporaryDirectoryURL.path) {
@@ -2211,32 +2614,67 @@ final class RemoteServerBrowsingService {
                 progressHandler(Double(completedUnits) / Double(totalUnits))
             }
 
-            if fileManager.fileExists(atPath: destinationURL.path) {
-                try fileManager.removeItem(at: destinationURL)
-            }
-            try fileManager.moveItem(at: temporaryDirectoryURL, to: destinationURL)
+            try Task.checkCancellation()
+            stagedCacheMutation = try installDownloadedCacheResource(
+                from: temporaryDirectoryURL,
+                to: destinationURL,
+                reference: reference,
+                stageCacheReplacementForRollback: stageCacheReplacementForRollback
+            )
 
             let cachedBytes = DiskUsageScanner.allocatedByteCount(
                 at: destinationURL,
                 fileManager: fileManager
             )
-            storeCachedMetadataIfPossible(
-                for: reference,
-                at: destinationURL,
-                cachedByteCount: cachedBytes,
-                reason: "imageDirectoryDownloadCompleted"
-            )
+            if stageCacheReplacementForRollback {
+                try storeCachedMetadata(
+                    for: reference,
+                    at: destinationURL,
+                    cachedByteCount: cachedBytes
+                )
+            } else {
+                storeCachedMetadataIfPossible(
+                    for: reference,
+                    at: destinationURL,
+                    cachedByteCount: cachedBytes,
+                    reason: "imageDirectoryDownloadCompleted"
+                )
+            }
             touchCachedFile(at: destinationURL)
-            if trimCacheAfterDownload {
+            if trimCacheAfterDownload && !stageCacheReplacementForRollback {
                 trimCacheIfNeededIfPossible(reason: "imageDirectoryDownloadCompleted")
             }
             invalidateCachedSummaries()
             progressHandler(1.0)
 
-            return RemoteComicDownloadResult(localFileURL: destinationURL, source: .downloaded)
+            return RemoteComicDownloadResult(
+                localFileURL: destinationURL,
+                source: .downloaded,
+                cacheMutation: stagedCacheMutation
+            )
         } catch is CancellationError {
+            resetPartialDownloadArtifactsIfPossible(
+                at: temporaryDirectoryURL,
+                reason: "imageDirectoryDownloadCancelled"
+            )
             throw CancellationError()
         } catch {
+            if stagedCacheMutation.requiresFinalization {
+                defer {
+                    endStagedCacheMutation(for: reference)
+                }
+                do {
+                    try restoreCachedComicMutation(
+                        stagedCacheMutation,
+                        destinationURL: destinationURL
+                    )
+                    stagedCacheMutation = .none
+                } catch {
+                    throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                        "The previous downloaded copy could not be restored after the update failed. \(error.userFacingMessage)"
+                    )
+                }
+            }
             if fileManager.fileExists(atPath: temporaryDirectoryURL.path) {
                 do {
                     try fileManager.removeItem(at: temporaryDirectoryURL)
@@ -3007,6 +3445,73 @@ final class RemoteServerBrowsingService {
         }
 
         return resources
+    }
+
+    private func recoverableReference(
+        for resourceURL: URL,
+        under cacheRootURL: URL,
+        profile: RemoteServerProfile
+    ) -> RemoteComicFileReference? {
+        let metadata = loadCachedMetadata(at: resourceURL)
+        let recoveredPath = metadata?.path.flatMap { path -> String? in
+            let normalizedPath = normalizeDisplayPath(path)
+            return normalizedPath.isEmpty ? nil : normalizedPath
+        } ?? relativeRemotePath(for: resourceURL, under: cacheRootURL)
+        guard let recoveredPath, !recoveredPath.isEmpty else {
+            return nil
+        }
+
+        let contentKind: RemoteComicReferenceKind
+        if let metadata {
+            contentKind = metadata.contentKind
+        } else if (try? resourceURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            contentKind = .imageDirectory
+        } else {
+            contentKind = .file
+        }
+
+        let fileName = URL(fileURLWithPath: recoveredPath).lastPathComponent
+        guard !fileName.isEmpty else {
+            return nil
+        }
+
+        let resourceFileSize: Int64?
+        if contentKind == .file {
+            resourceFileSize = (try? resourceURL.resourceValues(forKeys: [.fileSizeKey]).fileSize)
+                .map(Int64.init)
+        } else {
+            resourceFileSize = nil
+        }
+
+        return RemoteComicFileReference(
+            serverID: profile.id,
+            providerKind: profile.providerKind,
+            shareName: profile.normalizedProviderRootIdentifier,
+            cacheScopeKey: profile.remoteCacheScopeKey,
+            path: recoveredPath,
+            fileName: fileName,
+            fileSize: metadata?.fileSize ?? resourceFileSize,
+            modifiedAt: metadata?.modifiedAt,
+            contentKind: contentKind,
+            pageCountHint: nil,
+            coverPath: nil
+        )
+    }
+
+    private func relativeRemotePath(
+        for resourceURL: URL,
+        under cacheRootURL: URL
+    ) -> String? {
+        let rootPath = cacheRootURL.standardizedFileURL.path
+        let resourcePath = resourceURL.standardizedFileURL.path
+        let rootedPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        guard resourcePath.hasPrefix(rootedPrefix) else {
+            return nil
+        }
+
+        let relativePath = String(resourcePath.dropFirst(rootedPrefix.count))
+        let normalizedPath = normalizeDisplayPath(relativePath)
+        return normalizedPath.isEmpty ? nil : normalizedPath
     }
 
     private func isUntrackedCachedImageComicDirectory(_ directoryURL: URL) -> Bool {

@@ -9,12 +9,43 @@ struct RemoteComicDownloadResult: Hashable {
 
     let localFileURL: URL
     let source: Source
+    let cacheMutation: RemoteComicCacheMutation
+
+    init(
+        localFileURL: URL,
+        source: Source,
+        cacheMutation: RemoteComicCacheMutation = .none
+    ) {
+        self.localFileURL = localFileURL
+        self.source = source
+        self.cacheMutation = cacheMutation
+    }
+}
+
+enum RemoteComicCacheMutation: Hashable {
+    case none
+    case createdNew
+    case replacedExisting(RemoteComicCacheReplacementBackup)
+
+    var requiresFinalization: Bool {
+        self != .none
+    }
+}
+
+struct RemoteComicCacheReplacementBackup: Hashable {
+    let resourceURL: URL?
+    let metadataURL: URL?
 }
 
 struct RemoteComicBatchDownloadOutcome {
     let reference: RemoteComicFileReference
     let result: RemoteComicDownloadResult?
     let error: Error?
+}
+
+struct RemoteCachedComicRecoveryCandidate: Hashable {
+    let reference: RemoteComicFileReference
+    let cachedAt: Date
 }
 
 struct RemoteComicCacheSummary: Hashable {

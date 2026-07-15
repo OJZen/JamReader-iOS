@@ -32,6 +32,46 @@ enum RemoteBrowserGridLayoutFactory {
     }
 }
 
+enum RemoteBrowserGridAccessibility {
+    static func value(for row: RemoteBrowserListRowModel) -> String {
+        if row.item.isDirectory {
+            let dateText = row.item.modifiedAt?.formatted(date: .abbreviated, time: .omitted)
+            return [String(localized: "Folder"), dateText]
+                .compactMap { $0 }
+                .joined(separator: ", ")
+        }
+
+        var parts: [String] = []
+        if let readingSession = row.readingSession {
+            parts.append(readingSession.progressText)
+        }
+        if let badgeTitle = row.cacheAvailability.badgeTitle {
+            parts.append(badgeTitle)
+        }
+        if row.readingSession == nil, row.item.isComicDirectory {
+            if let pageCountHint = row.item.pageCountHint {
+                parts.append(String(localized: "\(pageCountHint) pages"))
+            } else {
+                parts.append(String(localized: "Image folder comic"))
+            }
+        } else if row.readingSession == nil, let fileSize = row.item.fileSize {
+            parts.append(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))
+        } else if row.readingSession == nil {
+            parts.append(String(localized: "Comic file"))
+        }
+        if let modifiedAt = row.item.modifiedAt {
+            parts.append(modifiedAt.formatted(date: .abbreviated, time: .omitted))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    static func hint(for item: RemoteDirectoryItem) -> String {
+        item.isDirectory
+            ? String(localized: "Opens folder")
+            : String(localized: "Opens comic")
+    }
+}
+
 struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
     let sections: [RemoteBrowserListSectionModel]
     let profile: RemoteServerProfile
@@ -230,8 +270,12 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                     profile: profile,
                     browsingService: browsingService,
                     itemWidth: itemWidth(for: collectionView),
-                    allowsRemoteFetch: allowsRemoteThumbnailFetch
+                    allowsRemoteFetch: allowsRemoteThumbnailFetch,
+                    onActivate: { [weak self, weak cell] in
+                        self?.onOpenItem(row.item, cell?.heroSourceFrame() ?? .zero)
+                    }
                 )
+                cell.accessibilityCustomActions = accessibilityCustomActions(for: row)
                 return cell
             case .listGrid:
                 guard let cell = collectionView.dequeueReusableCell(
@@ -245,8 +289,12 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                     row: row,
                     profile: profile,
                     browsingService: browsingService,
-                    allowsRemoteFetch: allowsRemoteThumbnailFetch
+                    allowsRemoteFetch: allowsRemoteThumbnailFetch,
+                    onActivate: { [weak self, weak cell] in
+                        self?.onOpenItem(row.item, cell?.heroSourceFrame() ?? .zero)
+                    }
                 )
+                cell.accessibilityCustomActions = accessibilityCustomActions(for: row)
                 return cell
             }
         }
@@ -730,19 +778,82 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             return actions
         }
 
+        private func accessibilityCustomActions(
+            for row: RemoteBrowserListRowModel
+        ) -> [UIAccessibilityCustomAction] {
+            var actions: [UIAccessibilityCustomAction] = []
+
+            if row.item.canOpenAsComic {
+                actions.append(
+                    UIAccessibilityCustomAction(name: String(localized: "Info")) { [weak self] _ in
+                        self?.onShowInfo(row.item)
+                        return self != nil
+                    }
+                )
+                actions.append(
+                    UIAccessibilityCustomAction(name: String(localized: "Import")) { [weak self] _ in
+                        self?.onImport(row.item)
+                        return self != nil
+                    }
+                )
+
+                if row.cacheAvailability.hasLocalCopy {
+                    actions.append(
+                        UIAccessibilityCustomAction(name: String(localized: "Open Offline")) { [weak self] _ in
+                            self?.onOpenOffline(row.item)
+                            return self != nil
+                        }
+                    )
+                }
+
+                let saveActionName = row.cacheAvailability.kind == .unavailable
+                    ? String(localized: "Save Offline")
+                    : String(localized: "Refresh Offline Copy")
+                actions.append(
+                    UIAccessibilityCustomAction(name: saveActionName) { [weak self] _ in
+                        self?.onSaveOffline(row.item)
+                        return self != nil
+                    }
+                )
+
+                if row.cacheAvailability.hasLocalCopy {
+                    actions.append(
+                        UIAccessibilityCustomAction(name: String(localized: "Remove Download")) { [weak self] _ in
+                            self?.onRemoveOffline(row.item)
+                            return self != nil
+                        }
+                    )
+                }
+            } else if row.item.isDirectory {
+                actions.append(
+                    UIAccessibilityCustomAction(name: String(localized: "Import")) { [weak self] _ in
+                        self?.onImport(row.item)
+                        return self != nil
+                    }
+                )
+            }
+
+            return actions
+        }
+
         fileprivate func configureVisibleCell(_ cell: RemoteBrowserGridCell, at indexPath: IndexPath, collectionView: UICollectionView) {
             guard indexPath.section < sections.count,
                   indexPath.item < sections[indexPath.section].items.count else {
                 return
             }
+            let row = sections[indexPath.section].items[indexPath.item]
 
             cell.configure(
-                row: sections[indexPath.section].items[indexPath.item],
+                row: row,
                 profile: profile,
                 browsingService: browsingService,
                 itemWidth: itemWidth(for: collectionView),
-                allowsRemoteFetch: allowsRemoteThumbnailFetch
+                allowsRemoteFetch: allowsRemoteThumbnailFetch,
+                onActivate: { [weak self, weak cell] in
+                    self?.onOpenItem(row.item, cell?.heroSourceFrame() ?? .zero)
+                }
             )
+            cell.accessibilityCustomActions = accessibilityCustomActions(for: row)
         }
 
         fileprivate func configureVisibleCell(
@@ -753,13 +864,18 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                   indexPath.item < sections[indexPath.section].items.count else {
                 return
             }
+            let row = sections[indexPath.section].items[indexPath.item]
 
             cell.configure(
-                row: sections[indexPath.section].items[indexPath.item],
+                row: row,
                 profile: profile,
                 browsingService: browsingService,
-                allowsRemoteFetch: allowsRemoteThumbnailFetch
+                allowsRemoteFetch: allowsRemoteThumbnailFetch,
+                onActivate: { [weak self, weak cell] in
+                    self?.onOpenItem(row.item, cell?.heroSourceFrame() ?? .zero)
+                }
             )
+            cell.accessibilityCustomActions = accessibilityCustomActions(for: row)
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
@@ -1006,6 +1122,7 @@ private final class RemoteBrowserListGridCell: UICollectionViewCell {
     static let reuseIdentifier = "RemoteBrowserListGridCell"
 
     private let cardView = RemoteBrowserListItemCardView()
+    private var onAccessibilityActivate: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1019,13 +1136,21 @@ private final class RemoteBrowserListGridCell: UICollectionViewCell {
     override func prepareForReuse() {
         super.prepareForReuse()
         cardView.prepareForReuseCard()
+        onAccessibilityActivate = nil
+        isAccessibilityElement = false
+        accessibilityLabel = nil
+        accessibilityValue = nil
+        accessibilityHint = nil
+        accessibilityTraits = []
+        accessibilityCustomActions = nil
     }
 
     func configure(
         row: RemoteBrowserListRowModel,
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
-        allowsRemoteFetch: Bool
+        allowsRemoteFetch: Bool,
+        onActivate: @escaping () -> Void
     ) {
         cardView.configure(
             row: row,
@@ -1034,10 +1159,27 @@ private final class RemoteBrowserListGridCell: UICollectionViewCell {
             allowsRemoteFetch: allowsRemoteFetch,
             usesEmbeddedTapHandler: false
         ) { _ in }
+        cardView.accessibilityElementsHidden = true
+        contentView.accessibilityElementsHidden = true
+        isAccessibilityElement = true
+        accessibilityLabel = row.item.name
+        accessibilityValue = RemoteBrowserGridAccessibility.value(for: row)
+        accessibilityHint = RemoteBrowserGridAccessibility.hint(for: row.item)
+        accessibilityTraits = [.button]
+        onAccessibilityActivate = onActivate
     }
 
     func heroSourceFrame() -> CGRect {
         cardView.heroSourceFrame()
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard let onAccessibilityActivate else {
+            return false
+        }
+
+        onAccessibilityActivate()
+        return true
     }
 
     private func buildUI() {
@@ -1082,6 +1224,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     private var thumbnailTask: Task<Void, Never>?
     private var representedItemID: String?
     private var registeredHeroSourceID: String?
+    private var onAccessibilityActivate: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -1097,6 +1240,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         thumbnailTask?.cancel()
         thumbnailTask = nil
         unregisterHeroSourceIfNeeded()
+        onAccessibilityActivate = nil
         representedItemID = nil
         thumbnailImageView.image = nil
         thumbnailImageView.isHidden = true
@@ -1106,6 +1250,12 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         progressTrackView.isHidden = true
         progressWidthConstraint?.constant = 0
         progressFraction = 0
+        isAccessibilityElement = false
+        accessibilityLabel = nil
+        accessibilityValue = nil
+        accessibilityHint = nil
+        accessibilityTraits = []
+        accessibilityCustomActions = nil
     }
 
     func configure(
@@ -1113,13 +1263,21 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
         itemWidth: CGFloat,
-        allowsRemoteFetch: Bool
+        allowsRemoteFetch: Bool,
+        onActivate: @escaping () -> Void
     ) {
         representedItemID = row.item.id
         configureTitleText(for: row.item)
         metadataLabel.text = metadataText(for: row)
         updateHeroSourceRegistration(for: row.item)
         imageHeightConstraint?.constant = itemWidth / AppLayout.coverAspectRatio
+        contentView.accessibilityElementsHidden = true
+        isAccessibilityElement = true
+        accessibilityLabel = row.item.name
+        accessibilityValue = RemoteBrowserGridAccessibility.value(for: row)
+        accessibilityHint = RemoteBrowserGridAccessibility.hint(for: row.item)
+        accessibilityTraits = [.button]
+        onAccessibilityActivate = onActivate
 
         if row.item.isDirectory, !row.item.previewItems.isEmpty {
             configureDirectoryPreview(
@@ -1590,6 +1748,15 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         if !progressTrackView.isHidden, let constraint = progressWidthConstraint {
             constraint.constant = bounds.width * progressFraction
         }
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard let onAccessibilityActivate else {
+            return false
+        }
+
+        onAccessibilityActivate()
+        return true
     }
 
     private func metadataText(for row: RemoteBrowserListRowModel) -> String {

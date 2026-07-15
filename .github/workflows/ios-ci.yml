@@ -1,0 +1,120 @@
+name: iOS CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Ensure ripgrep is available
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            brew install ripgrep
+          fi
+
+      - name: Report Xcode toolchain
+        run: xcodebuild -version
+
+      - name: Run project static guards
+        run: ./scripts/check_project_static_guards.sh
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild build \
+            -project JamReader.xcodeproj \
+            -scheme JamReader \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/JamReaderDerivedData" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Select an available iPhone Simulator
+        id: simulator
+        run: |
+          simulator_udid="$(
+            xcrun simctl list devices available -j | python3 -c '
+          import json
+          import sys
+
+          devices_by_runtime = json.load(sys.stdin)["devices"]
+          ios_runtimes = sorted(
+              (
+                  (tuple(int(part) for part in runtime.rsplit(".iOS-", 1)[1].split("-")), devices)
+                  for runtime, devices in devices_by_runtime.items()
+                  if ".iOS-" in runtime
+              ),
+              reverse=True,
+          )
+          for _, devices in ios_runtimes:
+              for device in devices:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      print(device["udid"])
+                      raise SystemExit(0)
+
+          raise SystemExit("No available iPhone Simulator found")
+          '
+          )"
+
+          echo "udid=$simulator_udid" >> "$GITHUB_OUTPUT"
+          echo "Selected simulator: $simulator_udid"
+
+      - name: Boot selected Simulator
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          simulator_state="$(
+            xcrun simctl list devices -j | SIMULATOR_UDID="$SIMULATOR_UDID" python3 -c '
+          import json
+          import os
+          import sys
+
+          expected_udid = os.environ["SIMULATOR_UDID"]
+          for devices in json.load(sys.stdin)["devices"].values():
+              for device in devices:
+                  if device.get("udid") == expected_udid:
+                      print(device.get("state", "Unknown"))
+                      raise SystemExit(0)
+
+          raise SystemExit(f"Simulator {expected_udid} was not found")
+          '
+          )"
+
+          if [[ "$simulator_state" != "Booted" ]]; then
+            xcrun simctl boot "$SIMULATOR_UDID"
+          fi
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
+      - name: Run JamReaderTests
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          xcodebuild test \
+            -project JamReader.xcodeproj \
+            -scheme JamReader \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/JamReaderDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/JamReaderTests.xcresult" \
+            -only-testing:JamReaderTests \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JamReaderTests-xcresult
+          path: ${{ runner.temp }}/JamReaderTests.xcresult
+          if-no-files-found: ignore

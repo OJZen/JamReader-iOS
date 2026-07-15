@@ -12,6 +12,20 @@ final class LibraryScannerDatabaseTests: XCTestCase {
         super.tearDown()
     }
 
+    func testScannerPreservesCancellationError() throws {
+        let harness = try makeHarness()
+
+        XCTAssertThrowsError(
+            try harness.makeScanner().scanLibrary(
+                sourceRootURL: harness.sourceRootURL,
+                databaseURL: harness.databaseURL,
+                cancellationCheck: { throw CancellationError() }
+            )
+        ) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+    }
+
     func testFullScanIndexesSupportedFilesAndDirectoryComicsAcrossServiceRecreation() throws {
         let harness = try makeHarness()
         try harness.writeFile("Standalone.cbz", bytes: [1, 2, 3])

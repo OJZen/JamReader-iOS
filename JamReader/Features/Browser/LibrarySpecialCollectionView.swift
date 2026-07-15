@@ -75,7 +75,8 @@ struct LibrarySpecialCollectionView: View {
                 databaseWriter: dependencies.libraryDatabaseWriter,
                 storageManager: dependencies.libraryStorageManager,
                 coverLocator: dependencies.libraryCoverLocator,
-                comicRemovalService: dependencies.libraryComicRemovalService
+                comicRemovalService: dependencies.libraryComicRemovalService,
+                remoteBackgroundImportController: dependencies.remoteBackgroundImportController
             )
         )
     }

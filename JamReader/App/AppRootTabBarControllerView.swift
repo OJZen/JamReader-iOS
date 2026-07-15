@@ -33,6 +33,8 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
             credentialStore: dependencies.remoteServerCredentialStore,
             browsingService: dependencies.remoteServerBrowsingService,
             readingProgressStore: dependencies.remoteReadingProgressStore,
+            remoteOfflineCopyStore: dependencies.remoteOfflineCopyStore,
+            remoteOfflineLibrarySnapshotStore: dependencies.remoteOfflineLibrarySnapshotStore,
             remoteBackgroundImportController: dependencies.remoteBackgroundImportController
         )
 

@@ -27,6 +27,7 @@ struct AppDependencies {
     let comicInfoImportService: ComicInfoImportService
     let remoteServerBrowsingService: RemoteServerBrowsingService
     let remoteReadingProgressStore: RemoteReadingProgressStore
+    let remoteOfflineCopyStore: RemoteOfflineCopyStore
     let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     let remoteBackgroundImportController: RemoteBackgroundImportController
     let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
@@ -58,6 +59,7 @@ struct AppDependencies {
         let remoteServerCredentialStore = RemoteServerCredentialStore()
         let remoteCachePolicyStore = RemoteCachePolicyStore()
         let remoteReadingProgressStore = RemoteReadingProgressStore()
+        let remoteOfflineCopyStore = RemoteOfflineCopyStore()
         let remoteServerProfileStore = RemoteServerProfileStore()
         let remoteFolderShortcutStore = RemoteFolderShortcutStore()
         let remoteBackgroundImportController = RemoteBackgroundImportController()
@@ -120,9 +122,11 @@ struct AppDependencies {
             ),
             remoteServerBrowsingService: remoteServerBrowsingService,
             remoteReadingProgressStore: remoteReadingProgressStore,
+            remoteOfflineCopyStore: remoteOfflineCopyStore,
             remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore(
                 remoteServerProfileStore: remoteServerProfileStore,
                 remoteReadingProgressStore: remoteReadingProgressStore,
+                remoteOfflineCopyStore: remoteOfflineCopyStore,
                 remoteServerBrowsingService: remoteServerBrowsingService
             ),
             remoteBackgroundImportController: remoteBackgroundImportController,

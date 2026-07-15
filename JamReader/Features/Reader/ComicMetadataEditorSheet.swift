@@ -6,6 +6,7 @@ struct ComicMetadataEditorSheet: View {
     private let onSave: (LibraryComic) -> Void
 
     @StateObject private var viewModel: ComicMetadataEditorSheetViewModel
+    @State private var isShowingDiscardConfirmation = false
 
     init(
         descriptor: LibraryDescriptor,
@@ -100,8 +101,9 @@ struct ComicMetadataEditorSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        dismiss()
+                        requestDismissal()
                     }
+                    .disabled(viewModel.isSaving || viewModel.isImportingComicInfo)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -136,7 +138,9 @@ struct ComicMetadataEditorSheet: View {
         }
         .adaptiveSheetWidth(760)
         .presentationDetents([.large])
-        .interactiveDismissDisabled(viewModel.isSaving || viewModel.isImportingComicInfo)
+        .interactiveDismissDisabled(
+            viewModel.hasChanges || viewModel.isSaving || viewModel.isImportingComicInfo
+        )
         .task {
             viewModel.loadIfNeeded()
         }
@@ -146,6 +150,19 @@ struct ComicMetadataEditorSheet: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .confirmationDialog(
+            "Discard Changes?",
+            isPresented: $isShowingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Your metadata changes have not been saved.")
         }
     }
 
@@ -160,6 +177,18 @@ struct ComicMetadataEditorSheet: View {
                 viewModel.metadata[keyPath: keyPath] = newValue
             }
         )
+    }
+
+    private func requestDismissal() {
+        guard !viewModel.isSaving, !viewModel.isImportingComicInfo else {
+            return
+        }
+
+        if viewModel.hasChanges {
+            isShowingDiscardConfirmation = true
+        } else {
+            dismiss()
+        }
     }
 }
 

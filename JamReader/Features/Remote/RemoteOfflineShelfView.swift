@@ -102,34 +102,82 @@ private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
     }
 }
 
+enum RemoteOfflineShelfLoadState: Equatable {
+    case idle
+    case loading
+    case loaded
+    case refreshing
+    case failed(message: String)
+}
+
 @MainActor
 final class RemoteOfflineShelfViewModel: ObservableObject {
     @Published private(set) var entries: [RemoteOfflineComicEntry] = []
     @Published private(set) var cacheSummary: RemoteComicCacheSummary = .empty
-    @Published private(set) var isLoading = false
+    @Published private(set) var loadState: RemoteOfflineShelfLoadState = .idle
     @Published var feedback: RemoteBrowserFeedbackState?
     @Published var alert: BrowseHomeAlert?
 
     private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private let remoteServerBrowsingService: RemoteServerBrowsingService
     private let remoteReadingProgressStore: RemoteReadingProgressStore
+    private let remoteOfflineCopyStore: RemoteOfflineCopyStore
     private let remoteBackgroundImportController: RemoteBackgroundImportController
-    private var hasLoaded = false
+    private var hasAttemptedInitialLoad = false
     private let logger = AppLog.remoteCache
 
     init(dependencies: AppDependencies) {
         self.remoteOfflineLibrarySnapshotStore = dependencies.remoteOfflineLibrarySnapshotStore
         self.remoteServerBrowsingService = dependencies.remoteServerBrowsingService
         self.remoteReadingProgressStore = dependencies.remoteReadingProgressStore
+        self.remoteOfflineCopyStore = dependencies.remoteOfflineCopyStore
         self.remoteBackgroundImportController = dependencies.remoteBackgroundImportController
     }
 
+    init(
+        remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore,
+        remoteServerBrowsingService: RemoteServerBrowsingService,
+        remoteReadingProgressStore: RemoteReadingProgressStore,
+        remoteOfflineCopyStore: RemoteOfflineCopyStore,
+        remoteBackgroundImportController: RemoteBackgroundImportController
+    ) {
+        self.remoteOfflineLibrarySnapshotStore = remoteOfflineLibrarySnapshotStore
+        self.remoteServerBrowsingService = remoteServerBrowsingService
+        self.remoteReadingProgressStore = remoteReadingProgressStore
+        self.remoteOfflineCopyStore = remoteOfflineCopyStore
+        self.remoteBackgroundImportController = remoteBackgroundImportController
+    }
+
+    var isLoading: Bool {
+        switch loadState {
+        case .loading, .refreshing:
+            return true
+        case .idle, .loaded, .failed:
+            return false
+        }
+    }
+
+    var isInitialLoading: Bool {
+        entries.isEmpty && (
+            loadState == .idle
+                || loadState == .loading
+                || loadState == .refreshing
+        )
+    }
+
+    var loadFailureMessage: String? {
+        guard case .failed(let message) = loadState else {
+            return nil
+        }
+        return message
+    }
+
     func loadIfNeeded() async {
-        guard !hasLoaded else {
+        guard !hasAttemptedInitialLoad else {
             return
         }
 
-        hasLoaded = true
+        hasAttemptedInitialLoad = true
         await load()
     }
 
@@ -138,14 +186,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             return
         }
 
-        isLoading = true
-        defer {
-            isLoading = false
-        }
+        loadState = entries.isEmpty ? .loading : .refreshing
+        hasAttemptedInitialLoad = true
 
         logger.info("Remote offline shelf load requested forceRefresh=\(forceRefresh)")
         do {
             try rebuildEntries(forceRefresh: forceRefresh)
+            loadState = .loaded
             logger.info(
                 "Remote offline shelf load completed entries=\(self.entries.count) cacheFiles=\(self.cacheSummary.fileCount) cacheBytes=\(self.cacheSummary.totalBytes)"
             )
@@ -154,8 +201,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             logger.error(
                 "Remote offline shelf load failed forceRefresh=\(forceRefresh) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            entries = []
-            cacheSummary = .empty
+            loadState = .failed(message: error.userFacingMessage)
             alert = BrowseHomeAlert(
                 title: "Offline Shelf Unavailable",
                 message: error.userFacingMessage
@@ -178,10 +224,40 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
         )
 
         await activeOperation {
+            let reference = entry.session.resolvedComicFileReference(for: entry.profile)
             let result = try await remoteServerBrowsingService.downloadComicFile(
                 for: entry.profile,
-                reference: entry.session.resolvedComicFileReference(for: entry.profile),
-                forceRefresh: true
+                reference: reference,
+                forceRefresh: true,
+                trimCacheAfterDownload: false,
+                stageCacheReplacementForRollback: true
+            )
+            let persistenceCandidate = RemoteOfflineCopyPersistenceCandidate(
+                reference: reference,
+                result: result
+            )
+            try RemoteOfflineCopyPersistenceCoordinator.persist(
+                candidates: [persistenceCandidate],
+                persistRecords: {
+                    try remoteOfflineCopyStore.recordDownloadedCopy(for: reference)
+                },
+                commitDownloadedCache: { candidate in
+                    try remoteServerBrowsingService.commitDownloadedComicCache(
+                        for: candidate.reference,
+                        result: candidate.result
+                    )
+                },
+                rollbackDownloadedCache: { candidate in
+                    try remoteServerBrowsingService.rollbackDownloadedComicCache(
+                        for: candidate.reference,
+                        result: candidate.result
+                    )
+                },
+                rollbackFailureHandler: { [logger = self.logger] reference, error in
+                    logger.warning(
+                        "Remote offline refresh rollback failed serverID=\(reference.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
             )
             try rebuildEntries(forceRefresh: true)
             logger.info(
@@ -211,10 +287,11 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             "Remote offline copy remove requested serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public)"
         )
 
+        remoteOfflineLibrarySnapshotStore.invalidate()
         do {
-            try remoteServerBrowsingService.clearCachedComic(
-                for: entry.session.resolvedComicFileReference(for: entry.profile)
-            )
+            let reference = entry.session.resolvedComicFileReference(for: entry.profile)
+            try remoteServerBrowsingService.clearCachedComic(for: reference)
+            try remoteOfflineCopyStore.removeCopy(for: reference)
             try rebuildEntries(forceRefresh: true)
             logger.info(
                 "Remote offline copy remove completed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) remaining=\(self.entries.count)"
@@ -229,6 +306,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             logger.error(
                 "Remote offline copy remove failed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
+            do {
+                try rebuildEntries(forceRefresh: true)
+            } catch {
+                logger.warning(
+                    "Remote offline shelf rebuild after remove failure failed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             alert = BrowseHomeAlert(
                 title: "Remove Downloaded Copy Failed",
                 message: error.userFacingMessage
@@ -249,8 +333,10 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             "Remote offline copies clear requested serverID=\(profile.id.uuidString, privacy: .public) count=\(removedCount)"
         )
 
+        remoteOfflineLibrarySnapshotStore.invalidate()
         do {
             try remoteServerBrowsingService.clearCachedComics(for: profile)
+            try remoteOfflineCopyStore.removeCopies(for: profile)
             try remoteReadingProgressStore.deleteSessions(for: profile)
             RemoteServerBrowserViewModel.clearRememberedPath(for: profile)
             try rebuildEntries(forceRefresh: true)
@@ -268,6 +354,13 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             logger.error(
                 "Remote offline copies clear failed serverID=\(profile.id.uuidString, privacy: .public) requestedCount=\(removedCount) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
+            do {
+                try rebuildEntries(forceRefresh: true)
+            } catch {
+                logger.warning(
+                    "Remote offline shelf rebuild after clear failure failed serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
             alert = BrowseHomeAlert(
                 title: "Clear Downloaded Copies Failed",
                 message: error.userFacingMessage
@@ -519,7 +612,12 @@ struct RemoteOfflineShelfView: View {
         if adaptiveListColumnCount > 1 {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 24) {
-                    if scopedEntries.isEmpty, !viewModel.isLoading {
+                    if viewModel.isInitialLoading {
+                        loadingCard
+                    } else if scopedEntries.isEmpty,
+                              let failureMessage = viewModel.loadFailureMessage {
+                        loadFailureCard(message: failureMessage)
+                    } else if scopedEntries.isEmpty {
                         emptyCard(
                             systemImage: "arrow.down.circle",
                             title: "No Downloads",
@@ -527,7 +625,7 @@ struct RemoteOfflineShelfView: View {
                                 ? "Save comics for offline reading."
                                 : "Save comics from this server."
                         )
-                    } else if displayedEntries.isEmpty, !viewModel.isLoading {
+                    } else if displayedEntries.isEmpty {
                         emptyCard(
                             systemImage: "magnifyingglass",
                             title: emptyResultsTitle,
@@ -556,7 +654,20 @@ struct RemoteOfflineShelfView: View {
             }
         } else {
             List {
-                if scopedEntries.isEmpty, !viewModel.isLoading {
+                if viewModel.isInitialLoading {
+                    Section {
+                        ProgressView("Loading Downloads")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 36)
+                            .accessibilityIdentifier("remoteOfflineShelf.loading")
+                    }
+                } else if scopedEntries.isEmpty,
+                          let failureMessage = viewModel.loadFailureMessage {
+                    Section {
+                        loadFailureContent(message: failureMessage)
+                            .padding(.vertical, 24)
+                    }
+                } else if scopedEntries.isEmpty {
                     Section {
                         EmptyStateView(
                             systemImage: "arrow.down.circle",
@@ -567,7 +678,7 @@ struct RemoteOfflineShelfView: View {
                         )
                         .padding(.vertical, 28)
                     }
-                } else if displayedEntries.isEmpty, !viewModel.isLoading {
+                } else if displayedEntries.isEmpty {
                     Section {
                         EmptyStateView(
                             systemImage: "magnifyingglass",
@@ -764,6 +875,48 @@ struct RemoteOfflineShelfView: View {
                 description: description
             )
             .padding(.vertical, 12)
+        }
+    }
+
+    private var loadingCard: some View {
+        InsetCard(
+            cornerRadius: 20,
+            contentPadding: 20,
+            backgroundColor: Color(.secondarySystemBackground)
+        ) {
+            ProgressView("Loading Downloads")
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+                .accessibilityIdentifier("remoteOfflineShelf.loading")
+        }
+    }
+
+    private func loadFailureCard(message: String) -> some View {
+        InsetCard(
+            cornerRadius: 20,
+            contentPadding: 20,
+            backgroundColor: Color(.secondarySystemBackground)
+        ) {
+            loadFailureContent(message: message)
+                .padding(.vertical, 12)
+        }
+    }
+
+    private func loadFailureContent(message: String) -> some View {
+        VStack(spacing: 12) {
+            EmptyStateView(
+                systemImage: "exclamationmark.triangle",
+                title: "Downloads Unavailable",
+                description: message
+            )
+
+            Button("Try Again") {
+                Task {
+                    await viewModel.load(forceRefresh: true)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("remoteOfflineShelf.retry")
         }
     }
 

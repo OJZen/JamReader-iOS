@@ -394,6 +394,7 @@ struct BatchComicMetadataSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @StateObject private var viewModel: BatchComicMetadataSheetViewModel
+    @State private var isShowingDiscardConfirmation = false
 
     private let onCommit: () -> Void
 
@@ -491,8 +492,9 @@ struct BatchComicMetadataSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        dismiss()
+                        requestDismissal()
                     }
+                    .disabled(viewModel.isSaving)
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -507,13 +509,38 @@ struct BatchComicMetadataSheet: View {
             }
         }
         .adaptiveFormSheet(720)
-        .interactiveDismissDisabled(viewModel.isSaving)
+        .interactiveDismissDisabled(viewModel.patch.hasChanges || viewModel.isSaving)
         .alert(item: $viewModel.alert) { alert in
             Alert(
                 title: Text(alert.title),
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .confirmationDialog(
+            "Discard Changes?",
+            isPresented: $isShowingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Your batch metadata changes have not been applied.")
+        }
+    }
+
+    private func requestDismissal() {
+        guard !viewModel.isSaving else {
+            return
+        }
+
+        if viewModel.patch.hasChanges {
+            isShowingDiscardConfirmation = true
+        } else {
+            dismiss()
         }
     }
 }

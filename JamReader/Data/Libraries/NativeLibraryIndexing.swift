@@ -159,6 +159,8 @@ final class LibraryIndexingService {
                 cancellationCheck: cancellationCheck,
                 progressHandler: progressHandler
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             let sourcePath = AppLogSanitizer.path(sourceRootURL.path)
             let errorDescription = AppLogSanitizer.errorDescription(error)

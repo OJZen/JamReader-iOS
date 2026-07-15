@@ -24,6 +24,7 @@ struct LibraryOrganizationCollectionRow: View {
             if showsAssignmentIndicator {
                 Image(systemName: collection.isAssigned ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(collection.isAssigned ? Color.green : Color.secondary)
+                    .accessibilityHidden(true)
             } else if let trailingLabel {
                 Text(trailingLabel)
                     .font(.caption.weight(.semibold))
@@ -32,6 +33,10 @@ struct LibraryOrganizationCollectionRow: View {
         }
         .padding(.vertical, 4)
         .padding(.trailing, trailingAccessoryReservedWidth)
+        .accessibilitySelectionState(
+            isPresented: showsAssignmentIndicator,
+            isSelected: collection.isAssigned
+        )
     }
 
     @ViewBuilder

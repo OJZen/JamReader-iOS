@@ -49,7 +49,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             databaseBootstrapper: dependencies.libraryDatabaseBootstrapper,
             libraryScanner: dependencies.libraryScanner,
             maintenanceStatusStore: dependencies.libraryMaintenanceStatusStore,
-            importedComicsImportService: dependencies.importedComicsImportService
+            importedComicsImportService: dependencies.importedComicsImportService,
+            remoteBackgroundImportController: dependencies.remoteBackgroundImportController
         )
         let memoryPressureCoordinator = AppMemoryPressureCoordinator()
         let appRootCoordinator = AppRootCoordinator(

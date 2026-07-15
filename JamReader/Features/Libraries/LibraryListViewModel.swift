@@ -27,34 +27,49 @@ struct LibraryListItem: Identifiable, Equatable {
     }
 }
 
+private enum ManagedLibraryCreationError: LocalizedError {
+    case rollbackFailed
+
+    var errorDescription: String? {
+        "Library setup failed, and its catalog entry could not be rolled back. Local files were kept for recovery."
+    }
+}
+
 @MainActor
 final class LibraryListViewModel: ObservableObject {
     private static let liveReloadDebounce: RunLoop.SchedulerTimeType.Stride = .milliseconds(900)
     nonisolated private static let liveImportNotificationLibraryIDKey = "libraryID"
 
     @Published private(set) var items: [LibraryListItem] = []
+    @Published private(set) var importProgress: ImportedComicsImportProgress?
+    @Published private(set) var isImporting = false
     @Published var alert: AppAlertState?
 
-    private let store: LibraryDescriptorStore
+    private let store: any LibraryDescriptorStoring
     private let storageManager: LibraryStorageManager
     private let inspector: SQLiteDatabaseInspector
     private let databaseBootstrapper: LibraryDatabaseBootstrapper
-    private let libraryScanner: LibraryScanner
+    private let libraryScanner: any LibraryScanning
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let importedComicsImportService: ImportedComicsImportService
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
     private let logger = AppLog.library
 
     private var descriptors: [LibraryDescriptor] = []
     private var cancellables = Set<AnyCancellable>()
+    private var importTask: Task<Void, Never>?
+    private var importCancellationController: LibraryImportCancellationController?
+    private var activeImportID: UUID?
 
     init(
-        store: LibraryDescriptorStore,
+        store: any LibraryDescriptorStoring,
         storageManager: LibraryStorageManager,
         inspector: SQLiteDatabaseInspector,
         databaseBootstrapper: LibraryDatabaseBootstrapper,
-        libraryScanner: LibraryScanner,
+        libraryScanner: any LibraryScanning,
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
-        importedComicsImportService: ImportedComicsImportService
+        importedComicsImportService: ImportedComicsImportService,
+        remoteBackgroundImportController: RemoteBackgroundImportController
     ) {
         self.store = store
         self.storageManager = storageManager
@@ -63,6 +78,7 @@ final class LibraryListViewModel: ObservableObject {
         self.libraryScanner = libraryScanner
         self.maintenanceStatusStore = maintenanceStatusStore
         self.importedComicsImportService = importedComicsImportService
+        self.remoteBackgroundImportController = remoteBackgroundImportController
         configureLiveLibraryUpdates()
         reload()
     }
@@ -86,10 +102,22 @@ final class LibraryListViewModel: ObservableObject {
     }
 
     func addLibraryFolders(from urls: [URL]) {
+        guard !urls.isEmpty else {
+            return
+        }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         logger.info("Library folders add requested count=\(urls.count)")
         var addedCount = 0
         var duplicateNames: [String] = []
         var failedItemNames: [String] = []
+        var candidateDescriptors = descriptors
+        var addedDescriptors: [LibraryDescriptor] = []
 
         for url in urls {
             let standardizedURL = url.standardizedFileURL
@@ -107,13 +135,14 @@ final class LibraryListViewModel: ObservableObject {
                     continue
                 }
 
-                if descriptors.contains(where: { $0.sourcePath == standardizedURL.path }) {
+                if candidateDescriptors.contains(where: { $0.sourcePath == standardizedURL.path }) {
                     duplicateNames.append(standardizedURL.lastPathComponent)
                     continue
                 }
 
                 let descriptor = try storageManager.registerLibrary(at: standardizedURL)
-                descriptors.append(descriptor)
+                candidateDescriptors.append(descriptor)
+                addedDescriptors.append(descriptor)
                 addedCount += 1
             } catch {
                 failedItemNames.append(standardizedURL.lastPathComponent)
@@ -121,9 +150,11 @@ final class LibraryListViewModel: ObservableObject {
         }
 
         do {
-            try store.save(descriptors)
+            try store.save(candidateDescriptors)
+            descriptors = candidateDescriptors
             rebuildItems()
         } catch {
+            addedDescriptors.forEach(storageManager.deleteLibraryAssets)
             logger.error(
                 "Library folders add failed while saving added=\(addedCount) duplicates=\(duplicateNames.count) failed=\(failedItemNames.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
@@ -189,27 +220,43 @@ final class LibraryListViewModel: ObservableObject {
             return nil
         }
 
+        guard beginExclusiveLibraryStorageOperation() else {
+            return nil
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         logger.info("Managed library create requested name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)")
         do {
             let descriptor = try storageManager.createManagedLibrary(named: trimmedName)
-            descriptors.append(descriptor)
-            try store.save(descriptors)
+            let candidateDescriptors = descriptors + [descriptor]
+            do {
+                try store.save(candidateDescriptors)
+            } catch {
+                try? storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
+                storageManager.deleteLibraryAssets(for: descriptor)
+                throw error
+            }
             do {
                 let sourceURL = try storageManager.restoreSourceURL(for: descriptor)
                 let databaseURL = storageManager.databaseURL(for: descriptor)
                 try databaseBootstrapper.createDatabaseIfNeeded(at: databaseURL)
                 _ = try libraryScanner.scanLibrary(
                     sourceRootURL: sourceURL,
-                    databaseURL: databaseURL
+                    databaseURL: databaseURL,
+                    cancellationCheck: nil,
+                    progressHandler: nil
                 )
             } catch {
-                descriptors.removeAll { $0.id == descriptor.id }
+                let setupError = error
                 do {
                     try store.save(descriptors)
                 } catch {
                     logger.warning(
                         "Managed library create rollback failed item=descriptorStore id=\(descriptor.id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(descriptor.name), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
                     )
+                    throw ManagedLibraryCreationError.rollbackFailed
                 }
                 do {
                     try storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
@@ -218,8 +265,10 @@ final class LibraryListViewModel: ObservableObject {
                         "Managed library create rollback failed item=managedFiles id=\(descriptor.id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(descriptor.name), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
                     )
                 }
-                throw error
+                storageManager.deleteLibraryAssets(for: descriptor)
+                throw setupError
             }
+            descriptors = candidateDescriptors
             rebuildItems()
             logger.info(
                 "Managed library create completed id=\(descriptor.id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(descriptor.name), privacy: .public)"
@@ -238,7 +287,7 @@ final class LibraryListViewModel: ObservableObject {
         from urls: [URL],
         destinationSelection: LibraryImportDestinationSelection = .importedComics
     ) {
-        importComicResources(
+        startComicImport(
             from: urls,
             traverseDirectories: false,
             destinationSelection: destinationSelection
@@ -249,7 +298,7 @@ final class LibraryListViewModel: ObservableObject {
         from urls: [URL],
         destinationSelection: LibraryImportDestinationSelection = .importedComics
     ) {
-        importComicResources(
+        startComicImport(
             from: urls,
             traverseDirectories: true,
             destinationSelection: destinationSelection
@@ -280,11 +329,20 @@ final class LibraryListViewModel: ObservableObject {
             return false
         }
 
-        descriptors[descriptorIndex].name = trimmedName
-        descriptors[descriptorIndex].updatedAt = Date()
+        guard beginExclusiveLibraryStorageOperation() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
+        var candidateDescriptors = descriptors
+        candidateDescriptors[descriptorIndex].name = trimmedName
+        candidateDescriptors[descriptorIndex].updatedAt = Date()
 
         do {
-            try store.save(descriptors)
+            try store.save(candidateDescriptors)
+            descriptors = candidateDescriptors
             rebuildItems()
             logger.info(
                 "Library rename completed id=\(id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
@@ -310,6 +368,10 @@ final class LibraryListViewModel: ObservableObject {
     }
 
     func presentImportError(_ error: Error) {
+        if error is CancellationError {
+            return
+        }
+
         let nsError = error as NSError
         if nsError.domain == NSCocoaErrorDomain, nsError.code == NSUserCancelledError {
             return
@@ -318,17 +380,73 @@ final class LibraryListViewModel: ObservableObject {
         alert = AppAlertState(title: "Import Failed", message: error.userFacingMessage)
     }
 
-    private func importComicResources(
+    func cancelComicImport() {
+        importCancellationController?.cancel()
+        importTask?.cancel()
+    }
+
+    private func startComicImport(
         from urls: [URL],
         traverseDirectories: Bool,
         destinationSelection: LibraryImportDestinationSelection
     ) {
+        guard !urls.isEmpty, !isImporting else {
+            return
+        }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return
+        }
+
+        let cancellationController = LibraryImportCancellationController()
+        let importID = UUID()
+        importCancellationController = cancellationController
+        activeImportID = importID
+        isImporting = true
+        importProgress = nil
+        alert = nil
+
+        importTask = Task {
+            await importComicResources(
+                from: urls,
+                traverseDirectories: traverseDirectories,
+                destinationSelection: destinationSelection,
+                cancellationController: cancellationController,
+                importID: importID
+            )
+        }
+    }
+
+    private func importComicResources(
+        from urls: [URL],
+        traverseDirectories: Bool,
+        destinationSelection: LibraryImportDestinationSelection,
+        cancellationController: LibraryImportCancellationController,
+        importID: UUID
+    ) async {
+        defer {
+            isImporting = false
+            importProgress = nil
+            importCancellationController = nil
+            importTask = nil
+            activeImportID = nil
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         do {
-            let result = try importedComicsImportService.importComicResources(
+            let result = try await importedComicsImportService.importComicResourcesAsync(
                 from: urls,
                 traverseDirectories: traverseDirectories,
                 accessSecurityScopedResources: true,
-                destinationSelection: destinationSelection
+                destinationSelection: destinationSelection,
+                progressHandler: { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard self?.activeImportID == importID else {
+                            return
+                        }
+                        self?.importProgress = progress
+                    }
+                },
+                cancellationCheck: cancellationController.checkCancelled
             )
             reload()
 
@@ -340,32 +458,7 @@ final class LibraryListViewModel: ObservableObject {
                 return
             }
 
-            var messageLines: [String] = []
-
-            if result.createdLibrary {
-                messageLines.append("Added \(result.importedDestinationName).")
-            }
-
-            if result.importedComicCount > 0 {
-                let comicWord = result.importedComicCount == 1 ? "comic file" : "comic files"
-                messageLines.append("Imported \(result.importedComicCount) \(comicWord) into \(result.importedDestinationName).")
-            }
-
-            if let scanSummary = result.scanSummary {
-                messageLines.append(scanSummary.indexedSummaryLine + ".")
-            } else if let scanErrorMessage = result.scanErrorMessage {
-                messageLines.append("Automatic indexing failed: \(scanErrorMessage)")
-                messageLines.append("Open \(result.importedDestinationName) and run Refresh to index the new files.")
-            }
-
-            if !result.unsupportedItemNames.isEmpty {
-                let itemWord = result.unsupportedItemNames.count == 1 ? "item" : "items"
-                messageLines.append("Skipped \(result.unsupportedItemNames.count) unsupported \(itemWord).")
-            }
-
-            if !result.failedItemNames.isEmpty {
-                messageLines.append("Failed to import \(result.failedItemNames.count) item(s): \(NamePreviewFormatter.preview(from: result.failedItemNames)).")
-            }
+            let messageLines = result.completionMessageLines()
 
             if (result.createdLibrary || result.hasImportedAnyComics) {
                 let action = AppAlertAction.openLibrary(result.importedDestinationID, 1)
@@ -381,7 +474,12 @@ final class LibraryListViewModel: ObservableObject {
                     message: messageLines.joined(separator: "\n")
                 )
             }
+        } catch is CancellationError {
+            logger.notice("Local comic import canceled")
         } catch {
+            logger.error(
+                "Local comic import failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Import Comics",
                 message: error.userFacingMessage
@@ -392,6 +490,16 @@ final class LibraryListViewModel: ObservableObject {
     private func removeLibraries(withIDs idsToRemove: [UUID]) -> Bool {
         let removedDescriptors = descriptors.filter { idsToRemove.contains($0.id) }
         let removedNames = removedDescriptors.map(\.name)
+
+        guard !removedDescriptors.isEmpty else {
+            return true
+        }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
 
         if !removedDescriptors.isEmpty {
             logger.notice(
@@ -435,6 +543,18 @@ final class LibraryListViewModel: ObservableObject {
                 message: "Removed the library from JamReader, but failed to delete local files for: \(NamePreviewFormatter.preview(from: fileCleanupFailures))."
             )
         }
+        return true
+    }
+
+    private func beginExclusiveLibraryStorageOperation() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = AppAlertState(
+                title: "Library Busy",
+                message: "Finish the current import or storage task, then try again."
+            )
+            return false
+        }
+
         return true
     }
 

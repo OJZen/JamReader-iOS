@@ -25,6 +25,8 @@ struct RemoteServerListView: View {
                 credentialStore: dependencies.remoteServerCredentialStore,
                 browsingService: dependencies.remoteServerBrowsingService,
                 readingProgressStore: dependencies.remoteReadingProgressStore,
+                remoteOfflineCopyStore: dependencies.remoteOfflineCopyStore,
+                remoteOfflineLibrarySnapshotStore: dependencies.remoteOfflineLibrarySnapshotStore,
                 remoteBackgroundImportController: dependencies.remoteBackgroundImportController
             )
         )
@@ -138,7 +140,7 @@ struct RemoteServerListView: View {
                 profile: profile,
                 recentHistoryCount: viewModel.recentSessions(for: profile).count,
                 savedFolderCount: viewModel.shortcutCount(for: profile),
-                offlineCopyCount: viewModel.cacheSummary(for: profile).fileCount,
+                offlineCopyCount: viewModel.offlineCopyCount(for: profile),
                 trailingAccessoryReservedWidth: persistentRowActionReservedWidth
             )
         }
@@ -186,7 +188,7 @@ struct RemoteServerListView: View {
         for profile: RemoteServerProfile
     ) -> some View {
         let savedFolderCount = viewModel.shortcutCount(for: profile)
-        let offlineCopyCount = viewModel.cacheSummary(for: profile).fileCount
+        let offlineCopyCount = viewModel.offlineCopyCount(for: profile)
         let recentHistoryCount = viewModel.recentSessions(for: profile).count
         let cacheSummary = viewModel.cacheSummary(for: profile)
 

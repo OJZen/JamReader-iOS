@@ -1,5 +1,10 @@
 import Foundation
 
+protocol LibraryDescriptorStoring: AnyObject {
+    func load() throws -> [LibraryDescriptor]
+    func save(_ descriptors: [LibraryDescriptor]) throws
+}
+
 final class LibraryDescriptorStore {
     private let repository: LibraryCatalogRepository
 
@@ -20,3 +25,5 @@ final class LibraryDescriptorStore {
         try repository.replaceLibraries(with: sortedDescriptors)
     }
 }
+
+extension LibraryDescriptorStore: LibraryDescriptorStoring {}

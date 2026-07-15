@@ -105,4 +105,98 @@ final class RemoteServerBrowserLayoutTests: XCTestCase {
         XCTAssertGreaterThan(accessibilityHeight, standardHeight)
         XCTAssertGreaterThan(accessibilityHeight, 84)
     }
+
+    func testGridAccessibilityDescribesFolderAsActionableItem() {
+        let item = RemoteDirectoryItem(
+            serverID: UUID(),
+            providerKind: .smb,
+            shareName: "Comics",
+            cacheScopeKey: "scope",
+            path: "/Manga",
+            name: "Manga",
+            kind: .directory,
+            fileSize: nil,
+            modifiedAt: nil,
+            pageCountHint: nil,
+            coverPath: nil,
+            previewItems: []
+        )
+        let row = RemoteBrowserListRowModel(
+            item: item,
+            readingSession: nil,
+            cacheAvailability: .unavailable
+        )
+
+        XCTAssertTrue(RemoteBrowserGridAccessibility.value(for: row).contains("Folder"))
+        XCTAssertEqual(RemoteBrowserGridAccessibility.hint(for: item), "Opens folder")
+    }
+
+    func testGridAccessibilityIncludesOfflineStateForComic() {
+        let serverID = UUID()
+        let item = RemoteDirectoryItem(
+            serverID: serverID,
+            providerKind: .smb,
+            shareName: "Comics",
+            cacheScopeKey: "scope",
+            path: "/Manga/Book.cbz",
+            name: "Book.cbz",
+            kind: .comicFile,
+            fileSize: 1_024,
+            modifiedAt: nil,
+            pageCountHint: nil,
+            coverPath: nil,
+            previewItems: []
+        )
+        let row = RemoteBrowserListRowModel(
+            item: item,
+            readingSession: nil,
+            cacheAvailability: RemoteComicCachedAvailability(kind: .current)
+        )
+
+        XCTAssertTrue(RemoteBrowserGridAccessibility.value(for: row).contains("Offline Ready"))
+        XCTAssertEqual(RemoteBrowserGridAccessibility.hint(for: item), "Opens comic")
+    }
+
+    func testGridAccessibilityKeepsOfflineStateAlongsideReadingProgress() {
+        let serverID = UUID()
+        let item = RemoteDirectoryItem(
+            serverID: serverID,
+            providerKind: .smb,
+            shareName: "Comics",
+            cacheScopeKey: "scope",
+            path: "/Manga/Book.cbz",
+            name: "Book.cbz",
+            kind: .comicFile,
+            fileSize: 1_024,
+            modifiedAt: nil,
+            pageCountHint: nil,
+            coverPath: nil,
+            previewItems: []
+        )
+        let readingSession = RemoteComicReadingSession(
+            serverID: serverID,
+            providerKind: .smb,
+            serverName: "Server",
+            shareName: "Comics",
+            cacheScopeKey: "scope",
+            path: item.path,
+            fileName: item.name,
+            pageCount: 20,
+            currentPage: 4,
+            hasBeenOpened: true,
+            read: false,
+            lastTimeOpened: Date(),
+            fileSize: item.fileSize,
+            modifiedAt: item.modifiedAt
+        )
+        let row = RemoteBrowserListRowModel(
+            item: item,
+            readingSession: readingSession,
+            cacheAvailability: RemoteComicCachedAvailability(kind: .current)
+        )
+
+        let accessibilityValue = RemoteBrowserGridAccessibility.value(for: row)
+        XCTAssertTrue(accessibilityValue.contains("Page 4 / 20"))
+        XCTAssertTrue(accessibilityValue.contains("Offline Ready"))
+    }
 }

@@ -6,6 +6,7 @@ struct ReaderQuickMetadataSheet: View {
     private let onSave: (LibraryComic) -> Void
 
     @StateObject private var viewModel: ComicMetadataEditorSheetViewModel
+    @State private var isShowingDiscardConfirmation = false
 
     init(
         descriptor: LibraryDescriptor,
@@ -76,8 +77,9 @@ struct ReaderQuickMetadataSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        dismiss()
+                        requestDismissal()
                     }
+                    .disabled(viewModel.isSaving)
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -93,7 +95,7 @@ struct ReaderQuickMetadataSheet: View {
         }
         .adaptiveFormSheet(700)
         .presentationDragIndicator(.visible)
-        .interactiveDismissDisabled(viewModel.isSaving)
+        .interactiveDismissDisabled(viewModel.hasChanges || viewModel.isSaving)
         .task {
             viewModel.loadIfNeeded()
         }
@@ -103,6 +105,19 @@ struct ReaderQuickMetadataSheet: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+        .confirmationDialog(
+            "Discard Changes?",
+            isPresented: $isShowingDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Your metadata changes have not been saved.")
         }
     }
 
@@ -117,5 +132,17 @@ struct ReaderQuickMetadataSheet: View {
                 viewModel.metadata[keyPath: keyPath] = newValue
             }
         )
+    }
+
+    private func requestDismissal() {
+        guard !viewModel.isSaving else {
+            return
+        }
+
+        if viewModel.hasChanges {
+            isShowingDiscardConfirmation = true
+        } else {
+            dismiss()
+        }
     }
 }

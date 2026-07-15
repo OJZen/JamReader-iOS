@@ -341,6 +341,7 @@ struct RemoteCacheSettingsView: View {
         }
         do {
             try await runMaintenanceWork {
+                dependencies.remoteOfflineLibrarySnapshotStore.invalidate()
                 try dependencies.remoteServerBrowsingService.applyCachePolicyPreset(preset)
             }
             await refresh()
@@ -439,8 +440,9 @@ struct RemoteCacheSettingsView: View {
         switch action {
         case .downloads:
             try await runMaintenanceWork {
-                try dependencies.remoteServerBrowsingService.clearCachedComics()
                 dependencies.remoteOfflineLibrarySnapshotStore.invalidate()
+                try dependencies.remoteServerBrowsingService.clearCachedComics()
+                try dependencies.remoteOfflineCopyStore.clearAll()
             }
         case .temporaryCache:
             try await runMaintenanceWork {

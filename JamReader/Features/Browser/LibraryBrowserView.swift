@@ -63,7 +63,8 @@ struct LibraryBrowserView: View {
                 coverLocator: dependencies.libraryCoverLocator,
                 comicInfoImportService: dependencies.comicInfoImportService,
                 importedComicsImportService: dependencies.importedComicsImportService,
-                comicRemovalService: dependencies.libraryComicRemovalService
+                comicRemovalService: dependencies.libraryComicRemovalService,
+                remoteBackgroundImportController: dependencies.remoteBackgroundImportController
             )
         )
     }
@@ -156,6 +157,16 @@ struct LibraryBrowserView: View {
                         : .move(edge: .top).combined(with: .opacity)
                 )
                 .padding(.top, Spacing.xs)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if viewModel.isImportingComics {
+                LibraryImportProgressView(
+                    progress: viewModel.importProgress,
+                    onCancel: viewModel.cancelComicImport
+                )
+                .padding(.horizontal, Spacing.sm)
+                .padding(.bottom, Spacing.xs)
             }
         }
         .animation(

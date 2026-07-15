@@ -22,6 +22,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var recentComics: [LibraryComic] = []
     @Published private(set) var favoritesComics: [LibraryComic] = []
     @Published private(set) var specialCollectionCounts: [LibrarySpecialCollectionKind: Int] = [:]
+    @Published private(set) var importProgress: ImportedComicsImportProgress?
+    @Published private(set) var isImportingComics = false
     @Published var searchQuery = ""
     @Published var alert: AppAlertState?
 
@@ -32,13 +34,14 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private let databaseReader: LibraryDatabaseReader
     private let databaseWriter: LibraryDatabaseWriter
     private let databaseBootstrapper: LibraryDatabaseBootstrapper
-    private let libraryScanner: LibraryScanner
+    private let libraryScanner: any LibraryScanning
     private let maintenanceStatusStore: LibraryMaintenanceStatusStore
     private let coverLocator: LibraryCoverLocator
     private let comicInfoImportService: ComicInfoImportService
     private let importedComicsImportService: ImportedComicsImportService
     private let comicRemovalService: LibraryComicRemovalService
-    private let databaseInspector = SQLiteDatabaseInspector()
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
+    private let databaseInspector: SQLiteDatabaseInspector
     private let logger = AppLog.library
 
     private let metadataRootURL: URL
@@ -47,6 +50,9 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private var accessSession: LibraryAccessSession?
     private var cancellables = Set<AnyCancellable>()
     private var scanCompletionDismissTask: Task<Void, Never>?
+    private var comicImportTask: Task<Void, Never>?
+    private var comicImportCancellationController: LibraryImportCancellationController?
+    private var activeComicImportID: UUID?
     private var hasLoaded = false
     private var hasAttemptedAutomaticImportRecovery = false
     private var hasLoggedSourceRootResolutionFailure = false
@@ -54,7 +60,6 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     nonisolated private static let searchResultLimit = 40
     nonisolated private static let liveImportNotificationLibraryIDKey = "libraryID"
     private var recentDays = LibraryRecentWindowOption.defaultOption.dayCount
-    private let supportedImportedFileExtensions = SupportedComicFormats.comicFileExtensions
 
     init(
         descriptor: LibraryDescriptor,
@@ -63,12 +68,14 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         databaseReader: LibraryDatabaseReader,
         databaseWriter: LibraryDatabaseWriter,
         databaseBootstrapper: LibraryDatabaseBootstrapper,
-        libraryScanner: LibraryScanner,
+        libraryScanner: any LibraryScanning,
         maintenanceStatusStore: LibraryMaintenanceStatusStore,
         coverLocator: LibraryCoverLocator,
         comicInfoImportService: ComicInfoImportService,
         importedComicsImportService: ImportedComicsImportService,
-        comicRemovalService: LibraryComicRemovalService
+        comicRemovalService: LibraryComicRemovalService,
+        remoteBackgroundImportController: RemoteBackgroundImportController,
+        databaseInspector: SQLiteDatabaseInspector? = nil
     ) {
         self.descriptor = descriptor
         self.folderID = folderID
@@ -82,12 +89,14 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         self.comicInfoImportService = comicInfoImportService
         self.importedComicsImportService = importedComicsImportService
         self.comicRemovalService = comicRemovalService
+        self.remoteBackgroundImportController = remoteBackgroundImportController
+        self.databaseInspector = databaseInspector ?? SQLiteDatabaseInspector()
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         let initialMaintenanceRecord = maintenanceStatusStore.loadRecord(for: descriptor.id)
         self.maintenanceRecord = initialMaintenanceRecord
         self.lastInitializationSummary = initialMaintenanceRecord?.summary
-        self.databaseSummary = SQLiteDatabaseInspector().inspectDatabase(at: self.databaseURL)
+        self.databaseSummary = self.databaseInspector.inspectDatabase(at: self.databaseURL)
         configureSearch()
         configureLiveImportUpdates()
     }
@@ -154,6 +163,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             && supportsDirectLibraryImports
             && !isInitializingLibrary
             && !isRefreshingLibrary
+            && !isImportingComics
     }
 
     var libraryImportNotice: String? {
@@ -412,6 +422,13 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     func removeComic(_ comic: LibraryComic) -> Bool {
+        guard beginExclusiveLibraryStorageOperation() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         do {
             try comicRemovalService.removeComic(comic, from: descriptor)
             AppHaptics.warning()
@@ -563,6 +580,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         guard canInitializeLibrary, !isInitializingLibrary else {
             return
         }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return
+        }
+        let storageMaintenanceController = remoteBackgroundImportController
 
         dismissScanCompletion()
         isInitializingLibrary = true
@@ -583,7 +604,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             let databaseURL = self.databaseURL
             let progressHandler = makeScanProgressHandler()
 
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 _ = retainedAccessSession
 
                 let result = Result {
@@ -591,11 +612,15 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                     return try libraryScanner.scanLibrary(
                         sourceRootURL: sourceURL,
                         databaseURL: databaseURL,
+                        cancellationCheck: nil,
                         progressHandler: progressHandler
                     )
                 }
 
                 Task { @MainActor [weak self] in
+                    defer {
+                        storageMaintenanceController.endExclusiveStorageMaintenance()
+                    }
                     guard let self else {
                         return
                     }
@@ -632,6 +657,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 }
             }
         } catch {
+            storageMaintenanceController.endExclusiveStorageMaintenance()
             isInitializingLibrary = false
             scanProgress = nil
             alert = AppAlertState(title: "Failed to Initialize Library", message: error.userFacingMessage)
@@ -643,6 +669,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         guard canRefreshLibrary else {
             return
         }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return
+        }
+        let storageMaintenanceController = remoteBackgroundImportController
 
         dismissScanCompletion()
         isRefreshingLibrary = true
@@ -661,18 +691,22 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             let databaseURL = self.databaseURL
             let progressHandler = makeScanProgressHandler()
 
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 _ = retainedAccessSession
 
                 let result = Result {
                     try libraryScanner.rescanLibrary(
                         sourceRootURL: sourceURL,
                         databaseURL: databaseURL,
+                        cancellationCheck: nil,
                         progressHandler: progressHandler
                     )
                 }
 
                 Task { @MainActor [weak self] in
+                    defer {
+                        storageMaintenanceController.endExclusiveStorageMaintenance()
+                    }
                     guard let self else {
                         return
                     }
@@ -708,6 +742,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 }
             }
         } catch {
+            storageMaintenanceController.endExclusiveStorageMaintenance()
             isRefreshingLibrary = false
             scanProgress = nil
             alert = AppAlertState(title: "Failed to Refresh Library", message: error.userFacingMessage)
@@ -718,6 +753,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         guard canRefreshCurrentFolder, let currentFolder = content?.folder else {
             return
         }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return
+        }
+        let storageMaintenanceController = remoteBackgroundImportController
 
         dismissScanCompletion()
         isRefreshingLibrary = true
@@ -736,7 +775,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             let databaseURL = self.databaseURL
             let progressHandler = makeScanProgressHandler()
 
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 _ = retainedAccessSession
 
                 let result = Result {
@@ -744,11 +783,15 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                         sourceRootURL: sourceURL,
                         databaseURL: databaseURL,
                         folder: currentFolder,
+                        cancellationCheck: nil,
                         progressHandler: progressHandler
                     )
                 }
 
                 Task { @MainActor [weak self] in
+                    defer {
+                        storageMaintenanceController.endExclusiveStorageMaintenance()
+                    }
                     guard let self else {
                         return
                     }
@@ -778,6 +821,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 }
             }
         } catch {
+            storageMaintenanceController.endExclusiveStorageMaintenance()
             isRefreshingLibrary = false
             scanProgress = nil
             alert = AppAlertState(title: "Failed to Refresh Folder", message: error.userFacingMessage)
@@ -795,93 +839,113 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             return
         }
 
-        var importedCount = 0
-        var unsupportedNames: [String] = []
-        var failedNames: [String] = []
+        guard !urls.isEmpty, !isImportingComics else {
+            return
+        }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return
+        }
+
+        let cancellationController = LibraryImportCancellationController()
+        let importID = UUID()
+        comicImportCancellationController = cancellationController
+        activeComicImportID = importID
+        isImportingComics = true
+        importProgress = nil
+        alert = nil
+        let destinationRelativePath = importDestinationRelativePath()
+
+        comicImportTask = Task {
+            await performComicFileImport(
+                from: urls,
+                destinationRelativePath: destinationRelativePath,
+                cancellationController: cancellationController,
+                importID: importID
+            )
+        }
+    }
+
+    func cancelComicImport() {
+        comicImportCancellationController?.cancel()
+        comicImportTask?.cancel()
+    }
+
+    private func performComicFileImport(
+        from urls: [URL],
+        destinationRelativePath: String?,
+        cancellationController: LibraryImportCancellationController,
+        importID: UUID
+    ) async {
+        defer {
+            isImportingComics = false
+            importProgress = nil
+            comicImportCancellationController = nil
+            comicImportTask = nil
+            activeComicImportID = nil
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
 
         do {
-            let destinationDirectoryURL = try importDestinationDirectoryURL()
-            if !FileManager.default.fileExists(atPath: destinationDirectoryURL.path) {
-                try FileManager.default.createDirectory(
-                    at: destinationDirectoryURL,
-                    withIntermediateDirectories: true
-                )
-            }
-
-            for url in urls {
-                let standardizedURL = url.standardizedFileURL
-                let scopedAccess = standardizedURL.startAccessingSecurityScopedResource()
-                defer {
-                    if scopedAccess {
-                        standardizedURL.stopAccessingSecurityScopedResource()
+            let result = try await importedComicsImportService.importComicResourcesAsync(
+                from: urls,
+                traverseDirectories: false,
+                accessSecurityScopedResources: true,
+                destinationSelection: .library(descriptor.id),
+                destinationRelativePath: destinationRelativePath,
+                progressHandler: { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard self?.activeComicImportID == importID else {
+                            return
+                        }
+                        self?.importProgress = progress
                     }
-                }
+                },
+                cancellationCheck: cancellationController.checkCancelled
+            )
 
-                let values = try standardizedURL.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
-                guard values.isDirectory != true, values.isRegularFile == true else {
-                    unsupportedNames.append(standardizedURL.lastPathComponent)
-                    continue
-                }
-
-                let fileExtension = standardizedURL.pathExtension.lowercased()
-                guard supportedImportedFileExtensions.contains(fileExtension) else {
-                    unsupportedNames.append(standardizedURL.lastPathComponent)
-                    continue
-                }
-
-                let destinationURL = uniqueDestinationURL(
-                    for: standardizedURL,
-                    in: destinationDirectoryURL
-                )
-
-                do {
-                    try FileManager.default.copyItem(at: standardizedURL, to: destinationURL)
-                    importedCount += 1
-                } catch {
-                    failedNames.append(standardizedURL.lastPathComponent)
-                }
+            loadContent(respectingTransientState: false)
+            guard result.hasImportedAnyComics
+                    || !result.unsupportedItemNames.isEmpty
+                    || !result.failedItemNames.isEmpty
+            else {
+                return
             }
+
+            var messageLines: [String] = []
+            if result.importedComicCount > 0 {
+                let comicWord = result.importedComicCount == 1 ? "comic file" : "comic files"
+                messageLines.append("Imported \(result.importedComicCount) \(comicWord) into the current library location.")
+            }
+            if let scanSummary = result.scanSummary {
+                messageLines.append(scanSummary.indexedSummaryLine + ".")
+            } else if let scanErrorMessage = result.scanErrorMessage {
+                messageLines.append("Automatic indexing failed: \(scanErrorMessage)")
+            }
+            if !result.unsupportedItemNames.isEmpty {
+                let itemWord = result.unsupportedItemNames.count == 1 ? "item" : "items"
+                messageLines.append("Skipped \(result.unsupportedItemNames.count) unsupported \(itemWord).")
+            }
+            if !result.failedItemNames.isEmpty {
+                messageLines.append("Failed to import \(result.failedItemNames.count) item(s): \(NamePreviewFormatter.preview(from: result.failedItemNames)).")
+            }
+
+            alert = AppAlertState(
+                title: result.hasImportedAnyComics ? "Import Completed" : "Import Finished with Warnings",
+                message: messageLines.joined(separator: "\n")
+            )
+        } catch is CancellationError {
+            logger.notice(
+                "Library browser comic import canceled libraryID=\(self.descriptor.id.uuidString, privacy: .public)"
+            )
         } catch {
+            logger.error(
+                "Library browser comic import failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
             alert = AppAlertState(
                 title: "Failed to Import Comics",
                 message: error.userFacingMessage
             )
-            return
         }
-
-        if importedCount > 0 {
-            if canRefreshCurrentFolder {
-                refreshCurrentFolder()
-            } else if canRefreshLibrary {
-                refreshLibrary()
-            } else {
-                load()
-            }
-        }
-
-        if importedCount == 0 && unsupportedNames.isEmpty && failedNames.isEmpty {
-            return
-        }
-
-        var messageLines: [String] = []
-        if importedCount > 0 {
-            let comicWord = importedCount == 1 ? "comic file" : "comic files"
-            messageLines.append("Imported \(importedCount) \(comicWord) into the current library location.")
-        }
-
-        if !unsupportedNames.isEmpty {
-            let fileWord = unsupportedNames.count == 1 ? "file" : "files"
-            messageLines.append("Skipped \(unsupportedNames.count) unsupported \(fileWord).")
-        }
-
-        if !failedNames.isEmpty {
-            messageLines.append("Failed to import \(failedNames.count) item(s): \(NamePreviewFormatter.preview(from: failedNames)).")
-        }
-
-        alert = AppAlertState(
-            title: importedCount > 0 ? "Import Completed" : "Import Finished with Warnings",
-            message: messageLines.joined(separator: "\n")
-        )
     }
 
     func importLibraryComicInfo(policy: ComicInfoImportPolicy) {
@@ -954,22 +1018,29 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         scanCompletion = nil
     }
 
-    private func importDestinationDirectoryURL() throws -> URL {
-        let sourceRootURL = try resolvedSourceRootURL()
+    private func importDestinationRelativePath() -> String? {
         guard let content else {
-            return sourceRootURL
+            return nil
         }
 
         guard !content.folder.isRoot else {
-            return sourceRootURL
+            return nil
         }
 
         let relativePath = content.folder.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !relativePath.isEmpty else {
-            return sourceRootURL
+        return relativePath.isEmpty ? nil : relativePath
+    }
+
+    private func beginExclusiveLibraryStorageOperation() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = AppAlertState(
+                title: "Library Busy",
+                message: "Finish the current import or storage task, then try again."
+            )
+            return false
         }
 
-        return sourceRootURL.appendingPathComponent(relativePath, isDirectory: true)
+        return true
     }
 
     private func resolvedSourceRootURL() throws -> URL {
@@ -1013,32 +1084,6 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         return sourceRootURL.appendingPathComponent(relativePath)
     }
 
-    private func uniqueDestinationURL(for sourceURL: URL, in directoryURL: URL) -> URL {
-        let preferredURL = directoryURL.appendingPathComponent(sourceURL.lastPathComponent)
-        guard !FileManager.default.fileExists(atPath: preferredURL.path) else {
-            let baseName = sourceURL.deletingPathExtension().lastPathComponent
-            let fileExtension = sourceURL.pathExtension
-            var counter = 1
-
-            while true {
-                let candidateName: String
-                if fileExtension.isEmpty {
-                    candidateName = "\(baseName) (\(counter))"
-                } else {
-                    candidateName = "\(baseName) (\(counter)).\(fileExtension)"
-                }
-
-                let candidateURL = directoryURL.appendingPathComponent(candidateName)
-                if !FileManager.default.fileExists(atPath: candidateURL.path) {
-                    return candidateURL
-                }
-                counter += 1
-            }
-        }
-
-        return preferredURL
-    }
-
     private func logSourceRootResolutionFailureOnce(error: Error) {
         guard !hasLoggedSourceRootResolutionFailure else {
             return
@@ -1074,7 +1119,9 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                     return
                 }
 
-                guard !self.isInitializingLibrary, !self.isRefreshingLibrary else {
+                guard !self.isInitializingLibrary,
+                      !self.isRefreshingLibrary,
+                      !self.isImportingComics else {
                     return
                 }
 

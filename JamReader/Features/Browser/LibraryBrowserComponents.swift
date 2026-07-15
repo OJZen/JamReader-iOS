@@ -522,6 +522,7 @@ struct LibraryComicRow: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
+                    .accessibilityHidden(true)
             } else {
                 EmptyView()
             }
@@ -577,6 +578,10 @@ struct LibraryComicRow: View {
         } trailingAccessory: {
             EmptyView()
         }
+        .accessibilitySelectionState(
+            isPresented: showsSelectionState,
+            isSelected: isSelected
+        )
     }
 }
 
@@ -668,8 +673,13 @@ struct LibraryComicCard: View {
                     .font(.title3)
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.35))
                     .padding(Spacing.sm)
+                    .accessibilityHidden(true)
             }
         }
+        .accessibilitySelectionState(
+            isPresented: showsSelectionState,
+            isSelected: isSelected
+        )
     }
 }
 

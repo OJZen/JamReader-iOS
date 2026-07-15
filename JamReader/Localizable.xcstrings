@@ -51,6 +51,9 @@
     "1 Star" : {
 
     },
+    "3 Profiles" : {
+
+    },
     "A new app-managed library will be created on this device." : {
 
     },
@@ -254,6 +257,9 @@
     "Comic Filters" : {
 
     },
+    "Comic file" : {
+
+    },
     "ComicInfo" : {
 
     },
@@ -349,6 +355,18 @@
 
     },
     "Direction" : {
+
+    },
+    "Discard Changes" : {
+
+    },
+    "Discard Changes?" : {
+
+    },
+    "Dismiss" : {
+
+    },
+    "Dismiss Scan Result" : {
 
     },
     "Display" : {
@@ -462,6 +480,9 @@
     "Folder" : {
 
     },
+    "Folder Actions" : {
+
+    },
     "Folder shortcut" : {
 
     },
@@ -481,6 +502,9 @@
 
     },
     "How It Works" : {
+
+    },
+    "Image folder comic" : {
 
     },
     "Import" : {
@@ -522,10 +546,16 @@
     "Imported files are removed. The Imported Comics library remains available." : {
 
     },
+    "Importing Comics" : {
+
+    },
     "Imprint" : {
 
     },
     "Included Fields" : {
+
+    },
+    "Indexing Comics" : {
 
     },
     "Info" : {
@@ -538,6 +568,9 @@
 
     },
     "Issue Number" : {
+
+    },
+    "Keep Editing" : {
 
     },
     "Keeps the current password." : {
@@ -587,6 +620,9 @@
 
     },
     "Loading %@" : {
+
+    },
+    "Loading Downloads" : {
 
     },
     "Loading Metadata" : {
@@ -682,6 +718,9 @@
     "Not Now" : {
 
     },
+    "Not Selected" : {
+
+    },
     "Notes" : {
 
     },
@@ -709,10 +748,19 @@
     "Open Last Comic" : {
 
     },
+    "Open Offline" : {
+
+    },
     "Open Older Downloaded Copy" : {
 
     },
     "Open a comic on this server to keep it here." : {
+
+    },
+    "Opens comic" : {
+
+    },
+    "Opens folder" : {
 
     },
     "Opens reading defaults" : {
@@ -781,6 +829,9 @@
 
     },
     "Port" : {
+
+    },
+    "Preparing Import" : {
 
     },
     "Provider" : {
@@ -865,6 +916,9 @@
     "Refresh Library" : {
 
     },
+    "Refresh Offline Copy" : {
+
+    },
     "Remote" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -886,6 +940,9 @@
 
     },
     "Remove Bookmark" : {
+
+    },
+    "Remove Download" : {
 
     },
     "Remove Downloaded Copy" : {
@@ -958,6 +1015,9 @@
 
     },
     "Save" : {
+
+    },
+    "Save Offline" : {
 
     },
     "Save folders from this server in Browse." : {
@@ -1218,6 +1278,15 @@
 
     },
     "You can rename it later in the app" : {
+
+    },
+    "Your batch metadata changes have not been applied." : {
+
+    },
+    "Your changes to this server have not been saved." : {
+
+    },
+    "Your metadata changes have not been saved." : {
 
     },
     "nas.local" : {

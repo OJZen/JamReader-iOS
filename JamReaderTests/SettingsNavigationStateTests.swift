@@ -1,7 +1,21 @@
+import SwiftUI
 import XCTest
 @testable import JamReader
 
 final class SettingsNavigationStateTests: XCTestCase {
+    func testPersistentSplitSelectionFollowsUIKitIPadSplitArchitecture() {
+        XCTAssertTrue(
+            AppLayout.usesPersistentSplitSelection(
+                isPad: true
+            )
+        )
+        XCTAssertFalse(
+            AppLayout.usesPersistentSplitSelection(
+                isPad: false
+            )
+        )
+    }
+
     func testLeafRoutesMapToTheirOwningPane() {
         XCTAssertEqual(
             SettingsNavigationRoute.readerDefaults(.manga).settingsPane,

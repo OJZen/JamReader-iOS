@@ -59,4 +59,58 @@ struct ImportedComicsImportProgress {
     let totalCount: Int?
     let currentItemName: String?
     let scanProgress: LibraryScanProgress?
+
+    var fractionCompleted: Double? {
+        guard let totalCount, totalCount > 0 else {
+            return nil
+        }
+
+        return min(1, max(0, Double(completedCount) / Double(totalCount)))
+    }
+
+    var title: String {
+        switch phase {
+        case .transferring:
+            return String(localized: "Importing Comics")
+        case .indexing:
+            return String(localized: "Indexing Comics")
+        }
+    }
+
+    var detailLine: String? {
+        if let scanProgress {
+            return scanProgress.detailLine
+        }
+
+        if let currentItemName, !currentItemName.isEmpty {
+            return currentItemName
+        }
+
+        if let totalCount {
+            return "\(completedCount) of \(totalCount)"
+        }
+
+        return nil
+    }
+}
+
+nonisolated final class LibraryImportCancellationController: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isCancelled = false
+
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        lock.unlock()
+    }
+
+    func checkCancelled() throws {
+        lock.lock()
+        let cancelled = isCancelled
+        lock.unlock()
+
+        if cancelled {
+            throw CancellationError()
+        }
+    }
 }

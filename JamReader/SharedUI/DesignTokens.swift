@@ -157,6 +157,12 @@ enum AppLayout {
         horizontalSizeClass == .regular && max(containerWidth, 0) >= minimumWidth
     }
 
+    static func usesPersistentSplitSelection(isPad: Bool) -> Bool {
+        // These views are hosted inside the primary column of a UIKit split view.
+        // That column reports a compact size class even while the split is expanded.
+        isPad
+    }
+
     static func adaptiveListColumnCount(
         horizontalSizeClass: UserInterfaceSizeClass?,
         containerWidth: CGFloat

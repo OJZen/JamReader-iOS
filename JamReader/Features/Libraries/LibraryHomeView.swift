@@ -5,7 +5,6 @@ import UniformTypeIdentifiers
 struct LibraryHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
-
     @AppStorage(AppNavigationStorageKeys.libraryHomeSelectedLibraryID) private var storedSelectedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedFolderID) private var pendingFocusedFolderID = ""
@@ -36,6 +35,16 @@ struct LibraryHomeView: View {
         }
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.large)
+        .safeAreaInset(edge: .bottom) {
+            if viewModel.isImporting {
+                LibraryImportProgressView(
+                    progress: viewModel.importProgress,
+                    onCancel: viewModel.cancelComicImport
+                )
+                .padding(.horizontal, Spacing.sm)
+                .padding(.bottom, Spacing.xs)
+            }
+        }
         .toolbar {
             addLibraryToolbarItem
         }
@@ -103,7 +112,7 @@ struct LibraryHomeView: View {
     }
 
     private var isPad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        usesPersistentSelection
     }
 
     private var content: some View {
@@ -375,7 +384,9 @@ struct LibraryHomeView: View {
     }
 
     private var usesPersistentSelection: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
+        AppLayout.usesPersistentSplitSelection(
+            isPad: UIDevice.current.userInterfaceIdiom == .pad
+        )
     }
 
     private var pendingLibraryRemovalBinding: Binding<Bool> {

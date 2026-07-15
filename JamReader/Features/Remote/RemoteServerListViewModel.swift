@@ -64,6 +64,7 @@ final class RemoteServerListViewModel: ObservableObject {
     @Published private(set) var latestSessionsByServerID: [UUID: RemoteComicReadingSession] = [:]
     @Published private(set) var shortcutCountByServerID: [UUID: Int] = [:]
     @Published private(set) var cacheSummaryByServerID: [UUID: RemoteComicCacheSummary] = [:]
+    @Published private(set) var offlineCopyCountByServerID: [UUID: Int] = [:]
     @Published private(set) var shortcutCount = 0
     @Published var alert: AppAlertState?
 
@@ -72,10 +73,14 @@ final class RemoteServerListViewModel: ObservableObject {
     private let credentialStore: RemoteServerCredentialStore
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
+    private let remoteOfflineCopyStore: RemoteOfflineCopyStore?
+    private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore?
     private let remoteBackgroundImportController: RemoteBackgroundImportController
     private let logger = AppLog.remote
     private let cacheLogger = AppLog.remoteCache
     private var hasLoaded = false
+    private var offlineCopyCountRefreshGeneration: UInt64 = 0
+    private var offlineCopyCountRefreshTask: Task<Void, Never>?
 
     init(
         profileStore: RemoteServerProfileStore,
@@ -83,6 +88,8 @@ final class RemoteServerListViewModel: ObservableObject {
         credentialStore: RemoteServerCredentialStore,
         browsingService: RemoteServerBrowsingService,
         readingProgressStore: RemoteReadingProgressStore,
+        remoteOfflineCopyStore: RemoteOfflineCopyStore? = nil,
+        remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore? = nil,
         remoteBackgroundImportController: RemoteBackgroundImportController
     ) {
         self.profileStore = profileStore
@@ -90,6 +97,8 @@ final class RemoteServerListViewModel: ObservableObject {
         self.credentialStore = credentialStore
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
+        self.remoteOfflineCopyStore = remoteOfflineCopyStore
+        self.remoteOfflineLibrarySnapshotStore = remoteOfflineLibrarySnapshotStore
         self.remoteBackgroundImportController = remoteBackgroundImportController
     }
 
@@ -120,6 +129,7 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
+            refreshOfflineCopyCounts()
             let profileCount = profiles.count
             let recentCount = latestSessionsByServerID.count
             logger.info("Remote server list loaded count=\(profileCount) recent=\(recentCount)")
@@ -127,6 +137,8 @@ final class RemoteServerListViewModel: ObservableObject {
             profiles = []
             shortcutCount = 0
             cacheSummaryByServerID = [:]
+            offlineCopyCountByServerID = [:]
+            cancelOfflineCopyCountRefresh()
             logger.error(
                 "Remote server list load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
@@ -338,6 +350,7 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
+            refreshOfflineCopyCounts(forceRefresh: true)
             let profileCount = profiles.count
             logger.info(
                 "Remote server save completed action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) locationChanged=\(didChangeRemoteLocation) credentialsChanged=\(didChangeCredentialIdentity) passwordRotated=\(didRotatePassword) count=\(profileCount)"
@@ -391,6 +404,7 @@ final class RemoteServerListViewModel: ObservableObject {
             refreshRecentActivity()
             refreshShortcutCount()
             refreshCacheSummaries()
+            refreshOfflineCopyCounts(forceRefresh: true)
             let profileCount = profiles.count
             logger.info(
                 "Remote server delete completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) remaining=\(profileCount)"
@@ -412,6 +426,14 @@ final class RemoteServerListViewModel: ObservableObject {
         cacheSummaryByServerID[profile.id] ?? .empty
     }
 
+    func offlineCopyCount(for profile: RemoteServerProfile) -> Int {
+        offlineCopyCountByServerID[profile.id] ?? 0
+    }
+
+    var totalOfflineCopyCount: Int {
+        offlineCopyCountByServerID.values.reduce(0, +)
+    }
+
     func shortcutCount(for profile: RemoteServerProfile) -> Int {
         shortcutCountByServerID[profile.id] ?? 0
     }
@@ -428,11 +450,14 @@ final class RemoteServerListViewModel: ObservableObject {
         cacheLogger.notice(
             "Remote server comic cache clear requested provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
         )
+        remoteOfflineLibrarySnapshotStore?.invalidate()
         do {
             try browsingService.clearCachedComics(for: profile)
+            try remoteOfflineCopyStore?.removeCopies(for: profile)
             browsingService.evictActiveConnections(for: profile)
             refreshCacheSummaries()
             refreshRecentActivity()
+            refreshOfflineCopyCounts(forceRefresh: true)
             cacheLogger.info(
                 "Remote server comic cache clear completed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public)"
             )
@@ -581,6 +606,15 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server scope change cleanup failed item=cachedComics provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
         }
+
+        do {
+            try remoteOfflineCopyStore?.removeCopies(forServerID: previousProfile.id)
+        } catch {
+            cacheLogger.warning(
+                "Remote server scope change cleanup failed item=offlineRecords provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+        remoteOfflineLibrarySnapshotStore?.invalidate()
     }
 
     private func cleanupStateAfterServerDelete(_ profile: RemoteServerProfile) {
@@ -594,6 +628,15 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server delete cleanup failed item=cachedComics provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
         }
+
+        do {
+            try remoteOfflineCopyStore?.removeCopies(forServerID: profile.id)
+        } catch {
+            cacheLogger.warning(
+                "Remote server delete cleanup failed item=offlineRecords provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+        }
+        remoteOfflineLibrarySnapshotStore?.invalidate()
 
         do {
             try readingProgressStore.deleteSessions(for: profile.id)
@@ -633,6 +676,84 @@ final class RemoteServerListViewModel: ObservableObject {
         cacheSummaryByServerID = profiles.reduce(into: [:]) { result, profile in
             result[profile.id] = browsingService.cacheSummary(for: profile)
         }
+    }
+
+    /// Refreshes the explicit offline shelf count away from the main thread.
+    ///
+    /// Physical cache files are intentionally not used here: automatic reader cache entries
+    /// should not make an Offline Shelf shortcut appear. A failed refresh preserves the last
+    /// known count so a transient storage error does not make existing shortcuts flicker away.
+    @discardableResult
+    func refreshOfflineCopyCounts(
+        forceRefresh: Bool = false
+    ) -> Task<Void, Never>? {
+        let activeServerIDs = Set(profiles.map(\.id))
+        offlineCopyCountByServerID = offlineCopyCountByServerID.filter {
+            activeServerIDs.contains($0.key)
+        }
+
+        guard let remoteOfflineLibrarySnapshotStore else {
+            cancelOfflineCopyCountRefresh()
+            offlineCopyCountByServerID = [:]
+            return nil
+        }
+
+        offlineCopyCountRefreshGeneration &+= 1
+        let generation = offlineCopyCountRefreshGeneration
+        offlineCopyCountRefreshTask?.cancel()
+        let task = Task { @MainActor [weak self] in
+            let result = await Self.loadOfflineCopyCounts(
+                from: remoteOfflineLibrarySnapshotStore,
+                activeServerIDs: activeServerIDs,
+                forceRefresh: forceRefresh
+            )
+            guard let self,
+                  !Task.isCancelled,
+                  generation == offlineCopyCountRefreshGeneration else {
+                return
+            }
+
+            switch result {
+            case .success(let counts):
+                offlineCopyCountByServerID = counts
+            case .failure(let error):
+                cacheLogger.warning(
+                    "Remote offline shortcut count fallback result=preserved error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                )
+            }
+        }
+        offlineCopyCountRefreshTask = task
+        return task
+    }
+
+    nonisolated private static func loadOfflineCopyCounts(
+        from snapshotStore: RemoteOfflineLibrarySnapshotStore,
+        activeServerIDs: Set<UUID>,
+        forceRefresh: Bool
+    ) async -> Result<[UUID: Int], Error> {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(
+                    returning: Result {
+                        let snapshot = try snapshotStore.loadSnapshot(
+                            forceRefresh: forceRefresh
+                        )
+                        return snapshot.offlineEntries.reduce(into: [:]) { counts, entry in
+                            guard activeServerIDs.contains(entry.profile.id) else {
+                                return
+                            }
+                            counts[entry.profile.id, default: 0] += 1
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    private func cancelOfflineCopyCountRefresh() {
+        offlineCopyCountRefreshGeneration &+= 1
+        offlineCopyCountRefreshTask?.cancel()
+        offlineCopyCountRefreshTask = nil
     }
 
     private func beginStorageMaintenance() -> Bool {

@@ -54,6 +54,8 @@ struct RemoteServerBrowserView: View {
                 currentPath: currentPath,
                 browsingService: dependencies.remoteServerBrowsingService,
                 readingProgressStore: dependencies.remoteReadingProgressStore,
+                remoteOfflineCopyStore: dependencies.remoteOfflineCopyStore,
+                remoteOfflineLibrarySnapshotStore: dependencies.remoteOfflineLibrarySnapshotStore,
                 importedComicsImportService: dependencies.importedComicsImportService,
                 folderShortcutStore: dependencies.remoteFolderShortcutStore,
                 remoteBackgroundImportController: dependencies.remoteBackgroundImportController

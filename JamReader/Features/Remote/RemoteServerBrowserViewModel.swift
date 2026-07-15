@@ -87,6 +87,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     private let browsingService: RemoteServerBrowsingService
     private let readingProgressStore: RemoteReadingProgressStore
+    private let remoteOfflineCopyStore: RemoteOfflineCopyStore
+    private let remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore
     private let importedComicsImportService: ImportedComicsImportService
     private let folderShortcutStore: RemoteFolderShortcutStore
     private let remoteBackgroundImportController: RemoteBackgroundImportController
@@ -100,6 +102,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         currentPath: String? = nil,
         browsingService: RemoteServerBrowsingService,
         readingProgressStore: RemoteReadingProgressStore,
+        remoteOfflineCopyStore: RemoteOfflineCopyStore,
+        remoteOfflineLibrarySnapshotStore: RemoteOfflineLibrarySnapshotStore,
         importedComicsImportService: ImportedComicsImportService,
         folderShortcutStore: RemoteFolderShortcutStore,
         remoteBackgroundImportController: RemoteBackgroundImportController
@@ -109,6 +113,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         self.capabilities = browsingService.capabilities(for: profile.providerKind)
         self.browsingService = browsingService
         self.readingProgressStore = readingProgressStore
+        self.remoteOfflineCopyStore = remoteOfflineCopyStore
+        self.remoteOfflineLibrarySnapshotStore = remoteOfflineLibrarySnapshotStore
         self.importedComicsImportService = importedComicsImportService
         self.folderShortcutStore = folderShortcutStore
         self.remoteBackgroundImportController = remoteBackgroundImportController
@@ -532,6 +538,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 reference: reference,
                 trimCacheAfterDownload: false,
+                stageCacheReplacementForRollback: true,
                 progressHandler: { [weak self] fraction in
                     guard let self else {
                         return
@@ -856,6 +863,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 reference: reference,
                 forceRefresh: forceRefresh,
+                trimCacheAfterDownload: false,
+                stageCacheReplacementForRollback: true,
                 progressHandler: { [weak self] fraction in
                     guard let self else {
                         return
@@ -870,6 +879,34 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     }
                 }
             )
+            let persistenceCandidate = RemoteOfflineCopyPersistenceCandidate(
+                reference: reference,
+                result: result
+            )
+            try RemoteOfflineCopyPersistenceCoordinator.persist(
+                candidates: [persistenceCandidate],
+                persistRecords: {
+                    try remoteOfflineCopyStore.recordDownloadedCopy(for: reference)
+                },
+                commitDownloadedCache: { candidate in
+                    try browsingService.commitDownloadedComicCache(
+                        for: candidate.reference,
+                        result: candidate.result
+                    )
+                },
+                rollbackDownloadedCache: { candidate in
+                    try browsingService.rollbackDownloadedComicCache(
+                        for: candidate.reference,
+                        result: candidate.result
+                    )
+                },
+                rollbackFailureHandler: { [cacheLogger = self.cacheLogger] reference, error in
+                    cacheLogger.warning(
+                        "Remote offline save rollback failed serverID=\(reference.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
+            )
+            remoteOfflineLibrarySnapshotStore.invalidate()
             refreshProgressState()
             feedback = RemoteBrowserFeedbackState(
                 title: forceRefresh ? "Downloaded Copy Updated" : "Saved for Offline",
@@ -945,6 +982,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 references: preparedDownloads.map { $0.1 },
                 trimCacheAfterDownload: false,
+                stageCacheReplacementForRollback: true,
                 progressHandler: { [weak self] reference, fraction in
                     guard let self else {
                         return
@@ -971,9 +1009,16 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
             var savedCount = 0
             var refreshedCount = 0
+            var persistenceCandidates: [RemoteOfflineCopyPersistenceCandidate] = []
 
             for outcome in outcomes {
                 if let result = outcome.result {
+                    persistenceCandidates.append(
+                        RemoteOfflineCopyPersistenceCandidate(
+                            reference: outcome.reference,
+                            result: result
+                        )
+                    )
                     switch result.source {
                     case .downloaded:
                         savedCount += 1
@@ -985,6 +1030,32 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 }
             }
 
+            try RemoteOfflineCopyPersistenceCoordinator.persist(
+                candidates: persistenceCandidates,
+                persistRecords: {
+                    try remoteOfflineCopyStore.recordDownloadedCopies(
+                        for: persistenceCandidates.map(\.reference)
+                    )
+                },
+                commitDownloadedCache: { candidate in
+                    try browsingService.commitDownloadedComicCache(
+                        for: candidate.reference,
+                        result: candidate.result
+                    )
+                },
+                rollbackDownloadedCache: { candidate in
+                    try browsingService.rollbackDownloadedComicCache(
+                        for: candidate.reference,
+                        result: candidate.result
+                    )
+                },
+                rollbackFailureHandler: { [cacheLogger = self.cacheLogger] reference, error in
+                    cacheLogger.warning(
+                        "Remote batch offline save rollback failed serverID=\(reference.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    )
+                }
+            )
+            remoteOfflineLibrarySnapshotStore.invalidate()
             refreshProgressState()
 
             guard savedCount > 0 || refreshedCount > 0 else {
@@ -1065,6 +1136,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         )
         do {
             try browsingService.clearCachedComic(for: reference)
+            try remoteOfflineCopyStore.removeCopy(for: reference)
+            remoteOfflineLibrarySnapshotStore.invalidate()
             refreshProgressState()
             feedback = RemoteBrowserFeedbackState(
                 title: "Downloaded Copy Removed",
@@ -1111,6 +1184,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         )
         var removedCount = 0
         var failedNames: [String] = []
+        var removedReferences: [RemoteComicFileReference] = []
 
         for item in comics {
             guard let reference = try? browsingService.makeComicFileReference(from: item) else {
@@ -1125,9 +1199,25 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             do {
                 try browsingService.clearCachedComic(for: reference)
                 removedCount += 1
+                removedReferences.append(reference)
             } catch {
                 failedNames.append(item.name)
             }
+        }
+
+        do {
+            try remoteOfflineCopyStore.removeCopies(for: removedReferences)
+            remoteOfflineLibrarySnapshotStore.invalidate()
+        } catch {
+            cacheLogger.error(
+                "Remote batch offline copy record removal failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) removed=\(removedReferences.count, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            alert = AppAlertState(
+                title: "Remove Downloaded Copies Failed",
+                message: error.userFacingMessage
+            )
+            refreshProgressState()
+            return
         }
 
         refreshProgressState()
@@ -1440,6 +1530,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 for: profile,
                 references: preparedDownloads.map { $0.1 },
                 trimCacheAfterDownload: false,
+                stageCacheReplacementForRollback: true,
                 progressHandler: { [weak self] reference, fraction in
                     guard let self else {
                         return
@@ -1662,12 +1753,15 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         _ stagedResults: [(RemoteComicFileReference, RemoteComicDownloadResult)]
     ) {
         for (reference, result) in stagedResults {
-            guard case .downloaded = result.source else {
+            guard result.cacheMutation.requiresFinalization else {
                 continue
             }
 
             do {
-                try browsingService.clearCachedComic(for: reference)
+                try browsingService.rollbackDownloadedComicCache(
+                    for: reference,
+                    result: result
+                )
             } catch {
                 cacheLogger.warning(
                     "Remote import staged download cleanup failed provider=\(reference.providerKind.rawValue, privacy: .public) serverID=\(reference.serverID.uuidString, privacy: .public) path=\(AppLogSanitizer.path(reference.path), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"

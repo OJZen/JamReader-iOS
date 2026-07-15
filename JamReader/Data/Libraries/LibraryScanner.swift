@@ -20,7 +20,39 @@ enum LibraryScannerError: LocalizedError {
     }
 }
 
-final class LibraryScanner {
+protocol LibraryScanning: Sendable {
+    func scanLibrary(
+        sourceRootURL: URL,
+        databaseURL: URL,
+        cancellationCheck: (() throws -> Void)?,
+        progressHandler: ((LibraryScanProgress) -> Void)?
+    ) throws -> LibraryScanSummary
+
+    func rescanLibrary(
+        sourceRootURL: URL,
+        databaseURL: URL,
+        cancellationCheck: (() throws -> Void)?,
+        progressHandler: ((LibraryScanProgress) -> Void)?
+    ) throws -> LibraryScanSummary
+
+    func refreshFolder(
+        sourceRootURL: URL,
+        databaseURL: URL,
+        folder: LibraryFolder,
+        cancellationCheck: (() throws -> Void)?,
+        progressHandler: ((LibraryScanProgress) -> Void)?
+    ) throws -> LibraryScanSummary
+
+    func appendImportedComics(
+        sourceRootURL: URL,
+        databaseURL: URL,
+        fileURLs: [URL],
+        cancellationCheck: (() throws -> Void)?,
+        progressHandler: ((LibraryScanProgress) -> Void)?
+    ) throws -> LibraryScanSummary
+}
+
+final class LibraryScanner: LibraryScanning, @unchecked Sendable {
     private let indexingService: LibraryIndexingService
 
     init(fileManager: FileManager = .default) {
@@ -46,6 +78,8 @@ final class LibraryScanner {
                 cancellationCheck: cancellationCheck,
                 progressHandler: progressHandler
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw mappedError(error)
         }
@@ -64,6 +98,8 @@ final class LibraryScanner {
                 cancellationCheck: cancellationCheck,
                 progressHandler: progressHandler
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw mappedError(error)
         }
@@ -84,6 +120,8 @@ final class LibraryScanner {
                 cancellationCheck: cancellationCheck,
                 progressHandler: progressHandler
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw mappedError(error)
         }
@@ -104,6 +142,8 @@ final class LibraryScanner {
                 cancellationCheck: cancellationCheck,
                 progressHandler: progressHandler
             )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             throw mappedError(error)
         }

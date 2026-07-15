@@ -92,7 +92,12 @@ final class LibraryStorageManager {
             updatedAt: Date()
         )
 
-        try ensureLibraryMetadataStructure(for: descriptor)
+        do {
+            try ensureLibraryMetadataStructure(for: descriptor)
+        } catch {
+            assetStore.deleteAssets(for: descriptor.id)
+            throw error
+        }
         return descriptor
     }
 
@@ -267,6 +272,10 @@ final class LibraryStorageManager {
 
     func ensureLibraryMetadataStructure(for descriptor: LibraryDescriptor) throws {
         try assetStore.ensureLibraryDirectories(for: descriptor.id)
+    }
+
+    func deleteLibraryAssets(for descriptor: LibraryDescriptor) {
+        assetStore.deleteAssets(for: descriptor.id)
     }
 
     func deleteManagedLibraryFilesIfNeeded(for descriptor: LibraryDescriptor) throws {

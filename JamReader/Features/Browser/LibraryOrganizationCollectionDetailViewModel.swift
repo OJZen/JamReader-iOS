@@ -17,6 +17,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     private let storageManager: LibraryStorageManager
     private let coverLocator: LibraryCoverLocator
     private let comicRemovalService: LibraryComicRemovalService
+    private let remoteBackgroundImportController: RemoteBackgroundImportController
     private let databaseURL: URL
     private let metadataRootURL: URL
     private var hasLoaded = false
@@ -31,7 +32,8 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         databaseWriter: LibraryDatabaseWriter,
         storageManager: LibraryStorageManager,
         coverLocator: LibraryCoverLocator,
-        comicRemovalService: LibraryComicRemovalService
+        comicRemovalService: LibraryComicRemovalService,
+        remoteBackgroundImportController: RemoteBackgroundImportController
     ) {
         self.descriptor = descriptor
         self.collection = collection
@@ -40,6 +42,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         self.storageManager = storageManager
         self.coverLocator = coverLocator
         self.comicRemovalService = comicRemovalService
+        self.remoteBackgroundImportController = remoteBackgroundImportController
         self.databaseURL = storageManager.databaseURL(for: descriptor)
         self.metadataRootURL = storageManager.metadataRootURL(for: descriptor)
     }
@@ -452,6 +455,13 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     }
 
     func removeComicFromLibrary(_ comic: LibraryComic) -> Bool {
+        guard beginExclusiveLibraryStorageOperation() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
         do {
             try comicRemovalService.removeComic(comic, from: descriptor)
             AppHaptics.warning()
@@ -464,6 +474,18 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             )
             return false
         }
+    }
+
+    private func beginExclusiveLibraryStorageOperation() -> Bool {
+        guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
+            alert = AppAlertState(
+                title: "Library Busy",
+                message: "Finish the current import or storage task, then try again."
+            )
+            return false
+        }
+
+        return true
     }
 
     func coverURL(for comic: LibraryComic) -> URL? {

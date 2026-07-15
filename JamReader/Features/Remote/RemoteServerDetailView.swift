@@ -43,6 +43,8 @@ struct RemoteServerDetailView: View {
                 credentialStore: dependencies.remoteServerCredentialStore,
                 browsingService: dependencies.remoteServerBrowsingService,
                 readingProgressStore: dependencies.remoteReadingProgressStore,
+                remoteOfflineCopyStore: dependencies.remoteOfflineCopyStore,
+                remoteOfflineLibrarySnapshotStore: dependencies.remoteOfflineLibrarySnapshotStore,
                 remoteBackgroundImportController: dependencies.remoteBackgroundImportController
             )
         )
@@ -303,7 +305,7 @@ struct RemoteServerDetailView: View {
     }
 
     private var offlineCopyCount: Int {
-        viewModel.cacheSummary(for: profile).fileCount
+        viewModel.offlineCopyCount(for: profile)
     }
 
     @ViewBuilder

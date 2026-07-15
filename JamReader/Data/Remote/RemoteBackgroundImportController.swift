@@ -11,7 +11,7 @@ final class RemoteBackgroundImportController: ObservableObject {
 
     private var activeTask: Task<Void, Never>?
     private var activeCancellationController: RemoteImportCancellationController?
-    private var isStorageMaintenanceRunning = false
+    private(set) var isStorageMaintenanceRunning = false
     private var pendingProgressCommitTask: Task<Void, Never>?
     private var pendingProgressState: RemoteBrowserProgressState?
     private var lastPublishedProgressState: RemoteBrowserProgressState?
