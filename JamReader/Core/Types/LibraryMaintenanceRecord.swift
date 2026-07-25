@@ -14,15 +14,30 @@ struct LibraryMaintenanceRecord: Codable, Equatable {
     let contextPath: String?
     let scannedAt: Date
 
+    var localizedTitle: String {
+        switch title {
+        case "Library Ready":
+            return String(localized: "Library Ready")
+        case "Library Refreshed":
+            return String(localized: "Library Refreshed")
+        case "Folder Refreshed":
+            return String(localized: "Folder Refreshed")
+        case "Library Updated":
+            return String(localized: "Library Updated")
+        default:
+            return title
+        }
+    }
+
     var summaryLine: String {
-        "\(title) · \(summary.summaryLine)"
+        String(localized: "\(localizedTitle) · \(summary.summaryLine)")
     }
 
     var detailLine: String? {
         let timestamp = relativeTimestampLine
 
         if let changeSummaryLine = summary.changeSummaryLine {
-            return "\(timestamp) · \(changeSummaryLine)"
+            return String(localized: "\(timestamp) · \(changeSummaryLine)")
         }
 
         return timestamp
@@ -31,15 +46,15 @@ struct LibraryMaintenanceRecord: Codable, Equatable {
     var infoLine: String {
         switch scope {
         case .library:
-            return "Last full library scan"
+            return String(localized: "Last full library scan")
         case .folder:
             if let contextPath, !contextPath.isEmpty {
-                return "Last folder refresh · \(contextPath)"
+                return String(localized: "Last folder refresh · \(contextPath)")
             }
 
-            return "Last folder refresh"
+            return String(localized: "Last folder refresh")
         case .importIndex:
-            return "Last import indexing pass"
+            return String(localized: "Last import indexing pass")
         }
     }
 
@@ -50,6 +65,7 @@ struct LibraryMaintenanceRecord: Codable, Equatable {
     private var relativeTimestampLine: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        return "Updated \(formatter.localizedString(for: scannedAt, relativeTo: Date()))"
+        let relativeTimestamp = formatter.localizedString(for: scannedAt, relativeTo: Date())
+        return String(localized: "Updated \(relativeTimestamp)")
     }
 }

@@ -9,13 +9,13 @@ enum LibraryDatabaseWriteError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .sqliteUnavailable:
-            return "SQLite3 is unavailable in this build."
+            return String(localized: "SQLite3 is unavailable in this build.")
         case .databaseMissing:
-            return "This library has not been indexed yet."
-        case .openDatabaseFailed(let reason):
-            return "Unable to open the app library database for writing. \(reason)"
-        case .updateFailed(let reason):
-            return "Unable to update the app library database. \(reason)"
+            return String(localized: "This library has not been indexed yet.")
+        case .openDatabaseFailed:
+            return String(localized: "Unable to open the app library database for writing.")
+        case .updateFailed:
+            return String(localized: "Unable to update the app library database.")
         }
     }
 }
@@ -285,6 +285,6 @@ final class LibraryDatabaseWriter {
             return error
         }
 
-        return .updateFailed(error.userFacingMessage)
+        return .updateFailed(AppLogSanitizer.errorDescription(error))
     }
 }

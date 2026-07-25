@@ -17,27 +17,27 @@ enum ZIPArchiveError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unreadableArchive:
-            return "The archive could not be opened."
+            return String(localized: "The archive could not be opened.")
         case .invalidArchive:
-            return "The archive is not a valid ZIP/CBZ file."
+            return String(localized: "The archive is not a valid ZIP/CBZ file.")
         case .unsupportedZIP64:
-            return "ZIP64 archives are not supported yet."
+            return String(localized: "ZIP64 archives are not supported yet.")
         case .unsupportedMultiDiskArchive:
-            return "Split ZIP archives are not supported yet."
+            return String(localized: "Split ZIP archives are not supported yet.")
         case .noRenderablePages:
-            return "No supported image pages were found inside this archive."
+            return String(localized: "No supported image pages were found inside this archive.")
         case .pageIndexOutOfBounds(let index):
-            return "The requested archive page \(index + 1) does not exist."
+            return String(localized: "The requested archive page \(index + 1) does not exist.")
         case .encryptedEntry(let path):
-            return "The archive entry `\(path)` is encrypted and cannot be opened yet."
+            return String(localized: "The archive entry `\(path)` is encrypted and cannot be opened yet.")
         case .unsupportedCompressionMethod(let path, let method):
-            return "The archive entry `\(path)` uses ZIP compression method \(method), which is not supported yet."
+            return String(localized: "The archive entry `\(path)` uses ZIP compression method \(method), which is not supported yet.")
         case .corruptEntry(let path):
-            return "The archive entry `\(path)` appears to be corrupt."
+            return String(localized: "The archive entry `\(path)` appears to be corrupt.")
         case .truncatedEntry(let path):
-            return "The archive entry `\(path)` could not be fully read."
+            return String(localized: "The archive entry `\(path)` could not be fully read.")
         case .inflateFailed(let path):
-            return "The archive entry `\(path)` could not be decompressed."
+            return String(localized: "The archive entry `\(path)` could not be decompressed.")
         }
     }
 }

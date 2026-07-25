@@ -163,10 +163,6 @@ enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 
     var title: LocalizedStringKey {
-        LocalizedStringKey(titleString)
-    }
-
-    var titleString: String {
         switch self {
         case .overview:
             return "Overview"
@@ -178,6 +174,21 @@ enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
             return "Storage"
         case .about:
             return "About"
+        }
+    }
+
+    var titleString: String {
+        switch self {
+        case .overview:
+            return String(localized: "Overview")
+        case .reading:
+            return String(localized: "Reading")
+        case .library:
+            return String(localized: "Library")
+        case .storage:
+            return String(localized: "Storage")
+        case .about:
+            return String(localized: "About")
         }
     }
 

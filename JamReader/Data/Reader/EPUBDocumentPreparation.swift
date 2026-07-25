@@ -18,15 +18,15 @@ enum EPUBDocumentPreparationError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingReaderAssets:
-            return "The EPUB reader assets are missing from the app bundle."
+            return String(localized: "The EPUB reader assets are missing from the app bundle.")
         case .invalidArchiveEntry(let path):
-            return "The EPUB contains an invalid entry path: \(path)"
+            return String(localized: "The EPUB contains an invalid entry path: \(path)")
         case .missingContainerXML:
-            return "The EPUB is missing META-INF/container.xml."
+            return String(localized: "The EPUB is missing META-INF/container.xml.")
         case .invalidContainerXML:
-            return "The EPUB container metadata could not be parsed."
+            return String(localized: "The EPUB container metadata could not be parsed.")
         case .missingPackageDocument(let path):
-            return "The EPUB package document could not be found at \(path)."
+            return String(localized: "The EPUB package document could not be found at \(path).")
         }
     }
 }

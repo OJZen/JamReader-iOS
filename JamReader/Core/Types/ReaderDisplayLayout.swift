@@ -8,9 +8,9 @@ enum ReaderSpreadMode: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .singlePage:
-            return "Single Page"
+            return String(localized: "Single Page")
         case .doublePage:
-            return "Double Page"
+            return String(localized: "Double Page")
         }
     }
 }
@@ -22,9 +22,9 @@ enum ReaderReadingDirection: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .leftToRight:
-            return "Left to Right"
+            return String(localized: "Left to Right")
         case .rightToLeft:
-            return "Right to Left"
+            return String(localized: "Right to Left")
         }
     }
 }
@@ -36,9 +36,9 @@ enum ReaderPagingMode: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .paged:
-            return "Paged"
+            return String(localized: "Paged")
         case .verticalContinuous:
-            return "Vertical Scroll"
+            return String(localized: "Vertical Scroll")
         }
     }
 }
@@ -52,13 +52,13 @@ enum ReaderFitMode: String, CaseIterable, Hashable {
     var title: String {
         switch self {
         case .page:
-            return "Fit Page"
+            return String(localized: "Fit Page")
         case .width:
-            return "Fit Width"
+            return String(localized: "Fit Width")
         case .height:
-            return "Fit Height"
+            return String(localized: "Fit Height")
         case .originalSize:
-            return "Original Size"
+            return String(localized: "Original Size")
         }
     }
 }

@@ -91,7 +91,11 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
         if (error != NULL) {
             *error = [NSError errorWithDomain:YRLibArchiveReaderErrorDomain
                                          code:YRLibArchiveReaderErrorInvalidEntry
-                                     userInfo:@{NSLocalizedDescriptionKey: @"The requested archive entry index is invalid."}];
+                                     userInfo:@{
+                                         NSLocalizedDescriptionKey: NSLocalizedString(
+                                             @"The requested archive entry index is invalid.", nil
+                                         )
+                                     }];
         }
         return nil;
     }
@@ -119,7 +123,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
 
         if (result != ARCHIVE_OK) {
             [self closeArchive];
-            return [self populateArchiveError:error fallback:@"Unable to enumerate archive entries."];
+            return [self populateArchiveError:
+                             error
+                                     fallback:NSLocalizedString(@"Unable to enumerate archive entries.", nil)];
         }
 
         if ([self shouldIndexEntry:entry]) {
@@ -129,7 +135,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
 
         if (archive_read_data_skip(self.archiveHandle) != ARCHIVE_OK) {
             [self closeArchive];
-            return [self populateArchiveError:error fallback:@"Unable to skip archive entry data."];
+            return [self populateArchiveError:
+                             error
+                                     fallback:NSLocalizedString(@"Unable to skip archive entry data.", nil)];
         }
     }
 
@@ -148,7 +156,11 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
         if (error != NULL) {
             *error = [NSError errorWithDomain:YRLibArchiveReaderErrorDomain
                                          code:YRLibArchiveReaderErrorOpenFailed
-                                     userInfo:@{NSLocalizedDescriptionKey: @"Unable to allocate libarchive reader."}];
+                                     userInfo:@{
+                                         NSLocalizedDescriptionKey: NSLocalizedString(
+                                             @"Unable to allocate libarchive reader.", nil
+                                         )
+                                     }];
         }
         return NO;
     }
@@ -171,7 +183,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
 
     if (openResult != ARCHIVE_OK) {
         self.archiveHandle = archiveHandle;
-        BOOL populated = [self populateArchiveError:error fallback:@"Unable to open archive."];
+        BOOL populated = [self populateArchiveError:
+                                   error
+                                       fallback:NSLocalizedString(@"Unable to open archive.", nil)];
         [self closeArchive];
         return populated;
     }
@@ -210,7 +224,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
     while (self.nextReadableEntryIndex < targetIndex) {
         int result = archive_read_next_header(self.archiveHandle, &entry);
         if (result != ARCHIVE_OK) {
-            return [self populateArchiveError:error fallback:@"Unable to seek within archive."];
+            return [self populateArchiveError:
+                             error
+                                     fallback:NSLocalizedString(@"Unable to seek within archive.", nil)];
         }
 
         if ([self shouldIndexEntry:entry]) {
@@ -218,7 +234,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
         }
 
         if (archive_read_data_skip(self.archiveHandle) != ARCHIVE_OK) {
-            return [self populateArchiveError:error fallback:@"Unable to skip archive data while seeking."];
+            return [self populateArchiveError:
+                             error
+                                     fallback:NSLocalizedString(@"Unable to skip archive data while seeking.", nil)];
         }
     }
 
@@ -231,13 +249,17 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
     while (YES) {
         int result = archive_read_next_header(self.archiveHandle, &entry);
         if (result != ARCHIVE_OK) {
-            [self populateArchiveError:error fallback:@"Unable to read archive entry."];
+            [self populateArchiveError:
+                      error
+                          fallback:NSLocalizedString(@"Unable to read archive entry.", nil)];
             return nil;
         }
 
         if (![self shouldIndexEntry:entry]) {
             if (archive_read_data_skip(self.archiveHandle) != ARCHIVE_OK) {
-                [self populateArchiveError:error fallback:@"Unable to skip non-page archive entry."];
+                [self populateArchiveError:
+                          error
+                              fallback:NSLocalizedString(@"Unable to skip non-page archive entry.", nil)];
                 return nil;
             }
             continue;
@@ -248,7 +270,11 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
             if (error != NULL) {
                 *error = [NSError errorWithDomain:YRLibArchiveReaderErrorDomain
                                              code:YRLibArchiveReaderErrorReadFailed
-                                         userInfo:@{NSLocalizedDescriptionKey: @"Archive entry size is invalid."}];
+                                         userInfo:@{
+                                             NSLocalizedDescriptionKey: NSLocalizedString(
+                                                 @"Archive entry size is invalid.", nil
+                                             )
+                                         }];
             }
             return nil;
         }
@@ -264,7 +290,9 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
             );
 
             if (chunk < 0) {
-                [self populateArchiveError:error fallback:@"Unable to extract archive entry data."];
+                [self populateArchiveError:
+                          error
+                              fallback:NSLocalizedString(@"Unable to extract archive entry data.", nil)];
                 return nil;
             }
 
@@ -298,17 +326,18 @@ static int YRLibArchiveCloseCallback(struct archive *archive, void *clientData);
         return NO;
     }
 
-    NSString *message = fallback;
     if (self.archiveHandle != NULL) {
         const char *errorString = archive_error_string(self.archiveHandle);
         if (errorString != NULL && errorString[0] != '\0') {
-            message = [NSString stringWithUTF8String:errorString];
+            os_log_error(YRLibArchiveReaderLog(),
+                         "libarchive operation failed detail=%{private}s",
+                         errorString);
         }
     }
 
     *error = [NSError errorWithDomain:YRLibArchiveReaderErrorDomain
                                  code:YRLibArchiveReaderErrorReadFailed
-                             userInfo:@{NSLocalizedDescriptionKey: message}];
+                             userInfo:@{NSLocalizedDescriptionKey: fallback}];
     return NO;
 }
 
@@ -330,7 +359,8 @@ static la_ssize_t YRLibArchiveReadCallback(struct archive *archive, void *client
     NSError *error = nil;
     NSData *data = [reader.dataSource readDataAtOffset:reader.currentOffset length:64 * 1024 error:&error];
     if (data == nil) {
-        NSString *message = error.localizedDescription ?: @"Unable to read remote archive data.";
+        NSString *message = error.localizedDescription
+            ?: NSLocalizedString(@"Unable to read remote archive data.", nil);
         archive_set_error(archive, -1, "%s", message.UTF8String);
         return -1;
     }

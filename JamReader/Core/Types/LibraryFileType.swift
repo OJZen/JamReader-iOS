@@ -18,15 +18,15 @@ enum LibraryFileType: Int, Codable, Hashable, CaseIterable, Identifiable, Sendab
     var title: String {
         switch self {
         case .comic:
-            return "Comic"
+            return String(localized: "Comic")
         case .manga:
-            return "Manga"
+            return String(localized: "Manga")
         case .westernManga:
-            return "Western Manga"
+            return String(localized: "Western Manga")
         case .webComic:
-            return "Webcomic"
+            return String(localized: "Webcomic")
         case .yonkoma:
-            return "4-Koma"
+            return String(localized: "4-Koma")
         }
     }
 }

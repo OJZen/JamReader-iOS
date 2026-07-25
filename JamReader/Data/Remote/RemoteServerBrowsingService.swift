@@ -3763,9 +3763,7 @@ final class RemoteServerBrowsingService {
             case .noData, .disconnected, .cancelled, .unknown:
                 return RemoteServerBrowsingError.connectionFailed(profile.endpointDisplayHost)
             case .connectionTimeout:
-                return RemoteServerBrowsingError.connectionFailed(
-                    "\(profile.endpointDisplayHost) (connection timed out)"
-                )
+                return RemoteServerBrowsingError.connectionFailed(profile.endpointDisplayHost)
             }
         }
 
@@ -3778,7 +3776,10 @@ final class RemoteServerBrowsingService {
             case .remotePathUnavailable:
                 return RemoteServerBrowsingError.remotePathUnavailable(remotePath)
             case .connectionFailed(let message):
-                return RemoteServerBrowsingError.connectionFailed(message)
+                logger.debug(
+                    "WebDAV connection failure normalized endpoint=\(profile.endpointDisplayHost, privacy: .public) detail=\(AppLogSanitizer.truncated(message), privacy: .private)"
+                )
+                return RemoteServerBrowsingError.connectionFailed(profile.endpointDisplayHost)
             case .invalidResponse, .unsupportedResponse:
                 return RemoteServerBrowsingError.operationFailed(webDAVError.localizedDescription)
             }
@@ -3847,7 +3848,10 @@ final class RemoteServerBrowsingService {
              .clientCertificateRequired:
             return .secureConnectionFailed(profile.endpointDisplayHost)
         default:
-            return .connectionFailed("\(profile.endpointDisplayHost) (\(fallbackMessage))")
+            logger.debug(
+                "URL transport failure normalized endpoint=\(profile.endpointDisplayHost, privacy: .public) code=\(code.rawValue, privacy: .public) detail=\(AppLogSanitizer.truncated(fallbackMessage), privacy: .private)"
+            )
+            return .connectionFailed(profile.endpointDisplayHost)
         }
     }
 
@@ -3861,7 +3865,7 @@ final class RemoteServerBrowsingService {
             remotePath: profile.connectionDisplayPath
         )
 
-        return "Opened the last downloaded copy because the server could not be reached. \(normalizedError.localizedDescription)"
+        return String(localized: "Opened the last downloaded copy because the server could not be reached. \(normalizedError.localizedDescription)")
     }
 }
 

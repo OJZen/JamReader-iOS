@@ -13,41 +13,45 @@ enum RemoteServerDestructiveAction: Identifiable {
     var title: String {
         switch self {
         case .clearHistory:
-            return "Clear Recent History?"
+            return String(localized: "Clear Recent History?")
         case .clearDownloads:
-            return "Clear Downloaded Comics?"
+            return String(localized: "Clear Downloaded Comics?")
         case .clearTemporaryCache:
-            return "Clear Temporary Cache?"
+            return String(localized: "Clear Temporary Cache?")
         case .deleteServer:
-            return "Delete Server?"
+            return String(localized: "Delete Server?")
         }
     }
 
     var buttonTitle: String {
         switch self {
         case .clearHistory:
-            return "Clear History"
+            return String(localized: "Clear History")
         case .clearDownloads:
-            return "Clear Downloads"
+            return String(localized: "Clear Downloads")
         case .clearTemporaryCache:
-            return "Clear Temporary Cache"
+            return String(localized: "Clear Temporary Cache")
         case .deleteServer:
-            return "Delete Server"
+            return String(localized: "Delete Server")
         }
     }
 
     var message: String {
         switch self {
         case .clearHistory(let profile, let count):
-            let itemText = count == 1 ? "1 recent item" : "\(count) recent items"
-            return "This removes \(itemText) for \(profile.displayTitle). Downloaded comics remain on this device."
+            if count == 1 {
+                return String(localized: "This removes 1 recent item for \(profile.displayTitle). Downloaded comics remain on this device.")
+            }
+            return String(localized: "This removes \(count) recent items for \(profile.displayTitle). Downloaded comics remain on this device.")
         case .clearDownloads(let profile, let count):
-            let itemText = count == 1 ? "1 downloaded comic" : "\(count) downloaded comics"
-            return "This deletes \(itemText) for \(profile.displayTitle) from this device. Reading history remains."
+            if count == 1 {
+                return String(localized: "This deletes 1 downloaded comic for \(profile.displayTitle) from this device. Reading history remains.")
+            }
+            return String(localized: "This deletes \(count) downloaded comics for \(profile.displayTitle) from this device. Reading history remains.")
         case .clearTemporaryCache(let profile):
-            return "This removes cached previews and temporary browsing data for \(profile.displayTitle). Downloaded comics remain available."
+            return String(localized: "This removes cached previews and temporary browsing data for \(profile.displayTitle). Downloaded comics remain available.")
         case .deleteServer(let profile):
-            return "This deletes \(profile.displayTitle), its saved credentials, downloaded comics, recent history, and saved folder shortcuts from this device."
+            return String(localized: "This deletes \(profile.displayTitle), its saved credentials, downloaded comics, recent history, and saved folder shortcuts from this device.")
         }
     }
 

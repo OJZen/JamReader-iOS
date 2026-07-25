@@ -15,15 +15,15 @@ enum NativeLibraryStorageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .sqliteUnavailable:
-            return "SQLite3 is unavailable in this build."
+            return String(localized: "SQLite3 is unavailable in this build.")
         case .invalidLibraryContext:
-            return "The library context could not be resolved."
-        case .openDatabaseFailed(let reason):
-            return "Unable to open the app library database. \(reason)"
-        case .statementPreparationFailed(let reason):
-            return "Unable to prepare an app library query. \(reason)"
-        case .executionFailed(let reason):
-            return "Unable to update the app library database. \(reason)"
+            return String(localized: "The library context could not be resolved.")
+        case .openDatabaseFailed:
+            return String(localized: "Unable to open the app library database.")
+        case .statementPreparationFailed:
+            return String(localized: "Unable to prepare an app library query.")
+        case .executionFailed:
+            return String(localized: "Unable to update the app library database.")
         }
     }
 }
@@ -120,7 +120,7 @@ final class AppLibraryDatabase {
 
         let openResult = sqlite3_open_v2(databaseFileURL.path, &database, flags, nil)
         guard openResult == SQLITE_OK, let database else {
-            let reason = database.map(sqliteLastError) ?? "Unknown SQLite error."
+            let reason = database.map(sqliteLastError) ?? String(localized: "Unknown SQLite error.")
             if let database {
                 sqlite3_close(database)
             }
@@ -555,7 +555,7 @@ final class LibraryCatalogRepository {
                     LibraryDescriptor(
                         id: identifier,
                         kind: kind,
-                        name: sqliteString(statement, index: 2) ?? "Untitled Library",
+                        name: sqliteString(statement, index: 2) ?? String(localized: "Untitled Library"),
                         rootPath: sqliteString(statement, index: 3) ?? "",
                         bookmarkData: sqliteData(statement, index: 4) ?? Data(),
                         createdAt: sqliteDate(statement, index: 5) ?? Date.distantPast,
@@ -779,7 +779,7 @@ func sqliteRollbackTransaction(database: OpaquePointer) {
 
 func sqliteLastError(_ database: OpaquePointer) -> String {
     guard let message = sqlite3_errmsg(database) else {
-        return "Unknown SQLite error."
+        return String(localized: "Unknown SQLite error.")
     }
 
     return String(cString: message)

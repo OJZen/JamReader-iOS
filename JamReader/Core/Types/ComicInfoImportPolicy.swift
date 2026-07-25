@@ -11,18 +11,18 @@ enum ComicInfoImportPolicy: String, CaseIterable, Codable, Hashable, Identifiabl
     var title: String {
         switch self {
         case .fillMissing:
-            return "Fill Empty Fields"
+            return String(localized: "Fill Empty Fields")
         case .overwriteExisting:
-            return "Overwrite Existing Fields"
+            return String(localized: "Overwrite Existing Fields")
         }
     }
 
     var summaryText: String {
         switch self {
         case .fillMissing:
-            return "Only applies XML values where the library field is still empty."
+            return String(localized: "Only applies XML values where the library field is still empty.")
         case .overwriteExisting:
-            return "Replaces current library values with embedded ComicInfo.xml values."
+            return String(localized: "Replaces current library values with embedded ComicInfo.xml values.")
         }
     }
 }

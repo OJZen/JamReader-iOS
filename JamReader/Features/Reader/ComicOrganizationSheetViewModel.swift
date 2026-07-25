@@ -74,7 +74,7 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
                 "Library comic organization load failed libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Load Organization",
+                title: String(localized: "Failed to Load Organization"),
                 message: error.userFacingMessage
             )
         }
@@ -113,7 +113,7 @@ final class ComicOrganizationSheetViewModel: ObservableObject, LoadableViewModel
                 "Library comic organization membership update failed libraryID=\(self.libraryID, privacy: .public) comicID=\(self.comic.id) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) value=\(updatedMembership) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Organization",
+                title: String(localized: "Failed to Update Organization"),
                 message: error.userFacingMessage
             )
         }

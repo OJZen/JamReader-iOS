@@ -701,7 +701,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             if row.item.canOpenAsComic {
                 actions.append(
                     UIAction(
-                        title: "Info",
+                        title: String(localized: "Info"),
                         image: UIImage(systemName: "info.circle")
                     ) { [weak self] _ in
                         self?.pendingContextMenuAction = { [weak self] in
@@ -712,7 +712,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
                 actions.append(
                     UIAction(
-                        title: "Import",
+                        title: String(localized: "Import"),
                         image: UIImage(systemName: "square.and.arrow.down")
                     ) { [weak self] _ in
                         self?.pendingContextMenuAction = { [weak self] in
@@ -724,7 +724,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 if row.cacheAvailability.hasLocalCopy {
                     actions.append(
                         UIAction(
-                            title: "Open Offline",
+                            title: String(localized: "Open Offline"),
                             image: UIImage(systemName: "arrow.down.circle")
                         ) { [weak self] _ in
                             self?.pendingContextMenuAction = { [weak self] in
@@ -736,7 +736,9 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
                 actions.append(
                     UIAction(
-                        title: row.cacheAvailability.kind == .unavailable ? "Save Offline" : "Refresh Offline Copy",
+                        title: row.cacheAvailability.kind == .unavailable
+                            ? String(localized: "Save Offline")
+                            : String(localized: "Refresh Offline Copy"),
                         image: UIImage(
                             systemName: row.cacheAvailability.kind == .unavailable
                                 ? "icloud.and.arrow.down"
@@ -752,7 +754,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 if row.cacheAvailability.hasLocalCopy {
                     actions.append(
                         UIAction(
-                            title: "Remove Download",
+                            title: String(localized: "Remove Download"),
                             image: UIImage(systemName: "trash"),
                             attributes: .destructive
                         ) { [weak self] _ in
@@ -765,7 +767,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             } else if row.item.isDirectory {
                 actions.append(
                     UIAction(
-                        title: "Import",
+                        title: String(localized: "Import"),
                         image: UIImage(systemName: "square.and.arrow.down")
                     ) { [weak self] _ in
                         self?.pendingContextMenuAction = { [weak self] in
@@ -1761,7 +1763,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
 
     private func metadataText(for row: RemoteBrowserListRowModel) -> String {
         if row.item.isDirectory {
-            return row.item.modifiedAt?.formatted(date: .abbreviated, time: .omitted) ?? "Browse folder"
+            return row.item.modifiedAt?.formatted(date: .abbreviated, time: .omitted)
+                ?? String(localized: "Browse folder")
         }
         if let readingSession = row.readingSession {
             return readingSession.progressText
@@ -1772,9 +1775,9 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         }
         if row.item.isComicDirectory {
             if let pageCountHint = row.item.pageCountHint {
-                parts.append("\(pageCountHint) pages")
+                parts.append(String(localized: "\(pageCountHint) pages"))
             } else {
-                parts.append("Image folder comic")
+                parts.append(String(localized: "Image folder comic"))
             }
         } else if let fileSize = row.item.fileSize {
             parts.append(ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file))

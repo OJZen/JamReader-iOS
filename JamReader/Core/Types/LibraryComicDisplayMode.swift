@@ -11,9 +11,9 @@ enum LibraryComicDisplayMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .list:
-            return "List"
+            return String(localized: "List")
         case .grid:
-            return "Grid"
+            return String(localized: "Grid")
         }
     }
 

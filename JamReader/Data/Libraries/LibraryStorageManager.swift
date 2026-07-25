@@ -9,11 +9,11 @@ enum LibraryStorageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidFolder:
-            return "The selected URL is not a valid library folder."
+            return String(localized: "The selected URL is not a valid library folder.")
         case .bookmarkCreationFailed:
-            return "Unable to create a persistent bookmark for the selected folder."
+            return String(localized: "Unable to create a persistent bookmark for the selected folder.")
         case .bookmarkResolutionFailed:
-            return "Unable to restore access to the selected library folder."
+            return String(localized: "Unable to restore access to the selected library folder.")
         }
     }
 }
@@ -316,7 +316,7 @@ final class LibraryStorageManager {
         }
 
         let fallbackTrimmed = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
-        return fallbackTrimmed.isEmpty ? "Untitled Library" : fallbackTrimmed
+        return fallbackTrimmed.isEmpty ? String(localized: "Untitled Library") : fallbackTrimmed
     }
 
     private func importedComicsLibraryRootURL(createIfNeeded: Bool) throws -> URL {

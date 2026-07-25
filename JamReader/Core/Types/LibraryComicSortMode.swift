@@ -15,17 +15,17 @@ enum LibraryComicSortMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .sourceOrder:
-            return "Default Order"
+            return String(localized: "Default Order")
         case .titleAscending:
-            return "Title A-Z"
+            return String(localized: "Title A-Z")
         case .titleDescending:
-            return "Title Z-A"
+            return String(localized: "Title Z-A")
         case .fileNameAscending:
-            return "File Name"
+            return String(localized: "File Name")
         case .recentlyOpened:
-            return "Recently Opened"
+            return String(localized: "Recently Opened")
         case .recentlyAdded:
-            return "Recently Added"
+            return String(localized: "Recently Added")
         }
     }
 }

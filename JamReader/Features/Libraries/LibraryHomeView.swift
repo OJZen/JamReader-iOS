@@ -23,9 +23,9 @@ struct LibraryHomeView: View {
             if viewModel.items.isEmpty {
                 EmptyStateView(
                     systemImage: "books.vertical",
-                    title: "No Libraries Yet",
-                    description: isPad ? nil : "Add a library or import comics.",
-                    actionTitle: isPad ? nil : "New Library",
+                    title: String(localized: "No Libraries Yet"),
+                    description: isPad ? nil : String(localized: "Add a library or import comics."),
+                    actionTitle: isPad ? nil : String(localized: "New Library"),
                     action: isPad ? nil : { presentCreateLibrarySheet() }
                 )
                 .background(Color.surfaceGrouped)
@@ -91,7 +91,7 @@ struct LibraryHomeView: View {
             makeLibraryAlert(for: alert)
         }
         .confirmationDialog(
-            pendingLibraryRemoval?.title ?? "Remove Library?",
+            pendingLibraryRemoval?.title ?? String(localized: "Remove Library?"),
             isPresented: pendingLibraryRemovalBinding,
             titleVisibility: .visible
         ) {
@@ -326,7 +326,11 @@ struct LibraryHomeView: View {
                 NSError(
                     domain: "LibraryHomeImportRoute",
                     code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "The selected import action could not be resolved."]
+                    userInfo: [
+                        NSLocalizedDescriptionKey: String(
+                            localized: "The selected import action could not be resolved."
+                        )
+                    ]
                 )
             )
         }
@@ -465,7 +469,7 @@ struct LibraryHomeView: View {
             PersistentRowActionButtonLabel()
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Manage \(item.descriptor.name)")
+        .accessibilityLabel("Manage \(item.descriptor.displayName)")
     }
 
     private func openLibrary(_ libraryID: UUID) {
@@ -569,11 +573,11 @@ private enum LibraryHomeImportRoute: Identifiable {
     var destinationPickerTitle: String {
         switch self {
         case .libraryFolder:
-            return "Choose Import Destination"
+            return String(localized: "Choose Import Destination")
         case .comicFiles:
-            return "Import Comic Files"
+            return String(localized: "Import Comic Files")
         case .comicFolder:
-            return "Import Comic Folder"
+            return String(localized: "Import Comic Folder")
         }
     }
 
@@ -593,7 +597,7 @@ private struct LibraryRowView: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(item.descriptor.name)
+                Text(item.descriptor.displayName)
                     .font(AppFont.body(.semibold))
                     .foregroundStyle(Color.textPrimary)
                     .lineLimit(1)
@@ -631,7 +635,7 @@ private struct LibrarySidebarRowView: View {
             )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(item.descriptor.name)
+                Text(item.descriptor.displayName)
                     .font(AppFont.headline())
                     .lineLimit(1)
 
@@ -677,7 +681,9 @@ struct LibraryHomeDetailPlaceholder: View {
     var body: some View {
         ContentUnavailableView {
             Label(
-                itemCount == 0 ? "Add a Library" : "Select a Library",
+                itemCount == 0
+                    ? String(localized: "Add a Library")
+                    : String(localized: "Select a Library"),
                 systemImage: "books.vertical"
             )
         } description: {
@@ -696,10 +702,10 @@ struct LibraryHomeDetailPlaceholder: View {
 
     private var descriptionText: String {
         if itemCount == 0 {
-            return "Create a library, link a folder, or import comics."
+            return String(localized: "Create a library, link a folder, or import comics.")
         }
 
-        return "Choose a library from the sidebar."
+        return String(localized: "Choose a library from the sidebar.")
     }
 }
 
@@ -718,40 +724,50 @@ private struct LibraryRemovalRequest {
 
     var title: String {
         if items.count == 1 {
-            return managedCount == 1 ? "Delete Library from Device?" : "Remove Library from App?"
+            return managedCount == 1
+                ? String(localized: "Delete Library from Device?")
+                : String(localized: "Remove Library from App?")
         }
 
-        return managedCount == items.count ? "Delete Libraries from Device?" : "Remove Libraries?"
+        return managedCount == items.count
+            ? String(localized: "Delete Libraries from Device?")
+            : String(localized: "Remove Libraries?")
     }
 
     var actionTitle: String {
         if items.count == 1 {
-            return managedCount == 1 ? "Delete from Device" : "Remove from App"
+            return managedCount == 1
+                ? String(localized: "Delete from Device")
+                : String(localized: "Remove from App")
         }
 
         return managedCount == items.count
-            ? "Delete \(items.count) Libraries"
-            : "Remove \(items.count) Libraries"
+            ? String(localized: "Delete \(items.count) Libraries")
+            : String(localized: "Remove \(items.count) Libraries")
     }
 
     var message: String {
         if items.count == 1, let item = items.first {
             if item.descriptor.kind.isManagedByApp {
-                return "This permanently deletes \(item.descriptor.name) and its files from this device."
+                return String(
+                    localized: "This permanently deletes \(item.descriptor.displayName) and its files from this device."
+                )
             }
 
-            return "This removes \(item.descriptor.name) from JamReader. Files remain in the original folder."
+            return String(
+                localized: "This removes \(item.descriptor.displayName) from JamReader. Files remain in the original folder."
+            )
         }
 
         if managedCount == items.count {
-            return "This permanently deletes the selected libraries and their files from this device."
+            return String(localized: "This permanently deletes the selected libraries and their files from this device.")
         }
 
         if managedCount == 0 {
-            return "This removes the selected libraries from JamReader. Files remain in their original folders."
+            return String(localized: "This removes the selected libraries from JamReader. Files remain in their original folders.")
         }
 
-        return "App-managed library files will be deleted from this device. Files in linked folders will remain in place."
+        return String(localized: "App-managed library files will be deleted from this device. Files in linked folders will remain in place.")
     }
 }
 
@@ -768,23 +784,29 @@ private extension LibraryListItem {
     }
 
     var removalActionTitle: String {
-        descriptor.kind.isManagedByApp ? "Delete" : "Remove"
+        descriptor.kind.isManagedByApp
+            ? String(localized: "Delete")
+            : String(localized: "Remove")
     }
 
     var libraryScaleSummary: String {
         let database = accessSnapshot.database
 
         if database.exists {
-            let comicText = database.comicCount == 1 ? "1 comic" : "\(database.comicCount) comics"
-            let folderText = database.folderCount == 1 ? "1 folder" : "\(database.folderCount) folders"
-            return "\(comicText) · \(folderText)"
+            let comicText = database.comicCount == 1
+                ? String(localized: "1 comic")
+                : String(localized: "\(database.comicCount) comics")
+            let folderText = database.folderCount == 1
+                ? String(localized: "1 folder")
+                : String(localized: "\(database.folderCount) folders")
+            return String(localized: "\(comicText) · \(folderText)")
         }
 
         if accessSnapshot.sourceExists {
-            return "Local state has not been indexed yet."
+            return String(localized: "Local state has not been indexed yet.")
         }
 
-        return "Library is currently unavailable on this device."
+        return String(localized: "Library is currently unavailable on this device.")
     }
 
     func homeMetadataItems() -> [InlineMetadataItem] {
@@ -806,7 +828,7 @@ private extension LibraryListItem {
         if !accessSnapshot.sourceExists {
             return InlineMetadataItem(
                 systemImage: "exclamationmark.triangle.fill",
-                text: "Needs Access",
+                text: String(localized: "Needs Access"),
                 tint: .orange
             )
         }
@@ -814,14 +836,14 @@ private extension LibraryListItem {
         if accessSnapshot.sourceReadable {
             return InlineMetadataItem(
                 systemImage: "checkmark.circle.fill",
-                text: "Ready",
+                text: String(localized: "Ready"),
                 tint: .green
             )
         }
 
         return InlineMetadataItem(
             systemImage: "lock.circle.fill",
-            text: "Unavailable",
+            text: String(localized: "Unavailable"),
             tint: .orange
         )
     }

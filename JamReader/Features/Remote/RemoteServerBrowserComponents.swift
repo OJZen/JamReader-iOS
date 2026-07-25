@@ -332,7 +332,7 @@ struct RemoteDirectoryItemListRow: View {
             items.append(
                 RemoteInlineMetadataItem(
                     systemImage: "folder",
-                    text: "Folder",
+                    text: String(localized: "Folder"),
                     tint: .blue
                 )
             )
@@ -340,7 +340,8 @@ struct RemoteDirectoryItemListRow: View {
             items.append(
                 RemoteInlineMetadataItem(
                     systemImage: "clock",
-                    text: item.modifiedAt?.formatted(date: .abbreviated, time: .omitted) ?? "Browse folder",
+                    text: item.modifiedAt?.formatted(date: .abbreviated, time: .omitted)
+                        ?? String(localized: "Browse folder"),
                     tint: .secondary
                 )
             )
@@ -351,7 +352,8 @@ struct RemoteDirectoryItemListRow: View {
             items.append(
                 RemoteInlineMetadataItem(
                     systemImage: "photo.on.rectangle",
-                    text: item.pageCountHint.map { "\($0) pages" } ?? "Image folder comic",
+                    text: item.pageCountHint.map { String(localized: "\($0) pages") }
+                        ?? String(localized: "Image folder comic"),
                     tint: .secondary
                 )
             )
@@ -393,7 +395,11 @@ struct RemoteDirectoryItemListRow: View {
             items.append(
                 RemoteInlineMetadataItem(
                     systemImage: item.isComicDirectory ? "photo.on.rectangle" : (item.canOpenAsComic ? "book.closed" : "doc"),
-                    text: item.isComicDirectory ? "Image folder comic" : (item.canOpenAsComic ? "Comic file" : "Remote file"),
+                    text: item.isComicDirectory
+                        ? String(localized: "Image folder comic")
+                        : (item.canOpenAsComic
+                            ? String(localized: "Comic file")
+                            : String(localized: "Remote file")),
                     tint: .secondary
                 )
             )
@@ -696,7 +702,7 @@ private struct RemoteDirectoryItemPresentation {
             metadataItems.append(
                 RemoteInlineMetadataItem(
                     systemImage: "photo.on.rectangle",
-                    text: "\(pageCountHint) pages",
+                    text: String(localized: "\(pageCountHint) pages"),
                     tint: .secondary
                 )
             )
@@ -746,13 +752,14 @@ private struct RemoteDirectoryItemPresentation {
         self.metadataItems = metadataItems
         if overviewSegments.isEmpty {
             if item.isDirectory {
-                supportingText = "Browse this folder"
+                supportingText = String(localized: "Browse this folder")
             } else if item.isComicDirectory {
-                supportingText = item.pageCountHint.map { "\($0) image pages" } ?? "Image folder comic"
+                supportingText = item.pageCountHint.map { String(localized: "\($0) image pages") }
+                    ?? String(localized: "Image folder comic")
             } else if item.canOpenAsComic {
-                supportingText = "Open comic"
+                supportingText = String(localized: "Open comic")
             } else {
-                supportingText = "Remote file"
+                supportingText = String(localized: "Remote file")
             }
         } else {
             supportingText = overviewSegments.joined(separator: " · ")
@@ -1079,8 +1086,8 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
         .accessibilityLabel("Expand Import")
         .accessibilityValue(
             progress.clampedFraction.map {
-                "\(Int(($0 * 100).rounded())) percent"
-            } ?? "In progress"
+                String(localized: "\(Int(($0 * 100).rounded())) percent")
+            } ?? String(localized: "In progress")
         )
     }
 

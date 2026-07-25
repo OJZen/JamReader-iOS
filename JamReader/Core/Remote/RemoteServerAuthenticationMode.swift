@@ -11,9 +11,9 @@ enum RemoteServerAuthenticationMode: String, Codable, Hashable, CaseIterable, Id
     var title: String {
         switch self {
         case .guest:
-            return "Guest"
+            return String(localized: "Guest")
         case .usernamePassword:
-            return "Username & Password"
+            return String(localized: "Username & Password")
         }
     }
 

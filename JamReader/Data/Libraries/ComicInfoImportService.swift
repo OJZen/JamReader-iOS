@@ -13,26 +13,26 @@ struct ComicInfoImportBatchResult: Equatable {
 
     var alertTitle: String {
         if importedCount > 0 && failedCount == 0 {
-            return "ComicInfo Imported"
+            return String(localized: "ComicInfo Imported")
         }
 
         if importedCount == 0 && skippedCount > 0 && failedCount == 0 {
-            return "No ComicInfo Found"
+            return String(localized: "No ComicInfo Found")
         }
 
-        return "ComicInfo Import Finished"
+        return String(localized: "ComicInfo Import Finished")
     }
 
     var alertMessage: String {
         var lines = [
-            "\(importedCount) imported",
-            "\(skippedCount) skipped",
-            "\(failedCount) failed"
+            String(localized: "\(importedCount) imported"),
+            String(localized: "\(skippedCount) skipped"),
+            String(localized: "\(failedCount) failed")
         ]
 
         if !failedTitles.isEmpty {
             let preview = failedTitles.prefix(5).joined(separator: "\n")
-            lines.append("Failed comics:\n\(preview)")
+            lines.append(String(localized: "Failed comics:\n\(preview)"))
         }
 
         return lines.joined(separator: "\n")

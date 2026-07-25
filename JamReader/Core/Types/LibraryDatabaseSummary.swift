@@ -23,11 +23,11 @@ struct LibraryDatabaseSummary: Equatable {
 
     var summaryLine: String {
         if !exists {
-            return "Local state has not been indexed yet."
+            return String(localized: "Local state has not been indexed yet.")
         }
 
         let versionText = version ?? "AppLibraryV2"
-        return "\(versionText) · \(folderCount) folders · \(comicCount) comics"
+        return String(localized: "\(versionText) · \(folderCount) folders · \(comicCount) comics")
     }
 
     var issueDescription: String? {

@@ -105,10 +105,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
     var navigationTitle: String {
         if let content {
-            return content.folder.isRoot ? descriptor.name : content.folder.displayName
+            return content.folder.isRoot ? descriptor.displayName : content.folder.displayName
         }
 
-        return descriptor.name
+        return descriptor.displayName
     }
 
     var folderPath: String {
@@ -307,7 +307,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             applyUpdatedComic(comic.updatingFavorite(updatedValue))
         } catch {
             alert = AppAlertState(
-                title: "Failed to Update Favorites",
+                title: String(localized: "Failed to Update Favorites"),
                 message: error.userFacingMessage
             )
         }
@@ -326,7 +326,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             applyUpdatedComic(comic.updatingReadState(updatedValue))
         } catch {
             alert = AppAlertState(
-                title: "Failed to Update Read Status",
+                title: String(localized: "Failed to Update Read Status"),
                 message: error.userFacingMessage
             )
         }
@@ -351,7 +351,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             applyUpdatedComic(comic.updatingRating(ratingValue))
         } catch {
             alert = AppAlertState(
-                title: "Failed to Update Rating",
+                title: String(localized: "Failed to Update Rating"),
                 message: error.userFacingMessage
             )
         }
@@ -382,7 +382,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             return true
         } catch {
             alert = AppAlertState(
-                title: "Failed to Update Favorites",
+                title: String(localized: "Failed to Update Favorites"),
                 message: error.userFacingMessage
             )
             return false
@@ -414,7 +414,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             return true
         } catch {
             alert = AppAlertState(
-                title: "Failed to Update Read Status",
+                title: String(localized: "Failed to Update Read Status"),
                 message: error.userFacingMessage
             )
             return false
@@ -436,7 +436,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             return true
         } catch {
             alert = AppAlertState(
-                title: "Failed to Remove Comic",
+                title: String(localized: "Failed to Remove Comic"),
                 message: error.userFacingMessage
             )
             return false
@@ -554,7 +554,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             clearSearch()
         } catch {
             content = nil
-            alert = AppAlertState(title: "Failed to Open Library", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Open Library"),
+                message: error.userFacingMessage
+            )
             continueReadingComics = []
             recentComics = []
             favoritesComics = []
@@ -638,7 +641,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                         )
                         self.loadContent(respectingTransientState: false)
                         self.showScanCompletion(
-                            title: "Library Ready",
+                            title: String(localized: "Library Ready"),
                             summary: summary
                         )
                     case .failure(let error):
@@ -649,7 +652,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                             "Failed to initialize library \(self.descriptor.id.uuidString, privacy: .public) from \(sourcePath, privacy: .public). Database: \(databasePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
                         )
                         self.alert = AppAlertState(
-                            title: "Failed to Initialize Library",
+                            title: String(localized: "Failed to Initialize Library"),
                             message: error.userFacingMessage
                         )
                         self.emptyStateMessage = error.userFacingMessage
@@ -660,7 +663,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             storageMaintenanceController.endExclusiveStorageMaintenance()
             isInitializingLibrary = false
             scanProgress = nil
-            alert = AppAlertState(title: "Failed to Initialize Library", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Initialize Library"),
+                message: error.userFacingMessage
+            )
             emptyStateMessage = error.userFacingMessage
         }
     }
@@ -724,7 +730,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                         )
                         self.loadContent(respectingTransientState: false)
                         self.showScanCompletion(
-                            title: "Library Refreshed",
+                            title: String(localized: "Library Refreshed"),
                             summary: summary
                         )
                     case .failure(let error):
@@ -735,7 +741,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                             "Failed to refresh library \(self.descriptor.id.uuidString, privacy: .public) from \(sourcePath, privacy: .public). Database: \(databasePath, privacy: .public). Error: \(errorDescription, privacy: .public)"
                         )
                         self.alert = AppAlertState(
-                            title: "Failed to Refresh Library",
+                            title: String(localized: "Failed to Refresh Library"),
                             message: error.userFacingMessage
                         )
                     }
@@ -745,7 +751,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             storageMaintenanceController.endExclusiveStorageMaintenance()
             isRefreshingLibrary = false
             scanProgress = nil
-            alert = AppAlertState(title: "Failed to Refresh Library", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Refresh Library"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -809,12 +818,12 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                         )
                         self.loadContent(respectingTransientState: false)
                         self.showScanCompletion(
-                            title: "Folder Refreshed",
+                            title: String(localized: "Folder Refreshed"),
                             summary: summary
                         )
                     case .failure(let error):
                         self.alert = AppAlertState(
-                            title: "Failed to Refresh Folder",
+                            title: String(localized: "Failed to Refresh Folder"),
                             message: error.userFacingMessage
                         )
                     }
@@ -824,7 +833,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             storageMaintenanceController.endExclusiveStorageMaintenance()
             isRefreshingLibrary = false
             scanProgress = nil
-            alert = AppAlertState(title: "Failed to Refresh Folder", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Refresh Folder"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -832,7 +844,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         guard canImportComicFiles else {
             if let libraryImportNotice {
                 alert = AppAlertState(
-                    title: "Import Unavailable",
+                    title: String(localized: "Import Unavailable"),
                     message: libraryImportNotice
                 )
             }
@@ -913,24 +925,43 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
             var messageLines: [String] = []
             if result.importedComicCount > 0 {
-                let comicWord = result.importedComicCount == 1 ? "comic file" : "comic files"
-                messageLines.append("Imported \(result.importedComicCount) \(comicWord) into the current library location.")
+                if result.importedComicCount == 1 {
+                    messageLines.append(String(localized: "Imported 1 comic file into the current library location."))
+                } else {
+                    messageLines.append(
+                        String(localized: "Imported \(result.importedComicCount) comic files into the current library location.")
+                    )
+                }
             }
             if let scanSummary = result.scanSummary {
                 messageLines.append(scanSummary.indexedSummaryLine + ".")
             } else if let scanErrorMessage = result.scanErrorMessage {
-                messageLines.append("Automatic indexing failed: \(scanErrorMessage)")
+                messageLines.append(String(localized: "Automatic indexing failed: \(scanErrorMessage)"))
             }
             if !result.unsupportedItemNames.isEmpty {
-                let itemWord = result.unsupportedItemNames.count == 1 ? "item" : "items"
-                messageLines.append("Skipped \(result.unsupportedItemNames.count) unsupported \(itemWord).")
+                if result.unsupportedItemNames.count == 1 {
+                    messageLines.append(String(localized: "Skipped 1 unsupported item."))
+                } else {
+                    messageLines.append(
+                        String(localized: "Skipped \(result.unsupportedItemNames.count) unsupported items.")
+                    )
+                }
             }
             if !result.failedItemNames.isEmpty {
-                messageLines.append("Failed to import \(result.failedItemNames.count) item(s): \(NamePreviewFormatter.preview(from: result.failedItemNames)).")
+                let failedItemsPreview = NamePreviewFormatter.preview(from: result.failedItemNames)
+                if result.failedItemNames.count == 1 {
+                    messageLines.append(String(localized: "Failed to import 1 item: \(failedItemsPreview)."))
+                } else {
+                    messageLines.append(
+                        String(localized: "Failed to import \(result.failedItemNames.count) items: \(failedItemsPreview).")
+                    )
+                }
             }
 
             alert = AppAlertState(
-                title: result.hasImportedAnyComics ? "Import Completed" : "Import Finished with Warnings",
+                title: result.hasImportedAnyComics
+                    ? String(localized: "Import Completed")
+                    : String(localized: "Import Finished with Warnings"),
                 message: messageLines.joined(separator: "\n")
             )
         } catch is CancellationError {
@@ -942,7 +973,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 "Library browser comic import failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Import Comics",
+                title: String(localized: "Failed to Import Comics"),
                 message: error.userFacingMessage
             )
         }
@@ -956,8 +987,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         performComicInfoImport(
             policy: policy,
             initialPath: "/",
-            emptyTitle: "No Comics Found",
-            emptyMessage: "The library does not contain any comics yet."
+            emptyTitle: String(localized: "No Comics Found"),
+            emptyMessage: String(localized: "The library does not contain any comics yet.")
         ) { databaseURL, databaseReader in
             try databaseReader.loadAllComics(databaseURL: databaseURL)
         }
@@ -971,8 +1002,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         performComicInfoImport(
             policy: policy,
             initialPath: currentFolder.path,
-            emptyTitle: "No Comics Found",
-            emptyMessage: "The current folder does not contain any comics yet."
+            emptyTitle: String(localized: "No Comics Found"),
+            emptyMessage: String(localized: "The current folder does not contain any comics yet.")
         ) { databaseURL, databaseReader in
             try databaseReader.loadComicsRecursively(
                 databaseURL: databaseURL,
@@ -1034,8 +1065,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     private func beginExclusiveLibraryStorageOperation() -> Bool {
         guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
             alert = AppAlertState(
-                title: "Library Busy",
-                message: "Finish the current import or storage task, then try again."
+                title: String(localized: "Library Busy"),
+                message: String(localized: "Finish the current import or storage task, then try again.")
             )
             return false
         }
@@ -1255,7 +1286,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                     )
                 case .failure(let error):
                     self.alert = AppAlertState(
-                        title: "Failed to Import ComicInfo",
+                        title: String(localized: "Failed to Import ComicInfo"),
                         message: error.userFacingMessage
                     )
                 }
@@ -1298,7 +1329,10 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                     self.searchResults = results
                 case .failure(let error):
                     self.searchResults = nil
-                    self.alert = AppAlertState(title: "Search Failed", message: error.userFacingMessage)
+                    self.alert = AppAlertState(
+                        title: String(localized: "Search Failed"),
+                        message: error.userFacingMessage
+                    )
                 }
             }
         }

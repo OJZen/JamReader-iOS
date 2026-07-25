@@ -187,7 +187,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     var currentFolderShortcutTitle: String {
         if currentPath == rootPath || currentPath.isEmpty {
-            return "\(profile.name) Root"
+            return String(localized: "\(profile.name) Root")
         }
 
         return navigationTitle
@@ -460,10 +460,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             }
             refreshShortcutState()
             feedback = RemoteBrowserFeedbackState(
-                title: wasSaved ? "Folder Removed" : "Folder Saved",
+                title: wasSaved
+                    ? String(localized: "Folder Removed")
+                    : String(localized: "Folder Saved"),
                 message: wasSaved
-                    ? "This remote folder was removed from Saved Folders."
-                    : "This remote folder now appears in Browse > Saved Folders.",
+                    ? String(localized: "This remote folder was removed from Saved Folders.")
+                    : String(localized: "This remote folder now appears in Browse > Saved Folders."),
                 kind: .success,
                 autoDismissAfter: 2.6
             )
@@ -475,7 +477,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote folder shortcut \(action, privacy: .public) failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: isCurrentFolderSaved ? "Failed to Remove Shortcut" : "Failed to Save Shortcut",
+                title: isCurrentFolderSaved
+                    ? String(localized: "Failed to Remove Shortcut")
+                    : String(localized: "Failed to Save Shortcut"),
                 message: error.userFacingMessage
             )
         }
@@ -503,8 +507,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote comic import rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) reason=unsupportedItem"
             )
             alert = AppAlertState(
-                title: "Import Unavailable",
-                message: "Only supported remote comics can be imported."
+                title: String(localized: "Import Unavailable"),
+                message: String(localized: "Only supported remote comics can be imported.")
             )
             return
         }
@@ -514,8 +518,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote comic import rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) reason=referenceUnavailable"
             )
             alert = AppAlertState(
-                title: "Import Unavailable",
-                message: "This remote comic could not be prepared for import."
+                title: String(localized: "Import Unavailable"),
+                message: String(localized: "This remote comic could not be prepared for import.")
             )
             return
         }
@@ -524,7 +528,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             "Remote comic import requested provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public)"
         )
         setBackgroundImportProgress(
-            title: "Downloading Comic",
+            title: String(localized: "Downloading Comic"),
             detail: item.name,
             fraction: 0,
             isCancellable: true
@@ -546,7 +550,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
                     Task { @MainActor [self, itemName = item.name] in
                         self.setBackgroundImportProgress(
-                            title: "Downloading Comic",
+                            title: String(localized: "Downloading Comic"),
                             detail: itemName,
                             fraction: fraction,
                             isCancellable: true
@@ -559,7 +563,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     "Remote comic import skipped provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) source=\(Self.downloadSourceLogValue(downloadResult.source), privacy: .public)"
                 )
                 alert = AppAlertState(
-                    title: "Import Requires Current Remote Copy",
+                    title: String(localized: "Import Requires Current Remote Copy"),
                     message: importUnavailableMessage(for: downloadResult)
                 )
                 return
@@ -592,7 +596,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             presentImportResult(
                 importResult,
                 extraFailedItemNames: [],
-                successTitle: "Imported to Library"
+                successTitle: String(localized: "Imported to Library")
             )
             logger.info(
                 "Remote comic import completed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) imported=\(importResult.importedComicCount) unsupported=\(importResult.unsupportedItemNames.count) failed=\(importResult.failedItemNames.count)"
@@ -607,7 +611,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote comic import failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             presentImportFailureFeedback(
-                title: "Failed to Import Comic",
+                title: String(localized: "Failed to Import Comic"),
                 message: error.userFacingMessage
             )
         }
@@ -627,8 +631,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote directory import rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) reason=notDirectory"
             )
             alert = AppAlertState(
-                title: "Import Unavailable",
-                message: "Only remote folders can be imported recursively."
+                title: String(localized: "Import Unavailable"),
+                message: String(localized: "Only remote folders can be imported recursively.")
             )
             return
         }
@@ -638,7 +642,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         )
         do {
             setBackgroundImportProgress(
-                title: scope == .includeSubfolders ? "Scanning Remote Folder" : "Checking Folder",
+                title: scope == .includeSubfolders
+                    ? String(localized: "Scanning Remote Folder")
+                    : String(localized: "Checking Folder"),
                 detail: item.name,
                 isCancellable: true
             )
@@ -653,18 +659,18 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     "Remote directory import skipped provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) scope=\(scope.rawValue, privacy: .public) reason=noImportableItems"
                 )
                 alert = AppAlertState(
-                    title: "Nothing to Import",
+                    title: String(localized: "Nothing to Import"),
                     message: scope == .includeSubfolders
-                        ? "No supported remote comics were found in \(item.name) or its subfolders."
-                        : "No supported remote comics were found directly inside \(item.name)."
+                        ? String(localized: "No supported remote comics were found in \(item.name) or its subfolders.")
+                        : String(localized: "No supported remote comics were found directly inside \(item.name).")
                 )
                 return
             }
 
             await importComicItems(
                 importableItems,
-                progressPrefix: "Importing \(item.name)",
-                successTitle: "Folder Imported to Library",
+                progressPrefix: String(localized: "Importing \(item.name)"),
+                successTitle: String(localized: "Folder Imported to Library"),
                 destinationSelection: destinationSelection,
                 cancellationController: cancellationController
             )
@@ -680,7 +686,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote directory import failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) scope=\(scope.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             presentImportFailureFeedback(
-                title: "Folder Import Failed",
+                title: String(localized: "Folder Import Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -699,8 +705,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote current folder import rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) reason=noImportableState"
             )
             alert = AppAlertState(
-                title: "Nothing to Import",
-                message: "There are no supported remote comics in this remote folder or its subfolders yet."
+                title: String(localized: "Nothing to Import"),
+                message: String(localized: "There are no supported remote comics in this remote folder or its subfolders yet.")
             )
             return
         }
@@ -713,21 +719,21 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             switch scope {
             case .currentFolderOnly:
                 setBackgroundImportProgress(
-                    title: "Checking Folder",
+                    title: String(localized: "Checking Folder"),
                     detail: navigationTitle,
                     isCancellable: true
                 )
                 importableItems = comicFiles
             case .visibleResults:
                 setBackgroundImportProgress(
-                    title: "Checking Visible Comics",
+                    title: String(localized: "Checking Visible Comics"),
                     detail: navigationTitle,
                     isCancellable: true
                 )
                 importableItems = comicFiles
             case .includeSubfolders:
                 setBackgroundImportProgress(
-                    title: "Scanning Remote Folder",
+                    title: String(localized: "Scanning Remote Folder"),
                     detail: navigationTitle,
                     isCancellable: true
                 )
@@ -743,18 +749,18 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     "Remote current folder import skipped provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) scope=\(scope.rawValue, privacy: .public) reason=noImportableItems"
                 )
                 alert = AppAlertState(
-                    title: "Nothing to Import",
+                    title: String(localized: "Nothing to Import"),
                     message: scope == .includeSubfolders
-                        ? "No supported remote comics were found in this remote folder or its subfolders."
-                        : "No supported remote comics were found directly inside this remote folder."
+                        ? String(localized: "No supported remote comics were found in this remote folder or its subfolders.")
+                        : String(localized: "No supported remote comics were found directly inside this remote folder.")
                 )
                 return
             }
 
             await importComicItems(
                 importableItems,
-                progressPrefix: "Importing \(navigationTitle)",
-                successTitle: "Folder Imported to Library",
+                progressPrefix: String(localized: "Importing \(navigationTitle)"),
+                successTitle: String(localized: "Folder Imported to Library"),
                 destinationSelection: destinationSelection,
                 cancellationController: cancellationController
             )
@@ -770,7 +776,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote current folder import failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) scope=\(scope.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             presentImportFailureFeedback(
-                title: "Folder Import Failed",
+                title: String(localized: "Folder Import Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -790,8 +796,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote visible comics import rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) reason=noVisibleComics"
             )
             alert = AppAlertState(
-                title: "Nothing to Import",
-                message: "There are no visible supported remote comics in the current browser results."
+                title: String(localized: "Nothing to Import"),
+                message: String(localized: "There are no visible supported remote comics in the current browser results.")
             )
             return
         }
@@ -801,8 +807,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         )
         await importComicItems(
             visibleComics,
-            progressPrefix: "Importing visible comics",
-            successTitle: "Visible Comics Imported",
+            progressPrefix: String(localized: "Importing visible comics"),
+            successTitle: String(localized: "Visible Comics Imported"),
             destinationSelection: destinationSelection,
             cancellationController: cancellationController
         )
@@ -829,8 +835,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote offline save rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) reason=unsupportedItem"
             )
             alert = AppAlertState(
-                title: "Offline Save Unavailable",
-                message: "Only supported remote comics can be saved for offline reading."
+                title: String(localized: "Offline Save Unavailable"),
+                message: String(localized: "Only supported remote comics can be saved for offline reading.")
             )
             return
         }
@@ -840,8 +846,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote offline save rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) reason=referenceUnavailable"
             )
             alert = AppAlertState(
-                title: "Offline Save Unavailable",
-                message: "This remote comic could not be prepared for offline reading."
+                title: String(localized: "Offline Save Unavailable"),
+                message: String(localized: "This remote comic could not be prepared for offline reading.")
             )
             return
         }
@@ -850,7 +856,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             "Remote offline save requested provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) forceRefresh=\(forceRefresh)"
         )
         setActiveProgress(
-            title: forceRefresh ? "Refreshing Downloaded Copy" : "Saving Offline Copy",
+            title: forceRefresh
+                ? String(localized: "Refreshing Downloaded Copy")
+                : String(localized: "Saving Offline Copy"),
             detail: item.name,
             fraction: 0
         )
@@ -872,7 +880,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
                     Task { @MainActor [self, itemName = item.name] in
                         self.setActiveProgress(
-                            title: forceRefresh ? "Refreshing Downloaded Copy" : "Saving Offline Copy",
+                            title: forceRefresh
+                                ? String(localized: "Refreshing Downloaded Copy")
+                                : String(localized: "Saving Offline Copy"),
                             detail: itemName,
                             fraction: fraction
                         )
@@ -909,7 +919,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             remoteOfflineLibrarySnapshotStore.invalidate()
             refreshProgressState()
             feedback = RemoteBrowserFeedbackState(
-                title: forceRefresh ? "Downloaded Copy Updated" : "Saved for Offline",
+                title: forceRefresh
+                    ? String(localized: "Downloaded Copy Updated")
+                    : String(localized: "Saved for Offline"),
                 message: offlineSaveMessage(for: item, result: result, forceRefresh: forceRefresh),
                 kind: .success,
                 autoDismissAfter: 3.2
@@ -922,7 +934,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote offline save failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Save Offline Copy",
+                title: String(localized: "Failed to Save Offline Copy"),
                 message: error.userFacingMessage
             )
         }
@@ -946,8 +958,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote batch offline save rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) reason=noComics"
             )
             alert = AppAlertState(
-                title: "Nothing to Save",
-                message: "There are no supported remote comics in the current results yet."
+                title: String(localized: "Nothing to Save"),
+                message: String(localized: "There are no supported remote comics in the current results yet.")
             )
             return
         }
@@ -956,8 +968,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             "Remote batch offline save requested provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) count=\(comics.count)"
         )
         setActiveProgress(
-            title: "Saving Visible Comics",
-            detail: "Preparing downloads",
+            title: String(localized: "Saving Visible Comics"),
+            detail: String(localized: "Preparing downloads"),
             fraction: 0
         )
         defer {
@@ -995,8 +1007,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         )
                         await MainActor.run { [self] in
                             self.setActiveProgress(
-                                title: "Saving Visible Comics",
-                                detail: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)",
+                                title: String(localized: "Saving Visible Comics"),
+                                detail: String(localized: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)"),
                                 fraction: snapshot.fraction
                             )
                         }
@@ -1063,26 +1075,37 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     "Remote batch offline save completed with no saved copies provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) failed=\(failedNames.count)"
                 )
                 alert = AppAlertState(
-                    title: "Offline Save Failed",
-                    message: "No visible comics could be saved for offline reading."
+                    title: String(localized: "Offline Save Failed"),
+                    message: String(localized: "No visible comics could be saved for offline reading.")
                 )
                 return
             }
 
             var segments: [String] = []
             if savedCount > 0 {
-                segments.append("Saved \(savedCount) comic(s) to this device.")
+                segments.append(
+                    savedCount == 1
+                        ? String(localized: "Saved 1 comic to this device.")
+                        : String(localized: "Saved \(savedCount) comics to this device.")
+                )
             }
             if refreshedCount > 0 {
-                let copyPhrase = refreshedCount == 1 ? "downloaded copy" : "downloaded copies"
-                segments.append("Kept \(refreshedCount) existing \(copyPhrase) ready offline.")
+                segments.append(
+                    refreshedCount == 1
+                        ? String(localized: "Kept 1 existing downloaded copy ready offline.")
+                        : String(localized: "Kept \(refreshedCount) existing downloaded copies ready offline.")
+                )
             }
             if !failedNames.isEmpty {
-                segments.append("Failed to save \(failedNames.count) item(s).")
+                segments.append(
+                    failedNames.count == 1
+                        ? String(localized: "Failed to save 1 item.")
+                        : String(localized: "Failed to save \(failedNames.count) items.")
+                )
             }
 
             feedback = RemoteBrowserFeedbackState(
-                title: "Offline Copies Ready",
+                title: String(localized: "Offline Copies Ready"),
                 message: segments.joined(separator: " "),
                 kind: .success
             )
@@ -1094,7 +1117,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote batch offline save failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Offline Save Failed",
+                title: String(localized: "Offline Save Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -1125,8 +1148,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote offline copy remove rejected provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) reason=referenceUnavailable"
             )
             alert = AppAlertState(
-                title: "Remove Offline Copy Failed",
-                message: "This remote comic could not be matched to a downloaded copy."
+                title: String(localized: "Remove Offline Copy Failed"),
+                message: String(localized: "This remote comic could not be matched to a downloaded copy.")
             )
             return
         }
@@ -1140,8 +1163,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             remoteOfflineLibrarySnapshotStore.invalidate()
             refreshProgressState()
             feedback = RemoteBrowserFeedbackState(
-                title: "Downloaded Copy Removed",
-                message: "\(item.name) was removed from this device.",
+                title: String(localized: "Downloaded Copy Removed"),
+                message: String(localized: "\(item.name) was removed from this device."),
                 kind: .info,
                 autoDismissAfter: 2.6
             )
@@ -1153,7 +1176,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote offline copy remove failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(itemPath, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Remove Offline Copy Failed",
+                title: String(localized: "Remove Offline Copy Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -1213,7 +1236,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote batch offline copy record removal failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) removed=\(removedReferences.count, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Remove Downloaded Copies Failed",
+                title: String(localized: "Remove Downloaded Copies Failed"),
                 message: error.userFacingMessage
             )
             refreshProgressState()
@@ -1228,8 +1251,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     "Remote batch offline copy remove completed with no removals provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) failed=\(failedNames.count)"
                 )
                 alert = AppAlertState(
-                    title: "Remove Downloaded Copies Failed",
-                    message: "No downloaded copies could be removed from this device."
+                    title: String(localized: "Remove Downloaded Copies Failed"),
+                    message: String(localized: "No downloaded copies could be removed from this device.")
                 )
             }
             if failedNames.isEmpty {
@@ -1240,13 +1263,18 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             return
         }
 
-        var message = "Removed \(removedCount) downloaded \(removedCount == 1 ? "copy" : "copies") from this device."
+        var message = removedCount == 1
+            ? String(localized: "Removed 1 downloaded copy from this device.")
+            : String(localized: "Removed \(removedCount) downloaded copies from this device.")
         if !failedNames.isEmpty {
-            message += " Failed to remove \(failedNames.count) item(s)."
+            let failureMessage = failedNames.count == 1
+                ? String(localized: "Failed to remove 1 item.")
+                : String(localized: "Failed to remove \(failedNames.count) items.")
+            message += " \(failureMessage)"
         }
 
         feedback = RemoteBrowserFeedbackState(
-            title: "Downloaded Copies Removed",
+            title: String(localized: "Downloaded Copies Removed"),
             message: message,
             kind: .info,
             autoDismissAfter: 3.0
@@ -1271,8 +1299,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private func beginStorageMaintenance() -> Bool {
         guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
             alert = AppAlertState(
-                title: "Remote Task in Progress",
-                message: "Wait for the current remote task to finish."
+                title: String(localized: "Remote Task in Progress"),
+                message: String(localized: "Wait for the current remote task to finish.")
             )
             return false
         }
@@ -1374,7 +1402,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             }
             remoteBackgroundImportController.presentFeedback(
                 RemoteBrowserFeedbackState(
-                    title: hasIndexingWarning ? "Imported with Indexing Warning" : successTitle,
+                    title: hasIndexingWarning
+                        ? String(localized: "Imported with Indexing Warning")
+                        : successTitle,
                     message: importFeedbackMessage(
                         from: result,
                         extraFailedItemNames: extraFailedItemNames
@@ -1388,7 +1418,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
         remoteBackgroundImportController.presentFeedback(
             RemoteBrowserFeedbackState(
-                title: "Import Finished with Warnings",
+                title: String(localized: "Import Finished with Warnings"),
                 message: messageLines.joined(separator: "\n"),
                 kind: .info,
                 primaryAction: primaryAction
@@ -1414,66 +1444,66 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         case .authenticationFailed:
             return RemoteBrowserLoadIssue(
                 kind: .authentication,
-                title: "Sign-in Failed",
+                title: String(localized: "Sign-in Failed"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "Open the server settings and verify the username or password, then try again."
+                recoverySuggestion: String(localized: "Open the server settings and verify the username or password, then try again.")
             )
         case .connectionFailed:
             return RemoteBrowserLoadIssue(
                 kind: .connection,
-                title: "Server Unreachable",
+                title: String(localized: "Server Unreachable"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "Make sure this device can reach the remote server on the current network. You can still try opening a recently cached comic below."
+                recoverySuggestion: String(localized: "Make sure this device can reach the remote server on the current network. You can still try opening a recently cached comic below.")
             )
         case .insecureTransportBlocked:
             return RemoteBrowserLoadIssue(
                 kind: .connection,
-                title: "Insecure HTTP Blocked",
+                title: String(localized: "Insecure HTTP Blocked"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "This WebDAV server is using HTTP, and iOS blocked the connection. Switch the server to HTTPS or update the app to explicitly allow insecure HTTP for this endpoint."
+                recoverySuggestion: String(localized: "This WebDAV server is using HTTP, and iOS blocked the connection. Switch the server to HTTPS or update the app to explicitly allow insecure HTTP for this endpoint.")
             )
         case .certificateNotTrusted:
             return RemoteBrowserLoadIssue(
                 kind: .connection,
-                title: "Certificate Not Trusted",
+                title: String(localized: "Certificate Not Trusted"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "Install a certificate that iOS trusts, provide the full TLS certificate chain, or connect using a hostname covered by the certificate."
+                recoverySuggestion: String(localized: "Install a certificate that iOS trusts, provide the full TLS certificate chain, or connect using a hostname covered by the certificate.")
             )
         case .secureConnectionFailed:
             return RemoteBrowserLoadIssue(
                 kind: .connection,
-                title: "Secure Connection Failed",
+                title: String(localized: "Secure Connection Failed"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "Check the server's TLS setup, certificate chain, and hostname, then try again."
+                recoverySuggestion: String(localized: "Check the server's TLS setup, certificate chain, and hostname, then try again.")
             )
         case .shareUnavailable:
             return RemoteBrowserLoadIssue(
                 kind: .shareUnavailable,
-                title: "Location Unavailable",
+                title: String(localized: "Location Unavailable"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "The saved remote root may have changed or gone offline. Review the server settings, then refresh."
+                recoverySuggestion: String(localized: "The saved remote root may have changed or gone offline. Review the server settings, then refresh.")
             )
         case .remotePathUnavailable:
             return RemoteBrowserLoadIssue(
                 kind: .remotePathUnavailable,
-                title: "Folder Not Found",
+                title: String(localized: "Folder Not Found"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "This folder may have been moved or deleted on the server. Try going up one level or return to the saved root folder."
+                recoverySuggestion: String(localized: "This folder may have been moved or deleted on the server. Try going up one level or return to the saved root folder.")
             )
         case .accessDenied:
             return RemoteBrowserLoadIssue(
                 kind: .accessDenied,
-                title: "Access Denied",
+                title: String(localized: "Access Denied"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "The current credentials or permissions do not allow this folder. Try a different location or review the saved server settings."
+                recoverySuggestion: String(localized: "The current credentials or permissions do not allow this folder. Try a different location or review the saved server settings.")
             )
         case .invalidProfile, .providerIntegrationUnavailable, .unsupportedComicFile,
              .missingCredentials, .cacheMaintenanceFailed, .operationFailed, .none:
             return RemoteBrowserLoadIssue(
                 kind: .generic,
-                title: "Remote Browser Not Ready Yet",
+                title: String(localized: "Remote Browser Not Ready Yet"),
                 message: error.userFacingMessage,
-                recoverySuggestion: "Try refreshing this folder again. If the problem keeps coming back, return to the server list and review the saved connection."
+                recoverySuggestion: String(localized: "Try refreshing this folder again. If the problem keeps coming back, return to the server list and review the saved connection.")
             )
         }
     }
@@ -1522,7 +1552,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             )
             setBackgroundImportProgress(
                 title: progressPrefix,
-                detail: preparedDownloads.isEmpty ? "Preparing downloads" : "Downloaded 0 of \(preparedDownloads.count)",
+                detail: preparedDownloads.isEmpty
+                    ? String(localized: "Preparing downloads")
+                    : String(localized: "Downloaded 0 of \(preparedDownloads.count)"),
                 fraction: preparedDownloads.isEmpty ? nil : 0,
                 isCancellable: true
             )
@@ -1544,7 +1576,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         await MainActor.run { [self] in
                             self.setBackgroundImportProgress(
                                 title: progressPrefix,
-                                detail: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)",
+                                detail: String(localized: "Downloaded \(snapshot.completedCount) of \(snapshot.totalCount)"),
                                 fraction: snapshot.fraction,
                                 isCancellable: true
                             )
@@ -1581,7 +1613,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote batch import download failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) prepared=\(preparedDownloads.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             presentImportFailureFeedback(
-                title: "Folder Import Failed",
+                title: String(localized: "Folder Import Failed"),
                 message: error.userFacingMessage
             )
             return
@@ -1592,8 +1624,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote batch import skipped provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) reason=noDownloadedFiles failedDownloads=\(failedDownloadNames.count)"
             )
             presentImportFailureFeedback(
-                title: "Folder Import Failed",
-                message: "No remote comics could be downloaded for import."
+                title: String(localized: "Folder Import Failed"),
+                message: String(localized: "No remote comics could be downloaded for import.")
             )
             return
         }
@@ -1639,7 +1671,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 "Remote batch import library import failed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) downloaded=\(downloadedFileURLs.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             presentImportFailureFeedback(
-                title: "Folder Import Failed",
+                title: String(localized: "Folder Import Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -1674,11 +1706,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         return
                     }
 
-                    let currentPathSuffix = currentPath.map { " · \($0)" } ?? ""
-                    let detail = "Found \(discoveredCount) comics\(currentPathSuffix)"
+                    let detail = if let currentPath {
+                        String(localized: "Found \(discoveredCount) comics · \(currentPath)")
+                    } else {
+                        String(localized: "Found \(discoveredCount) comics")
+                    }
                     Task { @MainActor [self, detail, progressName] in
                         self.setBackgroundImportProgress(
-                            title: "Scanning \(progressName)",
+                            title: String(localized: "Scanning \(progressName)"),
                             detail: detail,
                             isCancellable: true
                         )
@@ -1695,26 +1730,36 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         var segments: [String] = []
 
         if result.createdLibrary {
-            segments.append("Added \(result.importedDestinationName).")
+            segments.append(String(localized: "Added \(result.importedDestinationDisplayName)."))
         }
 
-        let comicWord = result.importedComicCount == 1 ? "comic" : "comics"
-        segments.append("Imported \(result.importedComicCount) \(comicWord) into \(result.importedDestinationName).")
+        segments.append(
+            result.importedComicCount == 1
+                ? String(localized: "Imported 1 comic into \(result.importedDestinationDisplayName).")
+                : String(localized: "Imported \(result.importedComicCount) comics into \(result.importedDestinationDisplayName).")
+        )
 
         if let scanSummary = result.scanSummary {
             segments.append(scanSummary.indexedSummaryLine + ".")
         } else if result.scanErrorMessage != nil {
-            segments.append("Open the library and run Refresh to finish indexing the new files.")
+            segments.append(String(localized: "Open the library and run Refresh to finish indexing the new files."))
         }
 
         if !result.unsupportedItemNames.isEmpty {
-            let itemWord = result.unsupportedItemNames.count == 1 ? "item" : "items"
-            segments.append("Skipped \(result.unsupportedItemNames.count) unsupported \(itemWord).")
+            segments.append(
+                result.unsupportedItemNames.count == 1
+                    ? String(localized: "Skipped 1 unsupported item.")
+                    : String(localized: "Skipped \(result.unsupportedItemNames.count) unsupported items.")
+            )
         }
 
         let failedCount = Set(result.failedItemNames + extraFailedItemNames).count
         if failedCount > 0 {
-            segments.append("Failed to import \(failedCount) item(s).")
+            segments.append(
+                failedCount == 1
+                    ? String(localized: "Failed to import 1 item.")
+                    : String(localized: "Failed to import \(failedCount) items.")
+            )
         }
 
         return segments.joined(separator: " ")
@@ -1743,9 +1788,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private func importUnavailableMessage(for result: RemoteComicDownloadResult) -> String {
         switch result.source {
         case .downloaded, .cachedCurrent:
-            return "The selected remote comic is ready to import."
+            return String(localized: "The selected remote comic is ready to import.")
         case .cachedFallback(let message):
-            return "The latest remote copy could not be fetched, so importing an older downloaded copy into the library was skipped to keep library data in sync.\n\n\(message)"
+            return String(localized: "The latest remote copy could not be fetched, so importing an older downloaded copy into the library was skipped to keep library data in sync.\n\n\(message)")
         }
     }
 
@@ -1778,12 +1823,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         switch result.source {
         case .downloaded:
             return forceRefresh
-                ? "Downloaded the latest copy of \(item.name) to this device."
-                : "Saved \(item.name) to this device for offline reading."
+                ? String(localized: "Downloaded the latest copy of \(item.name) to this device.")
+                : String(localized: "Saved \(item.name) to this device for offline reading.")
         case .cachedCurrent:
-            return "\(item.name) is already saved on this device and ready offline."
+            return String(localized: "\(item.name) is already saved on this device and ready offline.")
         case .cachedFallback:
-            return "A downloaded copy of \(item.name) is already available on this device."
+            return String(localized: "A downloaded copy of \(item.name) is already available on this device.")
         }
     }
 
@@ -1813,10 +1858,13 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         case .transferring:
             let detail: String
             if let totalCount = progress.totalCount {
-                let currentSuffix = progress.currentItemName.map { " · \($0)" } ?? ""
-                detail = "Prepared \(progress.completedCount) of \(totalCount)\(currentSuffix)"
+                if let currentItemName = progress.currentItemName {
+                    detail = String(localized: "Prepared \(progress.completedCount) of \(totalCount) · \(currentItemName)")
+                } else {
+                    detail = String(localized: "Prepared \(progress.completedCount) of \(totalCount)")
+                }
                 setBackgroundImportProgress(
-                    title: "Adding to Library",
+                    title: String(localized: "Adding to Library"),
                     detail: detail,
                     fraction: totalCount > 0 ? Double(progress.completedCount) / Double(totalCount) : nil,
                     isCancellable: true
@@ -1824,24 +1872,29 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             } else {
                 detail = progress.currentItemName ?? contextTitle
                 setBackgroundImportProgress(
-                    title: "Adding to Library",
+                    title: String(localized: "Adding to Library"),
                     detail: detail,
                     isCancellable: true
                 )
             }
         case .indexing:
-            let currentSuffix = progress.currentItemName.map { " · \($0)" } ?? ""
             if let totalCount = progress.totalCount, totalCount > 0 {
+                let detail: String
+                if let currentItemName = progress.currentItemName {
+                    detail = String(localized: "Indexed \(min(progress.completedCount, totalCount)) of \(totalCount) · \(currentItemName)")
+                } else {
+                    detail = String(localized: "Indexed \(min(progress.completedCount, totalCount)) of \(totalCount)")
+                }
                 setBackgroundImportProgress(
-                    title: "Indexing Library",
-                    detail: "Indexed \(min(progress.completedCount, totalCount)) of \(totalCount)\(currentSuffix)",
+                    title: String(localized: "Indexing Library"),
+                    detail: detail,
                     fraction: Double(min(progress.completedCount, totalCount)) / Double(totalCount),
                     isCancellable: true
                 )
             } else {
                 setBackgroundImportProgress(
-                    title: progress.scanProgress?.title ?? "Indexing Library",
-                    detail: progress.scanProgress?.detailLine ?? "Updating imported comics",
+                    title: progress.scanProgress?.title ?? String(localized: "Indexing Library"),
+                    detail: progress.scanProgress?.detailLine ?? String(localized: "Updating imported comics"),
                     isCancellable: true
                 )
             }
@@ -1851,8 +1904,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     private func presentImportCancellationFeedback() {
         remoteBackgroundImportController.presentFeedback(
             RemoteBrowserFeedbackState(
-                title: "Import Canceled",
-                message: "The current remote import was stopped. Finished downloads stay available for reuse.",
+                title: String(localized: "Import Canceled"),
+                message: String(localized: "The current remote import was stopped. Finished downloads stay available for reuse."),
                 kind: .info,
                 autoDismissAfter: 3
             )

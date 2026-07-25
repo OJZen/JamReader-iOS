@@ -1,6 +1,8 @@
 import Foundation
 
 struct LibraryDescriptor: Identifiable, Codable, Hashable {
+    static let defaultImportedComicsName = "Imported Comics"
+
     let id: UUID
     var kind: LibraryKind
     var name: String
@@ -21,5 +23,13 @@ struct LibraryDescriptor: Identifiable, Codable, Hashable {
 
     var isImportedComics: Bool {
         kind == .importedComics
+    }
+
+    var displayName: String {
+        guard isImportedComics, name == Self.defaultImportedComicsName else {
+            return name
+        }
+
+        return String(localized: "Imported Comics")
     }
 }

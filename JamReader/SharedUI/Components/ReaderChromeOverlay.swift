@@ -387,14 +387,18 @@ struct ReaderTopBar: View {
                 chromeButton(systemImage: secondarySystemImage, action: onSecondaryAction)
                     .disabled(isSecondaryDisabled)
                     .opacity(isSecondaryDisabled ? 0.4 : 1)
-                    .accessibilityLabel(secondaryAccessibilityLabel ?? "Reader Action")
+                    .accessibilityLabel(
+                        secondaryAccessibilityLabel ?? String(localized: "Reader Action")
+                    )
             }
 
             if let savePageSystemImage, let onSavePage {
                 chromeButton(systemImage: savePageSystemImage, action: onSavePage)
                     .disabled(isSavePageDisabled)
                     .opacity(isSavePageDisabled ? 0.4 : 1)
-                    .accessibilityLabel(savePageAccessibilityLabel ?? "Save Page")
+                    .accessibilityLabel(
+                        savePageAccessibilityLabel ?? String(localized: "Save Page")
+                    )
             }
 
             chromeButton(systemImage: "ellipsis", action: onMenu)

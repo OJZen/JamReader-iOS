@@ -9,7 +9,7 @@ struct ReaderControlsSheet: View {
     var fileInfo: ReaderControlsFileInfo? = nil
 
     var body: some View {
-        ReaderControlsContainer(title: "Reader", onDone: actions.onDone) {
+        ReaderControlsContainer(title: String(localized: "Reader"), onDone: actions.onDone) {
             if let fileInfo {
                 ReaderFileInfoSection(fileInfo: fileInfo)
             }

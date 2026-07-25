@@ -16,9 +16,9 @@ enum LibraryOrganizationSectionKind: String, CaseIterable, Identifiable, Hashabl
     var title: String {
         switch self {
         case .labels:
-            return "Tags"
+            return String(localized: "Tags")
         case .readingLists:
-            return "Reading Lists"
+            return String(localized: "Reading Lists")
         }
     }
 
@@ -38,54 +38,54 @@ enum LibraryOrganizationSectionKind: String, CaseIterable, Identifiable, Hashabl
     var emptyStateTitle: String {
         switch self {
         case .labels:
-            return "No Tags Yet"
+            return String(localized: "No Tags Yet")
         case .readingLists:
-            return "No Reading Lists Yet"
+            return String(localized: "No Reading Lists Yet")
         }
     }
 
     var emptyStateDescription: String {
         switch self {
         case .labels:
-            return "Create tags to group comics."
+            return String(localized: "Create tags to group comics.")
         case .readingLists:
-            return "Create reading lists for custom queues."
+            return String(localized: "Create reading lists for custom queues.")
         }
     }
 
     var createActionTitle: String {
         switch self {
         case .labels:
-            return "New Tag"
+            return String(localized: "New Tag")
         case .readingLists:
-            return "New Reading List"
+            return String(localized: "New Reading List")
         }
     }
 
     var createNamePrompt: String {
         switch self {
         case .labels:
-            return "Tag name"
+            return String(localized: "Tag name")
         case .readingLists:
-            return "Reading list name"
+            return String(localized: "Reading list name")
         }
     }
 
     var detailEmptyStateTitle: String {
         switch self {
         case .labels:
-            return "This Tag Is Empty"
+            return String(localized: "This Tag Is Empty")
         case .readingLists:
-            return "This Reading List Is Empty"
+            return String(localized: "This Reading List Is Empty")
         }
     }
 
     var detailEmptyStateDescription: String {
         switch self {
         case .labels:
-            return "Add comics to use this tag."
+            return String(localized: "Add comics to use this tag.")
         case .readingLists:
-            return "Add comics to build this reading list."
+            return String(localized: "Add comics to build this reading list.")
         }
     }
 
@@ -101,9 +101,13 @@ enum LibraryOrganizationSectionKind: String, CaseIterable, Identifiable, Hashabl
     func summaryText(count: Int) -> String {
         switch self {
         case .labels:
-            return count == 1 ? "1 tag available" : "\(count) tags available"
+            return count == 1
+                ? String(localized: "1 tag available")
+                : String(localized: "\(count) tags available")
         case .readingLists:
-            return count == 1 ? "1 reading list available" : "\(count) reading lists available"
+            return count == 1
+                ? String(localized: "1 reading list available")
+                : String(localized: "\(count) reading lists available")
         }
     }
 }
@@ -124,9 +128,9 @@ struct LibraryOrganizationCollection: Identifiable, Hashable {
 
         switch type {
         case .label:
-            return "Untitled Tag"
+            return String(localized: "Untitled Tag")
         case .readingList:
-            return "Untitled Reading List"
+            return String(localized: "Untitled Reading List")
         }
     }
 
@@ -149,7 +153,9 @@ struct LibraryOrganizationCollection: Identifiable, Hashable {
     }
 
     var countText: String {
-        comicCount == 1 ? "1 comic" : "\(comicCount) comics"
+        comicCount == 1
+            ? String(localized: "1 comic")
+            : String(localized: "\(comicCount) comics")
     }
 
     func updatingDetails(

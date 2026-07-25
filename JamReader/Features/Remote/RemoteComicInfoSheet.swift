@@ -139,24 +139,24 @@ struct RemoteComicInfoSheet: View {
         }
 
         var rows: [RemoteComicInfoRow] = [
-            .init(title: "Status", value: readingSession.progressText)
+            .init(title: String(localized: "Status"), value: readingSession.progressText)
         ]
 
         if readingSession.hasBeenOpened {
-            rows.append(.init(title: "Current Page", value: "\(max(readingSession.currentPage, 1))"))
+            rows.append(.init(title: String(localized: "Current Page"), value: "\(max(readingSession.currentPage, 1))"))
         }
 
         if let pageCount = readingSession.pageCount, pageCount > 0 {
-            rows.append(.init(title: "Pages", value: "\(pageCount)"))
+            rows.append(.init(title: String(localized: "Pages"), value: "\(pageCount)"))
         }
 
         if !readingSession.bookmarkPageIndices.isEmpty {
-            rows.append(.init(title: "Bookmarks", value: "\(readingSession.bookmarkPageIndices.count)"))
+            rows.append(.init(title: String(localized: "Bookmarks"), value: "\(readingSession.bookmarkPageIndices.count)"))
         }
 
         rows.append(
             .init(
-                title: "Last Opened",
+                title: String(localized: "Last Opened"),
                 value: readingSession.lastTimeOpened.formatted(date: .abbreviated, time: .shortened)
             )
         )
@@ -166,22 +166,22 @@ struct RemoteComicInfoSheet: View {
 
     private var fileRows: [RemoteComicInfoRow] {
         var rows: [RemoteComicInfoRow] = [
-            .init(title: "Name", value: item.name),
-            .init(title: "Format", value: formatDisplayName),
-            .init(title: "Offline", value: offlineStatusText)
+            .init(title: String(localized: "Name"), value: item.name),
+            .init(title: String(localized: "Format"), value: formatDisplayName),
+            .init(title: String(localized: "Offline"), value: offlineStatusText)
         ]
 
         if let fileSize = item.fileSize {
             rows.append(
                 .init(
-                    title: "Size",
+                    title: String(localized: "Size"),
                     value: ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
                 )
             )
         } else if let pageCountHint = item.pageCountHint, item.isComicDirectory {
             rows.append(
                 .init(
-                    title: "Pages",
+                    title: String(localized: "Pages"),
                     value: "\(pageCountHint)"
                 )
             )
@@ -190,7 +190,7 @@ struct RemoteComicInfoSheet: View {
         if let modifiedAt = item.modifiedAt {
             rows.append(
                 .init(
-                    title: "Modified",
+                    title: String(localized: "Modified"),
                     value: modifiedAt.formatted(date: .abbreviated, time: .shortened)
                 )
             )
@@ -201,17 +201,17 @@ struct RemoteComicInfoSheet: View {
 
     private var locationRows: [RemoteComicInfoRow] {
         [
-            .init(title: "Server", value: profile.displayTitle),
-            .init(title: "Type", value: profile.providerDisplayTitle),
-            .init(title: "Address", value: profile.endpointDisplayHost),
-            .init(title: "Share", value: profile.providerRootDisplayPath),
-            .init(title: "Path", value: item.path, isMultiline: true)
+            .init(title: String(localized: "Server"), value: profile.displayTitle),
+            .init(title: String(localized: "Type"), value: profile.providerDisplayTitle),
+            .init(title: String(localized: "Address"), value: profile.endpointDisplayHost),
+            .init(title: String(localized: "Share"), value: profile.providerRootDisplayPath),
+            .init(title: String(localized: "Path"), value: item.path, isMultiline: true)
         ]
     }
 
     private var formatDisplayName: String {
         if item.isComicDirectory {
-            return "Image Folder Comic"
+            return String(localized: "Image Folder Comic")
         }
 
         return SupportedComicFormats.displayName(
@@ -220,7 +220,7 @@ struct RemoteComicInfoSheet: View {
     }
 
     private var offlineStatusText: String {
-        cacheAvailability.badgeTitle ?? "Not Downloaded"
+        cacheAvailability.badgeTitle ?? String(localized: "Not Downloaded")
     }
 
     private var offlineStatusSymbolName: String {

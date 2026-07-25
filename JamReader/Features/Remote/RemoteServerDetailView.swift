@@ -89,7 +89,7 @@ struct RemoteServerDetailView: View {
             refreshDetailState(forceReload: true)
         }
         .confirmationDialog(
-            pendingDestructiveAction?.title ?? "Confirm Action",
+            pendingDestructiveAction?.title ?? String(localized: "Confirm Action"),
             isPresented: pendingDestructiveActionBinding,
             titleVisibility: .visible
         ) {
@@ -359,7 +359,9 @@ struct RemoteServerDetailView: View {
     }
 
     private var browserEntryTitle: String {
-        browserEntryIsRoot ? "Browse" : "Continue"
+        browserEntryIsRoot
+            ? String(localized: "Browse")
+            : String(localized: "Continue")
     }
 
     private var browserEntryDisplayText: String {
@@ -382,8 +384,10 @@ struct RemoteServerDetailView: View {
             items.append(
                 RemoteServerDetailShortcutItem(
                     id: "saved-folders",
-                    title: "Saved Folders",
-                    subtitle: savedFolderCount == 1 ? "1 saved" : "\(savedFolderCount) saved",
+                    title: String(localized: "Saved Folders"),
+                    subtitle: savedFolderCount == 1
+                        ? String(localized: "1 saved")
+                        : String(localized: "\(savedFolderCount) saved"),
                     systemImage: "star.fill",
                     tint: .teal,
                     route: .savedFolders(profile.id)
@@ -395,10 +399,10 @@ struct RemoteServerDetailView: View {
             items.append(
                 RemoteServerDetailShortcutItem(
                     id: "offline-shelf",
-                    title: "Downloaded Comics",
+                    title: String(localized: "Downloaded Comics"),
                     subtitle: offlineCopyCount == 1
-                        ? "1 downloaded on this server"
-                        : "\(offlineCopyCount) downloaded on this server",
+                        ? String(localized: "1 downloaded on this server")
+                        : String(localized: "\(offlineCopyCount) downloaded on this server"),
                     systemImage: "arrow.down.circle.fill",
                     tint: .green,
                     route: .offlineShelf(profile.id)
@@ -427,7 +431,9 @@ struct RemoteServerDetailView: View {
                 navigate(.savedFolders(profile.id))
             } label: {
                 Label(
-                    savedFolderCount == 1 ? "Saved Folder" : "Saved Folders",
+                    savedFolderCount == 1
+                        ? String(localized: "Saved Folder")
+                        : String(localized: "Saved Folders"),
                     systemImage: "star"
                 )
             }
@@ -438,7 +444,9 @@ struct RemoteServerDetailView: View {
                 navigate(.offlineShelf(profile.id))
             } label: {
                 Label(
-                    offlineCopyCount == 1 ? "Offline Copy" : "Offline Shelf",
+                    offlineCopyCount == 1
+                        ? String(localized: "Offline Copy")
+                        : String(localized: "Offline Shelf"),
                     systemImage: "arrow.down.circle"
                 )
             }

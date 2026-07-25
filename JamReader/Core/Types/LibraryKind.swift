@@ -8,11 +8,11 @@ enum LibraryKind: String, Codable, Hashable, CaseIterable {
     var title: String {
         switch self {
         case .appManaged:
-            return "App Managed"
+            return String(localized: "App Managed")
         case .linkedFolder:
-            return "Linked Folder"
+            return String(localized: "Linked Folder")
         case .importedComics:
-            return "Imported Comics"
+            return String(localized: "Imported Comics")
         }
     }
 

@@ -47,7 +47,7 @@ extension AppAlertAction {
     var title: String {
         switch self {
         case .openLibrary:
-            return "Open Library"
+            return String(localized: "Open Library")
         }
     }
 }
@@ -63,7 +63,7 @@ extension Error {
         let raw = localizedDescription
         // Filter out unhelpful generic Apple error messages
         if raw.contains("NSLocalizedDescription") || raw.contains("NSUnderlyingError") {
-            return "An unexpected error occurred. Please try again."
+            return String(localized: "An unexpected error occurred. Please try again.")
         }
         return raw
     }

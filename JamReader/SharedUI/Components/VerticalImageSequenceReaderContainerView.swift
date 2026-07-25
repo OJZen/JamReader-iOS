@@ -783,28 +783,28 @@ final class VerticalReaderViewController: UIViewController {
             modifierFlags: [],
             action: #selector(handleAdvancePage)
         )
-        nextPageCommand.discoverabilityTitle = "Next Page"
+        nextPageCommand.discoverabilityTitle = String(localized: "Next Page")
 
         let previousPageCommand = UIKeyCommand(
             input: UIKeyCommand.inputUpArrow,
             modifierFlags: [],
             action: #selector(handleRetreatPage)
         )
-        previousPageCommand.discoverabilityTitle = "Previous Page"
+        previousPageCommand.discoverabilityTitle = String(localized: "Previous Page")
 
         let spaceAdvanceCommand = UIKeyCommand(
             input: " ",
             modifierFlags: [],
             action: #selector(handleAdvancePage)
         )
-        spaceAdvanceCommand.discoverabilityTitle = "Next Page"
+        spaceAdvanceCommand.discoverabilityTitle = String(localized: "Next Page")
 
         let shiftSpaceRetreatCommand = UIKeyCommand(
             input: " ",
             modifierFlags: [.shift],
             action: #selector(handleRetreatPage)
         )
-        shiftSpaceRetreatCommand.discoverabilityTitle = "Previous Page"
+        shiftSpaceRetreatCommand.discoverabilityTitle = String(localized: "Previous Page")
 
         return [nextPageCommand, previousPageCommand, spaceAdvanceCommand, shiftSpaceRetreatCommand]
     }
@@ -851,7 +851,7 @@ private final class VerticalReaderPageCell: UICollectionViewCell {
         imageView.isHidden = true
         imageView.image = nil
         activityIndicator.startAnimating()
-        accessibilityLabel = "Page \(pageNumber)"
+        accessibilityLabel = String(localized: "Page \(pageNumber)")
     }
 
     func setImage(_ image: UIImage) {
@@ -914,7 +914,7 @@ private enum VerticalPageLoadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .decodeFailed(let index):
-            return "Page \(index + 1) could not be decoded."
+            return String(localized: "Page \(index + 1) could not be decoded.")
         }
     }
 }

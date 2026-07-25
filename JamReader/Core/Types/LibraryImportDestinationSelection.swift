@@ -58,11 +58,11 @@ struct LibraryImportDestinationOption: Identifiable, Hashable {
         var title: String {
             switch self {
             case .appManaged:
-                return "App Managed"
+                return String(localized: "App Managed")
             case .linkedFolder:
-                return "Linked Folder"
+                return String(localized: "Linked Folder")
             case .readOnly:
-                return "Read-Only"
+                return String(localized: "Read-Only")
             }
         }
     }

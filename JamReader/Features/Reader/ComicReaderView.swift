@@ -65,9 +65,10 @@ struct ComicReaderView: View {
                     )
                 } else {
                     ReaderFallbackStateView(
-                        title: "Comic Unavailable",
+                        title: String(localized: "Comic Unavailable"),
                         systemImage: "book.closed",
-                        message: viewModel.failureMessage ?? "The selected comic could not be opened."
+                        message: viewModel.failureMessage
+                            ?? String(localized: "The selected comic could not be opened.")
                     )
                 }
             }
@@ -185,7 +186,7 @@ struct ComicReaderView: View {
             }
         ) { unsupportedDocument in
             ReaderFallbackStateView(
-                title: "Reader Not Ready",
+                title: String(localized: "Reader Not Ready"),
                 systemImage: "shippingbox",
                 message: unsupportedReaderMessage(for: unsupportedDocument)
             )
@@ -193,13 +194,7 @@ struct ComicReaderView: View {
     }
 
     private func unsupportedReaderMessage(for unsupportedDocument: UnsupportedComicDocument) -> String {
-        let fileExtension = unsupportedDocument.fileExtension.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if fileExtension.isEmpty {
-            return unsupportedDocument.reason
-        }
-
-        return "\(fileExtension.uppercased()) reading support is still being ported.\n\n\(unsupportedDocument.reason)"
+        unsupportedDocument.reason
     }
 
     private var readerControlsSheet: some View {
@@ -344,13 +339,13 @@ struct ComicReaderView: View {
             title: viewModel.navigationTitle,
             onBack: dismiss.callAsFunction,
             secondarySystemImage: showsThumbnailShortcut ? "square.grid.3x2" : nil,
-            secondaryAccessibilityLabel: "Browse Pages",
+            secondaryAccessibilityLabel: String(localized: "Browse Pages"),
             onSecondaryAction: showsThumbnailShortcut ? {
                 readerSession.setChromeVisible(true)
                 presentThumbnailBrowser()
             } : nil,
             savePageSystemImage: viewModel.isSavingCurrentPageToPhotoLibrary ? "hourglass" : "square.and.arrow.down",
-            savePageAccessibilityLabel: "Save Page to Photos",
+            savePageAccessibilityLabel: String(localized: "Save Page to Photos"),
             onSavePage: viewModel.supportsCurrentPagePhotoSave ? {
                 viewModel.saveCurrentPageToPhotoLibrary()
             } : nil,
@@ -583,7 +578,7 @@ struct ComicReaderView: View {
             pageCount: pageCount
         ) else {
             viewModel.alert = AppAlertState(
-                title: "Invalid Page Number",
+                title: String(localized: "Invalid Page Number"),
                 message: ReaderPageJumpResolver.validationMessage(pageCount: pageCount)
             )
             return

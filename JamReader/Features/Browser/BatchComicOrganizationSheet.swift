@@ -13,18 +13,18 @@ enum BatchOrganizationMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .add:
-            return "Add"
+            return String(localized: "Add")
         case .remove:
-            return "Remove"
+            return String(localized: "Remove")
         }
     }
 
     var description: String {
         switch self {
         case .add:
-            return "Adds selected comics to tags and reading lists."
+            return String(localized: "Adds selected comics to tags and reading lists.")
         case .remove:
-            return "Removes selected comics from tags and reading lists."
+            return String(localized: "Removes selected comics from tags and reading lists.")
         }
     }
 
@@ -95,7 +95,9 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
     }
 
     var selectedComicCountText: String {
-        selectedComicCount == 1 ? "1 selected comic" : "\(selectedComicCount) selected comics"
+        selectedComicCount == 1
+            ? String(localized: "1 selected comic")
+            : String(localized: "\(selectedComicCount) selected comics")
     }
 
     func loadIfNeeded() {
@@ -128,7 +130,7 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
                 "Library batch organization load failed libraryID=\(self.libraryID, privacy: .public) selected=\(self.selectedComicCount) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Load Organization",
+                title: String(localized: "Failed to Load Organization"),
                 message: error.userFacingMessage
             )
         }
@@ -170,7 +172,7 @@ final class BatchComicOrganizationSheetViewModel: ObservableObject {
                 "Library batch organization membership update failed libraryID=\(self.libraryID, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) mode=\(self.mode.rawValue, privacy: .public) count=\(self.selectedComicIDs.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Organization",
+                title: String(localized: "Failed to Update Organization"),
                 message: error.userFacingMessage
             )
             return false
@@ -342,11 +344,13 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
     }
 
     var selectedComicCountText: String {
-        selectedComicCount == 1 ? "1 selected comic" : "\(selectedComicCount) selected comics"
+        selectedComicCount == 1
+            ? String(localized: "1 selected comic")
+            : String(localized: "\(selectedComicCount) selected comics")
     }
 
     var helperText: String {
-        "Turn on the fields to update. Blank text clears the value. Rating supports Unrated or 1-5 stars."
+        String(localized: "Turn on the fields to update. Blank text clears the value. Rating supports Unrated or 1-5 stars.")
     }
 
     var canApply: Bool {
@@ -382,7 +386,7 @@ final class BatchComicMetadataSheetViewModel: ObservableObject {
                 "Library batch metadata update failed libraryID=\(self.libraryID, privacy: .public) count=\(self.selectedComicIDs.count) fields=\(self.patch.enabledFieldCount) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Metadata",
+                title: String(localized: "Failed to Update Metadata"),
                 message: error.userFacingMessage
             )
             return false
@@ -431,7 +435,7 @@ struct BatchComicMetadataSheet: View {
                 }
 
                 Section("Classification") {
-                    BatchMetadataFieldToggle(title: "Type", isEnabled: $viewModel.patch.shouldUpdateType) {
+                    BatchMetadataFieldToggle(title: String(localized: "Type"), isEnabled: $viewModel.patch.shouldUpdateType) {
                         Picker("Type", selection: $viewModel.patch.type) {
                             ForEach(LibraryFileType.allCases) { type in
                                 Text(type.title).tag(type)
@@ -440,7 +444,7 @@ struct BatchComicMetadataSheet: View {
                         .pickerStyle(.menu)
                     }
 
-                    BatchMetadataFieldToggle(title: "Rating", isEnabled: $viewModel.patch.shouldUpdateRating) {
+                    BatchMetadataFieldToggle(title: String(localized: "Rating"), isEnabled: $viewModel.patch.shouldUpdateRating) {
                         Picker("Rating", selection: $viewModel.patch.rating) {
                             Text("Unrated").tag(0)
                             ForEach(1...5, id: \.self) { value in
@@ -451,37 +455,37 @@ struct BatchComicMetadataSheet: View {
                         .pickerStyle(.menu)
                     }
 
-                    BatchMetadataFieldToggle(title: "Series", isEnabled: $viewModel.patch.shouldUpdateSeries) {
+                    BatchMetadataFieldToggle(title: String(localized: "Series"), isEnabled: $viewModel.patch.shouldUpdateSeries) {
                         TextField("Series", text: $viewModel.patch.series)
                     }
 
-                    BatchMetadataFieldToggle(title: "Volume", isEnabled: $viewModel.patch.shouldUpdateVolume) {
+                    BatchMetadataFieldToggle(title: String(localized: "Volume"), isEnabled: $viewModel.patch.shouldUpdateVolume) {
                         TextField("Volume", text: $viewModel.patch.volume)
                     }
 
-                    BatchMetadataFieldToggle(title: "Story Arc", isEnabled: $viewModel.patch.shouldUpdateStoryArc) {
+                    BatchMetadataFieldToggle(title: String(localized: "Story Arc"), isEnabled: $viewModel.patch.shouldUpdateStoryArc) {
                         TextField("Story Arc", text: $viewModel.patch.storyArc)
                     }
                 }
 
                 Section("Publishing") {
-                    BatchMetadataFieldToggle(title: "Publisher", isEnabled: $viewModel.patch.shouldUpdatePublisher) {
+                    BatchMetadataFieldToggle(title: String(localized: "Publisher"), isEnabled: $viewModel.patch.shouldUpdatePublisher) {
                         TextField("Publisher", text: $viewModel.patch.publisher)
                     }
 
-                    BatchMetadataFieldToggle(title: "Language ISO", isEnabled: $viewModel.patch.shouldUpdateLanguageISO) {
+                    BatchMetadataFieldToggle(title: String(localized: "Language ISO"), isEnabled: $viewModel.patch.shouldUpdateLanguageISO) {
                         TextField("Language ISO", text: $viewModel.patch.languageISO)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                     }
 
-                    BatchMetadataFieldToggle(title: "Format", isEnabled: $viewModel.patch.shouldUpdateFormat) {
+                    BatchMetadataFieldToggle(title: String(localized: "Format"), isEnabled: $viewModel.patch.shouldUpdateFormat) {
                         TextField("Format", text: $viewModel.patch.format)
                     }
                 }
 
                 Section("Tags") {
-                    BatchMetadataFieldToggle(title: "Tags", isEnabled: $viewModel.patch.shouldUpdateTags) {
+                    BatchMetadataFieldToggle(title: String(localized: "Tags"), isEnabled: $viewModel.patch.shouldUpdateTags) {
                         TextField("Tags", text: $viewModel.patch.tags, axis: .vertical)
                             .lineLimit(2...4)
                     }
@@ -595,7 +599,7 @@ final class BatchComicInfoImportSheetViewModel: ObservableObject {
             )
         } catch {
             alert = AppAlertState(
-                title: "Failed to Import ComicInfo",
+                title: String(localized: "Failed to Import ComicInfo"),
                 message: error.userFacingMessage
             )
             return nil
@@ -653,11 +657,11 @@ struct BatchComicInfoImportSheet: View {
                 Section("Included Fields") {
                     LabeledContent(
                         "Core",
-                        value: "Title, series, issue number, volume, and story arc"
+                        value: String(localized: "Title, series, issue number, volume, and story arc")
                     )
                     LabeledContent(
                         "Details",
-                        value: "Credits, publisher, format, language, characters, teams, locations, review, and tags"
+                        value: String(localized: "Credits, publisher, format, language, characters, teams, locations, review, and tags")
                     )
                 }
             }
@@ -722,8 +726,8 @@ private struct BatchMetadataFieldToggle<Editor: View>: View {
 private extension BatchComicMetadataSheet {
     var enabledFieldCountText: String {
         viewModel.patch.enabledFieldCount == 1
-            ? "1 field"
-            : "\(viewModel.patch.enabledFieldCount) fields"
+            ? String(localized: "1 field")
+            : String(localized: "\(viewModel.patch.enabledFieldCount) fields")
     }
 }
 
@@ -731,9 +735,9 @@ private extension BatchComicInfoImportSheet {
     var scopeTitle: String {
         switch viewModel.importScope {
         case .selected:
-            return "Selected"
+            return String(localized: "Selected")
         case .visible:
-            return "Visible"
+            return String(localized: "Visible")
         }
     }
 }

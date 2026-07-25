@@ -10,8 +10,14 @@ struct LibrarySearchResults: Equatable {
     }
 
     var summaryText: String {
-        let folderLabel = folders.count == 1 ? "1 folder" : "\(folders.count) folders"
-        let comicLabel = comics.count == 1 ? "1 comic" : "\(comics.count) comics"
-        return "\(folderLabel) / \(comicLabel)"
+        let folderCount = folders.count
+        let comicCount = comics.count
+        let folderLabel = folderCount == 1
+            ? String(localized: "1 folder")
+            : String(localized: "\(folderCount) folders")
+        let comicLabel = comicCount == 1
+            ? String(localized: "1 comic")
+            : String(localized: "\(comicCount) comics")
+        return String(localized: "\(folderLabel) / \(comicLabel)")
     }
 }

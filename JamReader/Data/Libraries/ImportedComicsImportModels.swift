@@ -3,6 +3,7 @@ import Foundation
 struct ImportedComicsImportResult {
     let importedDestinationID: UUID
     let importedDestinationName: String
+    let importedDestinationDisplayName: String
     let createdLibrary: Bool
     let importedComicCount: Int
     let scanSummary: LibraryScanSummary?
@@ -18,30 +19,38 @@ struct ImportedComicsImportResult {
         var messageLines: [String] = []
 
         if createdLibrary {
-            messageLines.append("Added \(importedDestinationName).")
+            messageLines.append(String(localized: "Added \(importedDestinationDisplayName)."))
         }
 
         if importedComicCount > 0 {
-            let comicWord = importedComicCount == 1 ? "comic file" : "comic files"
-            messageLines.append("Imported \(importedComicCount) \(comicWord) into \(importedDestinationName).")
+            if importedComicCount == 1 {
+                messageLines.append(String(localized: "Imported 1 comic file into \(importedDestinationDisplayName)."))
+            } else {
+                messageLines.append(String(localized: "Imported \(importedComicCount) comic files into \(importedDestinationDisplayName)."))
+            }
         }
 
         if let scanSummary {
             messageLines.append(scanSummary.indexedSummaryLine + ".")
         } else if let scanErrorMessage {
-            messageLines.append("Automatic indexing failed: \(scanErrorMessage)")
-            messageLines.append("Open \(importedDestinationName) and run Refresh to index the new files.")
+            messageLines.append(String(localized: "Automatic indexing failed: \(scanErrorMessage)"))
+            messageLines.append(String(localized: "Open \(importedDestinationDisplayName) and run Refresh to index the new files."))
         }
 
         if !unsupportedItemNames.isEmpty {
-            let itemWord = unsupportedItemNames.count == 1 ? "item" : "items"
-            messageLines.append("Skipped \(unsupportedItemNames.count) unsupported \(itemWord).")
+            let unsupportedCount = unsupportedItemNames.count
+            if unsupportedCount == 1 {
+                messageLines.append(String(localized: "Skipped 1 unsupported item."))
+            } else {
+                messageLines.append(String(localized: "Skipped \(unsupportedCount) unsupported items."))
+            }
         }
 
         let combinedFailedItemNames = failedItemNames + extraFailedItemNames
         if !combinedFailedItemNames.isEmpty {
             let preview = NamePreviewFormatter.preview(from: combinedFailedItemNames)
-            messageLines.append("Failed to import \(combinedFailedItemNames.count) item(s): \(preview).")
+            let failedCount = combinedFailedItemNames.count
+            messageLines.append(String(localized: "Failed to import \(failedCount) item(s): \(preview)."))
         }
 
         return messageLines
@@ -87,7 +96,7 @@ struct ImportedComicsImportProgress {
         }
 
         if let totalCount {
-            return "\(completedCount) of \(totalCount)"
+            return String(localized: "\(completedCount) of \(totalCount)")
         }
 
         return nil

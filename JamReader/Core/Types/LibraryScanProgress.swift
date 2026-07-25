@@ -17,20 +17,20 @@ struct LibraryScanProgress: Equatable {
     var title: String {
         switch phase {
         case .preparing:
-            return "Preparing Scan"
+            return String(localized: "Preparing Scan")
         case .scanningFolders:
-            return "Scanning Folders"
+            return String(localized: "Scanning Folders")
         case .scanningComics:
-            return "Scanning Comics"
+            return String(localized: "Scanning Comics")
         case .importingMetadata:
-            return "Importing ComicInfo"
+            return String(localized: "Importing ComicInfo")
         case .finalizing:
-            return "Finalizing Library"
+            return String(localized: "Finalizing Library")
         }
     }
 
     var countsLine: String {
-        "\(processedFolderCount) folders · \(processedComicCount) comics"
+        String(localized: "\(processedFolderCount) folders · \(processedComicCount) comics")
     }
 
     var detailLine: String {
@@ -39,6 +39,6 @@ struct LibraryScanProgress: Equatable {
             return countsLine
         }
 
-        return "\(countsLine) · \(currentPath)"
+        return String(localized: "\(countsLine) · \(currentPath)")
     }
 }

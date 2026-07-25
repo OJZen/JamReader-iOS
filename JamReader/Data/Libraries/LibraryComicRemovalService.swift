@@ -10,7 +10,7 @@ enum LibraryComicRemovalError: LocalizedError {
         case .unavailable(let message):
             return message
         case .unsafeComicPath:
-            return "A comic points outside the library folder and could not be removed safely."
+            return String(localized: "A comic points outside the library folder and could not be removed safely.")
         }
     }
 }
@@ -192,7 +192,7 @@ final class LibraryComicRemovalService {
         )
 
         if !accessSnapshot.sourceWritable {
-            return "This library is currently read-only on this device."
+            return String(localized: "This library is currently read-only on this device.")
         }
 
         return nil

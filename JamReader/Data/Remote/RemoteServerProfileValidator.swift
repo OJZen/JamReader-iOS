@@ -8,7 +8,7 @@ struct RemoteServerProfileValidator {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "A display name is required for the remote server."
+                    message: String(localized: "A display name is required for the remote server.")
                 )
             )
         }
@@ -17,7 +17,7 @@ struct RemoteServerProfileValidator {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "Host cannot be empty."
+                    message: String(localized: "Host cannot be empty.")
                 )
             )
         }
@@ -26,7 +26,7 @@ struct RemoteServerProfileValidator {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "Port must be between 1 and 65535."
+                    message: String(localized: "Port must be between 1 and 65535.")
                 )
             )
         }
@@ -37,7 +37,7 @@ struct RemoteServerProfileValidator {
                 issues.append(
                     RemoteServerValidationIssue(
                         severity: .error,
-                        message: "Share name cannot be empty."
+                        message: String(localized: "Share name cannot be empty.")
                     )
                 )
             }
@@ -46,7 +46,7 @@ struct RemoteServerProfileValidator {
                 issues.append(
                     RemoteServerValidationIssue(
                         severity: .error,
-                        message: "Enter a valid WebDAV host or URL."
+                        message: String(localized: "Enter a valid WebDAV host or URL.")
                     )
                 )
             }
@@ -57,7 +57,7 @@ struct RemoteServerProfileValidator {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "Username is required for this authentication mode."
+                    message: String(localized: "Username is required for this authentication mode.")
                 )
             )
         }
@@ -66,7 +66,7 @@ struct RemoteServerProfileValidator {
             issues.append(
                 RemoteServerValidationIssue(
                     severity: .error,
-                    message: "A saved password is required for this remote server."
+                    message: String(localized: "A saved password is required for this remote server.")
                 )
             )
         }

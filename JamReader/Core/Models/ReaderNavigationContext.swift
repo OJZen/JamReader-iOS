@@ -29,6 +29,6 @@ struct ReaderNavigationContext: Equatable {
             return nil
         }
 
-        return "\(index + 1) of \(comics.count)"
+        return String(localized: "\(index + 1) of \(comics.count)")
     }
 }

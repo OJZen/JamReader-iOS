@@ -85,7 +85,9 @@ struct LibraryOrganizationCollectionDetailView: View {
     var body: some View {
         Group {
             if viewModel.isLoading {
-                LoadingStateView(message: "Loading \(viewModel.collection.displayTitle)")
+                LoadingStateView(
+                    message: String(localized: "Loading \(viewModel.collection.displayTitle)")
+                )
             } else {
                 contentBody
             }
@@ -537,7 +539,7 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var deletingCollectionDialogTitle: String {
         guard let deletingCollection else {
-            return "Delete Collection"
+            return String(localized: "Delete Collection")
         }
 
         return deleteCollectionActionTitle(for: deletingCollection)
@@ -546,18 +548,18 @@ struct LibraryOrganizationCollectionDetailView: View {
     private func deleteCollectionActionTitle(for collection: LibraryOrganizationCollection) -> String {
         switch collection.type {
         case .label:
-            return "Delete Tag"
+            return String(localized: "Delete Tag")
         case .readingList:
-            return "Delete Reading List"
+            return String(localized: "Delete Reading List")
         }
     }
 
     private func deleteCollectionMessage(for collection: LibraryOrganizationCollection) -> String {
         switch collection.type {
         case .label:
-            return "This removes the tag and its assignments from the library database."
+            return String(localized: "This removes the tag and its assignments from the library database.")
         case .readingList:
-            return "This removes the reading list and its assigned comics from the library database."
+            return String(localized: "This removes the reading list and its assigned comics from the library database.")
         }
     }
 
@@ -808,16 +810,22 @@ struct LibraryOrganizationCollectionDetailView: View {
     }
 
     private var contentSectionTitle: String {
-        hasActiveFilter ? "Results" : "Comics"
+        hasActiveFilter
+            ? String(localized: "Results")
+            : String(localized: "Comics")
     }
 
     private var emptyStateTitle: String {
-        hasActiveFilter ? "No Matching Comics" : viewModel.collection.sectionKind.detailEmptyStateTitle
+        hasActiveFilter
+            ? String(localized: "No Matching Comics")
+            : viewModel.collection.sectionKind.detailEmptyStateTitle
     }
 
     private var emptyStateDescription: String {
         if !trimmedSearchQuery.isEmpty {
-            return "No comics in \(viewModel.collection.displayTitle) matched \"\(trimmedSearchQuery)\"."
+            return String(
+                localized: "No comics in \(viewModel.collection.displayTitle) matched \"\(trimmedSearchQuery)\"."
+            )
         }
 
         return viewModel.collection.sectionKind.detailEmptyStateDescription
@@ -833,7 +841,9 @@ struct LibraryOrganizationCollectionDetailView: View {
 
     private var selectionSummaryText: String {
         let count = selectedComicIDs.count
-        return count == 1 ? "1 selected" : "\(count) selected"
+        return count == 1
+            ? String(localized: "1 selected")
+            : String(localized: "\(count) selected")
     }
 
     @ViewBuilder
@@ -956,7 +966,9 @@ struct LibraryOrganizationCollectionDetailView: View {
                 content: AnyView(
                     LibraryComicQuickActionsSheet(
                         comic: comic,
-                        removeFromContextTitle: "Remove from \(viewModel.collection.displayTitle)",
+                        removeFromContextTitle: String(
+                            localized: "Remove from \(viewModel.collection.displayTitle)"
+                        ),
                         onDone: {
                             quickActionsComic = nil
                             appPresenter?.dismissSheet()
@@ -1097,8 +1109,10 @@ struct LibraryOrganizationCollectionDetailView: View {
                 content: AnyView(
                     LibrarySelectionActionsSheet(
                         selectionCount: selectedComicIDs.count,
-                        organizeActionTitle: "Tags and Reading Lists",
-                        removeFromContextTitle: viewModel.collection.type == .label ? "Remove from Tag" : "Remove from Reading List",
+                        organizeActionTitle: String(localized: "Tags and Reading Lists"),
+                        removeFromContextTitle: viewModel.collection.type == .label
+                            ? String(localized: "Remove from Tag")
+                            : String(localized: "Remove from Reading List"),
                         onEditMetadata: {
                             isShowingBatchMetadataSheet = true
                         },

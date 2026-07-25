@@ -19,22 +19,22 @@ enum LibraryRecentWindowOption: Int, CaseIterable, Identifiable {
     }
 
     var title: String {
-        "\(rawValue) Days"
+        String(localized: "\(rawValue) Days")
     }
 
     var subtitle: String {
         if rawValue == 7 {
-            return "Great for weekly imports."
+            return String(localized: "Great for weekly imports.")
         }
 
         if rawValue == 14 {
-            return "A two-week intake window."
+            return String(localized: "A two-week intake window.")
         }
 
         if rawValue == 30 {
-            return "Good for monthly catch-up."
+            return String(localized: "Good for monthly catch-up.")
         }
 
-        return "Use a broader backlog window."
+        return String(localized: "Use a broader backlog window.")
     }
 }

@@ -12,22 +12,22 @@ enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
     var title: String {
         switch self {
         case .visibleResults:
-            return "Visible Comics Only"
+            return String(localized: "Visible Comics Only")
         case .currentFolderOnly:
-            return "This Folder Only"
+            return String(localized: "This Folder Only")
         case .includeSubfolders:
-            return "Include Subfolders"
+            return String(localized: "Include Subfolders")
         }
     }
 
     var summaryText: String {
         switch self {
         case .visibleResults:
-            return "Only comics shown here."
+            return String(localized: "Only comics shown here.")
         case .currentFolderOnly:
-            return "Comics directly in this folder."
+            return String(localized: "Comics directly in this folder.")
         case .includeSubfolders:
-            return "This folder and nested folders."
+            return String(localized: "This folder and nested folders.")
         }
     }
 }
@@ -52,7 +52,7 @@ struct RemoteImportOptionsSheet: View {
         title: String,
         message: String,
         supplementaryNotice: String? = nil,
-        confirmLabel: String = "Import",
+        confirmLabel: String = String(localized: "Import"),
         availableScopes: [RemoteDirectoryImportScope] = RemoteDirectoryImportScope.allCases,
         defaultScope: RemoteDirectoryImportScope = .includeSubfolders,
         dependencies: AppDependencies,
@@ -149,7 +149,7 @@ struct RemoteImportOptionsSheet: View {
     }
 
     private var scopeSection: some View {
-        ImportSection(title: "Scope") {
+        ImportSection(title: String(localized: "Scope")) {
             ForEach(availableScopes) { scope in
                 Button {
                     selectedScope = scope
@@ -168,7 +168,7 @@ struct RemoteImportOptionsSheet: View {
 
     private var destinationSection: some View {
         ImportSection(
-            title: "Destination",
+            title: String(localized: "Destination"),
             footer: supplementaryNotice ?? ImportDestinationSheetCopy.destinationFooter
         ) {
             ForEach(destinationViewModel.options) { option in
@@ -256,7 +256,11 @@ private struct RemoteImportScopeRow: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityValue(isSelected ? "Selected" : "Not Selected")
+        .accessibilityValue(
+            isSelected
+                ? String(localized: "Selected")
+                : String(localized: "Not Selected")
+        )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

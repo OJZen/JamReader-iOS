@@ -94,7 +94,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 "Library special collection favorite update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Favorites",
+                title: String(localized: "Failed to Update Favorites"),
                 message: error.userFacingMessage
             )
         }
@@ -134,7 +134,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 "Library special collection favorite batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(selectedComicIDs.count) value=\(isFavorite) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Favorites",
+                title: String(localized: "Failed to Update Favorites"),
                 message: error.userFacingMessage
             )
             return false
@@ -160,7 +160,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 "Library special collection read status update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Read Status",
+                title: String(localized: "Failed to Update Read Status"),
                 message: error.userFacingMessage
             )
         }
@@ -191,7 +191,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 "Library special collection rating update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) rating=\(normalizedRating) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Rating",
+                title: String(localized: "Failed to Update Rating"),
                 message: error.userFacingMessage
             )
         }
@@ -234,7 +234,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 "Library special collection read status batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) count=\(selectedComicIDs.count) value=\(isRead) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Read Status",
+                title: String(localized: "Failed to Update Read Status"),
                 message: error.userFacingMessage
             )
             return false
@@ -266,7 +266,7 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
                 "Library special collection remove comic failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) comicID=\(comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Remove Comic",
+                title: String(localized: "Failed to Remove Comic"),
                 message: error.userFacingMessage
             )
             return false
@@ -276,8 +276,8 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
     private func beginExclusiveLibraryStorageOperation() -> Bool {
         guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
             alert = AppAlertState(
-                title: "Library Busy",
-                message: "Finish the current import or storage task, then try again."
+                title: String(localized: "Library Busy"),
+                message: String(localized: "Finish the current import or storage task, then try again.")
             )
             return false
         }
@@ -333,7 +333,10 @@ final class LibrarySpecialCollectionViewModel: ObservableObject, LoadableViewMod
             logger.error(
                 "Library special collection load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) kind=\(self.kind.rawValue, privacy: .public) recentDays=\(self.recentDays) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Load Collection", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Load Collection"),
+                message: error.userFacingMessage
+            )
         }
     }
 

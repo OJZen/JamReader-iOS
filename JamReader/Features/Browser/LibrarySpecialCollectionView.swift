@@ -84,7 +84,9 @@ struct LibrarySpecialCollectionView: View {
     var body: some View {
         Group {
             if viewModel.isLoading {
-                LoadingStateView(message: "Loading \(viewModel.kind.title)")
+                LoadingStateView(
+                    message: String(localized: "Loading \(viewModel.kind.title)")
+                )
             } else {
                 contentBody
             }
@@ -523,7 +525,9 @@ struct LibrarySpecialCollectionView: View {
 
     private var selectionSummaryText: String {
         let count = selectedComicIDs.count
-        return count == 1 ? "1 selected" : "\(count) selected"
+        return count == 1
+            ? String(localized: "1 selected")
+            : String(localized: "\(count) selected")
     }
 
     private var supportsGridDisplay: Bool {
@@ -772,16 +776,22 @@ struct LibrarySpecialCollectionView: View {
     }
 
     private var contentSectionTitle: String {
-        hasActiveFilter ? "Results" : "Comics"
+        hasActiveFilter
+            ? String(localized: "Results")
+            : String(localized: "Comics")
     }
 
     private var emptyStateTitle: String {
-        hasActiveFilter ? "No Matching Comics" : viewModel.kind.emptyStateTitle
+        hasActiveFilter
+            ? String(localized: "No Matching Comics")
+            : viewModel.kind.emptyStateTitle
     }
 
     private var emptyStateDescription: String {
         if !trimmedSearchQuery.isEmpty {
-            return "No comics in \(viewModel.kind.title) matched \"\(trimmedSearchQuery)\"."
+            return String(
+                localized: "No comics in \(viewModel.kind.title) matched \"\(trimmedSearchQuery)\"."
+            )
         }
 
         return viewModel.kind.emptyStateDescriptionText(recentDays: viewModel.currentRecentDays)

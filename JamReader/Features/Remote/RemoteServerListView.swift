@@ -80,7 +80,7 @@ struct RemoteServerListView: View {
         }
         .background { presentationObservers }
         .confirmationDialog(
-            pendingDestructiveAction?.title ?? "Confirm Action",
+            pendingDestructiveAction?.title ?? String(localized: "Confirm Action"),
             isPresented: pendingDestructiveActionBinding,
             titleVisibility: .visible
         ) {
@@ -203,7 +203,9 @@ struct RemoteServerListView: View {
                 appNavigator?.navigate(.browse(.savedFolders(profile.id)))
             } label: {
                 Label(
-                    savedFolderCount == 1 ? "Saved Folder" : "Saved Folders",
+                    savedFolderCount == 1
+                        ? String(localized: "Saved Folder")
+                        : String(localized: "Saved Folders"),
                     systemImage: "star"
                 )
             }
@@ -214,7 +216,9 @@ struct RemoteServerListView: View {
                 appNavigator?.navigate(.browse(.offlineShelf(profile.id)))
             } label: {
                 Label(
-                    offlineCopyCount == 1 ? "Offline Copy" : "Offline Shelf",
+                    offlineCopyCount == 1
+                        ? String(localized: "Offline Copy")
+                        : String(localized: "Offline Shelf"),
                     systemImage: "arrow.down.circle"
                 )
             }
@@ -357,8 +361,8 @@ struct RemoteServerRow: View {
 
     private var statusSummary: String? {
         let segments = [
-            savedFolderCount > 0 ? "\(savedFolderCount) saved" : nil,
-            offlineCopyCount > 0 ? "\(offlineCopyCount) downloaded" : nil
+            savedFolderCount > 0 ? String(localized: "\(savedFolderCount) saved") : nil,
+            offlineCopyCount > 0 ? String(localized: "\(offlineCopyCount) downloaded") : nil
         ]
         .compactMap { $0 }
 
@@ -370,7 +374,9 @@ struct RemoteServerRow: View {
             return nil
         }
 
-        return recentHistoryCount == 1 ? "1 recent" : "\(recentHistoryCount) recent"
+        return recentHistoryCount == 1
+            ? String(localized: "1 recent")
+            : String(localized: "\(recentHistoryCount) recent")
     }
 }
 

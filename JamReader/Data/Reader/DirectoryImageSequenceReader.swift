@@ -9,11 +9,11 @@ enum DirectoryImageSequenceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unreadableDirectory:
-            return "The image folder could not be opened."
+            return String(localized: "The image folder could not be opened.")
         case .noRenderablePages:
-            return "No supported image pages were found in this folder."
+            return String(localized: "No supported image pages were found in this folder.")
         case .pageIndexOutOfBounds(let index):
-            return "The requested folder page \(index + 1) does not exist."
+            return String(localized: "The requested folder page \(index + 1) does not exist.")
         }
     }
 }

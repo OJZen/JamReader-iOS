@@ -251,11 +251,11 @@ struct RemoteOfflineComicCard: View {
     private var availabilityStatusText: String {
         switch availability.kind {
         case .unavailable:
-            return "Remote only"
+            return String(localized: "Remote only")
         case .current:
-            return "Ready on device"
+            return String(localized: "Ready on device")
         case .stale:
-            return "Local copy may be older"
+            return String(localized: "Local copy may be older")
         }
     }
 

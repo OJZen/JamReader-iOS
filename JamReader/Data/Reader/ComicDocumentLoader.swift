@@ -7,9 +7,9 @@ enum ComicDocumentLoadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .fileMissing:
-            return "The selected comic file could not be found."
+            return String(localized: "The selected comic file could not be found.")
         case .unsupportedRemoteStreamingFormat(let fileName):
-            return "\(fileName) still needs a full download before it can be opened."
+            return String(localized: "\(fileName) still needs a full download before it can be opened.")
         }
     }
 }
@@ -89,11 +89,14 @@ nonisolated final class ComicDocumentLoader {
                 )
             )
         default:
+            let unsupportedReason = `extension`.isEmpty
+                ? String(localized: "This file format is not supported.")
+                : String(localized: "\(`extension`.uppercased()) files are not supported.")
             return .unsupported(
                 UnsupportedComicDocument(
                     url: fileURL,
                     fileExtension: `extension`,
-                    reason: "Archive and image-stream readers are the next migration step."
+                    reason: unsupportedReason
                 )
             )
         }

@@ -89,9 +89,9 @@ struct ComicMetadataEditorSheet: View {
                         }
 
                         Section("Notes") {
-                            MetadataTextEditor(title: "Synopsis", text: binding(for: \.synopsis))
-                            MetadataTextEditor(title: "Notes", text: binding(for: \.notes))
-                            MetadataTextEditor(title: "Review", text: binding(for: \.review))
+                            MetadataTextEditor(title: String(localized: "Synopsis"), text: binding(for: \.synopsis))
+                            MetadataTextEditor(title: String(localized: "Notes"), text: binding(for: \.notes))
+                            MetadataTextEditor(title: String(localized: "Review"), text: binding(for: \.review))
                         }
                     }
                 }

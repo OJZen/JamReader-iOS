@@ -125,22 +125,22 @@ struct RemoteComicReadingSession: Identifiable, Codable, Hashable {
 
     var progressText: String {
         if read {
-            return "Read"
+            return String(localized: "Read")
         }
 
         if hasBeenOpened, currentPage > 0 {
             if let pageCount, pageCount > 0 {
-                return "Page \(currentPage) / \(pageCount)"
+                return String(localized: "Page \(currentPage) / \(pageCount)")
             }
 
-            return "Page \(currentPage)"
+            return String(localized: "Page \(currentPage)")
         }
 
         if let pageCount, pageCount > 0 {
-            return "\(pageCount) pages"
+            return String(localized: "\(pageCount) pages")
         }
 
-        return "Unread"
+        return String(localized: "Unread")
     }
 
     var pageIndex: Int {

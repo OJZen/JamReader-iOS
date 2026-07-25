@@ -445,7 +445,7 @@ final class LibraryStateRepository {
             sqliteBindText(libraryID.uuidString, index: 2, statement: statement)
 
             guard sqlite3_step(statement) == SQLITE_ROW else {
-                throw NativeLibraryStorageError.executionFailed("Comic not found.")
+                throw NativeLibraryStorageError.executionFailed(String(localized: "Comic not found."))
             }
 
             return LibraryComicMetadata(
@@ -803,7 +803,7 @@ final class LibraryStateRepository {
         let libraryID = try resolvedLibraryID(from: contextualDatabaseURL)
         try deleteCollectionRow(
             tableName: "tags",
-            entityName: "label",
+            entityName: String(localized: "label"),
             id: id,
             libraryID: libraryID
         )
@@ -816,7 +816,7 @@ final class LibraryStateRepository {
         let libraryID = try resolvedLibraryID(from: contextualDatabaseURL)
         try deleteCollectionRow(
             tableName: "reading_lists",
-            entityName: "reading list",
+            entityName: String(localized: "reading list"),
             id: id,
             libraryID: libraryID
         )
@@ -1100,7 +1100,7 @@ final class LibraryStateRepository {
         try ensureRowBelongs(
             id: comicID,
             tableName: "comics",
-            entityName: "comic",
+            entityName: String(localized: "comic"),
             libraryID: libraryID,
             database: database
         )
@@ -1124,7 +1124,7 @@ final class LibraryStateRepository {
             sqliteBindText(libraryID.uuidString, index: 2, statement: statement)
             guard sqlite3_step(statement) == SQLITE_ROW else {
                 throw NativeLibraryStorageError.executionFailed(
-                    "One or more comics could not be found in the active library."
+                    String(localized: "One or more comics could not be found in the active library.")
                 )
             }
         }
@@ -1138,7 +1138,7 @@ final class LibraryStateRepository {
         try ensureRowBelongs(
             id: tagID,
             tableName: "tags",
-            entityName: "label",
+            entityName: String(localized: "label"),
             libraryID: libraryID,
             database: database
         )
@@ -1152,7 +1152,7 @@ final class LibraryStateRepository {
         try ensureRowBelongs(
             id: readingListID,
             tableName: "reading_lists",
-            entityName: "reading list",
+            entityName: String(localized: "reading list"),
             libraryID: libraryID,
             database: database
         )
@@ -1172,7 +1172,7 @@ final class LibraryStateRepository {
         sqliteBindText(libraryID.uuidString, index: 2, statement: statement)
         guard sqlite3_step(statement) == SQLITE_ROW else {
             throw NativeLibraryStorageError.executionFailed(
-                "The requested \(entityName) could not be found in the active library."
+                String(localized: "The requested \(entityName) could not be found in the active library.")
             )
         }
     }
@@ -1191,7 +1191,7 @@ final class LibraryStateRepository {
             return rootFolderID
         }
 
-        throw NativeLibraryStorageError.executionFailed("This library has not been indexed yet.")
+        throw NativeLibraryStorageError.executionFailed(String(localized: "This library has not been indexed yet."))
     }
 
     private func existingFolderID(
@@ -1249,7 +1249,7 @@ final class LibraryStateRepository {
         sqliteBindText(libraryID.uuidString, index: 2, statement: statement)
 
         guard sqlite3_step(statement) == SQLITE_ROW else {
-            throw NativeLibraryStorageError.executionFailed("The requested folder could not be found.")
+            throw NativeLibraryStorageError.executionFailed(String(localized: "The requested folder could not be found."))
         }
 
         return folder(from: statement)

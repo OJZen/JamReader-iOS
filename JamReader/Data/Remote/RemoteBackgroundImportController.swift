@@ -159,8 +159,8 @@ final class RemoteBackgroundImportController: ObservableObject {
         }
 
         activeProgress = RemoteBrowserProgressState(
-            title: "Canceling Import",
-            detail: "Stopping the current remote import…",
+            title: String(localized: "Canceling Import"),
+            detail: String(localized: "Stopping the current remote import…"),
             fraction: activeProgress?.fraction,
             isCancellable: false
         )

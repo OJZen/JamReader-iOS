@@ -20,10 +20,10 @@ struct RemoteThumbnailCacheSummary: Hashable {
 
     var summaryText: String {
         if fileCount == 1 {
-            return "1 cached thumbnail · \(sizeText)"
+            return String(localized: "1 cached thumbnail · \(sizeText)")
         }
 
-        return "\(fileCount) cached thumbnails · \(sizeText)"
+        return String(localized: "\(fileCount) cached thumbnails · \(sizeText)")
     }
 }
 

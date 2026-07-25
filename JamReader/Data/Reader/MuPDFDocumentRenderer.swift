@@ -12,17 +12,17 @@ enum MuPDFDocumentRendererError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unavailable:
-            return "MuPDF is not linked into this build."
+            return String(localized: "MuPDF is not linked into this build.")
         case .unsupportedFormat(let fileExtension):
-            return "\(fileExtension.uppercased()) is not configured for MuPDF rendering."
-        case .openFailed(let message):
-            return message
-        case .renderFailed(let message):
-            return message
+            return String(localized: "\(fileExtension.uppercased()) is not configured for MuPDF rendering.")
+        case .openFailed:
+            return String(localized: "MuPDF could not open this document.")
+        case .renderFailed:
+            return String(localized: "MuPDF could not render this page.")
         case .invalidPage(let pageIndex):
-            return "Page \(pageIndex + 1) is not available."
+            return String(localized: "Page \(pageIndex + 1) is not available.")
         case .imageEncodingFailed:
-            return "The rendered page could not be encoded."
+            return String(localized: "The rendered page could not be encoded.")
         }
     }
 }
@@ -45,9 +45,9 @@ nonisolated final class MuPDFDocumentRenderer: @unchecked Sendable {
     nonisolated static func unsupportedReason(for fileURL: URL) -> String {
         let fileExtension = fileURL.pathExtension.uppercased()
         if isAvailable {
-            return "\(fileExtension) could not be opened by MuPDF."
+            return String(localized: "\(fileExtension) could not be opened by MuPDF.")
         }
-        return "\(fileExtension) reading requires the MuPDF engine, which is not linked into this build."
+        return String(localized: "\(fileExtension) reading requires the MuPDF engine, which is not linked into this build.")
     }
 
     let url: URL

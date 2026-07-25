@@ -17,10 +17,10 @@ struct LibraryListItem: Identifiable, Equatable {
 
         if accessSnapshot.database.exists {
             if comics == 0 && folders == 0 {
-                return "Empty library"
+                return String(localized: "Empty library")
             }
 
-            return "\(comics) comics · \(folders) folders"
+            return String(localized: "\(comics) comics · \(folders) folders")
         }
 
         return accessSnapshot.sourceStatus
@@ -31,7 +31,7 @@ private enum ManagedLibraryCreationError: LocalizedError {
     case rollbackFailed
 
     var errorDescription: String? {
-        "Library setup failed, and its catalog entry could not be rolled back. Local files were kept for recovery."
+        String(localized: "Library setup failed, and its catalog entry could not be rolled back. Local files were kept for recovery.")
     }
 }
 
@@ -97,7 +97,10 @@ final class LibraryListViewModel: ObservableObject {
             logger.error(
                 "Library list load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Load Libraries", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Load Libraries"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -158,7 +161,10 @@ final class LibraryListViewModel: ObservableObject {
             logger.error(
                 "Library folders add failed while saving added=\(addedCount) duplicates=\(duplicateNames.count) failed=\(failedItemNames.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Save Libraries", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Save Libraries"),
+                message: error.userFacingMessage
+            )
             return
         }
 
@@ -168,7 +174,10 @@ final class LibraryListViewModel: ObservableObject {
 
         if addedCount == 0, !duplicateNames.isEmpty, failedItemNames.isEmpty {
             let names = duplicateNames.sorted().joined(separator: ", ")
-            alert = AppAlertState(title: "Library Already Added", message: names)
+            alert = AppAlertState(
+                title: String(localized: "Library Already Added"),
+                message: names
+            )
             return
         }
 
@@ -179,21 +188,34 @@ final class LibraryListViewModel: ObservableObject {
         var messageLines: [String] = []
 
         if addedCount > 0 {
-            let libraryWord = addedCount == 1 ? "library" : "libraries"
-            messageLines.append("Added \(addedCount) \(libraryWord).")
+            messageLines.append(
+                addedCount == 1
+                    ? String(localized: "Added 1 library.")
+                    : String(localized: "Added \(addedCount) libraries.")
+            )
         }
 
         if !duplicateNames.isEmpty {
-            let folderWord = duplicateNames.count == 1 ? "folder" : "folders"
-            messageLines.append("Skipped \(duplicateNames.count) duplicate library \(folderWord).")
+            messageLines.append(
+                duplicateNames.count == 1
+                    ? String(localized: "Skipped 1 duplicate library folder.")
+                    : String(localized: "Skipped \(duplicateNames.count) duplicate library folders.")
+            )
         }
 
         if !failedItemNames.isEmpty {
-            messageLines.append("Failed to add \(failedItemNames.count) item(s): \(NamePreviewFormatter.preview(from: failedItemNames)).")
+            let failedPreview = NamePreviewFormatter.preview(from: failedItemNames)
+            messageLines.append(
+                failedItemNames.count == 1
+                    ? String(localized: "Failed to add 1 item: \(failedPreview).")
+                    : String(localized: "Failed to add \(failedItemNames.count) items: \(failedPreview).")
+            )
         }
 
         alert = AppAlertState(
-            title: addedCount > 0 ? "Libraries Updated" : "Add Finished with Warnings",
+            title: addedCount > 0
+                ? String(localized: "Libraries Updated")
+                : String(localized: "Add Finished with Warnings"),
             message: messageLines.joined(separator: "\n")
         )
     }
@@ -201,21 +223,29 @@ final class LibraryListViewModel: ObservableObject {
     func createLibrary(named proposedName: String) -> UUID? {
         let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            alert = AppAlertState(title: "Invalid Library Name", message: "Enter a name for the new library.")
+            alert = AppAlertState(
+                title: String(localized: "Invalid Library Name"),
+                message: String(localized: "Enter a name for the new library.")
+            )
             return nil
         }
 
         if descriptors.contains(where: {
             $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
-            alert = AppAlertState(title: "Library Name Already Used", message: trimmedName)
+            alert = AppAlertState(
+                title: String(localized: "Library Name Already Used"),
+                message: trimmedName
+            )
             return nil
         }
 
         if trimmedName.localizedCaseInsensitiveCompare(ImportedComicsImportService.defaultImportedComicsLibraryName) == .orderedSame {
             alert = AppAlertState(
-                title: "Library Name Reserved",
-                message: "\"\(ImportedComicsImportService.defaultImportedComicsLibraryName)\" is reserved for the built-in imported library."
+                title: String(localized: "Library Name Reserved"),
+                message: String(
+                    localized: "\"\(LibraryKind.importedComics.title)\" is reserved for the built-in imported library."
+                )
             )
             return nil
         }
@@ -278,7 +308,10 @@ final class LibraryListViewModel: ObservableObject {
             logger.error(
                 "Managed library create failed name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Create Library", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Create Library"),
+                message: error.userFacingMessage
+            )
             return nil
         }
     }
@@ -314,7 +347,10 @@ final class LibraryListViewModel: ObservableObject {
     func renameLibrary(id: UUID, to proposedName: String) -> Bool {
         let trimmedName = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            alert = AppAlertState(title: "Invalid Library Name", message: "Enter a name for this library.")
+            alert = AppAlertState(
+                title: String(localized: "Invalid Library Name"),
+                message: String(localized: "Enter a name for this library.")
+            )
             return false
         }
 
@@ -325,7 +361,10 @@ final class LibraryListViewModel: ObservableObject {
         if descriptors.contains(where: {
             $0.id != id && $0.name.localizedCaseInsensitiveCompare(trimmedName) == .orderedSame
         }) {
-            alert = AppAlertState(title: "Library Name Already Used", message: trimmedName)
+            alert = AppAlertState(
+                title: String(localized: "Library Name Already Used"),
+                message: trimmedName
+            )
             return false
         }
 
@@ -352,7 +391,10 @@ final class LibraryListViewModel: ObservableObject {
             logger.error(
                 "Library rename failed id=\(id.uuidString, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Rename Library", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Rename Library"),
+                message: error.userFacingMessage
+            )
             return false
         }
     }
@@ -377,7 +419,10 @@ final class LibraryListViewModel: ObservableObject {
             return
         }
 
-        alert = AppAlertState(title: "Import Failed", message: error.userFacingMessage)
+        alert = AppAlertState(
+            title: String(localized: "Import Failed"),
+            message: error.userFacingMessage
+        )
     }
 
     func cancelComicImport() {
@@ -463,14 +508,18 @@ final class LibraryListViewModel: ObservableObject {
             if (result.createdLibrary || result.hasImportedAnyComics) {
                 let action = AppAlertAction.openLibrary(result.importedDestinationID, 1)
                 alert = AppAlertState(
-                    title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
+                    title: result.importedComicCount > 0
+                        ? String(localized: "Import Completed")
+                        : String(localized: "Import Finished with Warnings"),
                     message: messageLines.joined(separator: "\n"),
                     actionTitle: action.title,
                     action: action
                 )
             } else {
                 alert = AppAlertState(
-                    title: result.importedComicCount > 0 ? "Import Completed" : "Import Finished with Warnings",
+                    title: result.importedComicCount > 0
+                        ? String(localized: "Import Completed")
+                        : String(localized: "Import Finished with Warnings"),
                     message: messageLines.joined(separator: "\n")
                 )
             }
@@ -481,7 +530,7 @@ final class LibraryListViewModel: ObservableObject {
                 "Local comic import failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Import Comics",
+                title: String(localized: "Failed to Import Comics"),
                 message: error.userFacingMessage
             )
         }
@@ -521,26 +570,31 @@ final class LibraryListViewModel: ObservableObject {
             logger.error(
                 "Library remove failed count=\(removedDescriptors.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(removedNames), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Remove Library", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Remove Library"),
+                message: error.userFacingMessage
+            )
             return false
         }
 
-        var fileCleanupFailures: [String] = []
+        var fileCleanupFailures: [LibraryDescriptor] = []
         for descriptor in removedDescriptors {
             do {
                 try storageManager.deleteManagedLibraryFilesIfNeeded(for: descriptor)
             } catch {
-                fileCleanupFailures.append(descriptor.name)
+                fileCleanupFailures.append(descriptor)
             }
         }
 
         if !fileCleanupFailures.isEmpty {
             logger.warning(
-                "Library remove file cleanup failed count=\(fileCleanupFailures.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(fileCleanupFailures), privacy: .public)"
+                "Library remove file cleanup failed count=\(fileCleanupFailures.count, privacy: .public) names=\(AppLogSanitizer.namesPreview(fileCleanupFailures.map(\.name)), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Library Removed with Warnings",
-                message: "Removed the library from JamReader, but failed to delete local files for: \(NamePreviewFormatter.preview(from: fileCleanupFailures))."
+                title: String(localized: "Library Removed with Warnings"),
+                message: String(
+                    localized: "Removed the library from JamReader, but failed to delete local files for: \(NamePreviewFormatter.preview(from: fileCleanupFailures.map(\.displayName)))."
+                )
             )
         }
         return true
@@ -549,8 +603,8 @@ final class LibraryListViewModel: ObservableObject {
     private func beginExclusiveLibraryStorageOperation() -> Bool {
         guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
             alert = AppAlertState(
-                title: "Library Busy",
-                message: "Finish the current import or storage task, then try again."
+                title: String(localized: "Library Busy"),
+                message: String(localized: "Finish the current import or storage task, then try again.")
             )
             return false
         }
@@ -561,7 +615,7 @@ final class LibraryListViewModel: ObservableObject {
     private func rebuildItems() {
         items = descriptors
             .sorted { lhs, rhs in
-                lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
             }
             .map(makeItem(for:))
     }

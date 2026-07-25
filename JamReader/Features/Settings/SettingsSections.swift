@@ -57,7 +57,7 @@ private struct SettingsOverviewSummarySection: View {
                 metrics: [
                     SettingsSummaryMetric(
                         title: "Reading Defaults",
-                        value: "3 Profiles",
+                        value: String(localized: "3 Profiles"),
                         systemImage: "book.closed.fill",
                         tint: .blue
                     ),
@@ -154,7 +154,7 @@ private struct StorageSettingsSection: View {
                 SettingsNavigationRow(
                     systemImage: "internaldrive.fill",
                     tint: .orange,
-                    title: "Manage Downloads & Cache",
+                    title: String(localized: "Manage Downloads & Cache"),
                     detail: nil,
                     value: snapshot.managedStorageText
                 )
@@ -169,30 +169,30 @@ private struct StorageSettingsSection: View {
 
             if showsBreakdown {
                 storageValueRow(
-                    title: "Downloaded Copies",
+                    title: String(localized: "Downloaded Copies"),
                     value: snapshot.remoteCacheSummary.hasCachedComics
                         ? snapshot.remoteCacheSummary.summaryText
-                        : "None"
+                        : String(localized: "None")
                 )
 
                 if snapshot.remoteCacheSummary.hasOtherCacheData {
                     storageValueRow(
-                        title: "Temporary Cache",
+                        title: String(localized: "Temporary Cache"),
                         value: snapshot.remoteCacheSummary.otherCacheSizeText
                     )
                 }
 
                 storageValueRow(
-                    title: "Cover Thumbnails",
+                    title: String(localized: "Cover Thumbnails"),
                     value: snapshot.remoteThumbnailCacheSummary.isEmpty
-                        ? "None"
+                        ? String(localized: "None")
                         : snapshot.remoteThumbnailCacheSummary.summaryText
                 )
 
                 storageValueRow(
-                    title: "Imported Comics",
+                    title: String(localized: "Imported Comics"),
                     value: snapshot.importedComicsLibrarySummary.isEmpty
-                        ? "None"
+                        ? String(localized: "None")
                         : snapshot.importedComicsLibrarySummary.summaryText
                 )
             }

@@ -12,11 +12,11 @@ enum LibraryOrganizationSortMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .name:
-            return "Name"
+            return String(localized: "Name")
         case .comicCountDescending:
-            return "Most Comics"
+            return String(localized: "Most Comics")
         case .comicCountAscending:
-            return "Fewest Comics"
+            return String(localized: "Fewest Comics")
         }
     }
 }

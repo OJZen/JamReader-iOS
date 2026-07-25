@@ -95,7 +95,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         if case .opening(let message, _) = loadState {
             return message
         }
-        return "Opening Comic"
+        return String(localized: "Opening Comic")
     }
 
     var loadingProgress: Double? {
@@ -262,7 +262,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         loadWatchdogTask?.cancel()
         currentLoadToken = UUID()
         let token = currentLoadToken!
-        loadState = .opening(message: "Opening Comic", progress: nil)
+        loadState = .opening(message: String(localized: "Opening Comic"), progress: nil)
         hasAttemptedInitialLoad = true
         startLoadWatchdog(token: token)
 
@@ -295,7 +295,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 guard !Task.isCancelled, currentLoadToken == token else {
                     return
                 }
-                failOpen(message: "Opening this comic was canceled.", token: token)
+                failOpen(message: String(localized: "Opening this comic was canceled."), token: token)
             } catch {
                 guard currentLoadToken == token else {
                     return
@@ -331,7 +331,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         loadWatchdogTask?.cancel()
         loadTask = nil
         currentLoadToken = nil
-        loadState = .failed("Opening was canceled.")
+        loadState = .failed(String(localized: "Opening was canceled."))
         alert = nil
         logger.notice(
             "Reader open canceled title=\(AppLogSanitizer.truncated(self.request.displayTitle), privacy: .public)"
@@ -435,7 +435,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             )
             applyStateWriteResult(result)
         } catch {
-            alert = AppAlertState(title: "Failed to Update Favorites", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Update Favorites"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -458,7 +461,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             )
             applyStateWriteResult(result)
         } catch {
-            alert = AppAlertState(title: "Failed to Update Rating", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Update Rating"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -493,7 +499,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             applyStateWriteResult(result)
             persistProgress(force: true)
         } catch {
-            alert = AppAlertState(title: "Failed to Update Read Status", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Update Read Status"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -523,28 +532,29 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         }
         guard case .imageSequence(let imageDocument) = document else {
             alert = AppAlertState(
-                title: "Unable to Save Page",
-                message: "Only image pages can be saved to Photos."
+                title: String(localized: "Unable to Save Page"),
+                message: String(localized: "Only image pages can be saved to Photos.")
             )
             return
         }
         guard (0..<imageDocument.pageCount).contains(currentPageIndex) else {
             alert = AppAlertState(
-                title: "Unable to Save Page",
-                message: "The current page is no longer available."
+                title: String(localized: "Unable to Save Page"),
+                message: String(localized: "The current page is no longer available.")
             )
             return
         }
 
         let pageIndex = currentPageIndex
         let pageSource = imageDocument.pageSource
-        let pageName = imageDocument.pageName(at: pageIndex) ?? "Page \(pageIndex + 1).png"
+        let pageName = imageDocument.pageName(at: pageIndex)
+            ?? String(localized: "Page \(pageIndex + 1)") + ".png"
         let token = UUID()
 
         saveCurrentPageTask?.cancel()
         saveCurrentPageToken = token
         isSavingCurrentPageToPhotoLibrary = true
-        noticeMessage = "Saving page to Photos..."
+        noticeMessage = String(localized: "Saving page to Photos...")
         noticeDismissalTask?.cancel()
 
         saveCurrentPageTask = Task { [weak self, pageSource, pageIndex, pageName, token] in
@@ -565,7 +575,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 self?.saveCurrentPageTask = nil
                 self?.saveCurrentPageToken = nil
                 self?.isSavingCurrentPageToPhotoLibrary = false
-                self?.noticeMessage = "Saved page to Photos."
+                self?.noticeMessage = String(localized: "Saved page to Photos.")
                 self?.scheduleNoticeDismissalIfNeeded()
             } catch is CancellationError {
                 guard self?.saveCurrentPageToken == token else {
@@ -589,7 +599,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 self?.isSavingCurrentPageToPhotoLibrary = false
                 self?.noticeMessage = nil
                 self?.alert = AppAlertState(
-                    title: "Failed to Save Page",
+                    title: String(localized: "Failed to Save Page"),
                     message: error.userFacingMessage
                 )
             }
@@ -688,7 +698,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                     return
                 }
                 alert = AppAlertState(
-                    title: "Failed to Refresh Remote Comic",
+                    title: String(localized: "Failed to Refresh Remote Comic"),
                     message: error.userFacingMessage
                 )
             }
@@ -735,7 +745,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         loadTask = nil
         currentLoadToken = nil
         loadState = .failed(message)
-        alert = AppAlertState(title: "Failed to Open Comic", message: message)
+        alert = AppAlertState(
+            title: String(localized: "Failed to Open Comic"),
+            message: message
+        )
     }
 
     private func applyReadySession(
@@ -792,10 +805,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             self?.loadTask?.cancel()
             self?.loadTask = nil
             self?.currentLoadToken = nil
-            self?.loadState = .failed("Opening this comic took too long.")
+            self?.loadState = .failed(String(localized: "Opening this comic took too long."))
             self?.alert = AppAlertState(
-                title: "Failed to Open Comic",
-                message: "Opening this comic took too long. The file may be unavailable or the storage provider is not responding."
+                title: String(localized: "Failed to Open Comic"),
+                message: String(localized: "Opening this comic took too long. The file may be unavailable or the storage provider is not responding.")
             )
         }
     }
@@ -849,7 +862,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                     guard self.activeSession?.id == sessionID else {
                         return
                     }
-                    self.noticeMessage = "Offline copy ready."
+                    self.noticeMessage = String(localized: "Offline copy ready.")
                     self.scheduleNoticeDismissalIfNeeded()
                 }
             } catch {
@@ -925,7 +938,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             logger.error(
                 "Reader progress save failed session=\(session.id, privacy: .public) page=\(snapshot.pageIndex + 1) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
-            alert = AppAlertState(title: "Failed to Save Progress", message: error.userFacingMessage)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Save Progress"),
+                message: error.userFacingMessage
+            )
         }
     }
 
@@ -1020,7 +1036,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 )
                 applyStateWriteResult(result)
             } catch {
-                alert = AppAlertState(title: "Failed to Save Bookmarks", message: error.userFacingMessage)
+                alert = AppAlertState(
+                    title: String(localized: "Failed to Save Bookmarks"),
+                    message: error.userFacingMessage
+                )
             }
         } else {
             persistProgress(force: true)
@@ -1078,9 +1097,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     private func noticeMessage(for source: RemoteComicDownloadResult.Source) -> String? {
         switch source {
         case .downloaded:
-            return "Remote copy refreshed."
+            return String(localized: "Remote copy refreshed.")
         case .cachedCurrent:
-            return "The local copy is already current."
+            return String(localized: "The local copy is already current.")
         case .cachedFallback(let message):
             return message
         }

@@ -180,7 +180,7 @@ struct RemoteServerProfile: Identifiable, Codable, Hashable {
     }
 
     var providerDisplayTitle: String {
-        "\(providerKind.title) Server"
+        String(localized: "\(providerKind.title) Server")
     }
 
     var providerRootDisplayPath: String {

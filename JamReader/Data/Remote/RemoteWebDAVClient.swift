@@ -19,17 +19,17 @@ enum RemoteWebDAVClientError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            return "The WebDAV server returned an invalid response."
+            return String(localized: "The WebDAV server returned an invalid response.")
         case .authenticationFailed:
-            return "The WebDAV server rejected the saved credentials."
+            return String(localized: "The WebDAV server rejected the saved credentials.")
         case .accessDenied:
-            return "Access to the WebDAV location was denied."
+            return String(localized: "Access to the WebDAV location was denied.")
         case .remotePathUnavailable:
-            return "The WebDAV path is no longer available."
+            return String(localized: "The WebDAV path is no longer available.")
         case .connectionFailed(let message):
             return message
         case .unsupportedResponse(let statusCode):
-            return "The WebDAV server returned HTTP \(statusCode)."
+            return String(localized: "The WebDAV server returned HTTP \(statusCode).")
         }
     }
 }
@@ -248,10 +248,12 @@ final class RemoteWebDAVClient {
         let lastPathComponent = fallbackURL.lastPathComponent.removingPercentEncoding
             ?? fallbackURL.lastPathComponent
         if !lastPathComponent.isEmpty {
-            return isDirectory && lastPathComponent == "/" ? "Root" : lastPathComponent
+            return isDirectory && lastPathComponent == "/"
+                ? String(localized: "Root")
+                : lastPathComponent
         }
 
-        return isDirectory ? "Folder" : "File"
+        return isDirectory ? String(localized: "Folder") : String(localized: "File")
     }
 
     private func ensuredDirectoryURL(_ url: URL) -> URL {

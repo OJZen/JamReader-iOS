@@ -8,6 +8,7 @@ enum NamePreviewFormatter {
         }
 
         let preview = uniqueSortedNames.prefix(limit).joined(separator: ", ")
-        return "\(preview), +\(uniqueSortedNames.count - limit) more"
+        let remainingCount = uniqueSortedNames.count - limit
+        return String(localized: "\(preview), +\(remainingCount) more")
     }
 }

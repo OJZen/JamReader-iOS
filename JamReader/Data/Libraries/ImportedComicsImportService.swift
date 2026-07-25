@@ -7,7 +7,7 @@ extension Notification.Name {
 }
 
 final class ImportedComicsImportService {
-    static let defaultImportedComicsLibraryName = "Imported Comics"
+    static let defaultImportedComicsLibraryName = LibraryDescriptor.defaultImportedComicsName
     private static let libraryIDUserInfoKey = "libraryID"
 
     enum ImportDestinationValidationError: LocalizedError {
@@ -17,9 +17,9 @@ final class ImportedComicsImportService {
         var errorDescription: String? {
             switch self {
             case .destinationLibraryNotWritable(let libraryName):
-                return "\(libraryName) is currently read-only. Choose a writable local library or Imported Comics instead."
+                return String(localized: "\(libraryName) is currently read-only. Choose a writable local library or Imported Comics instead.")
             case .destinationFolderOutsideLibrary:
-                return "The selected destination folder is no longer available."
+                return String(localized: "The selected destination folder is no longer available.")
             }
         }
     }
@@ -176,6 +176,7 @@ final class ImportedComicsImportService {
         return ImportedComicsImportResult(
             importedDestinationID: destinationResolution.descriptor.id,
             importedDestinationName: destinationResolution.descriptor.name,
+            importedDestinationDisplayName: destinationResolution.descriptor.displayName,
             createdLibrary: destinationResolution.wasCreated,
             importedComicCount: importedComicCount,
             scanSummary: scanSummary,
@@ -236,13 +237,13 @@ final class ImportedComicsImportService {
             .standardizedFileURL
             .path
         let sortedDescriptors = descriptors.sorted {
-            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
         }
 
         var options: [LibraryImportDestinationOption] = [
             LibraryImportDestinationOption(
                 selection: .importedComics,
-                title: Self.defaultImportedComicsLibraryName,
+                title: String(localized: "Imported Comics"),
                 status: .appManaged,
                 detail: nil,
                 availability: .available
@@ -257,7 +258,7 @@ final class ImportedComicsImportService {
                     let availability = importAvailability(for: descriptor, accessSnapshot: accessSnapshot)
                     return LibraryImportDestinationOption(
                         selection: .library(descriptor.id),
-                        title: descriptor.name,
+                        title: descriptor.displayName,
                         status: importStatus(
                             for: descriptor,
                             accessSnapshot: accessSnapshot,
@@ -339,7 +340,7 @@ final class ImportedComicsImportService {
                     domain: "LibraryImportDestinationSelection",
                     code: 1,
                     userInfo: [
-                        NSLocalizedDescriptionKey: "The selected destination library is no longer available."
+                        NSLocalizedDescriptionKey: String(localized: "The selected destination library is no longer available.")
                     ]
                 )
             }
@@ -351,7 +352,7 @@ final class ImportedComicsImportService {
     private func validateImportDestination(_ descriptor: LibraryDescriptor) throws {
         let accessSnapshot = sourceAccessSnapshot(for: descriptor)
         guard accessSnapshot.sourceWritable else {
-            throw ImportDestinationValidationError.destinationLibraryNotWritable(descriptor.name)
+            throw ImportDestinationValidationError.destinationLibraryNotWritable(descriptor.displayName)
         }
     }
 
@@ -603,7 +604,7 @@ final class ImportedComicsImportService {
                 userInfo: [
                     NSLocalizedDescriptionKey:
                         summary.lastError
-                        ?? "Imported files were copied into \(descriptor.name), but the local library index could not be opened."
+                        ?? String(localized: "Imported files were copied into \(descriptor.displayName), but the local library index could not be opened.")
                 ]
             )
         }
@@ -646,7 +647,7 @@ final class ImportedComicsImportService {
     ) -> LibraryImportDestinationOption.Availability {
         if !accessSnapshot.sourceWritable {
             return .unavailable(
-                "This source folder is read-only on this device. Reading and local metadata stay available, but importing files here is disabled."
+                String(localized: "This source folder is read-only on this device. Reading and local metadata stay available, but importing files here is disabled.")
             )
         }
 

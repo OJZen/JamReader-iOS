@@ -84,7 +84,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
                 "Library comic metadata load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) comicID=\(self.comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Load Metadata",
+                title: String(localized: "Failed to Load Metadata"),
                 message: error.userFacingMessage
             )
         }
@@ -119,7 +119,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
                 "Library comic metadata save failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) comicID=\(self.comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Save Metadata",
+                title: String(localized: "Failed to Save Metadata"),
                 message: error.userFacingMessage
             )
             return nil
@@ -151,8 +151,8 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
                         "Library comic metadata ComicInfo import not found libraryID=\(self.descriptor.id.uuidString, privacy: .public) comicID=\(self.comic.id) policy=\(policy.rawValue, privacy: .public)"
                     )
                     alert = AppAlertState(
-                        title: "ComicInfo Not Found",
-                        message: "The selected comic does not contain an embedded ComicInfo.xml file."
+                        title: String(localized: "ComicInfo Not Found"),
+                        message: String(localized: "The selected comic does not contain an embedded ComicInfo.xml file.")
                     )
                     return
                 }
@@ -166,7 +166,7 @@ final class ComicMetadataEditorSheetViewModel: ObservableObject, LoadableViewMod
                     "Library comic metadata ComicInfo import failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) comicID=\(self.comic.id) policy=\(policy.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
                 )
                 alert = AppAlertState(
-                    title: "Failed to Import ComicInfo",
+                    title: String(localized: "Failed to Import ComicInfo"),
                     message: error.userFacingMessage
                 )
             }

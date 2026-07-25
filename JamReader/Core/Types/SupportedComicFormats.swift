@@ -56,7 +56,7 @@ enum SupportedComicFormats {
         case "epub":
             return "EPUB"
         default:
-            return normalizedExtension.isEmpty ? "Comic File" : normalizedExtension.uppercased()
+            return normalizedExtension.isEmpty ? String(localized: "Comic File") : normalizedExtension.uppercased()
         }
     }
 

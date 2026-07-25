@@ -344,7 +344,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
                 dependencies: dependencies
             )
             .background(Color.surfaceGrouped.ignoresSafeArea()),
-            title: "Library"
+            title: AppRootTab.library.title
         )
         root.navigationItem.largeTitleDisplayMode = .always
 
@@ -359,7 +359,10 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
     private func openLibrary(_ libraryID: UUID, folderID: Int64?, animated: Bool = true) {
         viewModel.reload()
         guard let item = viewModel.items.first(where: { $0.id == libraryID }) else {
-            showUnavailable(title: "Library Unavailable", message: "This library is no longer available on this device.")
+            showUnavailable(
+                title: String(localized: "Library Unavailable"),
+                message: String(localized: "This library is no longer available on this device.")
+            )
             return
         }
 
@@ -435,7 +438,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
                 folderID: folderID,
                 dependencies: dependencies
             ),
-            title: descriptor.name
+            title: descriptor.displayName
         )
         controller.navigationItem.largeTitleDisplayMode = .never
         return controller
@@ -466,7 +469,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
                     )
                 }
             ),
-            title: "Library"
+            title: AppRootTab.library.title
         )
         detailNavigationController?.setViewControllers([placeholder], animated: false)
     }
@@ -607,7 +610,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
                 editorDraft: editorDraftBinding
             )
             .background(Color.surfaceGrouped.ignoresSafeArea()),
-            title: "Browse"
+            title: AppRootTab.browse.title
         )
         root.navigationItem.largeTitleDisplayMode = .always
 
@@ -644,7 +647,10 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             appliesSwiftUIPresentationModifiers: false
         ) { [weak self] updatedDraft in
             guard let self else {
-                return AppAlertState(title: "Unable to Save", message: "The app navigation coordinator is unavailable.")
+                return AppAlertState(
+                    title: String(localized: "Unable to Save"),
+                    message: String(localized: "The app navigation coordinator is unavailable.")
+                )
             }
 
             let alertState = viewModel.save(draft: updatedDraft)
@@ -662,7 +668,10 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
     private func showServerDetail(_ profileID: UUID, animated: Bool = true) {
         viewModel.load()
         guard let profile = profile(for: profileID) else {
-            showUnavailable(title: "Server Unavailable", message: "This server is no longer available on this device.")
+            showUnavailable(
+                title: String(localized: "Server Unavailable"),
+                message: String(localized: "This server is no longer available on this device.")
+            )
             return
         }
 
@@ -691,7 +700,10 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
     ) {
         viewModel.load()
         guard let profile = profile(for: profileID) else {
-            showUnavailable(title: "Server Unavailable", message: "This server is no longer available on this device.")
+            showUnavailable(
+                title: String(localized: "Server Unavailable"),
+                message: String(localized: "This server is no longer available on this device.")
+            )
             return
         }
 
@@ -724,7 +736,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
             SavedRemoteFoldersView(dependencies: dependencies, focusedProfile: focusedProfile),
-            title: "Saved Folders"
+            title: String(localized: "Saved Folders")
         )
         controller.navigationItem.largeTitleDisplayMode = UINavigationItem.LargeTitleDisplayMode.never
         setPrimaryDestination(controller, animated: animated)
@@ -742,7 +754,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         persistDetailSelection(selection.storageValue)
         let controller = makeHostingController(
             RemoteOfflineShelfView(dependencies: dependencies, focusedProfile: focusedProfile),
-            title: "Offline Shelf"
+            title: String(localized: "Offline Shelf")
         )
         controller.navigationItem.largeTitleDisplayMode = UINavigationItem.LargeTitleDisplayMode.never
         setPrimaryDestination(controller, animated: animated)
@@ -818,7 +830,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
                     self.setEditorDraft(self.viewModel.makeCreateDraft())
                 }
             ),
-            title: "Browse"
+            title: AppRootTab.browse.title
         )
         detailNavigationController?.setViewControllers([placeholder], animated: false)
     }
@@ -945,7 +957,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
                 ownedBy: .storage,
                 makeHostingController(
                     RemoteCacheSettingsView(dependencies: dependencies),
-                    title: "Cache Management"
+                    title: String(localized: "Cache Management")
                 )
             )
         }
@@ -966,7 +978,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
                     viewModel: viewModel,
                     dependencies: dependencies
                 ),
-                title: "Settings"
+                title: AppRootTab.settings.title
             )
             root.navigationItem.largeTitleDisplayMode = .always
             compactNavigationController.setViewControllers([root], animated: false)
@@ -976,7 +988,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
                     viewModel: viewModel,
                     dependencies: dependencies
                 ),
-                title: "Settings"
+                title: AppRootTab.settings.title
             )
             root.navigationItem.largeTitleDisplayMode = .never
             primaryNavigationController?.setViewControllers([root], animated: false)
@@ -1074,11 +1086,11 @@ extension AppRootTab {
     var title: String {
         switch self {
         case .library:
-            return "Library"
+            return String(localized: "Library")
         case .browse:
-            return "Browse"
+            return String(localized: "Browse")
         case .settings:
-            return "Settings"
+            return String(localized: "Settings")
         }
     }
 
@@ -1118,17 +1130,17 @@ final class RootTabBarController: UITabBarController {
         [
             makeKeyCommand(
                 input: "1",
-                title: "Library",
+                title: AppRootTab.library.title,
                 action: #selector(selectLibraryTab)
             ),
             makeKeyCommand(
                 input: "2",
-                title: "Browse",
+                title: AppRootTab.browse.title,
                 action: #selector(selectBrowseTab)
             ),
             makeKeyCommand(
                 input: "3",
-                title: "Settings",
+                title: AppRootTab.settings.title,
                 action: #selector(selectSettingsTab)
             )
         ]

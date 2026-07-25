@@ -133,17 +133,19 @@ struct RemoteServerEditorSheet: View {
                 Text(
                     draft.providerKind == .smb
                         ? (draft.usesDefaultPort
-                            ? "SMB uses 445."
-                            : "Use a custom port only if needed.")
+                            ? String(localized: "SMB uses 445.")
+                            : String(localized: "Use a custom port only if needed."))
                         : (draft.usesDefaultPort
-                            ? "WebDAV uses 443 for HTTPS or 80 for HTTP."
-                            : "Use a custom port only if needed.")
+                            ? String(localized: "WebDAV uses 443 for HTTPS or 80 for HTTP.")
+                            : String(localized: "Use a custom port only if needed."))
                 )
             }
 
             Section {
                 TextField(
-                    draft.providerKind == .smb ? "Share" : "Server Path",
+                    draft.providerKind == .smb
+                        ? String(localized: "Share")
+                        : String(localized: "Server Path"),
                     text: $draft.shareName,
                     prompt: Text(draft.providerKind == .smb ? "Comics" : "/remote.php/dav/files/you/Comics")
                 )
@@ -164,8 +166,8 @@ struct RemoteServerEditorSheet: View {
             } footer: {
                 Text(
                     draft.providerKind == .smb
-                        ? "Leave Base Directory empty to start at the root."
-                        : "Leave Base Directory empty to start at Server Path."
+                        ? String(localized: "Leave Base Directory empty to start at the root.")
+                        : String(localized: "Leave Base Directory empty to start at Server Path.")
                 )
             }
 
@@ -330,7 +332,7 @@ private extension RemoteServerEditorDraft {
 
     var savedPasswordStatusText: String {
         password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Keep current"
-            : "Replace on save"
+            ? String(localized: "Keep current")
+            : String(localized: "Replace on save")
     }
 }

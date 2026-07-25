@@ -19,22 +19,22 @@ private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .recent:
-            return "Recent"
+            return String(localized: "Recent")
         case .title:
-            return "Title"
+            return String(localized: "Title")
         case .server:
-            return "Server"
+            return String(localized: "Server")
         }
     }
 
     var shortTitle: String {
         switch self {
         case .recent:
-            return "Recent"
+            return String(localized: "Recent")
         case .title:
-            return "Title"
+            return String(localized: "Title")
         case .server:
-            return "Server"
+            return String(localized: "Server")
         }
     }
 
@@ -82,11 +82,11 @@ private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            return String(localized: "All")
         case .current:
-            return "Current"
+            return String(localized: "Latest")
         case .stale:
-            return "Older"
+            return String(localized: "Older")
         }
     }
 
@@ -203,7 +203,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             )
             loadState = .failed(message: error.userFacingMessage)
             alert = BrowseHomeAlert(
-                title: "Offline Shelf Unavailable",
+                title: String(localized: "Offline Shelf Unavailable"),
                 message: error.userFacingMessage
             )
         }
@@ -265,7 +265,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             )
 
             feedback = RemoteBrowserFeedbackState(
-                title: "Downloaded Copy Updated",
+                title: String(localized: "Downloaded Copy Updated"),
                 message: refreshFeedbackMessage(for: entry, result: result),
                 kind: .success,
                 autoDismissAfter: 3.2
@@ -297,8 +297,8 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 "Remote offline copy remove completed serverID=\(entry.profile.id.uuidString, privacy: .public) path=\(pathForLog, privacy: .public) remaining=\(self.entries.count)"
             )
             feedback = RemoteBrowserFeedbackState(
-                title: "Downloaded Copy Removed",
-                message: "\(entry.session.displayName) was removed from this device.",
+                title: String(localized: "Downloaded Copy Removed"),
+                message: String(localized: "\(entry.session.displayName) was removed from this device."),
                 kind: .info,
                 autoDismissAfter: 2.6
             )
@@ -314,7 +314,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 )
             }
             alert = BrowseHomeAlert(
-                title: "Remove Downloaded Copy Failed",
+                title: String(localized: "Remove Downloaded Copy Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -343,10 +343,11 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
             logger.info(
                 "Remote offline copies clear completed serverID=\(profile.id.uuidString, privacy: .public) requestedCount=\(removedCount) remaining=\(self.entries.count)"
             )
-            let copyWord = removedCount == 1 ? "copy" : "copies"
             feedback = RemoteBrowserFeedbackState(
-                title: "Downloaded Copies Removed",
-                message: "Removed \(removedCount) downloaded \(copyWord) from \(profile.name) and cleared its browsing history.",
+                title: String(localized: "Downloaded Copies Removed"),
+                message: removedCount == 1
+                    ? String(localized: "Removed 1 downloaded copy from \(profile.name) and cleared its browsing history.")
+                    : String(localized: "Removed \(removedCount) downloaded copies from \(profile.name) and cleared its browsing history."),
                 kind: .info,
                 autoDismissAfter: 3.0
             )
@@ -362,7 +363,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 )
             }
             alert = BrowseHomeAlert(
-                title: "Clear Downloaded Copies Failed",
+                title: String(localized: "Clear Downloaded Copies Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -389,7 +390,7 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
                 )
             }
             alert = BrowseHomeAlert(
-                title: "Offline Shelf Action Failed",
+                title: String(localized: "Offline Shelf Action Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -398,8 +399,8 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
     private func beginStorageMaintenance() -> Bool {
         guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
             alert = BrowseHomeAlert(
-                title: "Remote Task in Progress",
-                message: "Wait for the current remote task to finish."
+                title: String(localized: "Remote Task in Progress"),
+                message: String(localized: "Wait for the current remote task to finish.")
             )
             return false
         }
@@ -423,9 +424,9 @@ final class RemoteOfflineShelfViewModel: ObservableObject {
     ) -> String {
         switch result.source {
         case .downloaded:
-            return "Downloaded the latest copy of \(entry.session.displayName) to this device."
+            return String(localized: "Downloaded the latest copy of \(entry.session.displayName) to this device.")
         case .cachedCurrent:
-            return "\(entry.session.displayName) is already current on this device."
+            return String(localized: "\(entry.session.displayName) is already current on this device.")
         case .cachedFallback(let message):
             return message
         }
@@ -620,10 +621,10 @@ struct RemoteOfflineShelfView: View {
                     } else if scopedEntries.isEmpty {
                         emptyCard(
                             systemImage: "arrow.down.circle",
-                            title: "No Downloads",
+                            title: String(localized: "No Downloads"),
                             description: focusedProfile == nil
-                                ? "Save comics for offline reading."
-                                : "Save comics from this server."
+                                ? String(localized: "Save comics for offline reading.")
+                                : String(localized: "Save comics from this server.")
                         )
                     } else if displayedEntries.isEmpty {
                         emptyCard(
@@ -671,10 +672,10 @@ struct RemoteOfflineShelfView: View {
                     Section {
                         EmptyStateView(
                             systemImage: "arrow.down.circle",
-                            title: "No Downloads",
+                            title: String(localized: "No Downloads"),
                             description: focusedProfile == nil
-                                ? "Save comics for offline reading."
-                                : "Save comics from this server."
+                                ? String(localized: "Save comics for offline reading.")
+                                : String(localized: "Save comics from this server.")
                         )
                         .padding(.vertical, 28)
                     }
@@ -779,18 +780,18 @@ struct RemoteOfflineShelfView: View {
 
     private var navigationTitleText: String {
         if let focusedProfile {
-            return "\(focusedProfile.displayTitle) Downloads"
+            return String(localized: "\(focusedProfile.displayTitle) Downloads")
         }
 
-        return "Offline Shelf"
+        return String(localized: "Offline Shelf")
     }
 
     private var searchPrompt: String {
         if focusedProfile != nil {
-            return "Search this server's downloads"
+            return String(localized: "Search this server's downloads")
         }
 
-        return "Search shelf"
+        return String(localized: "Search shelf")
     }
 
     private var scopedEntries: [RemoteOfflineComicEntry] {
@@ -803,44 +804,44 @@ struct RemoteOfflineShelfView: View {
 
     private var emptyResultsTitle: String {
         if !trimmedSearchText.isEmpty {
-            return "No Matches"
+            return String(localized: "No Matches")
         }
 
         switch filterMode {
         case .all:
-            return "No Downloads"
+            return String(localized: "No Downloads")
         case .current:
-            return "No Current Copies"
+            return String(localized: "No Current Copies")
         case .stale:
-            return "No Older Copies"
+            return String(localized: "No Older Copies")
         }
     }
 
     private var emptyResultsDescription: String {
         if !trimmedSearchText.isEmpty {
             if let focusedProfile {
-                return "No matches for \"\(trimmedSearchText)\" in \(focusedProfile.displayTitle) downloads."
+                return String(localized: "No matches for \"\(trimmedSearchText)\" in \(focusedProfile.displayTitle) downloads.")
             }
 
-            return "No matches for \"\(trimmedSearchText)\"."
+            return String(localized: "No matches for \"\(trimmedSearchText)\".")
         }
 
         switch filterMode {
         case .all:
             if let focusedProfile {
-                return "No downloads from \(focusedProfile.displayTitle) on this device."
+                return String(localized: "No downloads from \(focusedProfile.displayTitle) on this device.")
             }
-            return "No downloads on this device."
+            return String(localized: "No downloads on this device.")
         case .current:
             if let focusedProfile {
-                return "No current local copies from \(focusedProfile.displayTitle)."
+                return String(localized: "No current local copies from \(focusedProfile.displayTitle).")
             }
-            return "No current local copies."
+            return String(localized: "No current local copies.")
         case .stale:
             if let focusedProfile {
-                return "No older local copies from \(focusedProfile.displayTitle)."
+                return String(localized: "No older local copies from \(focusedProfile.displayTitle).")
             }
-            return "No older local copies."
+            return String(localized: "No older local copies.")
         }
     }
 
@@ -906,7 +907,7 @@ struct RemoteOfflineShelfView: View {
         VStack(spacing: 12) {
             EmptyStateView(
                 systemImage: "exclamationmark.triangle",
-                title: "Downloads Unavailable",
+                title: String(localized: "Downloads Unavailable"),
                 description: message
             )
 
@@ -940,7 +941,9 @@ struct RemoteOfflineShelfView: View {
                     pendingServerClearCount = viewModel.downloadedCopyCount(for: section.profile)
                 } label: {
                     Label(
-                        section.entries.count == 1 ? "Clear Download" : "Clear Downloads",
+                        section.entries.count == 1
+                            ? String(localized: "Clear Download")
+                            : String(localized: "Clear Downloads"),
                         systemImage: "trash"
                     )
                 }
@@ -961,18 +964,20 @@ struct RemoteOfflineShelfView: View {
         for section: RemoteOfflineShelfSection
     ) -> String {
         if section.readyCount > 0, section.olderCount > 0 {
-            return "\(section.entries.count) downloads · \(section.readyCount) current · \(section.olderCount) older"
+            return String(localized: "\(section.entries.count) downloads · \(section.readyCount) current · \(section.olderCount) older")
         }
 
         if section.readyCount > 0 {
-            return "\(section.entries.count) downloads · \(section.readyCount) current"
+            return String(localized: "\(section.entries.count) downloads · \(section.readyCount) current")
         }
 
         if section.olderCount > 0 {
-            return "\(section.entries.count) downloads · \(section.olderCount) older"
+            return String(localized: "\(section.entries.count) downloads · \(section.olderCount) older")
         }
 
-        return section.entries.count == 1 ? "1 download" : "\(section.entries.count) downloads"
+        return section.entries.count == 1
+            ? String(localized: "1 download")
+            : String(localized: "\(section.entries.count) downloads")
     }
 
     private var showsPersistentItemActions: Bool {
@@ -1121,15 +1126,15 @@ struct RemoteOfflineShelfView: View {
     private func presentDeleteAlert(for entry: RemoteOfflineComicEntry) {
         let viewModel = self.viewModel
         let alertController = UIAlertController(
-            title: "Delete this download?",
-            message: "Deletes the downloaded copy of \"\(entry.session.displayName)\" only.",
+            title: String(localized: "Delete this download?"),
+            message: String(localized: "Deletes the downloaded copy of \"\(entry.session.displayName)\" only."),
             preferredStyle: .alert
         )
         alertController.addAction(
-            UIAlertAction(title: "Cancel", style: .cancel)
+            UIAlertAction(title: String(localized: "Cancel"), style: .cancel)
         )
         alertController.addAction(
-            UIAlertAction(title: "Delete Copy", style: .destructive) { _ in
+            UIAlertAction(title: String(localized: "Delete Copy"), style: .destructive) { _ in
                 viewModel.removeDownloadedCopy(for: entry)
             }
         )
@@ -1144,7 +1149,7 @@ struct RemoteOfflineShelfView: View {
             preferredStyle: .alert
         )
         alertController.addAction(
-            UIAlertAction(title: "OK", style: .default) { _ in
+            UIAlertAction(title: String(localized: "OK"), style: .default) { _ in
                 viewModel.alert = nil
             }
         )

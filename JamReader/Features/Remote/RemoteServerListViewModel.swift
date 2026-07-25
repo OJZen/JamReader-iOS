@@ -49,12 +49,14 @@ struct RemoteServerEditorDraft: Identifiable, Equatable {
 
     var navigationTitle: String {
         existingProfileID == nil
-            ? "New \(providerKind.title) Server"
-            : "Edit \(providerKind.title) Server"
+            ? String(localized: "New \(providerKind.title) Server")
+            : String(localized: "Edit \(providerKind.title) Server")
     }
 
     var actionTitle: String {
-        existingProfileID == nil ? "Add" : "Save"
+        existingProfileID == nil
+            ? String(localized: "Add")
+            : String(localized: "Save")
     }
 }
 
@@ -143,7 +145,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server list load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Load Remote Servers",
+                title: String(localized: "Failed to Load Remote Servers"),
                 message: error.userFacingMessage
             )
         }
@@ -213,8 +215,8 @@ final class RemoteServerListViewModel: ObservableObject {
         guard let port = Int(draft.portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             logger.warning("Remote server save rejected action=\(saveAction, privacy: .public) reason=invalidPort")
             return AppAlertState(
-                title: "Invalid Port",
-                message: "Enter a numeric port for this remote server."
+                title: String(localized: "Invalid Port"),
+                message: String(localized: "Enter a numeric port for this remote server.")
             )
         }
 
@@ -258,8 +260,8 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server save rejected action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) reason=missingPassword"
             )
             return AppAlertState(
-                title: "Password Required",
-                message: "Enter a password for this remote server, or switch the connection to Guest."
+                title: String(localized: "Password Required"),
+                message: String(localized: "Enter a password for this remote server, or switch the connection to Guest.")
             )
         }
 
@@ -268,7 +270,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server save rejected action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) validationErrors=\(blockingIssues.count)"
             )
             return AppAlertState(
-                title: "Incomplete Server",
+                title: String(localized: "Incomplete Server"),
                 message: blockingIssues.joined(separator: "\n")
             )
         }
@@ -361,7 +363,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server save failed action=\(saveAction, privacy: .public) provider=\(provider, privacy: .public) serverID=\(serverID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             return AppAlertState(
-                title: "Failed to Save Server",
+                title: String(localized: "Failed to Save Server"),
                 message: error.userFacingMessage
             )
         }
@@ -415,7 +417,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server delete failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Remove Server",
+                title: String(localized: "Failed to Remove Server"),
                 message: error.userFacingMessage
             )
             return false
@@ -466,7 +468,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server comic cache clear failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Clear Cache",
+                title: String(localized: "Failed to Clear Cache"),
                 message: error.userFacingMessage
             )
         }
@@ -496,7 +498,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote server auxiliary cache clear failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Clear Other Cache Data",
+                title: String(localized: "Failed to Clear Other Cache Data"),
                 message: error.userFacingMessage
             )
         }
@@ -542,7 +544,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote recent session delete failed serverID=\(session.serverID.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Delete History",
+                title: String(localized: "Failed to Delete History"),
                 message: error.userFacingMessage
             )
         }
@@ -564,7 +566,7 @@ final class RemoteServerListViewModel: ObservableObject {
                 "Remote recent history clear failed provider=\(provider, privacy: .public) serverID=\(profile.id.uuidString, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Clear History",
+                title: String(localized: "Failed to Clear History"),
                 message: error.userFacingMessage
             )
         }
@@ -767,8 +769,8 @@ final class RemoteServerListViewModel: ObservableObject {
 
     private var remoteTaskInProgressAlert: AppAlertState {
         AppAlertState(
-            title: "Remote Task in Progress",
-            message: "Wait for the current remote task to finish."
+            title: String(localized: "Remote Task in Progress"),
+            message: String(localized: "Wait for the current remote task to finish.")
         )
     }
 

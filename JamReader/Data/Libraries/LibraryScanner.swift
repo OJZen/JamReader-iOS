@@ -9,13 +9,13 @@ enum LibraryScannerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .sqliteUnavailable:
-            return "SQLite3 is unavailable in this build."
+            return String(localized: "SQLite3 is unavailable in this build.")
         case .databaseMissing:
-            return "The app library database is not ready yet."
-        case .openDatabaseFailed(let reason):
-            return "Unable to open the app library database for scanning. \(reason)"
-        case .scanFailed(let reason):
-            return "Library scan failed. \(reason)"
+            return String(localized: "The app library database is not ready yet.")
+        case .openDatabaseFailed:
+            return String(localized: "Unable to open the app library database for scanning.")
+        case .scanFailed:
+            return String(localized: "Library scan failed.")
         }
     }
 }
@@ -154,6 +154,6 @@ final class LibraryScanner: LibraryScanning, @unchecked Sendable {
             return error
         }
 
-        return .scanFailed(error.userFacingMessage)
+        return .scanFailed(AppLogSanitizer.errorDescription(error))
     }
 }

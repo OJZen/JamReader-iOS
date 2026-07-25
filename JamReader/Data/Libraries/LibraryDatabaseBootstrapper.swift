@@ -7,9 +7,9 @@ enum LibraryDatabaseBootstrapError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .sqliteUnavailable:
-            return "SQLite3 is unavailable in this build."
-        case .createDatabaseFailed(let reason):
-            return "Unable to initialize the app library database. \(reason)"
+            return String(localized: "SQLite3 is unavailable in this build.")
+        case .createDatabaseFailed:
+            return String(localized: "Unable to initialize the app library database.")
         }
     }
 }
@@ -38,7 +38,9 @@ final class LibraryDatabaseBootstrapper {
         do {
             try database.ensureInitialized()
         } catch {
-            throw LibraryDatabaseBootstrapError.createDatabaseFailed(error.userFacingMessage)
+            throw LibraryDatabaseBootstrapError.createDatabaseFailed(
+                AppLogSanitizer.errorDescription(error)
+            )
         }
     }
 }

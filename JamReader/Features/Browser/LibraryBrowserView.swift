@@ -117,8 +117,11 @@ struct LibraryBrowserView: View {
                 VStack(spacing: Spacing.lg) {
                     EmptyStateView(
                         systemImage: viewModel.canInitializeLibrary ? "books.vertical.circle" : "externaldrive.badge.exclamationmark",
-                        title: viewModel.canInitializeLibrary ? "Library Not Initialized" : "Library Unavailable",
-                        description: viewModel.emptyStateMessage ?? "The selected library could not be loaded."
+                        title: viewModel.canInitializeLibrary
+                            ? String(localized: "Library Not Initialized")
+                            : String(localized: "Library Unavailable"),
+                        description: viewModel.emptyStateMessage
+                            ?? String(localized: "The selected library could not be loaded.")
                     )
 
                     if viewModel.canInitializeLibrary {
@@ -473,7 +476,9 @@ struct LibraryBrowserView: View {
 
     private var selectionSummaryText: String {
         let count = selectedComicIDs.count
-        return count == 1 ? "1 selected" : "\(count) selected"
+        return count == 1
+            ? String(localized: "1 selected")
+            : String(localized: "\(count) selected")
     }
 
     private var progressMessage: String {
@@ -482,14 +487,14 @@ struct LibraryBrowserView: View {
         }
 
         if viewModel.isInitializingLibrary {
-            return "Initializing Library"
+            return String(localized: "Initializing Library")
         }
 
         if viewModel.isRefreshingLibrary {
-            return "Refreshing Library"
+            return String(localized: "Refreshing Library")
         }
 
-        return "Opening Library"
+        return String(localized: "Opening Library")
     }
 
     private func handleReaderComicUpdate(_ updatedComic: LibraryComic) {
@@ -806,8 +811,8 @@ struct LibraryBrowserView: View {
                 Section {
                     EmptyStateView(
                         systemImage: "folder",
-                        title: "Empty Folder",
-                        description: "This part of the library does not contain subfolders or comics yet."
+                        title: String(localized: "Empty Folder"),
+                        description: String(localized: "This part of the library does not contain subfolders or comics yet.")
                     )
                     .padding(.vertical, Spacing.xl)
                 }
@@ -840,8 +845,8 @@ struct LibraryBrowserView: View {
                 if content.subfolders.isEmpty, content.comics.isEmpty {
                     EmptyStateView(
                         systemImage: "folder",
-                        title: "Empty Folder",
-                        description: "This part of the library does not contain subfolders or comics yet."
+                        title: String(localized: "Empty Folder"),
+                        description: String(localized: "This part of the library does not contain subfolders or comics yet.")
                     )
                     .padding(.vertical, Spacing.xxxl)
                 } else {
@@ -914,9 +919,9 @@ struct LibraryBrowserView: View {
     ) -> String {
         switch sectionKind {
         case .labels:
-            return "Tags across folders"
+            return String(localized: "Tags across folders")
         case .readingLists:
-            return "Custom reading queues"
+            return String(localized: "Custom reading queues")
         }
     }
 
@@ -956,7 +961,7 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private var browseByGridSection: some View {
         if !browseByShortcutItems.isEmpty {
-            gridSection(title: "Browse By") {
+            gridSection(title: String(localized: "Browse By")) {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(browseByShortcutItems) { item in
                         Button {
@@ -1050,11 +1055,11 @@ struct LibraryBrowserView: View {
     private func previewSectionTitle(for kind: LibrarySpecialCollectionKind) -> String {
         switch kind {
         case .reading:
-            return "Continue Reading"
+            return String(localized: "Continue Reading")
         case .recent:
-            return "Recently Added"
+            return String(localized: "Recently Added")
         case .favorites:
-            return "Favorites"
+            return String(localized: "Favorites")
         }
     }
 
@@ -1184,7 +1189,7 @@ struct LibraryBrowserView: View {
     }
 
     private var libraryStatusGridSection: some View {
-        gridSection(title: "Status") {
+        gridSection(title: String(localized: "Status")) {
             libraryStatusContent
         }
     }
@@ -1253,7 +1258,7 @@ struct LibraryBrowserView: View {
                     folderListButton(for: folder, appliesListRowInsets: false)
                 }
             } header: {
-                sectionHeaderLabel("Folders", count: folders.count)
+                sectionHeaderLabel(String(localized: "Folders"), count: folders.count)
             }
         }
     }
@@ -1261,7 +1266,7 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func folderGridSection(_ folders: [LibraryFolder]) -> some View {
         if !folders.isEmpty {
-            gridSection(title: "Folders", count: folders.count) {
+            gridSection(title: String(localized: "Folders"), count: folders.count) {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(folders) { folder in
                         folderGridButton(for: folder)
@@ -1320,7 +1325,7 @@ struct LibraryBrowserView: View {
                     }
                 }
             } header: {
-                sectionHeaderLabel("Comics", count: displayedComics.count)
+                sectionHeaderLabel(String(localized: "Comics"), count: displayedComics.count)
             }
         }
     }
@@ -1328,7 +1333,7 @@ struct LibraryBrowserView: View {
     @ViewBuilder
     private func comicGridSection(_ content: LibraryFolderContent, displayedComics: [LibraryComic]) -> some View {
         if !displayedComics.isEmpty {
-            gridSection(title: "Comics", count: displayedComics.count) {
+            gridSection(title: String(localized: "Comics"), count: displayedComics.count) {
                 LazyVGrid(columns: cardGridColumns, alignment: .leading, spacing: Spacing.md) {
                     ForEach(displayedComics) { comic in
                         if isSelectionMode {
@@ -1602,7 +1607,7 @@ struct LibraryBrowserView: View {
             viewModel.importComicFiles(from: urls)
         case .failure(let error):
             viewModel.alert = AppAlertState(
-                title: "Import Failed",
+                title: String(localized: "Import Failed"),
                 message: error.userFacingMessage
             )
         }
@@ -2128,8 +2133,8 @@ struct LibraryBrowserView: View {
                     Section {
                         EmptyStateView(
                             systemImage: "magnifyingglass",
-                            title: "No Results",
-                            description: "No folders or comics matched \"\(results.query)\"."
+                            title: String(localized: "No Results"),
+                            description: String(localized: "No folders or comics matched \"\(results.query)\".")
                         )
                         .padding(.vertical, Spacing.xl)
                     }
@@ -2145,7 +2150,7 @@ struct LibraryBrowserView: View {
                                 folderListButton(for: folder, appliesListRowInsets: false)
                             }
                         } header: {
-                            sectionHeaderLabel("Matching Folders", count: results.folders.count)
+                            sectionHeaderLabel(String(localized: "Matching Folders"), count: results.folders.count)
                         }
                     }
 
@@ -2160,7 +2165,7 @@ struct LibraryBrowserView: View {
                                 interactiveComicListButton(
                                     comic: comic,
                                     context: ReaderNavigationContext(
-                                        title: "Search",
+                                        title: String(localized: "Search"),
                                         comics: displayedSearchComics
                                     ),
                                     appliesListRowInsets: false,
@@ -2178,7 +2183,7 @@ struct LibraryBrowserView: View {
                                 )
                             }
                         } header: {
-                            sectionHeaderLabel("Matching Comics", count: displayedSearchComics.count)
+                            sectionHeaderLabel(String(localized: "Matching Comics"), count: displayedSearchComics.count)
                         }
                     }
                 }
@@ -2239,9 +2244,9 @@ private enum LibraryBrowserDisplayMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .list:
-            return "List"
+            return String(localized: "List")
         case .grid:
-            return "Grid"
+            return String(localized: "Grid")
         }
     }
 

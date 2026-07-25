@@ -26,17 +26,17 @@ struct LibraryAccessSnapshot: Equatable {
 
     var sourceStatus: String {
         if !sourceExists {
-            return "Missing"
+            return String(localized: "Missing")
         }
 
         if sourceReadable {
-            return "Readable"
+            return String(localized: "Readable")
         }
 
-        return "No Access"
+        return String(localized: "No Access")
     }
 
     var writeStatus: String {
-        sourceWritable ? "Writable" : "Read Only"
+        sourceWritable ? String(localized: "Writable") : String(localized: "Read Only")
     }
 }

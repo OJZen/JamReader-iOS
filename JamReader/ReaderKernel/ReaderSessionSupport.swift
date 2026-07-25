@@ -44,7 +44,7 @@ enum ReaderPageJumpResolver {
     }
 
     static func validationMessage(pageCount: Int) -> String {
-        "Enter a page between 1 and \(pageCount)."
+        String(localized: "Enter a page between 1 and \(pageCount).")
     }
 }
 

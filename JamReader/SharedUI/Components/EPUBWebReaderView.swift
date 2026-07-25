@@ -1,4 +1,5 @@
 import Combine
+import os
 import SwiftUI
 import UIKit
 import WebKit
@@ -15,9 +16,9 @@ struct EPUBReaderContainerView: View {
             switch stateModel.phase {
             case .idle, .loading:
                 ReaderFallbackStateView(
-                    title: "Opening EPUB",
+                    title: String(localized: "Opening EPUB"),
                     systemImage: nil,
-                    message: "Preparing the book for the new reader.",
+                    message: String(localized: "Preparing the book for the new reader."),
                     showsProgress: true
                 )
             case .ready(let preparedDocument, let initialLocation):
@@ -35,7 +36,7 @@ struct EPUBReaderContainerView: View {
                 )
             case .failed(let message):
                 ReaderFallbackStateView(
-                    title: "Failed to Open EPUB",
+                    title: String(localized: "Failed to Open EPUB"),
                     systemImage: "exclamationmark.triangle",
                     message: message
                 )
@@ -254,11 +255,15 @@ private struct EPUBWebReaderView: UIViewRepresentable {
                     onLocationChanged(nil)
                 }
             case Self.errorMessageName:
-                if let errorMessage = message.body as? String, !errorMessage.isEmpty {
-                    onLoadFailed(errorMessage)
-                } else {
-                    onLoadFailed("The EPUB reader could not render this book.")
-                }
+                let diagnosticMessage = (message.body as? String)
+                    .flatMap { $0.isEmpty ? nil : $0 }
+                    ?? "<missing>"
+                AppLog.reader.error(
+                    "EPUB web reader reported load failure detail=\(AppLogSanitizer.truncated(diagnosticMessage), privacy: .private)"
+                )
+                onLoadFailed(
+                    String(localized: "The EPUB reader could not render this book.")
+                )
             default:
                 break
             }

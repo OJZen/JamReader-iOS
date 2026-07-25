@@ -7,9 +7,9 @@ enum LibArchiveError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noRenderablePages:
-            return "No supported image pages were found inside this archive."
+            return String(localized: "No supported image pages were found inside this archive.")
         case .pageIndexOutOfBounds(let index):
-            return "The requested archive page \(index + 1) does not exist."
+            return String(localized: "The requested archive page \(index + 1) does not exist.")
         }
     }
 }

@@ -639,7 +639,7 @@ struct ReaderFileInfoSection: View {
             return nil
         }
 
-        return "Vol. \(volume)"
+        return String(localized: "Vol. \(volume)")
     }
 
     private var summaryChips: [String] {
@@ -650,7 +650,7 @@ struct ReaderFileInfoSection: View {
         }
 
         if let pages = fileInfo.pageCount {
-            chips.append("\(pages) pages")
+            chips.append(String(localized: "\(pages) pages"))
         }
 
         if let fileSizeText, !fileSizeText.isEmpty {
@@ -664,11 +664,21 @@ struct ReaderFileInfoSection: View {
         var rows: [ReaderFileInfoRow] = []
 
         if let added = fileInfo.addedAt {
-            rows.append(.init(label: "Added", value: Self.dateFormatter.string(from: added)))
+            rows.append(
+                .init(
+                    label: String(localized: "Added"),
+                    value: Self.dateFormatter.string(from: added)
+                )
+            )
         }
 
         if let opened = fileInfo.lastOpenedAt {
-            rows.append(.init(label: "Last Opened", value: Self.dateFormatter.string(from: opened)))
+            rows.append(
+                .init(
+                    label: String(localized: "Last Opened"),
+                    value: Self.dateFormatter.string(from: opened)
+                )
+            )
         }
 
         return rows

@@ -66,8 +66,10 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             alert = AppAlertState(
-                title: "Name Required",
-                message: "Enter a name before saving this \(collection.type == .label ? "tag" : "reading list")."
+                title: String(localized: "Name Required"),
+                message: collection.type == .label
+                    ? String(localized: "Enter a name before saving this tag.")
+                    : String(localized: "Enter a name before saving this reading list.")
             )
             return false
         }
@@ -106,7 +108,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update \(collection.type == .label ? "Tag" : "Reading List")",
+                title: collection.type == .label
+                    ? String(localized: "Failed to Update Tag")
+                    : String(localized: "Failed to Update Reading List"),
                 message: error.userFacingMessage
             )
             return false
@@ -140,7 +144,9 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail delete failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Delete \(collection.type == .label ? "Tag" : "Reading List")",
+                title: collection.type == .label
+                    ? String(localized: "Failed to Delete Tag")
+                    : String(localized: "Failed to Delete Reading List"),
                 message: error.userFacingMessage
             )
             return false
@@ -172,7 +178,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail favorite update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Favorites",
+                title: String(localized: "Failed to Update Favorites"),
                 message: error.userFacingMessage
             )
         }
@@ -206,7 +212,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail favorite batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) count=\(selectedComicIDs.count) value=\(isFavorite) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Favorites",
+                title: String(localized: "Failed to Update Favorites"),
                 message: error.userFacingMessage
             )
             return false
@@ -232,7 +238,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail read status update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) value=\(updatedValue) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Read Status",
+                title: String(localized: "Failed to Update Read Status"),
                 message: error.userFacingMessage
             )
         }
@@ -263,7 +269,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail rating update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) comicID=\(comic.id) rating=\(normalizedRating) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Rating",
+                title: String(localized: "Failed to Update Rating"),
                 message: error.userFacingMessage
             )
         }
@@ -300,7 +306,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail read status batch update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) count=\(selectedComicIDs.count) value=\(isRead) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Read Status",
+                title: String(localized: "Failed to Update Read Status"),
                 message: error.userFacingMessage
             )
             return false
@@ -348,7 +354,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection detail load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Load Collection",
+                title: String(localized: "Failed to Load Collection"),
                 message: error.userFacingMessage
             )
         }
@@ -394,7 +400,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection membership remove failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) comicID=\(comic.id) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Collection",
+                title: String(localized: "Failed to Update Collection"),
                 message: error.userFacingMessage
             )
         }
@@ -447,7 +453,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
                 "Library collection membership batch remove failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(self.collection.id) type=\(self.collection.type.rawValue, privacy: .public) count=\(uniqueComicIDs.count) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update Collection",
+                title: String(localized: "Failed to Update Collection"),
                 message: error.userFacingMessage
             )
             return false
@@ -469,7 +475,7 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
             return true
         } catch {
             alert = AppAlertState(
-                title: "Failed to Remove Comic",
+                title: String(localized: "Failed to Remove Comic"),
                 message: error.userFacingMessage
             )
             return false
@@ -479,8 +485,8 @@ final class LibraryOrganizationCollectionDetailViewModel: ObservableObject, Load
     private func beginExclusiveLibraryStorageOperation() -> Bool {
         guard remoteBackgroundImportController.beginExclusiveStorageMaintenance() else {
             alert = AppAlertState(
-                title: "Library Busy",
-                message: "Finish the current import or storage task, then try again."
+                title: String(localized: "Library Busy"),
+                message: String(localized: "Finish the current import or storage task, then try again.")
             )
             return false
         }

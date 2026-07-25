@@ -81,18 +81,18 @@ struct LibraryOrganizationCollectionEditorSheet: View {
     private var navigationTitle: String {
         switch collection.type {
         case .label:
-            return "Edit Tag"
+            return String(localized: "Edit Tag")
         case .readingList:
-            return "Edit Reading List"
+            return String(localized: "Edit Reading List")
         }
     }
 
     private var namePrompt: String {
         switch collection.type {
         case .label:
-            return "Tag name"
+            return String(localized: "Tag name")
         case .readingList:
-            return "Reading list name"
+            return String(localized: "Reading list name")
         }
     }
 }

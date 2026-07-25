@@ -153,16 +153,24 @@ struct LibraryComicQuickActionsSheet: View {
         }
 
         if comic.isFavorite {
-            parts.append("Favorite")
+            parts.append(String(localized: "Favorite"))
         }
 
         if selectedRating > 0 {
-            parts.append(selectedRating == 1 ? "1 star" : "\(selectedRating) stars")
+            parts.append(
+                selectedRating == 1
+                    ? String(localized: "1 star")
+                    : String(localized: "\(selectedRating) stars")
+            )
         }
 
         let bookmarkCount = comic.bookmarkPageIndices.count
         if bookmarkCount > 0 {
-            parts.append(bookmarkCount == 1 ? "1 bookmark" : "\(bookmarkCount) bookmarks")
+            parts.append(
+                bookmarkCount == 1
+                    ? String(localized: "1 bookmark")
+                    : String(localized: "\(bookmarkCount) bookmarks")
+            )
         }
 
         return parts.joined(separator: " · ")
@@ -173,7 +181,7 @@ struct LibrarySelectionActionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let selectionCount: Int
-    var organizeActionTitle = "Tags and Reading Lists"
+    var organizeActionTitle = String(localized: "Tags and Reading Lists")
     var removeFromContextTitle: String?
     var onEditMetadata: (() -> Void)?
     var onImportComicInfo: (() -> Void)?
@@ -196,25 +204,25 @@ struct LibrarySelectionActionsSheet: View {
 
                 Section("Status") {
                     actionButton(
-                        title: "Mark Read",
+                        title: String(localized: "Mark Read"),
                         systemImage: "checkmark.circle",
                         action: onMarkRead
                     )
 
                     actionButton(
-                        title: "Mark Unread",
+                        title: String(localized: "Mark Unread"),
                         systemImage: "arrow.uturn.backward.circle",
                         action: onMarkUnread
                     )
 
                     actionButton(
-                        title: "Add Favorite",
+                        title: String(localized: "Add Favorite"),
                         systemImage: "star",
                         action: onAddFavorite
                     )
 
                     actionButton(
-                        title: "Remove Favorite",
+                        title: String(localized: "Remove Favorite"),
                         systemImage: "star.slash",
                         action: onRemoveFavorite
                     )
@@ -224,7 +232,7 @@ struct LibrarySelectionActionsSheet: View {
                     Section("Manage") {
                         if let onEditMetadata {
                             actionButton(
-                                title: "Edit Metadata",
+                                title: String(localized: "Edit Metadata"),
                                 systemImage: "square.and.pencil",
                                 action: onEditMetadata
                             )
@@ -232,7 +240,7 @@ struct LibrarySelectionActionsSheet: View {
 
                         if let onImportComicInfo {
                             actionButton(
-                                title: "Import ComicInfo",
+                                title: String(localized: "Import ComicInfo"),
                                 systemImage: "square.and.arrow.down",
                                 action: onImportComicInfo
                             )
@@ -275,7 +283,9 @@ struct LibrarySelectionActionsSheet: View {
     }
 
     private var selectionSummary: String {
-        selectionCount == 1 ? "1 comic selected" : "\(selectionCount) comics selected"
+        selectionCount == 1
+            ? String(localized: "1 comic selected")
+            : String(localized: "\(selectionCount) comics selected")
     }
 
     private func actionButton(

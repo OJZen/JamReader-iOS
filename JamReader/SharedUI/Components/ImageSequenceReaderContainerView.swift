@@ -227,42 +227,42 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             modifierFlags: [],
             action: #selector(handleAdvance)
         )
-        nextPageCommand.discoverabilityTitle = "Next Page"
+        nextPageCommand.discoverabilityTitle = String(localized: "Next Page")
 
         let previousPageCommand = UIKeyCommand(
             input: UIKeyCommand.inputLeftArrow,
             modifierFlags: [],
             action: #selector(handleRetreat)
         )
-        previousPageCommand.discoverabilityTitle = "Previous Page"
+        previousPageCommand.discoverabilityTitle = String(localized: "Previous Page")
 
         let nextPageDownCommand = UIKeyCommand(
             input: UIKeyCommand.inputDownArrow,
             modifierFlags: [],
             action: #selector(handleAdvance)
         )
-        nextPageDownCommand.discoverabilityTitle = "Next Page"
+        nextPageDownCommand.discoverabilityTitle = String(localized: "Next Page")
 
         let previousPageUpCommand = UIKeyCommand(
             input: UIKeyCommand.inputUpArrow,
             modifierFlags: [],
             action: #selector(handleRetreat)
         )
-        previousPageUpCommand.discoverabilityTitle = "Previous Page"
+        previousPageUpCommand.discoverabilityTitle = String(localized: "Previous Page")
 
         let nextPageSpaceCommand = UIKeyCommand(
             input: " ",
             modifierFlags: [],
             action: #selector(handleAdvance)
         )
-        nextPageSpaceCommand.discoverabilityTitle = "Next Page"
+        nextPageSpaceCommand.discoverabilityTitle = String(localized: "Next Page")
 
         let previousPageShiftSpaceCommand = UIKeyCommand(
             input: " ",
             modifierFlags: [.shift],
             action: #selector(handleRetreat)
         )
-        previousPageShiftSpaceCommand.discoverabilityTitle = "Previous Page"
+        previousPageShiftSpaceCommand.discoverabilityTitle = String(localized: "Previous Page")
 
         return [
             nextPageCommand,
@@ -930,7 +930,7 @@ private final class ComicImageSpreadViewController: UIViewController {
         let pageSource = document.pageSource
         let pageIndices = spread.displayPageIndices(for: layout.readingDirection)
         let pageNames = pageIndices.map { index in
-            document.pageName(at: index) ?? "Page \(index + 1)"
+            document.pageName(at: index) ?? String(localized: "Page \(index + 1)")
         }
         let shouldPreferFullResolution = layout.fitMode == .originalSize
         let decodeMaxPixelSize = preferredDecodeMaxPixelSize()
@@ -997,7 +997,7 @@ private final class ComicImageSpreadViewController: UIViewController {
                 let fallbackMessage = pageNames.joined(separator: ", ")
                 self.presentError(
                     error.userFacingMessage.isEmpty
-                        ? "Unable to decode spread: \(fallbackMessage)"
+                        ? String(localized: "Unable to decode spread: \(fallbackMessage)")
                         : error.userFacingMessage
                 )
             }
@@ -1258,7 +1258,7 @@ private enum ReaderSpreadImageError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .decodeFailed(let index):
-            return "The image data for page \(index + 1) could not be decoded."
+            return String(localized: "The image data for page \(index + 1) could not be decoded.")
         }
     }
 }

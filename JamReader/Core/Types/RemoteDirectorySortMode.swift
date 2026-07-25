@@ -12,22 +12,22 @@ enum RemoteDirectorySortMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .nameAscending:
-            return "Name"
+            return String(localized: "Name")
         case .recentlyUpdated:
-            return "Recently Updated"
+            return String(localized: "Recently Updated")
         case .largestFirst:
-            return "Largest First"
+            return String(localized: "Largest First")
         }
     }
 
     var shortTitle: String {
         switch self {
         case .nameAscending:
-            return "Name"
+            return String(localized: "Name")
         case .recentlyUpdated:
-            return "Recent"
+            return String(localized: "Recent")
         case .largestFirst:
-            return "Largest"
+            return String(localized: "Largest")
         }
     }
 

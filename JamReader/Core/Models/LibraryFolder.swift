@@ -45,6 +45,8 @@ struct LibraryFolder: Identifiable, Hashable {
             return nil
         }
 
-        return numChildren == 1 ? "1 item" : "\(numChildren) items"
+        return numChildren == 1
+            ? String(localized: "1 item")
+            : String(localized: "\(numChildren) items")
     }
 }

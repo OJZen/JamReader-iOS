@@ -90,29 +90,29 @@ enum LibraryLabelColor: Int, CaseIterable, Identifiable, Hashable {
     var displayName: String {
         switch self {
         case .red:
-            return "Red"
+            return String(localized: "Red")
         case .orange:
-            return "Orange"
+            return String(localized: "Orange")
         case .yellow:
-            return "Yellow"
+            return String(localized: "Yellow")
         case .green:
-            return "Green"
+            return String(localized: "Green")
         case .cyan:
-            return "Cyan"
+            return String(localized: "Cyan")
         case .blue:
-            return "Blue"
+            return String(localized: "Blue")
         case .violet:
-            return "Violet"
+            return String(localized: "Violet")
         case .purple:
-            return "Purple"
+            return String(localized: "Purple")
         case .pink:
-            return "Pink"
+            return String(localized: "Pink")
         case .white:
-            return "White"
+            return String(localized: "White")
         case .light:
-            return "Light"
+            return String(localized: "Light")
         case .dark:
-            return "Dark"
+            return String(localized: "Dark")
         }
     }
 

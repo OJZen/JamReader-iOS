@@ -70,9 +70,9 @@ private extension LibraryOrganizationCollection {
     private var typeTitle: String {
         switch type {
         case .label:
-            return "Tag"
+            return String(localized: "Tag")
         case .readingList:
-            return "Reading List"
+            return String(localized: "Reading List")
         }
     }
 }

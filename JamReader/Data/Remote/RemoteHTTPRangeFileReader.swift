@@ -9,13 +9,13 @@ enum RemoteHTTPRangeFileReaderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
-            return "The remote file response was not valid."
+            return String(localized: "The remote file response was not valid.")
         case .missingContentLength:
-            return "The remote file size could not be determined."
+            return String(localized: "The remote file size could not be determined.")
         case .unreadableRange:
-            return "The requested remote byte range could not be read."
+            return String(localized: "The requested remote byte range could not be read.")
         case .rangeRequestsUnsupported:
-            return "This WebDAV server does not support byte-range reads for direct thumbnails."
+            return String(localized: "This WebDAV server does not support byte-range reads for direct thumbnails.")
         }
     }
 }

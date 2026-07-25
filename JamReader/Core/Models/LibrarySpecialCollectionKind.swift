@@ -14,11 +14,11 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
     var title: String {
         switch self {
         case .reading:
-            return "Reading"
+            return String(localized: "Reading")
         case .favorites:
-            return "Favorites"
+            return String(localized: "Favorites")
         case .recent:
-            return "Recent"
+            return String(localized: "Recent")
         }
     }
 
@@ -36,11 +36,11 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
     var subtitle: String {
         switch self {
         case .reading:
-            return "Unread comics that have already been opened."
+            return String(localized: "Unread comics that have already been opened.")
         case .favorites:
-            return "Pinned comics stored in the library database."
+            return String(localized: "Pinned comics stored in the library database.")
         case .recent:
-            return "Comics added in the last \(Self.defaultRecentDays) days."
+            return String(localized: "Comics added in the last \(Self.defaultRecentDays) days.")
         }
     }
 
@@ -51,29 +51,30 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
         case .favorites:
             return subtitle
         case .recent:
-            return "Comics added in the last \(max(1, recentDays)) days."
+            let dayCount = max(1, recentDays)
+            return String(localized: "Comics added in the last \(dayCount) days.")
         }
     }
 
     var emptyStateTitle: String {
         switch self {
         case .reading:
-            return "Nothing in Progress"
+            return String(localized: "Nothing in Progress")
         case .favorites:
-            return "No Favorites Yet"
+            return String(localized: "No Favorites Yet")
         case .recent:
-            return "No Recent Comics"
+            return String(localized: "No Recent Comics")
         }
     }
 
     var emptyStateDescription: String {
         switch self {
         case .reading:
-            return "Open a comic and leave it unfinished to keep it here."
+            return String(localized: "Open a comic and leave it unfinished to keep it here.")
         case .favorites:
-            return "Use the star button to add favorites."
+            return String(localized: "Use the star button to add favorites.")
         case .recent:
-            return "Imported comics appear here automatically."
+            return String(localized: "Imported comics appear here automatically.")
         }
     }
 
@@ -84,23 +85,20 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
         case .favorites:
             return emptyStateDescription
         case .recent:
-            return "Comics imported in the last \(max(1, recentDays)) days will appear here automatically."
-        }
-    }
-
-    var summaryFormat: String {
-        switch self {
-        case .reading:
-            return "Comics in progress: %d"
-        case .favorites:
-            return "Favorite comics: %d"
-        case .recent:
-            return "Recent comics: %d"
+            let dayCount = max(1, recentDays)
+            return String(localized: "Comics imported in the last \(dayCount) days will appear here automatically.")
         }
     }
 
     func summaryText(count: Int) -> String {
-        String(format: summaryFormat, count)
+        switch self {
+        case .reading:
+            return String(localized: "Comics in progress: \(count)")
+        case .favorites:
+            return String(localized: "Favorite comics: \(count)")
+        case .recent:
+            return String(localized: "Recent comics: \(count)")
+        }
     }
 
     func dashboardSubtitle(
@@ -109,13 +107,17 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
     ) -> String {
         switch self {
         case .reading:
-            return count == 1 ? "1 comic in progress." : "\(count) comics in progress."
+            return count == 1
+                ? String(localized: "1 comic in progress.")
+                : String(localized: "\(count) comics in progress.")
         case .favorites:
-            return count == 1 ? "1 comic is pinned as favorite." : "\(count) comics are pinned as favorites."
+            return count == 1
+                ? String(localized: "1 comic is pinned as favorite.")
+                : String(localized: "\(count) comics are pinned as favorites.")
         case .recent:
             return count == 1
-                ? "1 comic added in the last \(recentDays) days."
-                : "\(count) comics added in the last \(recentDays) days."
+                ? String(localized: "1 comic added in the last \(recentDays) days.")
+                : String(localized: "\(count) comics added in the last \(recentDays) days.")
         }
     }
 }

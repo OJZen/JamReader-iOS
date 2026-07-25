@@ -168,7 +168,7 @@ final class ReaderThumbnailBrowserViewController: UIViewController, UICollection
             selectedPageNumber: clampedSelectedPageNumber,
             pageCount: pageCount
         )
-        pagesHeaderView?.configure(title: "All Pages", count: pageCount)
+        pagesHeaderView?.configure(title: String(localized: "All Pages"), count: pageCount)
         loadSummaryThumbnailIfNeeded()
     }
 
@@ -217,7 +217,7 @@ final class ReaderThumbnailBrowserViewController: UIViewController, UICollection
             return UICollectionReusableView()
         }
 
-        headerView.configure(title: "All Pages", count: pageCount)
+        headerView.configure(title: String(localized: "All Pages"), count: pageCount)
         pagesHeaderView = headerView
         return headerView
     }
@@ -805,12 +805,14 @@ private final class ReaderThumbnailBrowserSummaryCell: UICollectionViewCell {
     }
 
     func configure(currentPageNumber: Int, pageCount: Int, progressPercent: Int, remainingPageCount: Int) {
-        titleLabel.text = pageCount > 0 ? "Page \(currentPageNumber)" : "No Pages"
+        titleLabel.text = pageCount > 0
+            ? String(localized: "Page \(currentPageNumber)")
+            : String(localized: "No Pages")
         detailLabel.text = pageCount > 0
-            ? "\(progressPercent)% completed across \(pageCount) pages"
-            : "This document does not expose page thumbnails."
+            ? String(localized: "\(progressPercent)% completed across \(pageCount) pages")
+            : String(localized: "This document does not expose page thumbnails.")
         progressView.progress = pageCount > 0 ? Float(Double(currentPageNumber) / Double(pageCount)) : 0
-        statusLabel.text = "Now Reading"
+        statusLabel.text = String(localized: "Now Reading")
 
         statsStackView.arrangedSubviews.forEach {
             statsStackView.removeArrangedSubview($0)
@@ -818,9 +820,9 @@ private final class ReaderThumbnailBrowserSummaryCell: UICollectionViewCell {
         }
 
         let stats = [
-            ("Progress", "\(progressPercent)%"),
-            ("Left", "\(remainingPageCount)"),
-            ("Total", "\(pageCount)")
+            (String(localized: "Progress"), "\(progressPercent)%"),
+            (String(localized: "Remaining"), "\(remainingPageCount)"),
+            (String(localized: "Total"), "\(pageCount)")
         ]
 
         for (title, value) in stats {
@@ -947,10 +949,10 @@ private final class ReaderThumbnailBrowserJumpCell: UICollectionViewCell, UIText
     }
 
     func configure(selectedPageNumber: Int, pageCount: Int) {
-        titleLabel.text = "Quick Jump"
+        titleLabel.text = String(localized: "Quick Jump")
         detailLabel.text = pageCount > 0
-            ? "Ready to jump to page \(selectedPageNumber) of \(pageCount)."
-            : "No pages available in this document."
+            ? String(localized: "Ready to jump to page \(selectedPageNumber) of \(pageCount).")
+            : String(localized: "No pages available in this document.")
         pageCountLabel.text = "/ \(pageCount)"
         if !textField.isFirstResponder {
             textField.text = pageCount > 0 ? "\(selectedPageNumber)" : ""
@@ -1037,14 +1039,14 @@ private final class ReaderThumbnailBrowserJumpCell: UICollectionViewCell, UIText
         var goToConfig = UIButton.Configuration.filled()
         goToConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
         goToButton.configuration = goToConfig
-        goToButton.setTitle("Go To", for: .normal)
+        goToButton.setTitle(String(localized: "Go To"), for: .normal)
         goToButton.addTarget(self, action: #selector(goToTapped), for: .touchUpInside)
         controls.addArrangedSubview(goToButton)
 
         var locateConfig = UIButton.Configuration.tinted()
         locateConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
         locateButton.configuration = locateConfig
-        locateButton.setTitle("Locate", for: .normal)
+        locateButton.setTitle(String(localized: "Locate"), for: .normal)
         locateButton.addTarget(self, action: #selector(locateTapped), for: .touchUpInside)
         controls.addArrangedSubview(locateButton)
 
@@ -1168,7 +1170,7 @@ private final class ReaderThumbnailBrowserPageCell: UICollectionViewCell {
 
         currentBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
         currentBadgeLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        currentBadgeLabel.text = "Now"
+        currentBadgeLabel.text = String(localized: "Now")
         currentBadgeLabel.textColor = tintColor
         currentBadgeLabel.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.92)
         currentBadgeLabel.layer.cornerRadius = 12

@@ -79,7 +79,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
                 "Library organization load failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Load \(sectionKind.title)",
+                title: sectionKind == .labels
+                    ? String(localized: "Failed to Load Tags")
+                    : String(localized: "Failed to Load Reading Lists"),
                 message: error.userFacingMessage
             )
         }
@@ -99,8 +101,10 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
         let trimmedName = pendingCollectionName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             alert = AppAlertState(
-                title: "Name Required",
-                message: "Enter a name before creating a new \(sectionKind == .labels ? "tag" : "reading list")."
+                title: String(localized: "Name Required"),
+                message: sectionKind == .labels
+                    ? String(localized: "Enter a name before creating a new tag.")
+                    : String(localized: "Enter a name before creating a new reading list.")
             )
             return
         }
@@ -134,7 +138,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
                 "Library organization create failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) section=\(self.sectionKind.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Create \(sectionKind == .labels ? "Tag" : "Reading List")",
+                title: sectionKind == .labels
+                    ? String(localized: "Failed to Create Tag")
+                    : String(localized: "Failed to Create Reading List"),
                 message: error.userFacingMessage
             )
         }
@@ -148,8 +154,10 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             alert = AppAlertState(
-                title: "Name Required",
-                message: "Enter a name before saving this \(collection.type == .label ? "tag" : "reading list")."
+                title: String(localized: "Name Required"),
+                message: collection.type == .label
+                    ? String(localized: "Enter a name before saving this tag.")
+                    : String(localized: "Enter a name before saving this reading list.")
             )
             return false
         }
@@ -161,7 +169,7 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
                 "Library organization update rejected libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) reason=duplicateName name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Name Already Used",
+                title: String(localized: "Name Already Used"),
                 message: trimmedName
             )
             return false
@@ -207,7 +215,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
                 "Library organization update failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) name=\(AppLogSanitizer.truncated(trimmedName), privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Update \(collection.type == .label ? "Tag" : "Reading List")",
+                title: collection.type == .label
+                    ? String(localized: "Failed to Update Tag")
+                    : String(localized: "Failed to Update Reading List"),
                 message: error.userFacingMessage
             )
             return false
@@ -243,7 +253,9 @@ final class LibraryOrganizationViewModel: ObservableObject, LoadableViewModel {
                 "Library organization delete failed libraryID=\(self.descriptor.id.uuidString, privacy: .public) collectionID=\(collection.id) type=\(collection.type.rawValue, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = AppAlertState(
-                title: "Failed to Delete \(collection.type == .label ? "Tag" : "Reading List")",
+                title: collection.type == .label
+                    ? String(localized: "Failed to Delete Tag")
+                    : String(localized: "Failed to Delete Reading List"),
                 message: error.userFacingMessage
             )
             return false

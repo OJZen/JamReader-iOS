@@ -21,7 +21,7 @@ enum RemoteComicCachePolicyPreset: String, CaseIterable, Identifiable {
         case .fourGigabytes:
             return "4096 MB"
         case .unlimited:
-            return "Unlimited"
+            return String(localized: "Unlimited")
         }
     }
 

@@ -11,11 +11,11 @@ enum ComicPagePhotoLibrarySaverError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .accessDenied:
-            return "JamReader does not have permission to add images to Photos."
+            return String(localized: "JamReader does not have permission to add images to Photos.")
         case .unsupportedImageData:
-            return "This page could not be converted into a Photos-compatible image."
+            return String(localized: "This page could not be converted into a Photos-compatible image.")
         case .saveFailed:
-            return "The page could not be saved to Photos."
+            return String(localized: "The page could not be saved to Photos.")
         }
     }
 }
@@ -131,7 +131,7 @@ enum ComicPagePhotoLibrarySaver {
             .replacingOccurrences(of: ":", with: "-")
 
         guard let trimmedName, !trimmedName.isEmpty else {
-            return "JamReader Page.png"
+            return "\(String(localized: "JamReader Page")).png"
         }
 
         return trimmedName
@@ -140,6 +140,7 @@ enum ComicPagePhotoLibrarySaver {
     private static func pngFileName(from suggestedFileName: String?) -> String {
         let sanitized = sanitizedFileName(from: suggestedFileName)
         let baseName = URL(fileURLWithPath: sanitized).deletingPathExtension().lastPathComponent
-        return "\(baseName.isEmpty ? "JamReader Page" : baseName).png"
+        let resolvedBaseName = baseName.isEmpty ? String(localized: "JamReader Page") : baseName
+        return "\(resolvedBaseName).png"
     }
 }

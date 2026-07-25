@@ -22,11 +22,11 @@ struct LibraryScanSummary: Codable, Equatable {
     }
 
     var summaryLine: String {
-        "\(folderCount) folders · \(comicCount) comics"
+        String(localized: "\(folderCount) folders · \(comicCount) comics")
     }
 
     var indexedSummaryLine: String {
-        "Indexed \(summaryLine)"
+        String(localized: "Indexed \(summaryLine)")
     }
 
     var addedComicCount: Int? {
@@ -57,20 +57,21 @@ struct LibraryScanSummary: Codable, Equatable {
         var parts: [String] = []
 
         if let addedComicCount, addedComicCount > 0 {
-            parts.append("Added \(addedComicCount) comics")
+            parts.append(String(localized: "Added \(addedComicCount) comics"))
         }
 
         if let removedComicCount, removedComicCount > 0 {
-            parts.append("Removed \(removedComicCount) comics")
+            parts.append(String(localized: "Removed \(removedComicCount) comics"))
         }
 
         if let folderDelta, folderDelta != 0 {
             let prefix = folderDelta > 0 ? "+" : "-"
-            parts.append("\(prefix)\(abs(folderDelta)) folders")
+            let changedFolderCount = abs(folderDelta)
+            parts.append(String(localized: "\(prefix)\(changedFolderCount) folders"))
         }
 
         if parts.isEmpty, previousComicCount != nil || previousFolderCount != nil {
-            return "No content changes"
+            return String(localized: "No content changes")
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -78,7 +79,7 @@ struct LibraryScanSummary: Codable, Equatable {
 
     var completionLine: String {
         if let changeSummaryLine {
-            return "\(indexedSummaryLine) · \(changeSummaryLine)"
+            return String(localized: "\(indexedSummaryLine) · \(changeSummaryLine)")
         }
 
         return indexedSummaryLine

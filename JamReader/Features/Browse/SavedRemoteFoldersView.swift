@@ -212,12 +212,12 @@ struct SavedRemoteFoldersView: View {
         Section {
             if focusedEntryCount == 0 {
                 ContentUnavailableView(
-                    focusedProfile == nil ? "No Saved Folders" : "No Saved Folders",
+                    String(localized: "No Saved Folders"),
                     systemImage: "star",
                     description: Text(
                         focusedProfile == nil
-                            ? "Save folders in Browse."
-                            : "Save folders from this server in Browse."
+                            ? String(localized: "Save folders in Browse.")
+                            : String(localized: "Save folders from this server in Browse.")
                     )
                 )
                 .padding(.vertical, 18)
@@ -248,7 +248,9 @@ struct SavedRemoteFoldersView: View {
     private func savedFolderCountText(
         for section: SavedRemoteFolderSection
     ) -> String {
-        section.entries.count == 1 ? "1 saved" : "\(section.entries.count) saved"
+        section.entries.count == 1
+            ? String(localized: "1 saved")
+            : String(localized: "\(section.entries.count) saved")
     }
 
     private var trimmedSearchText: String {
@@ -347,7 +349,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
                 "Saved remote folders load failed error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = BrowseHomeAlert(
-                title: "Saved Folders Unavailable",
+                title: String(localized: "Saved Folders Unavailable"),
                 message: error.userFacingMessage
             )
         }
@@ -357,8 +359,8 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
         let title = proposedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else {
             alert = BrowseHomeAlert(
-                title: "Shortcut Name Required",
-                message: "Enter a display name for this saved remote folder."
+                title: String(localized: "Shortcut Name Required"),
+                message: String(localized: "Enter a display name for this saved remote folder.")
             )
             return
         }
@@ -388,7 +390,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
                 "Saved remote folder rename failed shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = BrowseHomeAlert(
-                title: "Failed to Rename Shortcut",
+                title: String(localized: "Failed to Rename Shortcut"),
                 message: error.userFacingMessage
             )
         }
@@ -414,7 +416,7 @@ final class SavedRemoteFoldersViewModel: ObservableObject {
                 "Saved remote folder remove failed shortcutID=\(shortcutID, privacy: .public) serverID=\(serverID, privacy: .public) provider=\(provider, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
             )
             alert = BrowseHomeAlert(
-                title: "Failed to Remove Shortcut",
+                title: String(localized: "Failed to Remove Shortcut"),
                 message: error.userFacingMessage
             )
         }

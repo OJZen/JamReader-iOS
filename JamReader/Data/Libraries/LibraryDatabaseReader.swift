@@ -10,15 +10,15 @@ enum LibraryDatabaseReadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .databaseMissing:
-            return "This library has not been indexed yet."
+            return String(localized: "This library has not been indexed yet.")
         case .sqliteUnavailable:
-            return "SQLite3 is unavailable in this build."
-        case .openDatabaseFailed(let reason):
-            return "Unable to open the app library database. \(reason)"
+            return String(localized: "SQLite3 is unavailable in this build.")
+        case .openDatabaseFailed:
+            return String(localized: "Unable to open the app library database.")
         case .folderNotFound(let folderID):
-            return "The requested folder \(folderID) could not be found in the local library state."
-        case .queryFailed(let reason):
-            return "Library query failed. \(reason)"
+            return String(localized: "The requested folder \(folderID) could not be found in the local library state.")
+        case .queryFailed:
+            return String(localized: "Library query failed.")
         }
     }
 }
@@ -148,6 +148,6 @@ final class LibraryDatabaseReader {
             return .folderNotFound(fallbackFolderID)
         }
 
-        return .queryFailed(error.userFacingMessage)
+        return .queryFailed(AppLogSanitizer.errorDescription(error))
     }
 }

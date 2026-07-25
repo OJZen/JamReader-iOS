@@ -459,12 +459,12 @@ final class ComicOpenCoordinator {
     ) async throws -> (session: ComicReaderSession, document: ComicDocument) {
         switch request {
         case .library(let request):
-            progress("Opening Comic", nil)
+            progress(String(localized: "Opening Comic"), nil)
             return try await openLibrary(request)
         case .remote(let request):
             return try await openRemote(request, progress: progress)
         case .file(let request):
-            progress("Opening Comic", nil)
+            progress(String(localized: "Opening Comic"), nil)
             return try await openFile(request)
         }
     }
@@ -558,7 +558,7 @@ final class ComicOpenCoordinator {
                     request: request,
                     reference: reference,
                     cachedFileURL: cachedFileURL,
-                    noticeMessage: "Opened the downloaded copy saved on this device."
+                    noticeMessage: String(localized: "Opened the downloaded copy saved on this device.")
                 )
                 logger.info(
                     "Reader pipeline remote cache loaded provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public) reason=currentCache pages=\(result.document.pageCount ?? -1)"
@@ -580,7 +580,7 @@ final class ComicOpenCoordinator {
 
         if await remoteServerBrowsingService.supportsStreamingOpen(for: reference, profile: request.profile),
            ComicDocumentLoader().supportsRemoteStreaming(for: reference.fileName) {
-            progress("Preparing Pages", nil)
+            progress(String(localized: "Preparing Pages"), nil)
             logger.info(
                 "Reader pipeline remote streaming attempt provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public)"
             )
@@ -621,7 +621,7 @@ final class ComicOpenCoordinator {
             }
         }
 
-        progress("Downloading", 0)
+        progress(String(localized: "Downloading"), 0)
         logger.info(
             "Reader pipeline remote download fallback requested provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public)"
         )
@@ -630,7 +630,7 @@ final class ComicOpenCoordinator {
                 for: request.profile,
                 reference: reference,
                 progressHandler: { fraction in
-                    progress("Downloading", fraction)
+                    progress(String(localized: "Downloading"), fraction)
                 }
             )
             let session = makeRemoteSession(
@@ -817,9 +817,9 @@ final class ComicOpenCoordinator {
         case .unavailable:
             return nil
         case .current:
-            return "Opened the downloaded copy saved on this device."
+            return String(localized: "Opened the downloaded copy saved on this device.")
         case .stale:
-            return "Opened an older downloaded copy saved on this device."
+            return String(localized: "Opened an older downloaded copy saved on this device.")
         }
     }
 
@@ -828,7 +828,7 @@ final class ComicOpenCoordinator {
         case .downloaded:
             return nil
         case .cachedCurrent:
-            return "Opened the downloaded copy saved on this device."
+            return String(localized: "Opened the downloaded copy saved on this device.")
         case .cachedFallback(let message):
             return message
         }

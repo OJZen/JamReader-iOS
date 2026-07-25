@@ -795,9 +795,9 @@ extension LibraryFolder {
         }
 
         if finished {
-            parts.append("Finished")
+            parts.append(String(localized: "Finished"))
         } else if completed {
-            parts.append("Complete")
+            parts.append(String(localized: "Complete"))
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
@@ -847,7 +847,7 @@ extension LibraryComic {
             items.append(
                 InlineMetadataItem(
                     systemImage: "rectangle.stack.fill",
-                    text: "\(pageCount) pages"
+                    text: String(localized: "\(pageCount) pages")
                 )
             )
         }

@@ -56,7 +56,10 @@ static NSError *YRMuPDFError(YRMuPDFDocumentErrorCode code, NSString *message) {
     _context = fz_new_context(NULL, NULL, YRMuPDFStoreLimit);
     if (!_context) {
         if (error) {
-            *error = YRMuPDFError(YRMuPDFDocumentErrorOpenFailed, @"MuPDF could not create a rendering context.");
+            *error = YRMuPDFError(
+                YRMuPDFDocumentErrorOpenFailed,
+                NSLocalizedString(@"MuPDF could not create a rendering context.", nil)
+            );
         }
         return nil;
     }
@@ -84,7 +87,10 @@ static NSError *YRMuPDFError(YRMuPDFDocumentErrorCode code, NSString *message) {
             _context = NULL;
         }
         if (error) {
-            *error = YRMuPDFError(YRMuPDFDocumentErrorOpenFailed, @"MuPDF could not open this document.");
+            *error = YRMuPDFError(
+                YRMuPDFDocumentErrorOpenFailed,
+                NSLocalizedString(@"MuPDF could not open this document.", nil)
+            );
         }
         return nil;
     }
@@ -92,7 +98,10 @@ static NSError *YRMuPDFError(YRMuPDFDocumentErrorCode code, NSString *message) {
     return self;
 #else
     if (error) {
-        *error = YRMuPDFError(YRMuPDFDocumentErrorUnavailable, @"MuPDF is not linked into this build.");
+        *error = YRMuPDFError(
+            YRMuPDFDocumentErrorUnavailable,
+            NSLocalizedString(@"MuPDF is not linked into this build.", nil)
+        );
     }
     return nil;
 #endif
@@ -117,7 +126,10 @@ static NSError *YRMuPDFError(YRMuPDFDocumentErrorCode code, NSString *message) {
 #if JR_HAS_MUPDF
     if (pageIndex < 0 || pageIndex >= self.pageCount) {
         if (error) {
-            *error = YRMuPDFError(YRMuPDFDocumentErrorPageOutOfRange, @"The requested MuPDF page is out of range.");
+            *error = YRMuPDFError(
+                YRMuPDFDocumentErrorPageOutOfRange,
+                NSLocalizedString(@"The requested MuPDF page is out of range.", nil)
+            );
         }
         return nil;
     }
@@ -150,7 +162,10 @@ static NSError *YRMuPDFError(YRMuPDFDocumentErrorCode code, NSString *message) {
 
     if (!didRender || !pixmap) {
         if (error) {
-            *error = YRMuPDFError(YRMuPDFDocumentErrorRenderFailed, @"MuPDF could not render this page.");
+            *error = YRMuPDFError(
+                YRMuPDFDocumentErrorRenderFailed,
+                NSLocalizedString(@"MuPDF could not render this page.", nil)
+            );
         }
         return nil;
     }
@@ -159,12 +174,18 @@ static NSError *YRMuPDFError(YRMuPDFDocumentErrorCode code, NSString *message) {
     fz_drop_pixmap(_context, pixmap);
 
     if (!image && error) {
-        *error = YRMuPDFError(YRMuPDFDocumentErrorImageCreationFailed, @"MuPDF rendered the page, but the bitmap could not be converted.");
+        *error = YRMuPDFError(
+            YRMuPDFDocumentErrorImageCreationFailed,
+            NSLocalizedString(@"MuPDF rendered the page, but the bitmap could not be converted.", nil)
+        );
     }
     return image;
 #else
     if (error) {
-        *error = YRMuPDFError(YRMuPDFDocumentErrorUnavailable, @"MuPDF is not linked into this build.");
+        *error = YRMuPDFError(
+            YRMuPDFDocumentErrorUnavailable,
+            NSLocalizedString(@"MuPDF is not linked into this build.", nil)
+        );
     }
     return nil;
 #endif

@@ -10,15 +10,15 @@ enum TARArchiveError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unreadableArchive:
-            return "The archive could not be opened."
+            return String(localized: "The archive could not be opened.")
         case .invalidArchive:
-            return "The archive is not a valid TAR/CBT file."
+            return String(localized: "The archive is not a valid TAR/CBT file.")
         case .noRenderablePages:
-            return "No supported image pages were found inside this archive."
+            return String(localized: "No supported image pages were found inside this archive.")
         case .pageIndexOutOfBounds(let index):
-            return "The requested archive page \(index + 1) does not exist."
+            return String(localized: "The requested archive page \(index + 1) does not exist.")
         case .truncatedEntry(let path):
-            return "The archive entry `\(path)` could not be fully read."
+            return String(localized: "The archive entry `\(path)` could not be fully read.")
         }
     }
 }

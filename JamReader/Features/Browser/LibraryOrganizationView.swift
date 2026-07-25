@@ -274,7 +274,9 @@ struct LibraryOrganizationView: View {
     }
 
     private var contentSectionTitle: String {
-        hasSearchQuery ? "Results" : viewModel.sectionKind.title
+        hasSearchQuery
+            ? String(localized: "Results")
+            : viewModel.sectionKind.title
     }
 
     private var hasSearchQuery: Bool {
@@ -282,12 +284,16 @@ struct LibraryOrganizationView: View {
     }
 
     private var emptyStateTitle: String {
-        hasSearchQuery ? "No Matches" : viewModel.sectionKind.emptyStateTitle
+        hasSearchQuery
+            ? String(localized: "No Matches")
+            : viewModel.sectionKind.emptyStateTitle
     }
 
     private var emptyStateDescription: String {
         hasSearchQuery
-            ? "No matches for \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
+            ? String(
+                localized: "No matches for \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
+            )
             : viewModel.sectionKind.emptyStateDescription
     }
 
@@ -523,7 +529,7 @@ struct LibraryOrganizationView: View {
 
     private var deletingCollectionDialogTitle: String {
         guard let deletingCollection else {
-            return "Delete Collection"
+            return String(localized: "Delete Collection")
         }
 
         return deleteCollectionActionTitle(for: deletingCollection)
@@ -532,18 +538,18 @@ struct LibraryOrganizationView: View {
     private func deleteCollectionActionTitle(for collection: LibraryOrganizationCollection) -> String {
         switch collection.type {
         case .label:
-            return "Delete Tag"
+            return String(localized: "Delete Tag")
         case .readingList:
-            return "Delete Reading List"
+            return String(localized: "Delete Reading List")
         }
     }
 
     private func deleteCollectionMessage(for collection: LibraryOrganizationCollection) -> String {
         switch collection.type {
         case .label:
-            return "This removes the tag and its assignments from the library database."
+            return String(localized: "This removes the tag and its assignments from the library database.")
         case .readingList:
-            return "This removes the reading list and its assigned comics from the library database."
+            return String(localized: "This removes the reading list and its assigned comics from the library database.")
         }
     }
 

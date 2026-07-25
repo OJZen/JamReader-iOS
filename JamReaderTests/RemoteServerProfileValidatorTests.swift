@@ -19,12 +19,12 @@ final class RemoteServerProfileValidatorTests: XCTestCase {
         XCTAssertEqual(
             RemoteServerProfileValidator().validate(profile).map(\.message),
             [
-                "A display name is required for the remote server.",
-                "Host cannot be empty.",
-                "Port must be between 1 and 65535.",
-                "Share name cannot be empty.",
-                "Username is required for this authentication mode.",
-                "A saved password is required for this remote server."
+                String(localized: "A display name is required for the remote server."),
+                String(localized: "Host cannot be empty."),
+                String(localized: "Port must be between 1 and 65535."),
+                String(localized: "Share name cannot be empty."),
+                String(localized: "Username is required for this authentication mode."),
+                String(localized: "A saved password is required for this remote server.")
             ]
         )
     }
@@ -44,8 +44,8 @@ final class RemoteServerProfileValidatorTests: XCTestCase {
         XCTAssertEqual(
             RemoteServerProfileValidator().validate(profile).map(\.message),
             [
-                "Host cannot be empty.",
-                "Enter a valid WebDAV host or URL."
+                String(localized: "Host cannot be empty."),
+                String(localized: "Enter a valid WebDAV host or URL.")
             ]
         )
     }

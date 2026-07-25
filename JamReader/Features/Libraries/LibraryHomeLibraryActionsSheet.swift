@@ -11,7 +11,7 @@ struct LibraryHomeLibraryActionsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Library", value: item.descriptor.name)
+                    LabeledContent("Library", value: item.descriptor.displayName)
                 }
 
                 Section("Manage") {
@@ -46,15 +46,17 @@ struct LibraryHomeLibraryActionsSheet: View {
     }
 
     private var removalActionTitle: String {
-        item.descriptor.kind.isManagedByApp ? "Delete from Device" : "Remove from App"
+        item.descriptor.kind.isManagedByApp
+            ? String(localized: "Delete from Device")
+            : String(localized: "Remove from App")
     }
 
     private var removalFootnote: String {
         if item.descriptor.kind.isManagedByApp {
-            return "Deletes this library and its files from this device."
+            return String(localized: "Deletes this library and its files from this device.")
         }
 
-        return "Removes the library from the app. Files stay in the original folder."
+        return String(localized: "Removes the library from the app. Files stay in the original folder.")
     }
 }
 
@@ -176,7 +178,7 @@ struct LibraryInfoSheet: View {
         NavigationStack {
             Form {
                 Section("Overview") {
-                    LabeledContent("Name", value: item.descriptor.name)
+                    LabeledContent("Name", value: item.descriptor.displayName)
                     LabeledContent("Type", value: item.descriptor.kind.title)
                     LabeledContent(
                         "Updated",
@@ -188,12 +190,17 @@ struct LibraryInfoSheet: View {
                     LabeledContent("Source", value: item.accessSnapshot.sourceStatus)
                     LabeledContent("Source Write", value: item.accessSnapshot.writeStatus)
                     LabeledContent("Local State", value: item.accessSnapshot.database.summaryLine)
-                    LabeledContent("Assets", value: item.accessSnapshot.metadataExists ? "Ready" : "Empty")
+                    LabeledContent(
+                        "Assets",
+                        value: item.accessSnapshot.metadataExists
+                            ? String(localized: "Ready")
+                            : String(localized: "Empty")
+                    )
                 }
 
                 if let maintenanceRecord = item.maintenanceRecord {
                     Section {
-                        LabeledContent("Last Action", value: maintenanceRecord.title)
+                        LabeledContent("Last Action", value: maintenanceRecord.localizedTitle)
                         LabeledContent("When", value: maintenanceRecord.formattedTimestampLine)
                     } header: {
                         Text("Maintenance")

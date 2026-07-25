@@ -100,14 +100,16 @@ struct RemoteComicCacheSummary: Hashable {
 
     var summaryText: String {
         if !hasCachedComics {
-            return hasOtherCacheData ? "Other cache data · \(otherCacheSizeText)" : "Cached data · \(sizeText)"
+            return hasOtherCacheData
+                ? String(localized: "Other cache data · \(otherCacheSizeText)")
+                : String(localized: "Cached data · \(sizeText)")
         }
 
         if fileCount == 1 {
-            return "1 cached comic · \(cachedComicSizeText)"
+            return String(localized: "1 cached comic · \(cachedComicSizeText)")
         }
 
-        return "\(fileCount) cached comics · \(cachedComicSizeText)"
+        return String(localized: "\(fileCount) cached comics · \(cachedComicSizeText)")
     }
 }
 
@@ -131,9 +133,9 @@ struct RemoteComicCachedAvailability: Hashable {
         case .unavailable:
             return nil
         case .current:
-            return "Offline Ready"
+            return String(localized: "Offline Ready")
         case .stale:
-            return "Older Local Copy"
+            return String(localized: "Older Local Copy")
         }
     }
 }

@@ -13,13 +13,13 @@ enum LibraryComicQuickFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:
-            return "All"
+            return String(localized: "All")
         case .unread:
-            return "Unread"
+            return String(localized: "Unread")
         case .favorites:
-            return "Favorites"
+            return String(localized: "Favorites")
         case .bookmarked:
-            return "Bookmarked"
+            return String(localized: "Bookmarked")
         }
     }
 

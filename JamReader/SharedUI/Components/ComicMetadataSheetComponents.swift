@@ -14,7 +14,7 @@ struct ComicMetadataOverviewContent: View {
             return []
         }
 
-        return [FormOverviewItem(title: "File", value: fileName)]
+        return [FormOverviewItem(title: String(localized: "File"), value: fileName)]
     }
 
     var body: some View {

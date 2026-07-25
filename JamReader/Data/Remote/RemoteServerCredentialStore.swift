@@ -9,9 +9,9 @@ enum RemoteServerCredentialStoreError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unexpectedStatus:
-            return "Saved credentials are unavailable. Open the server settings and save the password again."
+            return String(localized: "Saved credentials are unavailable. Open the server settings and save the password again.")
         case .invalidPasswordData:
-            return "Stored remote server credentials could not be decoded."
+            return String(localized: "Stored remote server credentials could not be decoded.")
         }
     }
 }

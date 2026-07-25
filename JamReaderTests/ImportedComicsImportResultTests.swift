@@ -49,7 +49,23 @@ final class ImportedComicsImportResultTests: XCTestCase {
         )
     }
 
+    func testCompletionMessagePreservesUserLibraryDisplayName() {
+        let result = makeResult(
+            importedDestinationName: LibraryDescriptor.defaultImportedComicsName,
+            importedDestinationDisplayName: "My Imported Comics",
+            importedComicCount: 1
+        )
+
+        XCTAssertEqual(result.importedDestinationName, LibraryDescriptor.defaultImportedComicsName)
+        XCTAssertEqual(
+            result.completionMessageLines(),
+            ["Imported 1 comic file into My Imported Comics."]
+        )
+    }
+
     private func makeResult(
+        importedDestinationName: String = "Imported Comics",
+        importedDestinationDisplayName: String = "Imported Comics",
         createdLibrary: Bool = false,
         importedComicCount: Int = 0,
         scanErrorMessage: String? = nil,
@@ -58,7 +74,8 @@ final class ImportedComicsImportResultTests: XCTestCase {
     ) -> ImportedComicsImportResult {
         ImportedComicsImportResult(
             importedDestinationID: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
-            importedDestinationName: "Imported Comics",
+            importedDestinationName: importedDestinationName,
+            importedDestinationDisplayName: importedDestinationDisplayName,
             createdLibrary: createdLibrary,
             importedComicCount: importedComicCount,
             scanSummary: nil,

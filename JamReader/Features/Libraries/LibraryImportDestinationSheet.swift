@@ -2,8 +2,8 @@ import Combine
 import SwiftUI
 
 enum ImportDestinationSheetCopy {
-    static let destinationFooter = "Imports are copied to the selected library."
-    static let remoteImportNotice = "Remote files download to the selected library on this device."
+    static let destinationFooter = String(localized: "Imports are copied to the selected library.")
+    static let remoteImportNotice = String(localized: "Remote files download to the selected library on this device.")
 }
 
 struct LibraryImportDestinationOptionRow: View {
@@ -254,7 +254,7 @@ final class LibraryImportDestinationSheetViewModel: ObservableObject {
         } catch {
             options = []
             alert = AppAlertState(
-                title: "Import Destinations Unavailable",
+                title: String(localized: "Import Destinations Unavailable"),
                 message: error.userFacingMessage
             )
         }
@@ -324,7 +324,7 @@ struct LibraryImportDestinationSheet: View {
         title: String,
         message: String? = nil,
         supplementaryNotice: String? = nil,
-        confirmLabel: String = "Use This Library",
+        confirmLabel: String = String(localized: "Use This Library"),
         dependencies: AppDependencies,
         preferredSelection: LibraryImportDestinationSelection? = nil,
         onSelect: @escaping (LibraryImportDestinationSelection) -> Void
@@ -356,7 +356,7 @@ struct LibraryImportDestinationSheet: View {
                     }
 
                     ImportSection(
-                        title: "Choose Destination",
+                        title: String(localized: "Choose Destination"),
                         footer: supplementaryNotice ?? ImportDestinationSheetCopy.destinationFooter
                     ) {
                         ForEach(viewModel.options) { option in

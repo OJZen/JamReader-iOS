@@ -231,8 +231,10 @@ struct BrowseHomeView: View {
             items.append(
                 BrowseHomeShortcutItem(
                     id: "saved-folders",
-                    title: "Saved Folders",
-                    subtitle: totalSavedFolderCount == 1 ? "1 saved" : "\(totalSavedFolderCount) saved",
+                    title: String(localized: "Saved Folders"),
+                    subtitle: totalSavedFolderCount == 1
+                        ? String(localized: "1 saved")
+                        : String(localized: "\(totalSavedFolderCount) saved"),
                     systemImage: "star.fill",
                     tint: .teal,
                     splitSelection: .savedFolders
@@ -244,8 +246,10 @@ struct BrowseHomeView: View {
             items.append(
                 BrowseHomeShortcutItem(
                     id: "offline-shelf",
-                    title: "Offline Shelf",
-                    subtitle: totalOfflineCopyCount == 1 ? "1 downloaded" : "\(totalOfflineCopyCount) downloaded",
+                    title: String(localized: "Offline Shelf"),
+                    subtitle: totalOfflineCopyCount == 1
+                        ? String(localized: "1 downloaded")
+                        : String(localized: "\(totalOfflineCopyCount) downloaded"),
                     systemImage: "arrow.down.circle.fill",
                     tint: .green,
                     splitSelection: .offlineShelf
@@ -477,9 +481,11 @@ private struct BrowseHomeEmptyState: View {
     var body: some View {
         EmptyStateView(
             systemImage: "server.rack",
-            title: "No Servers",
-            description: showsGuidance ? "Add a server to browse comics." : nil,
-            actionTitle: showsGuidance ? "Add Server" : nil,
+            title: String(localized: "No Servers"),
+            description: showsGuidance
+                ? String(localized: "Add a server to browse comics.")
+                : nil,
+            actionTitle: showsGuidance ? String(localized: "Add Server") : nil,
             action: showsGuidance ? onAddServer : nil
         )
     }
@@ -492,14 +498,16 @@ struct BrowseHomeDetailPlaceholder: View {
     var body: some View {
         ContentUnavailableView {
             Label(
-                hasServers ? "Select a Server" : "Add a Server",
+                hasServers
+                    ? String(localized: "Select a Server")
+                    : String(localized: "Add a Server"),
                 systemImage: "server.rack"
             )
         } description: {
             Text(
                 hasServers
-                    ? "Choose a server or shortcut."
-                    : "Add a server to browse comics."
+                    ? String(localized: "Choose a server or shortcut.")
+                    : String(localized: "Add a server to browse comics.")
             )
         } actions: {
             if !hasServers {

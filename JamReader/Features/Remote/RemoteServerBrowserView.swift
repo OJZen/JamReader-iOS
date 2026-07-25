@@ -136,7 +136,7 @@ struct RemoteServerBrowserView: View {
             }
             .alert(item: $viewModel.alert, content: browserAlert)
             .confirmationDialog(
-                pendingOfflineRemoval?.title ?? "Remove downloaded copies?",
+                pendingOfflineRemoval?.title ?? String(localized: "Remove downloaded copies?"),
                 isPresented: pendingOfflineRemovalDialogBinding,
                 titleVisibility: .visible
             ) {
@@ -270,7 +270,11 @@ struct RemoteServerBrowserView: View {
             } label: {
                 Image(systemName: displayMode == .list ? "square.grid.2x2" : "list.bullet")
             }
-            .accessibilityLabel(displayMode == .list ? "Show Grid" : "Show List")
+            .accessibilityLabel(
+                displayMode == .list
+                    ? String(localized: "Show Grid")
+                    : String(localized: "Show List")
+            )
 
             Menu {
                 ForEach(RemoteDirectorySortMode.allCases) { mode in
@@ -298,7 +302,9 @@ struct RemoteServerBrowserView: View {
                         viewModel.toggleCurrentFolderShortcut()
                     } label: {
                         Label(
-                            viewModel.isCurrentFolderSaved ? "Remove from Favorites" : "Add to Favorites",
+                            viewModel.isCurrentFolderSaved
+                                ? String(localized: "Remove from Favorites")
+                                : String(localized: "Add to Favorites"),
                             systemImage: viewModel.isCurrentFolderSaved ? "star.fill" : "star"
                         )
                     }
@@ -380,7 +386,7 @@ struct RemoteServerBrowserView: View {
                 title: request.destinationPickerTitle,
                 message: request.destinationPickerMessage,
                 supplementaryNotice: ImportDestinationSheetCopy.remoteImportNotice,
-                confirmLabel: "Import",
+                confirmLabel: String(localized: "Import"),
                 availableScopes: availableImportScopes(for: request),
                 defaultScope: defaultImportScope(for: request),
                 dependencies: dependencies,
@@ -398,23 +404,23 @@ struct RemoteServerBrowserView: View {
     private var listBody: some View {
         Group {
             if viewModel.isLoading {
-                LoadingStateView(message: "Connecting to Remote Library")
+                LoadingStateView(message: String(localized: "Connecting to Remote Library"))
                     .padding(.vertical, Spacing.lg)
             } else if viewModel.loadIssue != nil {
                 remoteErrorContent()
             } else if viewModel.items.isEmpty {
                 browserUnavailableContent(
-                    title: "No Remote Files",
+                    title: String(localized: "No Remote Files"),
                     systemImage: "folder",
                     description: emptyFolderDescription
                 )
             } else if !hasVisibleItems {
                 if isPreparingBrowserSnapshot {
-                    LoadingStateView(message: "Preparing Remote Library")
+                    LoadingStateView(message: String(localized: "Preparing Remote Library"))
                         .padding(.vertical, Spacing.lg)
                 } else {
                     browserUnavailableContent(
-                        title: "No Remote Files",
+                        title: String(localized: "No Remote Files"),
                         systemImage: "folder",
                         description: emptyFolderDescription
                     )
@@ -511,23 +517,23 @@ struct RemoteServerBrowserView: View {
     private var gridBody: some View {
         Group {
             if viewModel.isLoading {
-                LoadingStateView(message: "Connecting to Remote Library")
+                LoadingStateView(message: String(localized: "Connecting to Remote Library"))
                     .padding(.vertical, Spacing.lg)
             } else if viewModel.loadIssue != nil {
                 remoteErrorContent()
             } else if viewModel.items.isEmpty {
                 browserUnavailableContent(
-                    title: "No Remote Files",
+                    title: String(localized: "No Remote Files"),
                     systemImage: "folder",
                     description: emptyFolderDescription
                 )
             } else if !hasVisibleItems {
                 if isPreparingBrowserSnapshot {
-                    LoadingStateView(message: "Preparing Remote Library")
+                    LoadingStateView(message: String(localized: "Preparing Remote Library"))
                         .padding(.vertical, Spacing.lg)
                 } else {
                     browserUnavailableContent(
-                        title: "No Remote Files",
+                        title: String(localized: "No Remote Files"),
                         systemImage: "folder",
                         description: emptyFolderDescription
                     )
@@ -584,13 +590,13 @@ struct RemoteServerBrowserView: View {
 
         return ContentUnavailableView {
             Label(
-                loadIssue?.title ?? "Remote Folder Unavailable",
+                loadIssue?.title ?? String(localized: "Remote Folder Unavailable"),
                 systemImage: "wifi.exclamationmark"
             )
             .font(AppFont.title2())
             .foregroundStyle(Color.appDanger)
         } description: {
-            Text(loadIssue?.message ?? "This remote folder could not be opened.")
+            Text(loadIssue?.message ?? String(localized: "This remote folder could not be opened."))
                 .font(AppFont.callout())
                 .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)
@@ -714,7 +720,7 @@ struct RemoteServerBrowserView: View {
                 openDirectory(parentPath)
             } label: {
                 RemoteBrowserHeaderActionChip(
-                    title: "Up",
+                    title: String(localized: "Up"),
                     systemImage: "arrow.up.left",
                     tint: .blue
                 )
@@ -730,7 +736,7 @@ struct RemoteServerBrowserView: View {
                 openDirectory(viewModel.rootPath)
             } label: {
                 RemoteBrowserHeaderActionChip(
-                    title: "Root",
+                    title: String(localized: "Root"),
                     systemImage: "arrow.uturn.backward.circle",
                     tint: .teal
                 )
@@ -984,7 +990,7 @@ struct RemoteServerBrowserView: View {
     }
 
     private var emptyFolderDescription: String {
-        "No folders or supported comics in this location."
+        String(localized: "No folders or supported comics in this location.")
     }
 
     private func browserUnavailableContent(
@@ -1142,12 +1148,10 @@ struct RemoteServerBrowserView: View {
             sections.append(
                 RemoteBrowserListSectionModel(
                     kind: .directories,
-                    title: "Folders",
-                    metadataText: Self.metadataText(
-                        forCount: snapshot.directories.count,
-                        singular: "folder",
-                        plural: "folders"
-                    ),
+                    title: String(localized: "Folders"),
+                    metadataText: snapshot.directories.count == 1
+                        ? String(localized: "1 folder")
+                        : String(localized: "\(snapshot.directories.count) folders"),
                     footerText: nil,
                     items: snapshot.directories.map {
                         RemoteBrowserListRowModel(
@@ -1169,17 +1173,13 @@ struct RemoteServerBrowserView: View {
             }
 
             let comicMetadata = [
-                Self.metadataText(
-                    forCount: snapshot.comicFiles.count,
-                    singular: "comic",
-                    plural: "comics"
-                ),
+                snapshot.comicFiles.count == 1
+                    ? String(localized: "1 comic")
+                    : String(localized: "\(snapshot.comicFiles.count) comics"),
                 downloadedCopies > 0
-                    ? Self.metadataText(
-                        forCount: downloadedCopies,
-                        singular: "downloaded copy",
-                        plural: "downloaded copies"
-                    )
+                    ? (downloadedCopies == 1
+                        ? String(localized: "1 downloaded copy")
+                        : String(localized: "\(downloadedCopies) downloaded copies"))
                     : nil
             ]
                 .compactMap { $0 }
@@ -1188,7 +1188,7 @@ struct RemoteServerBrowserView: View {
             sections.append(
                 RemoteBrowserListSectionModel(
                     kind: .comics,
-                    title: "Comics",
+                    title: String(localized: "Comics"),
                     metadataText: comicMetadata.isEmpty ? nil : comicMetadata,
                     footerText: nil,
                     items: snapshot.comicFiles.map {
@@ -1210,8 +1210,8 @@ struct RemoteServerBrowserView: View {
                     title: "",
                     metadataText: nil,
                     footerText: snapshot.unsupportedFileCount == 1
-                        ? "1 unsupported file hidden."
-                        : "\(snapshot.unsupportedFileCount) unsupported files hidden.",
+                        ? String(localized: "1 unsupported file hidden.")
+                        : String(localized: "\(snapshot.unsupportedFileCount) unsupported files hidden."),
                     items: []
                 )
             )
@@ -1226,14 +1226,6 @@ struct RemoteServerBrowserView: View {
 
     nonisolated private static func itemIdentifier(for item: RemoteDirectoryItem) -> String {
         "\(item.serverID.uuidString)|\(item.providerKind.rawValue)|\(item.shareName)|\(item.cacheScopeKey)|\(item.path)"
-    }
-
-    nonisolated private static func metadataText(
-        forCount count: Int,
-        singular: String,
-        plural: String
-    ) -> String {
-        count == 1 ? "1 \(singular)" : "\(count) \(plural)"
     }
 
     private func startImportTask(
@@ -1257,8 +1249,8 @@ struct RemoteServerBrowserView: View {
         }
 
         viewModel.alert = AppAlertState(
-            title: "Import Already Running",
-            message: "Another remote import is already running in the app. Wait for it to finish or cancel it from the import banner."
+            title: String(localized: "Import Already Running"),
+            message: String(localized: "Another remote import is already running in the app. Wait for it to finish or cancel it from the import banner.")
         )
     }
 
@@ -1446,15 +1438,17 @@ struct RemoteServerBrowserView: View {
     }
 
     private var saveVisibleComicsButtonTitle: String {
-        "Save Visible Comics"
+        String(localized: "Save Visible Comics")
     }
 
     private var removeVisibleOfflineCopiesButtonTitle: String {
-        "Remove Downloaded Copies"
+        String(localized: "Remove Downloaded Copies")
     }
 
     private var importCurrentFolderButtonTitle: String {
-        supportsVisibleResultsImportScope ? "Import Results" : "Import This Folder"
+        supportsVisibleResultsImportScope
+            ? String(localized: "Import Results")
+            : String(localized: "Import This Folder")
     }
 
     private func availableImportScopes(for request: RemoteBrowserImportRequest) -> [RemoteDirectoryImportScope] {
@@ -1518,13 +1512,13 @@ struct RemoteServerBrowserView: View {
             return
         }
 
-        let noun = items.count == 1 ? "visible comic" : "visible comics"
-
         pendingOfflineRemoval = PendingRemoteOfflineRemoval(
             items: items,
             title: removeVisibleOfflineCopiesButtonTitle,
             buttonTitle: removeVisibleOfflineCopiesButtonTitle,
-            message: "Only the downloaded copies of the current \(noun) will be removed from this device. The remote server, saved folder, and reading progress stay intact."
+            message: items.count == 1
+                ? String(localized: "Only the downloaded copy of the current visible comic will be removed from this device. The remote server, saved folder, and reading progress stay intact.")
+                : String(localized: "Only the downloaded copies of the current visible comics will be removed from this device. The remote server, saved folder, and reading progress stay intact.")
         )
     }
 
@@ -1626,18 +1620,18 @@ enum RemoteBrowserImportRequest: Identifiable {
     var destinationPickerTitle: String {
         switch self {
         case .currentFolder:
-            return "Import Folder"
+            return String(localized: "Import Folder")
         case .directory:
-            return "Import Directory"
+            return String(localized: "Import Directory")
         case .comic:
-            return "Import Comic"
+            return String(localized: "Import Comic")
         }
     }
 
     var destinationPickerMessage: String {
         switch self {
         case .currentFolder:
-            return "Current folder"
+            return String(localized: "Current folder")
         case .directory(let item):
             return item.name
         case .comic(let item):
@@ -1695,7 +1689,9 @@ struct RemoteBrowserItemActionMenuContent: View {
                 if let onOpenOffline {
                     Button(action: onOpenOffline) {
                         Label(
-                            cacheAvailability.kind == .stale ? "Open Older Downloaded Copy" : "Open Downloaded Copy",
+                            cacheAvailability.kind == .stale
+                                ? String(localized: "Open Older Downloaded Copy")
+                                : String(localized: "Open Downloaded Copy"),
                             systemImage: "arrow.down.circle"
                         )
                     }
@@ -1719,7 +1715,9 @@ struct RemoteBrowserItemActionMenuContent: View {
             Section("Library") {
                 Button(action: onImport) {
                     Label(
-                        item.isDirectory ? "Import Folder to Library" : "Import to Library",
+                        item.isDirectory
+                            ? String(localized: "Import Folder to Library")
+                            : String(localized: "Import to Library"),
                         systemImage: "square.and.arrow.down.on.square"
                     )
                 }
@@ -1730,11 +1728,11 @@ struct RemoteBrowserItemActionMenuContent: View {
     private var saveOfflineTitle: String {
         switch cacheAvailability.kind {
         case .unavailable:
-            return "Save for Offline"
+            return String(localized: "Save for Offline")
         case .current:
-            return "Refresh Downloaded Copy"
+            return String(localized: "Refresh Downloaded Copy")
         case .stale:
-            return "Update Downloaded Copy"
+            return String(localized: "Update Downloaded Copy")
         }
     }
 
