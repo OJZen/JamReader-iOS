@@ -3,7 +3,8 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_PATH="$PROJECT_ROOT/JamReader.xcodeproj"
-DERIVED_DATA_PATH="/tmp/jamreader-derived-data"
+BUILD_ARTIFACTS_ROOT="${CODEX_BUILD_ARTIFACTS_ROOT:-$PROJECT_ROOT/.xcodebuild}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$BUILD_ARTIFACTS_ROOT/build-ios}"
 MUPDF_ROOT="${MUPDF_ROOT:-$PROJECT_ROOT/.mupdf/mupdf-1.27.2}"
 MUPDF_LIB_DIR="$MUPDF_ROOT/build/ios-arm64"
 MUPDF_XCODE_ARGS=()

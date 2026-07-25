@@ -20,6 +20,8 @@ xcuserdata/
 
 # Local test outputs
 /tmp/
+__pycache__/
+*.py[cod]
 
 # Local large sample archives (kept locally for manual testing)
 res/*.zip

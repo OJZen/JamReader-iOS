@@ -12,4 +12,7 @@ echo "[check_project_static_guards] Running supported format policy guard..."
 echo "[check_project_static_guards] Running logging hygiene guard..."
 "$PROJECT_ROOT/scripts/check_logging_hygiene.sh"
 
+echo "[check_project_static_guards] Running localization catalog guard..."
+python3 "$PROJECT_ROOT/scripts/check_localizations.py"
+
 echo "[check_project_static_guards] OK: all static guards passed."
