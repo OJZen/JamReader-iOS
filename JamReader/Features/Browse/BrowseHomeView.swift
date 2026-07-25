@@ -93,7 +93,7 @@ struct BrowseHomeView: View {
                         quickAccessSection
                     }
                 }
-                .listStyle(.insetGrouped)
+                .adaptiveRootListStyle(usesSidebarStyle: usesPersistentSelection)
             }
         }
     }
@@ -117,6 +117,10 @@ struct BrowseHomeView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .persistentSidebarSelection(
+                    isSelected: splitSelection == .server(profile.id),
+                    isEnabled: usesPersistentSelection
+                )
                 .overlay(alignment: .trailing) {
                     if usesPersistentSelection {
                         Menu {
@@ -167,6 +171,10 @@ struct BrowseHomeView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .persistentSidebarSelection(
+                    isSelected: splitSelection == item.splitSelection,
+                    isEnabled: usesPersistentSelection
+                )
             }
         } header: {
             Text("Shortcuts")
@@ -412,14 +420,8 @@ private struct BrowseHomeServerRow: View {
             }
         }
         .padding(.vertical, Spacing.xxs)
-        .padding(.horizontal, isSelected ? Spacing.xs : 0)
         .padding(.trailing, trailingAccessoryReservedWidth)
-        .background(
-            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
-            in: RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-        )
         .contentShape(Rectangle())
-        .hoverEffect(.highlight)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
@@ -463,13 +465,7 @@ private struct BrowseHomeQuickAccessRow: View {
             }
         }
         .padding(.vertical, Spacing.xxs)
-        .padding(.horizontal, isSelected ? Spacing.xs : 0)
-        .background(
-            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
-            in: RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-        )
         .contentShape(Rectangle())
-        .hoverEffect(.highlight)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

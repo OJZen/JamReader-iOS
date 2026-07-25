@@ -42,11 +42,8 @@ struct SettingsSidebarView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .pointerHoverEffect()
-                .listRowBackground(
-                    pane == selectedPane
-                        ? Color.accentColor.opacity(0.12)
-                        : Color.clear
+                .persistentSidebarSelection(
+                    isSelected: pane == selectedPane
                 )
             }
         }

@@ -119,7 +119,7 @@ struct LibraryHomeView: View {
         List {
             librariesSection
         }
-        .listStyle(.insetGrouped)
+        .adaptiveRootListStyle(usesSidebarStyle: usesPersistentSelection)
     }
 
     @ToolbarContentBuilder
@@ -349,6 +349,10 @@ struct LibraryHomeView: View {
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+                .persistentSidebarSelection(
+                    isSelected: selectedLibraryID == item.id,
+                    isEnabled: usesPersistentSelection
+                )
                 .overlay(alignment: .trailing) {
                     if usesPersistentSelection {
                         libraryManagementMenu(for: item)
@@ -610,14 +614,8 @@ private struct LibraryRowView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, Spacing.xxs)
-        .padding(.horizontal, isSelected ? Spacing.xs : 0)
         .padding(.trailing, trailingAccessoryReservedWidth)
-        .background(
-            isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
-            in: RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-        )
         .contentShape(Rectangle())
-        .hoverEffect(.highlight)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
