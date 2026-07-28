@@ -42,6 +42,54 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     }
 }
 
+enum ReaderSpreadWillDisplayAction: Equatable {
+    case preserveCurrentViewport
+    case prepareForPresentation
+    case prewarmAnimatedTarget
+
+    static func resolve(
+        displayedSpreadIndex: Int,
+        currentSpreadIndex: Int,
+        animatedTransitionTargetSpreadIndex: Int?
+    ) -> Self {
+        if displayedSpreadIndex == animatedTransitionTargetSpreadIndex {
+            return .prewarmAnimatedTarget
+        }
+
+        return displayedSpreadIndex == currentSpreadIndex
+            ? .preserveCurrentViewport
+            : .prepareForPresentation
+    }
+}
+
+enum ReaderViewportLayoutAction: Equatable {
+    case waitForTargetViewport
+    case preserveViewport
+    case resetViewport
+
+    static func resolve(
+        currentSize: CGSize,
+        previousSize: CGSize,
+        targetSize: CGSize?,
+        resetRequired: Bool
+    ) -> Self {
+        guard currentSize.width > 0, currentSize.height > 0 else {
+            return .waitForTargetViewport
+        }
+
+        if let targetSize, !sizesMatch(currentSize, targetSize) {
+            return .waitForTargetViewport
+        }
+
+        let viewportChanged = previousSize != .zero && !sizesMatch(currentSize, previousSize)
+        return resetRequired || viewportChanged ? .resetViewport : .preserveViewport
+    }
+
+    static func sizesMatch(_ lhs: CGSize, _ rhs: CGSize) -> Bool {
+        abs(lhs.width - rhs.width) <= 0.5 && abs(lhs.height - rhs.height) <= 0.5
+    }
+}
+
 @MainActor
 final class ReaderPagedCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     var onPageChanged: (Int) -> Void
@@ -88,6 +136,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     private var currentPageIndex: Int
     private var currentSpreadIndex: Int
     private var lastViewportSize: CGSize = .zero
+    private var pageViewportSize: CGSize = .zero
     private var pendingScrollSpreadIndex: Int?
     private var staleRequestedPageIndexToIgnore: Int?
     private var lastInteractionBeganUptimeNanoseconds: UInt64?
@@ -181,7 +230,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
 
         if lastViewportSize != viewportSize {
             lastViewportSize = viewportSize
-            flowLayout.itemSize = pageItemSize(for: viewportSize)
+            let itemSize = pageItemSize(for: viewportSize)
+            pageViewportSize = itemSize
+            synchronizeCachedControllerViewports(to: itemSize)
+            flowLayout.itemSize = itemSize
             flowLayout.invalidateLayout()
             collectionView.collectionViewLayout.invalidateLayout()
             UIView.performWithoutAnimation {
@@ -197,7 +249,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         super.viewWillTransition(to: size, with: coordinator)
         isViewportTransitionInFlight = true
         coordinator.animate(alongsideTransition: { _ in
-            self.flowLayout.itemSize = self.pageItemSize(for: size)
+            let itemSize = self.pageItemSize(for: size)
+            self.pageViewportSize = itemSize
+            self.synchronizeCachedControllerViewports(to: itemSize)
+            self.flowLayout.itemSize = itemSize
             self.flowLayout.invalidateLayout()
             self.collectionView.collectionViewLayout.invalidateLayout()
             UIView.performWithoutAnimation {
@@ -219,6 +274,12 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             width: max(viewportSize.width, 1),
             height: max(viewportSize.height - 1, 1)
         )
+    }
+
+    private func synchronizeCachedControllerViewports(to size: CGSize) {
+        for controller in controllerCache.values {
+            controller.requireViewportSize(size)
+        }
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -330,6 +391,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         cell.setHostedView(controller.view)
+        cell.layoutHostedViewIfNeeded()
         return cell
     }
 
@@ -340,11 +402,19 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         cell.setHostedView(controller.view)
-        if animatedTransitionTargetSpreadIndex == indexPath.item {
+        cell.layoutHostedViewIfNeeded()
+        switch ReaderSpreadWillDisplayAction.resolve(
+            displayedSpreadIndex: indexPath.item,
+            currentSpreadIndex: currentSpreadIndex,
+            animatedTransitionTargetSpreadIndex: animatedTransitionTargetSpreadIndex
+        ) {
+        case .preserveCurrentViewport:
+            controller.refreshHostedLayout()
+        case .prepareForPresentation:
+            controller.prepareForPresentation()
+        case .prewarmAnimatedTarget:
             ReaderPerformanceTrace.log("willDisplay spread=\(indexPath.item) using prewarm during animation")
             controller.prewarmForUpcomingPresentation()
-        } else {
-            controller.prepareForPresentation()
         }
     }
 
@@ -503,7 +573,8 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         cell.setHostedView(controller.view)
-        controller.prepareForPresentation()
+        cell.layoutHostedViewIfNeeded()
+        controller.refreshHostedLayout()
     }
 
     private func controller(forSpreadIndex spreadIndex: Int) -> ComicImageSpreadViewController? {
@@ -530,6 +601,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
         controller.onInteractionBegan = { [weak self, spreadIndex] in
             self?.handleInteractionBegan(on: spreadIndex)
+        }
+        if pageViewportSize.width > 0, pageViewportSize.height > 0 {
+            controller.requireViewportSize(pageViewportSize)
         }
         addChild(controller)
         controller.didMove(toParent: self)
@@ -784,6 +858,12 @@ private final class ReaderPagedCollectionViewCell: UICollectionViewCell {
         }
         hostedView = nil
     }
+
+    func layoutHostedViewIfNeeded() {
+        contentView.setNeedsLayout()
+        contentView.layoutIfNeeded()
+        hostedView?.layoutIfNeeded()
+    }
 }
 
 private struct LoadedComicPage: @unchecked Sendable {
@@ -808,6 +888,7 @@ private final class ComicImageSpreadViewController: UIViewController {
     private var hasStartedLoading = false
     private var loadTask: Task<Void, Never>?
     private var lastViewportSize: CGSize = .zero
+    private var targetViewportSize: CGSize?
     private var needsViewportResetOnNextLayout = true
     private let previewNamespace: String
     private var previewObserver: NSObjectProtocol?
@@ -851,23 +932,13 @@ private final class ComicImageSpreadViewController: UIViewController {
         loadImagesIfNeeded()
     }
 
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        needsViewportResetOnNextLayout = true
-    }
-
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
         zoomablePageView.tapEdgeRatio = preferredTapEdgeRatio()
 
         let viewportSize = zoomablePageView.bounds.size
-        let viewportDidChange = lastViewportSize != .zero && !lastViewportSize.equalTo(viewportSize)
-        lastViewportSize = viewportSize
-        let shouldResetViewport = viewportDidChange || needsViewportResetOnNextLayout
-        if layoutLoadedPages(resetZoomScale: shouldResetViewport), shouldResetViewport {
-            needsViewportResetOnNextLayout = false
-        }
+        synchronizeLoadedPages(for: viewportSize)
     }
 
     private func configureSubviews() {
@@ -987,9 +1058,10 @@ private final class ComicImageSpreadViewController: UIViewController {
                 self.loadedPages = loadedPages
                 self.messageLabel.isHidden = true
                 self.configureImageViews(with: loadedPages)
-                if self.layoutLoadedPages(resetZoomScale: shouldResetZoomScale) {
-                    self.needsViewportResetOnNextLayout = false
-                }
+                self.synchronizeLoadedPages(
+                    for: self.zoomablePageView.bounds.size,
+                    forceReset: shouldResetZoomScale
+                )
             case .failure(let error):
                 ReaderPerformanceTrace.log(
                     "spread=\(self.spreadIndex) loadFailure elapsed=\(ReaderPerformanceTrace.format(nanoseconds: DispatchTime.now().uptimeNanoseconds - loadStart))ms error=\(AppLogSanitizer.errorDescription(error))"
@@ -1058,9 +1130,10 @@ private final class ComicImageSpreadViewController: UIViewController {
         messageLabel.isHidden = true
         loadedPages = previewPages
         configureImageViews(with: previewPages)
-        if layoutLoadedPages(resetZoomScale: resetZoomScale) {
-            needsViewportResetOnNextLayout = false
-        }
+        synchronizeLoadedPages(
+            for: zoomablePageView.bounds.size,
+            forceReset: resetZoomScale
+        )
     }
 
     private func configureImageViews(with loadedPages: [LoadedComicPage]) {
@@ -1071,6 +1144,38 @@ private final class ComicImageSpreadViewController: UIViewController {
             imageView.backgroundColor = .black
             rotationContainerView.addSubview(imageView)
             return imageView
+        }
+    }
+
+    @discardableResult
+    private func synchronizeLoadedPages(
+        for viewportSize: CGSize,
+        forceReset: Bool = false
+    ) -> Bool {
+        let action = ReaderViewportLayoutAction.resolve(
+            currentSize: viewportSize,
+            previousSize: lastViewportSize,
+            targetSize: targetViewportSize,
+            resetRequired: needsViewportResetOnNextLayout || forceReset
+        )
+        lastViewportSize = viewportSize
+
+        switch action {
+        case .waitForTargetViewport:
+            return false
+        case .preserveViewport:
+            return layoutLoadedPages(resetZoomScale: false)
+        case .resetViewport:
+            guard layoutLoadedPages(resetZoomScale: true) else {
+                return false
+            }
+
+            needsViewportResetOnNextLayout = false
+            if let targetViewportSize,
+               ReaderViewportLayoutAction.sizesMatch(viewportSize, targetViewportSize) {
+                self.targetViewportSize = nil
+            }
+            return true
         }
     }
 
@@ -1137,15 +1242,44 @@ private final class ComicImageSpreadViewController: UIViewController {
         messageLabel.isHidden = false
     }
 
+    func requireViewportSize(_ size: CGSize) {
+        guard size.width > 0, size.height > 0 else {
+            return
+        }
+
+        if let targetViewportSize,
+           ReaderViewportLayoutAction.sizesMatch(targetViewportSize, size) {
+            return
+        }
+        if targetViewportSize == nil,
+           !needsViewportResetOnNextLayout,
+           ReaderViewportLayoutAction.sizesMatch(lastViewportSize, size) {
+            return
+        }
+
+        targetViewportSize = size
+        needsViewportResetOnNextLayout = true
+
+        guard let loadedView = viewIfLoaded else {
+            return
+        }
+
+        // Stage detached pages at the new size without forcing every cached page
+        // to relayout on each live-resize tick. Prewarm or hosting finishes it.
+        if loadedView.superview == nil {
+            loadedView.bounds = CGRect(origin: .zero, size: size)
+        }
+        loadedView.setNeedsLayout()
+    }
+
     func restorePreferredViewportState() {
         guard !loadedPages.isEmpty else {
             return
         }
 
         needsViewportResetOnNextLayout = true
-        if layoutLoadedPages(resetZoomScale: true) {
-            needsViewportResetOnNextLayout = false
-        } else {
+        if !synchronizeLoadedPages(for: zoomablePageView.bounds.size),
+           targetViewportSize == nil {
             zoomablePageView.restorePreferredViewportState()
         }
     }
@@ -1155,22 +1289,23 @@ private final class ComicImageSpreadViewController: UIViewController {
             "spread=\(spreadIndex) prepareForPresentation loadedPages=\(loadedPages.count)"
         ) {
             loadViewIfNeeded()
-            view.setNeedsLayout()
+            synchronizeViewportIfNeeded()
 
             guard !loadedPages.isEmpty else {
                 onZoomStateChanged?(false)
                 return
             }
+        }
+    }
 
+    // Re-hosting can follow a canceled page swipe, so do not treat user zoom as stale.
+    func refreshHostedLayout() {
+        ReaderPerformanceTrace.measure(
+            "spread=\(spreadIndex) refreshHostedLayout loadedPages=\(loadedPages.count)"
+        ) {
+            loadViewIfNeeded()
+            view.setNeedsLayout()
             view.layoutIfNeeded()
-            let shouldResetViewport = needsViewportResetOnNextLayout || !zoomablePageView.isAtPreferredZoom
-            guard shouldResetViewport else {
-                return
-            }
-
-            if layoutLoadedPages(resetZoomScale: true) {
-                needsViewportResetOnNextLayout = false
-            }
         }
     }
 
@@ -1179,22 +1314,27 @@ private final class ComicImageSpreadViewController: UIViewController {
             "spread=\(spreadIndex) prewarmForUpcomingPresentation loadedPages=\(loadedPages.count)"
         ) {
             loadViewIfNeeded()
+            synchronizeViewportIfNeeded()
             guard !loadedPages.isEmpty else {
                 return
             }
+        }
+    }
 
-            view.setNeedsLayout()
-            view.layoutIfNeeded()
+    private func synchronizeViewportIfNeeded() {
+        guard targetViewportSize != nil || needsViewportResetOnNextLayout else {
+            return
+        }
 
-            guard zoomablePageView.bounds.width > 0,
-                  zoomablePageView.bounds.height > 0 else {
-                needsViewportResetOnNextLayout = true
-                return
-            }
+        if view.superview == nil, let targetViewportSize {
+            view.bounds = CGRect(origin: .zero, size: targetViewportSize)
+        }
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
 
-            if layoutLoadedPages(resetZoomScale: true) {
-                needsViewportResetOnNextLayout = false
-            }
+        if !loadedPages.isEmpty,
+           targetViewportSize != nil || needsViewportResetOnNextLayout {
+            synchronizeLoadedPages(for: zoomablePageView.bounds.size)
         }
     }
 
