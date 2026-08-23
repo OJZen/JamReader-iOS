@@ -1,16 +1,12 @@
-# Native Library Static Validation Checklist
+# Native Library Validation Checklist
 
-Use this checklist after changes to the app-owned library database layer when no XCTest target is available.
+Use this focused supplement after changes to the app-owned library database, indexing, import, or removal paths. Build and test commands live only in `development-workflow.md`.
 
-## Build
+## Automated Baseline
 
-- Run:
-
-```bash
-xcodebuild -project JamReader.xcodeproj -scheme JamReader -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath .xcodebuild build
-```
-
-- Expect `BUILD SUCCEEDED`.
+- Run the relevant library tests, normally including `LibraryScannerDatabaseTests`, `LibraryComicDeletionTransactionTests`, `LibraryComicRemovalServiceTests`, and `LibraryListViewModelPersistenceTests`.
+- Run the project static guards and generic iOS build from `development-workflow.md`.
+- Add a regression test for every fixed persistence, isolation, rollback, or deletion bug.
 
 ## Legacy Compatibility Sweep
 
@@ -27,11 +23,12 @@ rg -n "library\\.ydb|\\.jamreaderlibrary|storageMode|Desktop Compatible|Browse O
 - Run:
 
 ```bash
-rg -n "WHERE id = \\?|DELETE FROM [a-z_]+ WHERE id = \\?|UPDATE [a-z_]+.*WHERE id = \\?" JamReader/Data/Libraries/NativeLibraryState.swift
+rg -n "WHERE id = \\?|DELETE FROM [a-z_]+ WHERE id = \\?|UPDATE [a-z_]+.*WHERE id = \\?" JamReader/Data/Libraries
 ```
 
-- Verify mutating SQL in `NativeLibraryState.swift` is scoped with `library_id`.
-- Verify helper queries that intentionally use raw `id` are read-only and validated by active library context.
+- Public repository mutations must validate the `libraryID` carried by the contextual database URL.
+- A private indexer may mutate by raw row ID only when that ID came from the same library-scoped snapshot and transaction; document and test any new exception.
+- Verify comic, folder, tag, and reading-list relationships cannot cross library boundaries.
 
 ## Foreign Key Safety
 

@@ -18,41 +18,15 @@ JamReader is a native comic reader for iPhone and iPad with local, SMB, and WebD
 
 ## Project Status
 
-This project is in late-stage active development. The core reading and library flows are already runnable, with the current focus on polish, stability, and final UX refinement.
+The core local-library, remote-browsing, and reading flows are implemented. Ongoing work prioritizes reliability, performance, and native iPhone/iPad UX.
 
-## Build
+## Development
 
-Open in Xcode:
+Open `JamReader.xcodeproj` in Xcode. Canonical build, test, validation, artifact-location, and MuPDF instructions live in [the development workflow](docs/development-workflow.md).
 
-```bash
-open JamReader.xcodeproj
-```
+## Developer Context
 
-CLI build:
-
-```bash
-./scripts/build_ios.sh
-```
-
-`scripts/build_ios.sh` auto-links MuPDF when an iPhoneOS arm64 build is available
-at `.mupdf/mupdf-1.27.2`, or at the path provided by `MUPDF_ROOT`. Without that
-local artifact the app still builds, but PDF reader support falls back to the
-"MuPDF engine is not linked" message.
-
-Project static guards:
-
-```bash
-./scripts/check_project_static_guards.sh
-```
-
-The guard runner executes the gesture architecture, supported format policy, and logging hygiene checks. Individual scripts are also available when narrowing a failure:
-
-```bash
-./scripts/check_no_swiftui_gestures.sh
-./scripts/check_supported_formats_consistency.sh
-./scripts/check_logging_hygiene.sh
-```
-
-## Maintenance Notes
-
-- [Maintenance pitfalls and regression checklist](docs/maintenance-pitfalls.md)
+- [Agent entry point](AGENTS.md)
+- [Documentation index](docs/README.md)
+- [Current architecture and data flows](docs/project-context.md)
+- [Build, test, and repository workflow](docs/development-workflow.md)

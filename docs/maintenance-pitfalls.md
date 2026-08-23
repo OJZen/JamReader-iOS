@@ -1,6 +1,6 @@
 # JamReader 维护踩坑记录
 
-更新时间：2026-05-15
+更新时间：2026-08-23
 
 这份文档记录项目重构和真机调试过程中反复踩过的坑。目标不是描述所有实现细节，而是让后续维护者在遇到类似问题时先检查这些高风险点，避免继续叠补丁。
 
@@ -11,7 +11,7 @@
 - 远程缓存、导入缓存、缩略图缓存、数据库记录必须成对维护。只删文件不删记录，或者只删记录不删文件，都会制造“显示已缓存但打不开”这类问题。
 - SwiftUI 外层负责业务和导航，UIKit 层负责高频列表、阅读器页面、手势、缩略图列表和复杂转场。不要把手势和 viewport 状态分散到多个 SwiftUI 生命周期回调里。
 - 真机问题优先相信现象。iPadOS 后台恢复、旋转、sheet 手势、SMB/WebDAV 网络行为经常和模拟器不同。
-- 维护文档、`.github` 里的 AI 指令、README、历史归档文档不能互相矛盾。AI 指令如果还描述旧架构，会比普通文档更容易制造回归。
+- 当前文档、`.github` 里的 AI 指令和 README 不能互相矛盾。过时计划和交付稿应删除，由 Git 保留历史。
 
 ## 2. 原生库数据库
 
@@ -101,13 +101,13 @@ rg -n "WHERE id = \\?|DELETE FROM [a-z_]+ WHERE id = \\?|UPDATE [a-z_]+.*WHERE i
 
 - `Application Support/JamReader`、`Caches/JamReader` 这类持久化目录。
 - bundle id、显示名、scheme、日志 label、UserDefaults key。
-- README、`.github/copilot-instructions.md`、历史设计文档、检查脚本。
+- README、`.github/copilot-instructions.md`、`docs/README.md`、检查脚本。
 
 维护要求：
 
 - 不要因为改名就迁移或删除用户数据，除非明确设计了迁移流程。
 - 新增持久化路径时使用统一 helper，不要手写旧目录名。
-- 历史归档文档可以保留历史说明，但当前架构说明和 AI 指令必须以 App 自管数据库为准。
+- 当前架构说明和 AI 指令必须以 App 自管数据库为准；已失去决策价值的迁移或设计计划不要继续留在工作树中。
 
 ## 3. 导入链路
 
@@ -354,6 +354,12 @@ App 进入后台时可以保存进度、清理图片内存缓存，但不能释�
 - cell/page reuse 时是否重置了 zoomScale。
 - `contentInset`、`contentOffset` 是否在 imageView frame 确定前写入。
 - 是否存在延迟布局覆盖了初始化值。
+- 取消一次未完成的翻页后，当前页重新挂载时必须保留用户缩放，不能按“新页面”重置。
+
+现有保护入口：
+
+- `ReaderSpreadWillDisplayActionTests` 覆盖取消翻页返回当前页时保留 viewport。
+- `ReaderViewportLayoutActionTests` 覆盖目标 viewport 到达前等待、真实尺寸变化后重置、尺寸不变时保留缩放。
 
 ### 6.2 竖屏切横屏错乱，先查窗口 bounds 和容器重建
 
@@ -362,8 +368,10 @@ App 进入后台时可以保存进度、清理图片内存缓存，但不能释�
 维护要求：
 
 - iPad multitasking/旋转不要使用 `UIScreen.main.bounds` 作为真实 viewport。
-- 优先用当前 key window bounds 或 GeometryReader 实际 size。
-- 旋转期间允许短暂隐藏/重建内容容器，等 bounds 稳定后恢复。
+- 优先使用当前 reader/collection view 的实际 bounds，而不是全局屏幕尺寸。
+- viewport 变化时通过 `synchronizeCachedControllerViewports(to:)` 更新全部缓存页面，不能只更新当前页。
+- 页面在目标 viewport 到达前应等待；只有真实尺寸变化才重置布局，尺寸未变时保留用户缩放。
+- 不要为了旋转重建 reader session、document 或 source lease。
 - 横屏打开正常但竖屏切横屏错乱时，重点查旋转生命周期，不是文档加载。
 
 轻微闪一下可以接受；露出底层列表或出现半屏黑屏不可接受。
@@ -554,15 +562,7 @@ iOS 设置里看到的 App 占用和 app 自己统计差很多时，通常是只
 
 ## 11. 漫画格式和封面
 
-当前 README 声明支持：
-
-- image folders
-- `CBZ / ZIP`
-- `CBR / RAR`
-- `CB7 / 7Z / ARJ`
-- `CBT / TAR`
-- `PDF` when MuPDF is linked into the build
-- `EPUB`
+运行时扩展名策略由 `SupportedComicFormats` 负责，产品能力列表由 README 负责；本节只记录容易回归的格式行为。
 
 维护注意：
 
@@ -571,21 +571,13 @@ iOS 设置里看到的 App 占用和 app 自己统计差很多时，通常是只
 - PDF 缩略图使用 CoreGraphics 本地渲染，不依赖 reader 引擎。
 - PDF 在远程预热路径要保守。
 - EPUB/PDF 通过统一 reader 打开，但不要假设它们和图片序列共享所有 viewport 行为；MuPDF 渲染页也要保留文档语义。
-- `scripts/build_ios.sh` 会在 `.mupdf/mupdf-1.27.2` 或 `MUPDF_ROOT` 下发现 iPhoneOS arm64 MuPDF 产物时自动链接；没有该产物时构建仍会成功，但 PDF 阅读器会显示 MuPDF 未链接。
 - 同名图片封面优先于压缩包第一页。
 
 ## 12. 最小回归检查清单
 
 每次改动远程、导入、阅读器或缓存后，至少跑这些检查。
 
-静态检查：
-
-```bash
-git diff --check
-./scripts/check_no_swiftui_gestures.sh
-./scripts/check_supported_formats_consistency.sh
-xcodebuild -project JamReader.xcodeproj -scheme JamReader -destination 'generic/platform=iOS' -derivedDataPath .xcodebuild build
-```
+自动验证以 `docs/development-workflow.md` 的变更类型矩阵和命令为准。本节只补充高风险场景的人工检查，不复制容易过时的构建参数。
 
 本地库：
 
