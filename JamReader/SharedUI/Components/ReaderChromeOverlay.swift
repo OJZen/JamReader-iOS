@@ -628,19 +628,22 @@ private struct ReaderThumbnailScrubber: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         LazyHStack(spacing: layout.itemSpacing) {
                             ForEach(0..<pageCount, id: \.self) { pageIndex in
-                                ReaderThumbnailScrubberItem(
-                                    document: document,
-                                    pageIndex: pageIndex,
-                                    viewportWidth: viewportWidth,
-                                    coordinateSpaceName: coordinateSpaceName,
-                                    layout: layout,
-                                    isFocused: pageIndex == coordinator.focusedPageIndex
-                                )
-                                .id(pageIndex)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
+                                Button {
                                     coordinator.commitTap(on: pageIndex)
+                                } label: {
+                                    ReaderThumbnailScrubberItem(
+                                        document: document,
+                                        pageIndex: pageIndex,
+                                        viewportWidth: viewportWidth,
+                                        coordinateSpaceName: coordinateSpaceName,
+                                        layout: layout,
+                                        isFocused: pageIndex == coordinator.focusedPageIndex
+                                    )
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(Text("Page \(pageIndex + 1)"))
+                                .id(pageIndex)
                                 .background {
                                     GeometryReader { itemProxy in
                                         Color.clear.preference(

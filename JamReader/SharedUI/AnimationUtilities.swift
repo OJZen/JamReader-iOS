@@ -88,33 +88,3 @@ extension View {
             .animation(AppAnimation.standard, value: isLoading)
     }
 }
-
-// MARK: - Haptic-Enhanced Tap
-
-enum HapticStyle {
-    case light, medium, success, warning, error, selection
-
-    func fire() {
-        switch self {
-        case .light:     AppHaptics.light()
-        case .medium:    AppHaptics.medium()
-        case .success:   AppHaptics.success()
-        case .warning:   AppHaptics.warning()
-        case .error:     AppHaptics.error()
-        case .selection: AppHaptics.selection()
-        }
-    }
-}
-
-extension View {
-    /// Adds a tap gesture that triggers haptic feedback alongside the action.
-    func onTapWithHaptic(
-        _ style: HapticStyle = .light,
-        action: @escaping () -> Void
-    ) -> some View {
-        self.onTapGesture {
-            style.fire()
-            action()
-        }
-    }
-}
