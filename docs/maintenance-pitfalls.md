@@ -276,6 +276,7 @@ WebDAV/SMB 曾出现“ZIP 打不开”，后来确认是旧缓存损坏或旧�
 - 本地库、最近阅读、远程缓存、远程流式、完整下载后打开都走同一个 `ComicReaderView`。
 - 远程进度可以继续写 JSON，但只能通过统一 state store adapter 访问。
 - 不要新增远程专用 reader shell 来单独维护 page/layout/bookmark/progress。
+- 阅读布局默认值由 `ReaderLayoutPreferencesStore` 全局共享；不要再按漫画类型拆分设置入口、持久化 key 或运行时选择分支。
 
 ### 5.2 Opening Comic 卡住但下滑时显示图片，是层级或状态发布问题
 
@@ -449,6 +450,7 @@ iPadOS 后台恢复后曾出现 tab 栏多出空白项。修复 root tabs 是必
 - 缩略图、元数据、页码跳转等 sheet 关闭只影响 sheet 自己。
 - reader 关闭必须走 reader presentation coordinator 的明确路径。
 - `dismiss()`、`onDisappear`、interactive sheet drag 不应直接清空当前 reader request。
+- UIKit presenter 中的 SwiftUI sheet 属于独立 hosting tree；需要即时反馈的控件必须在 sheet 内观察状态 owner，不能只传入打开瞬间的值快照。
 - 对第二次打开 sheet 做真机回归测试。
 
 ## 8. UI hit-testing 和透明层
@@ -558,6 +560,7 @@ iOS 设置里看到的 App 占用和 app 自己统计差很多时，通常是只
 - 默认 1G。
 - UI 以 MB 显示。
 - 不删除 active reader 文件。
+- 自动上限裁剪不删除用户显式保存的离线副本；它们只由明确的下载副本清理操作删除。
 - 不把半成品文件算作可正常打开的缓存。
 
 ## 11. 漫画格式和封面

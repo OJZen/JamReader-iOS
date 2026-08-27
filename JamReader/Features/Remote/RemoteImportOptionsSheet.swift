@@ -1,37 +1,5 @@
 import SwiftUI
 
-enum RemoteDirectoryImportScope: String, CaseIterable, Hashable, Identifiable {
-    case visibleResults
-    case currentFolderOnly
-    case includeSubfolders
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-        switch self {
-        case .visibleResults:
-            return String(localized: "Visible Comics Only")
-        case .currentFolderOnly:
-            return String(localized: "This Folder Only")
-        case .includeSubfolders:
-            return String(localized: "Include Subfolders")
-        }
-    }
-
-    var summaryText: String {
-        switch self {
-        case .visibleResults:
-            return String(localized: "Only comics shown here.")
-        case .currentFolderOnly:
-            return String(localized: "Comics directly in this folder.")
-        case .includeSubfolders:
-            return String(localized: "This folder and nested folders.")
-        }
-    }
-}
-
 struct RemoteImportOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -40,7 +8,6 @@ struct RemoteImportOptionsSheet: View {
     let supplementaryNotice: String?
     let confirmLabel: String
     let availableScopes: [RemoteDirectoryImportScope]
-    let defaultScope: RemoteDirectoryImportScope
     let onConfirm: (LibraryImportDestinationSelection, RemoteDirectoryImportScope) -> Void
 
     @StateObject private var destinationViewModel: LibraryImportDestinationSheetViewModel
@@ -64,12 +31,12 @@ struct RemoteImportOptionsSheet: View {
         self.supplementaryNotice = supplementaryNotice
         self.confirmLabel = confirmLabel
         self.availableScopes = availableScopes
-        self.defaultScope = availableScopes.contains(defaultScope)
+        let resolvedDefaultScope = availableScopes.contains(defaultScope)
             ? defaultScope
             : (availableScopes.first ?? .includeSubfolders)
         self.onConfirm = onConfirm
         let initialDestination = preferredSelection ?? .importedComics
-        _selectedScope = State(initialValue: availableScopes.contains(defaultScope) ? defaultScope : (availableScopes.first ?? .includeSubfolders))
+        _selectedScope = State(initialValue: resolvedDefaultScope)
         _selectedDestination = State(initialValue: initialDestination)
         _destinationViewModel = StateObject(
             wrappedValue: LibraryImportDestinationSheetViewModel(

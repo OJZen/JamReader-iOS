@@ -208,6 +208,24 @@ final class RemoteOfflineCopyStore {
         return Self.sortedRecords(try loadEnvelopeLocked().records)
     }
 
+    func loadRecordsForAutomaticCacheProtection() throws -> [RemoteOfflineCopyRecord] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let envelope: StorageEnvelope
+        if let cachedEnvelope {
+            envelope = cachedEnvelope
+        } else {
+            envelope = try storage.load(StorageEnvelope.self) ?? .empty
+        }
+        guard envelope.completedCacheRecoveryMigration else {
+            throw RemoteOfflineCopyStoreError.cacheProtectionRecordsUnavailable
+        }
+
+        cachedEnvelope = envelope
+        return Self.sortedRecords(envelope.records)
+    }
+
     func recordDownloadedCopy(
         for reference: RemoteComicFileReference,
         savedAt: Date = Date()
@@ -371,6 +389,14 @@ final class RemoteOfflineCopyStore {
             }
             return lhs.savedAt > rhs.savedAt
         }
+    }
+}
+
+private enum RemoteOfflineCopyStoreError: LocalizedError {
+    case cacheProtectionRecordsUnavailable
+
+    var errorDescription: String? {
+        "Saved offline copy records must be recovered before automatic cache trimming."
     }
 }
 

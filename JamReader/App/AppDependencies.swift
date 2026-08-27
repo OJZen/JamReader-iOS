@@ -1,6 +1,7 @@
 import Foundation
 
 struct AppDependencies {
+    let appLaunchPreferencesStore: AppLaunchPreferencesStore
     let appLibraryDatabase: AppLibraryDatabase
     let libraryAssetStore: LibraryAssetStore
     let libraryCatalogRepository: LibraryCatalogRepository
@@ -32,11 +33,13 @@ struct AppDependencies {
     let remoteBackgroundImportController: RemoteBackgroundImportController
     let remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore
     let readerLayoutPreferencesStore: ReaderLayoutPreferencesStore
+    let readerBehaviorPreferencesStore: ReaderBehaviorPreferencesStore
     let comicDocumentService: ComicDocumentService
     let comicReaderStateStore: ComicReaderStateStore
     let comicOpenCoordinator: ComicOpenCoordinator
 
     static func makeDefault() -> AppDependencies {
+        let appLaunchPreferencesStore = AppLaunchPreferencesStore()
         let appLibraryDatabase = AppLibraryDatabase()
         let libraryAssetStore = LibraryAssetStore(database: appLibraryDatabase)
         let libraryCatalogRepository = LibraryCatalogRepository(
@@ -64,6 +67,7 @@ struct AppDependencies {
         let remoteFolderShortcutStore = RemoteFolderShortcutStore()
         let remoteBackgroundImportController = RemoteBackgroundImportController()
         let readerLayoutPreferencesStore = ReaderLayoutPreferencesStore()
+        let readerBehaviorPreferencesStore = ReaderBehaviorPreferencesStore()
         let comicDocumentService = ComicDocumentService()
         let comicReaderStateStore = ComicReaderStateStore(
             databaseWriter: databaseWriter,
@@ -71,7 +75,8 @@ struct AppDependencies {
         )
         let remoteServerBrowsingService = RemoteServerBrowsingService(
             credentialStore: remoteServerCredentialStore,
-            cachePolicyStore: remoteCachePolicyStore
+            cachePolicyStore: remoteCachePolicyStore,
+            remoteOfflineCopyStore: remoteOfflineCopyStore
         )
         let comicOpenCoordinator = ComicOpenCoordinator(
             storageManager: storageManager,
@@ -80,6 +85,7 @@ struct AppDependencies {
             remoteReadingProgressStore: remoteReadingProgressStore
         )
         return AppDependencies(
+            appLaunchPreferencesStore: appLaunchPreferencesStore,
             appLibraryDatabase: appLibraryDatabase,
             libraryAssetStore: libraryAssetStore,
             libraryCatalogRepository: libraryCatalogRepository,
@@ -132,6 +138,7 @@ struct AppDependencies {
             remoteBackgroundImportController: remoteBackgroundImportController,
             remoteBrowserPreferencesStore: RemoteBrowserPreferencesStore(),
             readerLayoutPreferencesStore: readerLayoutPreferencesStore,
+            readerBehaviorPreferencesStore: readerBehaviorPreferencesStore,
             comicDocumentService: comicDocumentService,
             comicReaderStateStore: comicReaderStateStore,
             comicOpenCoordinator: comicOpenCoordinator

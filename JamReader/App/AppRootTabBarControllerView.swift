@@ -80,7 +80,7 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
         }
 
         installRootTabs()
-        rootViewController.selectedIndex = storedSelectedTab.index
+        rootViewController.selectedIndex = initialSelectedTab.index
         presentationCoordinator.attach(rootViewController: rootViewController)
         installImportOverlay()
         observeNavigationRequests()
@@ -119,6 +119,12 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
     private var storedSelectedTab: AppRootTab {
         let rawValue = UserDefaults.standard.string(forKey: AppNavigationStorageKeys.selectedTab)
         return rawValue.flatMap(AppRootTab.init(rawValue:)) ?? .library
+    }
+
+    private var initialSelectedTab: AppRootTab {
+        dependencies.appLaunchPreferencesStore
+            .loadDestination()
+            .resolvedTab(lastUsedTab: storedSelectedTab)
     }
 
     private func observeNavigationRequests() {
@@ -886,6 +892,24 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
 }
 
 @MainActor
+final class SettingsPaneControllerCache {
+    private var controllers: [SettingsHomePane: UIViewController] = [:]
+
+    func controller(
+        for pane: SettingsHomePane,
+        makeController: () -> UIViewController
+    ) -> UIViewController {
+        if let controller = controllers[pane] {
+            return controller
+        }
+
+        let controller = makeController()
+        controllers[pane] = controller
+        return controller
+    }
+}
+
+@MainActor
 private final class SettingsTabCoordinator: RootTabChildCoordinator {
     let rootViewController: UIViewController
 
@@ -893,7 +917,10 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
     private let viewModel: LibraryListViewModel
     private let presenter: UIKitPresentationCoordinator
     private let navigator = AppNavigator()
+    private let selectionState: SettingsSelectionState
+    private let paneControllerCache = SettingsPaneControllerCache()
     private let usesSplitLayout: Bool
+    private let splitViewController: UISplitViewController?
     private let compactNavigationController: UINavigationController?
     private let primaryNavigationController: UINavigationController?
     private let detailNavigationController: UINavigationController?
@@ -908,6 +935,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         self.dependencies = dependencies
         self.viewModel = viewModel
         self.presenter = presenter
+        self.selectionState = SettingsSelectionState()
         self.usesSplitLayout = UIDevice.current.userInterfaceIdiom == .pad
 
         if usesSplitLayout {
@@ -915,13 +943,16 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
             let detail = UINavigationController()
             let split = UISplitViewController(style: .doubleColumn)
             split.preferredDisplayMode = .oneBesideSecondary
-            split.viewControllers = [primary, detail]
+            split.setViewController(primary, for: .primary)
+            split.setViewController(detail, for: .secondary)
+            self.splitViewController = split
             self.primaryNavigationController = primary
             self.detailNavigationController = detail
             self.compactNavigationController = nil
             self.rootViewController = split
         } else {
             let navigation = UINavigationController()
+            self.splitViewController = nil
             self.compactNavigationController = navigation
             self.primaryNavigationController = nil
             self.detailNavigationController = nil
@@ -939,27 +970,26 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
 
     func navigate(_ route: SettingsNavigationRoute) {
         switch route {
-        case .overview, .reading, .library, .storage, .about:
-            showPane(route)
-        case .readerDefaults(let profile):
+        case .overview:
+            if let compactNavigationController {
+                compactNavigationController.popToRootViewController(animated: true)
+            } else {
+                showPane(.general)
+            }
+        case .general, .reading, .library, .storage:
+            showPane(route.settingsPane)
+        case .readerDefaults:
             showLeaf(
-                ownedBy: .reading,
+                for: route,
                 makeHostingController(
                     ReaderDefaultsSettingsView(
-                        profile: profile,
                         preferencesStore: dependencies.readerLayoutPreferencesStore
                     ),
-                    title: profile.navigationTitle
+                    title: String(localized: "Reading Defaults")
                 )
             )
         case .remoteCache:
-            showLeaf(
-                ownedBy: .storage,
-                makeHostingController(
-                    RemoteCacheSettingsView(dependencies: dependencies),
-                    title: String(localized: "Cache Management")
-                )
-            )
+            showPane(.storage)
         }
     }
 
@@ -985,6 +1015,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         } else {
             let root = makeHostingController(
                 SettingsSidebarView(
+                    selectionState: selectionState,
                     viewModel: viewModel,
                     dependencies: dependencies
                 ),
@@ -992,65 +1023,61 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
             )
             root.navigationItem.largeTitleDisplayMode = .never
             primaryNavigationController?.setViewControllers([root], animated: false)
-            showPane(restoredPane.navigationRoute)
+            showPane(selectionState.selectedPane, animated: false)
         }
     }
 
-    private func showPane(_ route: SettingsNavigationRoute) {
-        let pane = route.settingsPane
-        storeSelectedPane(pane)
-
-        if pane == .overview, let compactNavigationController {
-            compactNavigationController.popToRootViewController(animated: true)
-            return
+    private func showPane(
+        _ pane: SettingsHomePane,
+        animated: Bool = true
+    ) {
+        selectionState.select(pane)
+        let controller = paneControllerCache.controller(for: pane) {
+            let controller = makeHostingController(
+                SettingsPaneContentView(
+                    pane: pane,
+                    viewModel: viewModel,
+                    dependencies: dependencies
+                ),
+                title: pane.titleString
+            )
+            controller.navigationItem.largeTitleDisplayMode = .never
+            return controller
         }
-
-        let controller = makeHostingController(
-            SettingsPaneContentView(
-                pane: pane,
-                viewModel: viewModel,
-                dependencies: dependencies
-            ),
-            title: pane.titleString
-        )
-        controller.navigationItem.largeTitleDisplayMode = .never
 
         if let compactNavigationController {
-            compactNavigationController.setViewControllers(
-                [compactNavigationController.viewControllers.first, controller].compactMap { $0 },
-                animated: true
-            )
-        } else {
-            detailNavigationController?.setViewControllers([controller], animated: false)
+            if compactNavigationController.topViewController === controller {
+                return
+            }
+
+            if compactNavigationController.viewControllers.contains(where: { $0 === controller }) {
+                compactNavigationController.popToViewController(controller, animated: animated)
+            } else {
+                compactNavigationController.setViewControllers(
+                    [compactNavigationController.viewControllers.first, controller].compactMap { $0 },
+                    animated: animated
+                )
+            }
+        } else if let detailNavigationController {
+            if detailNavigationController.topViewController !== controller {
+                if detailNavigationController.viewControllers.contains(where: { $0 === controller }) {
+                    detailNavigationController.popToViewController(controller, animated: animated)
+                } else {
+                    detailNavigationController.setViewControllers([controller], animated: false)
+                }
+            }
+            splitViewController?.show(.secondary)
         }
-    }
-
-    private var restoredPane: SettingsHomePane {
-        SettingsHomePane.restored(
-            from: UserDefaults.standard.string(
-                forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
-            )
-        )
-    }
-
-    private func storeSelectedPane(_ pane: SettingsHomePane) {
-        UserDefaults.standard.set(
-            pane.rawValue,
-            forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
-        )
     }
 
     private func showLeaf(
-        ownedBy pane: SettingsHomePane,
+        for route: SettingsNavigationRoute,
         _ controller: UIViewController
     ) {
+        showPane(route.settingsPane, animated: false)
         controller.navigationItem.largeTitleDisplayMode = .never
-        if let compactNavigationController {
-            compactNavigationController.pushViewController(controller, animated: true)
-        } else if let detailNavigationController {
-            showPane(pane.navigationRoute)
-            detailNavigationController.pushViewController(controller, animated: true)
-        }
+        activeNavigationController?.pushViewController(controller, animated: true)
+        splitViewController?.show(.secondary)
     }
 
     private func makeHostingController<Content: View>(

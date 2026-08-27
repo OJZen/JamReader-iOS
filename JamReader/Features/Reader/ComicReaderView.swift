@@ -20,6 +20,7 @@ struct ComicReaderView: View {
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isProgressScrubberInteracting = false
+    @State private var keepsScreenAwake: Bool
 
     @MainActor
     init(
@@ -29,7 +30,10 @@ struct ComicReaderView: View {
     ) {
         self.dependencies = dependencies
         self.openingPreviewImage = openingPreviewImage
-        let initialLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: request.preferredLayoutType)
+        _keepsScreenAwake = State(
+            initialValue: dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake()
+        )
+        let initialLayout = dependencies.readerLayoutPreferencesStore.loadLayout()
         let initialDescriptor = ReaderContentDescriptor.placeholder(
             documentURL: request.fallbackDocumentURL,
             pageCount: request.fallbackPageCount,
@@ -118,7 +122,7 @@ struct ComicReaderView: View {
             startInitialLoad()
         }
         .onAppear {
-            updateIdleTimerState()
+            reloadIdleTimerPreference()
             startInitialLoad()
         }
         .onDisappear {
@@ -135,6 +139,13 @@ struct ComicReaderView: View {
         .onChange(of: viewModel.documentIdentity) { _, _ in
             updateIdleTimerState()
             scheduleReaderSessionSynchronization()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerBehaviorPreferencesDidChange
+            )
+        ) { _ in
+            reloadIdleTimerPreference()
         }
         .onChange(of: viewModel.readerLayout) { _, _ in
             scheduleReaderSessionSynchronization()
@@ -198,32 +209,9 @@ struct ComicReaderView: View {
     }
 
     private var readerControlsSheet: some View {
-        ReaderControlsSheet(
-            pageState: ReaderControlsPageState(
-                pageIndicatorText: viewModel.pageIndicatorText,
-                currentPageNumber: viewModel.currentPageNumber,
-                pageCount: viewModel.pageCount,
-                currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
-                bookmarkItems: viewModel.bookmarkItems
-            ),
-            displayState: ReaderControlsDisplayState(
-                fitMode: readerSession.state.layout.fitMode,
-                pagingMode: readerSession.state.layout.pagingMode,
-                spreadMode: readerSession.state.layout.spreadMode,
-                readingDirection: readerSession.state.layout.readingDirection,
-                coverAsSinglePage: readerSession.state.layout.coverAsSinglePage,
-                rotation: readerSession.state.layout.rotation
-            ),
-            capabilities: ReaderControlsCapabilities(
-                supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
-                supportsDoublePageSpread: supportsDoublePageSpread,
-                supportsRotationControls: viewModel.supportsRotationControls,
-                supportsPageNavigation: viewModel.pageCount != nil,
-                supportsBookmarks: viewModel.pageCount != nil
-            ),
-            actions: readerControlsActions,
-            metadata: readerControlsMetadata,
-            fileInfo: readerControlsFileInfo
+        PresentedReaderControlsSheet(
+            viewModel: viewModel,
+            actions: readerControlsActions
         )
     }
 
@@ -301,31 +289,6 @@ struct ComicReaderView: View {
             presentOrganizationSheet()
         }
         return actions
-    }
-
-    private var readerControlsMetadata: ReaderControlsMetadata? {
-        guard viewModel.isLibraryBacked else {
-            return nil
-        }
-        return ReaderControlsMetadata(
-            isFavorite: viewModel.isFavorite,
-            isRead: viewModel.currentLibraryComic?.read,
-            rating: viewModel.rating
-        )
-    }
-
-    private var readerControlsFileInfo: ReaderControlsFileInfo {
-        ReaderControlsFileInfo(
-            fileName: viewModel.fileName,
-            fileExtension: viewModel.document?.fileURL.pathExtension,
-            pageCount: viewModel.pageCount,
-            series: viewModel.fileSeries,
-            volume: viewModel.fileVolume,
-            addedAt: viewModel.fileAddedAt,
-            lastOpenedAt: viewModel.fileLastOpenedAt,
-            fileURL: viewModel.document?.fileURL,
-            coverDocument: viewModel.document
-        )
     }
 
     private var isAnySheetPresented: Bool {
@@ -617,7 +580,83 @@ struct ComicReaderView: View {
     }
 
     private func updateIdleTimerState() {
-        UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && viewModel.document != nil
+        applyIdleTimerState(keepsScreenAwake: keepsScreenAwake)
+    }
+
+    private func reloadIdleTimerPreference() {
+        let keepsScreenAwake = dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake()
+        self.keepsScreenAwake = keepsScreenAwake
+        applyIdleTimerState(keepsScreenAwake: keepsScreenAwake)
+    }
+
+    private func applyIdleTimerState(keepsScreenAwake: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = ReaderIdleTimerPolicy.shouldDisableIdleTimer(
+            isSceneActive: scenePhase == .active,
+            hasDocument: viewModel.document != nil,
+            keepsScreenAwake: keepsScreenAwake
+        )
+    }
+}
+
+/// UIKit presents reader controls in a separate hosting tree, so the sheet must
+/// observe the reader model instead of retaining values captured when it opened.
+private struct PresentedReaderControlsSheet: View {
+    @ObservedObject var viewModel: ComicReaderViewModel
+    let actions: ReaderControlsActions
+
+    var body: some View {
+        ReaderControlsSheet(
+            pageState: ReaderControlsPageState(
+                pageIndicatorText: viewModel.pageIndicatorText,
+                currentPageNumber: viewModel.currentPageNumber,
+                pageCount: viewModel.pageCount,
+                currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
+                bookmarkItems: viewModel.bookmarkItems
+            ),
+            displayState: ReaderControlsDisplayState(
+                fitMode: viewModel.effectiveReaderLayout.fitMode,
+                pagingMode: viewModel.effectiveReaderLayout.pagingMode,
+                spreadMode: viewModel.effectiveReaderLayout.spreadMode,
+                readingDirection: viewModel.effectiveReaderLayout.readingDirection,
+                coverAsSinglePage: viewModel.effectiveReaderLayout.coverAsSinglePage,
+                rotation: viewModel.effectiveReaderLayout.rotation
+            ),
+            capabilities: ReaderControlsCapabilities(
+                supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
+                supportsDoublePageSpread: viewModel.allowsDoublePageSpread,
+                supportsRotationControls: viewModel.supportsRotationControls,
+                supportsPageNavigation: viewModel.pageCount != nil,
+                supportsBookmarks: viewModel.pageCount != nil
+            ),
+            actions: actions,
+            metadata: metadata,
+            fileInfo: fileInfo
+        )
+    }
+
+    private var metadata: ReaderControlsMetadata? {
+        guard viewModel.isLibraryBacked else {
+            return nil
+        }
+        return ReaderControlsMetadata(
+            isFavorite: viewModel.isFavorite,
+            isRead: viewModel.currentLibraryComic?.read,
+            rating: viewModel.rating
+        )
+    }
+
+    private var fileInfo: ReaderControlsFileInfo {
+        ReaderControlsFileInfo(
+            fileName: viewModel.fileName,
+            fileExtension: viewModel.document?.fileURL.pathExtension,
+            pageCount: viewModel.pageCount,
+            series: viewModel.fileSeries,
+            volume: viewModel.fileVolume,
+            addedAt: viewModel.fileAddedAt,
+            lastOpenedAt: viewModel.fileLastOpenedAt,
+            fileURL: viewModel.document?.fileURL,
+            coverDocument: viewModel.document
+        )
     }
 }
 

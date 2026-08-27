@@ -1,85 +1,25 @@
+import Combine
 import SwiftUI
 
-enum ReaderDefaultProfile: String, CaseIterable, Identifiable, Hashable {
-    case comics
-    case manga
-    case webcomics
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .comics:
-            return String(localized: "Comics")
-        case .manga:
-            return String(localized: "Manga")
-        case .webcomics:
-            return String(localized: "Webcomics")
-        }
-    }
-
-    var navigationTitle: String {
-        switch self {
-        case .comics:
-            return String(localized: "Comics Defaults")
-        case .manga:
-            return String(localized: "Manga Defaults")
-        case .webcomics:
-            return String(localized: "Webcomics Defaults")
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .comics:
-            return "book.fill"
-        case .manga:
-            return "book.closed.fill"
-        case .webcomics:
-            return "scroll.fill"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .comics:
-            return .blue
-        case .manga:
-            return .purple
-        case .webcomics:
-            return .green
-        }
-    }
-
-    var fileType: LibraryFileType {
-        switch self {
-        case .comics:
-            return .comic
-        case .manga:
-            return .manga
-        case .webcomics:
-            return .webComic
-        }
-    }
-
-    func summary(for layout: ReaderDisplayLayout) -> String {
-        if layout.pagingMode == .verticalContinuous {
+extension ReaderDisplayLayout {
+    var settingsSummary: String {
+        if pagingMode == .verticalContinuous {
             return [
-                layout.pagingMode.settingsLocalizedTitle,
-                layout.fitMode.settingsLocalizedTitle
+                pagingMode.settingsLocalizedTitle,
+                fitMode.settingsLocalizedTitle
             ]
                 .joined(separator: " · ")
         }
 
         var parts = [
-            layout.pagingMode.settingsLocalizedTitle,
-            layout.spreadMode.settingsLocalizedTitle,
-            layout.readingDirection.settingsLocalizedTitle,
-            layout.fitMode.settingsLocalizedTitle
+            pagingMode.settingsLocalizedTitle,
+            spreadMode.settingsLocalizedTitle,
+            readingDirection.settingsLocalizedTitle,
+            fitMode.settingsLocalizedTitle
         ]
-        if layout.spreadMode == .doublePage {
+        if spreadMode == .doublePage {
             parts.append(
-                layout.coverAsSinglePage
+                coverAsSinglePage
                     ? String(localized: "Cover Single")
                     : String(localized: "Cover Spread")
             )
@@ -153,87 +93,89 @@ extension RemoteComicCachePolicyPreset {
     }
 }
 
+extension AppLaunchDestination {
+    var settingsLocalizedTitle: String {
+        switch self {
+        case .lastUsedTab:
+            return String(localized: "Last Used Tab")
+        case .library:
+            return String(localized: "Library")
+        case .browse:
+            return String(localized: "Browse")
+        }
+    }
+}
+
 enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
-    case overview
+    case general
     case reading
     case library
     case storage
-    case about
 
     var id: String { rawValue }
 
     var title: LocalizedStringKey {
         switch self {
-        case .overview:
-            return "Overview"
+        case .general:
+            return "General"
         case .reading:
             return "Reading"
         case .library:
             return "Library"
         case .storage:
             return "Storage"
-        case .about:
-            return "About"
         }
     }
 
     var titleString: String {
         switch self {
-        case .overview:
-            return String(localized: "Overview")
+        case .general:
+            return String(localized: "General")
         case .reading:
             return String(localized: "Reading")
         case .library:
             return String(localized: "Library")
         case .storage:
             return String(localized: "Storage")
-        case .about:
-            return String(localized: "About")
         }
     }
 
     var navigationRoute: SettingsNavigationRoute {
         switch self {
-        case .overview:
-            return .overview
+        case .general:
+            return .general
         case .reading:
             return .reading
         case .library:
             return .library
         case .storage:
             return .storage
-        case .about:
-            return .about
         }
     }
 
     var systemImage: String {
         switch self {
-        case .overview:
-            return "slider.horizontal.3"
+        case .general:
+            return "gearshape.fill"
         case .reading:
             return "book.closed.fill"
         case .library:
             return "books.vertical.fill"
         case .storage:
             return "internaldrive.fill"
-        case .about:
-            return "info.circle.fill"
         }
     }
 
     var tint: Color {
         switch self {
-        case .overview:
-            return .appAccent
+        case .general:
+            return .gray
         case .reading:
             return .blue
         case .library:
             return .purple
         case .storage:
             return .orange
-        case .about:
-            return .gray
         }
     }
 
@@ -241,7 +183,46 @@ enum SettingsHomePane: String, CaseIterable, Identifiable, Hashable {
         if rawValue == "remote" {
             return .storage
         }
-        return rawValue.flatMap(SettingsHomePane.init(rawValue:)) ?? .overview
+        if rawValue == "about" || rawValue == "overview" {
+            return .general
+        }
+        return rawValue.flatMap(SettingsHomePane.init(rawValue:)) ?? .general
+    }
+}
+
+@MainActor
+final class SettingsSelectionState: ObservableObject {
+    @Published private(set) var selectedPane: SettingsHomePane
+
+    private let userDefaults: UserDefaults
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+
+        let rawValue = userDefaults.string(
+            forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
+        )
+        let selectedPane = SettingsHomePane.restored(from: rawValue)
+        self.selectedPane = selectedPane
+
+        if rawValue != selectedPane.rawValue {
+            userDefaults.set(
+                selectedPane.rawValue,
+                forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
+            )
+        }
+    }
+
+    func select(_ pane: SettingsHomePane) {
+        guard selectedPane != pane else {
+            return
+        }
+
+        selectedPane = pane
+        userDefaults.set(
+            pane.rawValue,
+            forKey: AppNavigationStorageKeys.settingsHomeSelectedPane
+        )
     }
 }
 
@@ -249,15 +230,15 @@ extension SettingsNavigationRoute {
     var settingsPane: SettingsHomePane {
         switch self {
         case .overview:
-            return .overview
+            return .general
+        case .general:
+            return .general
         case .reading, .readerDefaults:
             return .reading
         case .library:
             return .library
         case .storage, .remoteCache:
             return .storage
-        case .about:
-            return .about
         }
     }
 
@@ -267,27 +248,23 @@ extension SettingsNavigationRoute {
 }
 
 struct SettingsSnapshot {
-    var comicLayout: ReaderDisplayLayout
-    var mangaLayout: ReaderDisplayLayout
-    var webcomicLayout: ReaderDisplayLayout
+    var appLaunchDestination: AppLaunchDestination
+    var keepsScreenAwake: Bool
+    var readerLayout: ReaderDisplayLayout
     var recentWindow: LibraryRecentWindowOption
-    var remoteCacheSummary: RemoteComicCacheSummary
+    var defaultFolderImportScope: RemoteDirectoryImportScope
     var remoteCachePolicyPreset: RemoteComicCachePolicyPreset
-    var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary
-    var importedComicsLibrarySummary: LibraryStorageFootprintSummary
     var localLibraryCount: Int
     var appVersion: String
 
     static var empty: SettingsSnapshot {
         return SettingsSnapshot(
-            comicLayout: ReaderDisplayLayout(defaultsFor: .comic),
-            mangaLayout: ReaderDisplayLayout(defaultsFor: .manga),
-            webcomicLayout: ReaderDisplayLayout(defaultsFor: .webComic),
+            appLaunchDestination: .defaultValue,
+            keepsScreenAwake: true,
+            readerLayout: ReaderDisplayLayout(),
             recentWindow: .defaultOption,
-            remoteCacheSummary: .empty,
+            defaultFolderImportScope: .includeSubfolders,
             remoteCachePolicyPreset: .oneGigabyte,
-            remoteThumbnailCacheSummary: .empty,
-            importedComicsLibrarySummary: .empty,
             localLibraryCount: 0,
             appVersion: appVersionText()
         )
@@ -296,52 +273,35 @@ struct SettingsSnapshot {
     static func load(
         libraryCount: Int,
         dependencies: AppDependencies
-    ) async -> SettingsSnapshot {
-        let storage = await loadStorage(dependencies: dependencies)
-
-        return SettingsSnapshot(
-            comicLayout: dependencies.readerLayoutPreferencesStore.loadLayout(for: .comic),
-            mangaLayout: dependencies.readerLayoutPreferencesStore.loadLayout(for: .manga),
-            webcomicLayout: dependencies.readerLayoutPreferencesStore.loadLayout(for: .webComic),
+    ) -> SettingsSnapshot {
+        SettingsSnapshot(
+            appLaunchDestination: dependencies.appLaunchPreferencesStore.loadDestination(),
+            keepsScreenAwake: dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake(),
+            readerLayout: dependencies.readerLayoutPreferencesStore.loadLayout(),
             recentWindow: dependencies.libraryPreferencesStore.loadRecentWindow(),
-            remoteCacheSummary: storage.remoteCacheSummary,
-            remoteCachePolicyPreset: storage.remoteCachePolicyPreset,
-            remoteThumbnailCacheSummary: storage.remoteThumbnailCacheSummary,
-            importedComicsLibrarySummary: storage.importedComicsLibrarySummary,
+            defaultFolderImportScope: dependencies.remoteBrowserPreferencesStore.loadDefaultFolderImportScope(),
+            remoteCachePolicyPreset: dependencies.remoteCachePolicyStore.loadPreset(),
             localLibraryCount: libraryCount,
             appVersion: appVersionText()
         )
     }
 
-    static func loadStorage(
-        dependencies: AppDependencies
-    ) async -> SettingsStorageSnapshot {
-        async let remoteThumbnailCacheSummary = RemoteComicThumbnailPipeline.shared.cacheSummaryAsync()
-        let diskSummaries = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: (
-                        dependencies.remoteServerBrowsingService.cacheSummary(),
-                        dependencies.libraryStorageManager.importedComicsLibraryStorageSummary()
-                    )
-                )
-            }
-        }
+    mutating func reloadAppLaunchPreference(
+        preferencesStore: AppLaunchPreferencesStore
+    ) {
+        appLaunchDestination = preferencesStore.loadDestination()
+    }
 
-        return SettingsStorageSnapshot(
-            remoteCacheSummary: diskSummaries.0,
-            remoteCachePolicyPreset: dependencies.remoteCachePolicyStore.loadPreset(),
-            remoteThumbnailCacheSummary: await remoteThumbnailCacheSummary,
-            importedComicsLibrarySummary: diskSummaries.1
-        )
+    mutating func reloadReaderBehaviorPreference(
+        preferencesStore: ReaderBehaviorPreferencesStore
+    ) {
+        keepsScreenAwake = preferencesStore.loadKeepsScreenAwake()
     }
 
     mutating func reloadReaderPreferences(
         preferencesStore: ReaderLayoutPreferencesStore
     ) {
-        comicLayout = preferencesStore.loadLayout(for: .comic)
-        mangaLayout = preferencesStore.loadLayout(for: .manga)
-        webcomicLayout = preferencesStore.loadLayout(for: .webComic)
+        readerLayout = preferencesStore.loadLayout()
     }
 
     mutating func reloadLibraryPreferences(
@@ -350,38 +310,16 @@ struct SettingsSnapshot {
         recentWindow = preferencesStore.loadRecentWindow()
     }
 
-    mutating func applyStorage(_ storage: SettingsStorageSnapshot) {
-        remoteCacheSummary = storage.remoteCacheSummary
-        remoteCachePolicyPreset = storage.remoteCachePolicyPreset
-        remoteThumbnailCacheSummary = storage.remoteThumbnailCacheSummary
-        importedComicsLibrarySummary = storage.importedComicsLibrarySummary
+    mutating func reloadRemoteBrowserPreferences(
+        preferencesStore: RemoteBrowserPreferencesStore
+    ) {
+        defaultFolderImportScope = preferencesStore.loadDefaultFolderImportScope()
     }
 
-    var managedStorageBytes: Int64 {
-        remoteCacheSummary.totalBytes
-            + remoteThumbnailCacheSummary.totalBytes
-            + importedComicsLibrarySummary.totalBytes
-    }
-
-    var managedStorageText: String {
-        guard managedStorageBytes > 0 else {
-            return String(localized: "None")
-        }
-        return ByteCountFormatter.string(
-            fromByteCount: managedStorageBytes,
-            countStyle: .file
-        )
-    }
-
-    func layout(for profile: ReaderDefaultProfile) -> ReaderDisplayLayout {
-        switch profile {
-        case .comics:
-            return comicLayout
-        case .manga:
-            return mangaLayout
-        case .webcomics:
-            return webcomicLayout
-        }
+    mutating func reloadRemoteCachePolicy(
+        policyStore: RemoteCachePolicyStore
+    ) {
+        remoteCachePolicyPreset = policyStore.loadPreset()
     }
 
     private static func appVersionText() -> String {
@@ -395,65 +333,9 @@ struct SettingsSnapshot {
     }
 }
 
-struct SettingsStorageSnapshot {
-    let remoteCacheSummary: RemoteComicCacheSummary
-    let remoteCachePolicyPreset: RemoteComicCachePolicyPreset
-    let remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary
-    let importedComicsLibrarySummary: LibraryStorageFootprintSummary
-}
-
-struct SettingsSummaryMetric: Identifiable {
-    let title: LocalizedStringResource
-    let value: String
-    let systemImage: String
-    let tint: Color
-
-    var id: String { systemImage }
-}
-
-struct SettingsSummaryGrid: View {
+struct SettingsNavigationRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    let metrics: [SettingsSummaryMetric]
-
-    private var columns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible(), spacing: Spacing.md)]
-        }
-        return [
-            GridItem(.flexible(), spacing: Spacing.md),
-            GridItem(.flexible(), spacing: Spacing.md)
-        ]
-    }
-
-    var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.md) {
-            ForEach(metrics) { metric in
-                HStack(alignment: .top, spacing: Spacing.sm) {
-                    Image(systemName: metric.systemImage)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(metric.tint)
-                        .frame(width: 24, height: 24)
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                        Text(metric.title)
-                            .font(AppFont.caption())
-                            .foregroundStyle(Color.textSecondary)
-                        Text(metric.value)
-                            .font(AppFont.body(.semibold))
-                            .foregroundStyle(Color.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(.vertical, Spacing.xxs)
-    }
-}
-
-struct SettingsNavigationRow: View {
     let systemImage: String
     let tint: Color
     let title: String
@@ -474,15 +356,18 @@ struct SettingsNavigationRow: View {
                         .foregroundStyle(Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                if dynamicTypeSize.isAccessibilitySize,
+                   let value {
+                    valueText(value)
+                }
             }
 
             Spacer(minLength: Spacing.xs)
 
-            if let value {
-                Text(value)
-                    .font(AppFont.subheadline())
-                    .foregroundStyle(Color.textSecondary)
-                    .multilineTextAlignment(.trailing)
+            if !dynamicTypeSize.isAccessibilitySize,
+               let value {
+                valueText(value)
             }
 
             Image(systemName: "chevron.forward")
@@ -492,6 +377,17 @@ struct SettingsNavigationRow: View {
         }
         .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private func valueText(_ value: String) -> some View {
+        Text(value)
+            .font(AppFont.subheadline())
+            .foregroundStyle(Color.textSecondary)
+            .multilineTextAlignment(
+                dynamicTypeSize.isAccessibilitySize ? .leading : .trailing
+            )
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -500,26 +396,31 @@ struct SettingsPaneRow: View {
 
     let pane: SettingsHomePane
     let detail: String?
-    let isSelected: Bool
+    var showsDisclosureIndicator = false
 
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    SettingsIcon(systemName: pane.systemImage, color: pane.tint)
-                    textContent
+                HStack(alignment: .top, spacing: Spacing.sm) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        SettingsIcon(systemName: pane.systemImage, color: pane.tint)
+                        textContent
+                    }
+                    Spacer(minLength: 0)
+                    disclosureIndicator
                 }
             } else {
                 HStack(spacing: Spacing.sm) {
                     SettingsIcon(systemName: pane.systemImage, color: pane.tint)
                     textContent
                     Spacer(minLength: 0)
+                    disclosureIndicator
                 }
             }
         }
         .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityElement(children: .combine)
     }
 
     private var textContent: some View {
@@ -529,14 +430,23 @@ struct SettingsPaneRow: View {
                 .foregroundStyle(Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if !dynamicTypeSize.isAccessibilitySize,
-               let detail,
+            if let detail,
                !detail.isEmpty {
                 Text(detail)
                     .font(AppFont.caption())
                     .foregroundStyle(Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var disclosureIndicator: some View {
+        if showsDisclosureIndicator {
+            Image(systemName: "chevron.forward")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.textTertiary)
+                .accessibilityHidden(true)
         }
     }
 }

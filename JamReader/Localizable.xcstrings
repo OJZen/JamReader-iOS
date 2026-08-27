@@ -1918,28 +1918,6 @@
         }
       }
     },
-    "3 Profiles": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3 種設定檔"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3つのプロファイル"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "3 个配置"
-          }
-        }
-      }
-    },
     "4-Koma": {
       "localizations": {
         "zh-Hant-TW": {
@@ -2974,28 +2952,6 @@
         }
       }
     },
-    "At a Glance": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快速概覽"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "概要"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "概览"
-          }
-        }
-      }
-    },
     "Authentication": {
       "localizations": {
         "zh-Hant-TW": {
@@ -3344,28 +3300,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "构建此书库的本地索引，添加根文件夹，并扫描支持的漫画文件。"
-          }
-        }
-      }
-    },
-    "Cache Management": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快取管理"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キャッシュ管理"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "缓存管理"
           }
         }
       }
@@ -4580,28 +4514,6 @@
         }
       }
     },
-    "Comics Defaults": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "漫畫預設值"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コミックのデフォルト設定"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "漫画默认设置"
-          }
-        }
-      }
-    },
     "Comics directly in this folder.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -4998,28 +4910,6 @@
         }
       }
     },
-    "Covers": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表紙"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面"
-          }
-        }
-      }
-    },
     "Create": {
       "localizations": {
         "zh-Hant-TW": {
@@ -5324,6 +5214,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "深色"
+          }
+        }
+      }
+    },
+    "Default Folder Import Scope": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設資料夾匯入範圍"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デフォルトのフォルダインポート範囲"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认文件夹导入范围"
           }
         }
       }
@@ -6038,6 +5950,28 @@
         }
       }
     },
+    "Download Full Copy While Reading": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閱讀時下載完整副本"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閲覧中に完全なコピーをダウンロード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读时下载完整副本"
+          }
+        }
+      }
+    },
     "Download Limit": {
       "localizations": {
         "zh-Hant-TW": {
@@ -6198,6 +6132,28 @@
         }
       }
     },
+    "Downloaded copy ready.": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已下載的副本已就緒。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード済みコピーの準備ができました。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载副本已就绪。"
+          }
+        }
+      }
+    },
     "Downloaded Copy Removed": {
       "localizations": {
         "zh-Hant-TW": {
@@ -6348,28 +6304,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "下载内容"
-          }
-        }
-      }
-    },
-    "Downloads & Storage": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下載與儲存空間"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロードとストレージ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下载与存储"
           }
         }
       }
@@ -8988,6 +8922,28 @@
         }
       }
     },
+    "For streamed remote comics. Required downloads and explicit offline saves are unchanged.": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅套用於串流開啟的遠端漫畫。必要下載和手動離線儲存不受影響。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ストリーミングで開いたリモート漫画に適用されます。閲覧に必要なダウンロードと明示的なオフライン保存は変更されません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅适用于以流式方式打开的远程漫画。必须完成的下载和手动离线保存不受影响。"
+          }
+        }
+      }
+    },
     "Format": {
       "localizations": {
         "zh-Hant-TW": {
@@ -9056,6 +9012,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "找到 %1$lld 本漫画 · %2$@"
+          }
+        }
+      }
+    },
+    "General": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用"
           }
         }
       }
@@ -9848,28 +9826,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "导入不可用"
-          }
-        }
-      }
-    },
-    "Imported": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已匯入"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "インポート済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已导入"
           }
         }
       }
@@ -10844,6 +10800,28 @@
         }
       }
     },
+    "Keep Screen Awake": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持螢幕開啟"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面をスリープさせない"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持屏幕常亮"
+          }
+        }
+      }
+    },
     "Keeps the current password.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11126,6 +11104,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "上次打开"
+          }
+        }
+      }
+    },
+    "Last Used Tab": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次使用的標籤頁"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回使用したタブ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次使用的标签页"
           }
         }
       }
@@ -12120,28 +12120,6 @@
         }
       }
     },
-    "Manage Downloads & Cache": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "管理下載與快取"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロードとキャッシュを管理"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "管理下载与缓存"
-          }
-        }
-      }
-    },
     "Manage Servers": {
       "localizations": {
         "zh-Hant-TW": {
@@ -12182,28 +12160,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "日漫"
-          }
-        }
-      }
-    },
-    "Manga Defaults": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日式漫畫預設值"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "マンガのデフォルト設定"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日漫默认设置"
           }
         }
       }
@@ -14093,28 +14049,6 @@
         }
       }
     },
-    "Offline copy ready.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "離線副本已就緒。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフラインコピーを利用できます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "离线副本已就绪。"
-          }
-        }
-      }
-    },
     "Offline Ready": {
       "localizations": {
         "zh-Hant-TW": {
@@ -14617,6 +14551,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开此服务器上的漫画，即可将它留在这里。"
+          }
+        }
+      }
+    },
+    "Open at Launch": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟動時開啟"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起動時に開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动时打开"
           }
         }
       }
@@ -15623,28 +15579,6 @@
         }
       }
     },
-    "Policy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下載規則"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード設定"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下载规则"
-          }
-        }
-      }
-    },
     "Port": {
       "localizations": {
         "zh-Hant-TW": {
@@ -15873,6 +15807,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在为阅读器准备图书。"
+          }
+        }
+      }
+    },
+    "Preselected when importing a remote folder. You can still change it before importing.": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入遠端資料夾時會預先選取；匯入前仍可變更。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートフォルダのインポート時に事前選択されます。インポート前に変更できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入远程文件夹时会预先选择；导入前仍可更改。"
+          }
+        }
+      }
+    },
+    "Prevents automatic locking only while a comic is open and visible.": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅在漫畫已開啟且顯示於螢幕上時防止裝置自動鎖定。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫画を開いて画面に表示している間だけ、自動ロックを防ぎます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在漫画已打开并显示在屏幕上时防止设备自动锁定。"
           }
         }
       }
@@ -17067,6 +17045,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "远程文件夹不可用"
+          }
+        }
+      }
+    },
+    "Remote Import": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端匯入"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートインポート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远程导入"
           }
         }
       }
@@ -20025,6 +20025,28 @@
         }
       }
     },
+    "Startup": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟動"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起動"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动"
+          }
+        }
+      }
+    },
     "Status": {
       "localizations": {
         "zh-Hant-TW": {
@@ -20087,28 +20109,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ストレージ"
-          }
-        }
-      }
-    },
-    "Storage Summary": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "儲存空間摘要"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ストレージの概要"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "存储概览"
           }
         }
       }
@@ -21765,6 +21765,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "当前浏览结果中没有可见且受支持的远程漫画。"
+          }
+        }
+      }
+    },
+    "These defaults apply to every comic opened in the reader.": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些預設值會套用到在閱讀器中開啟的所有漫畫。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これらのデフォルト設定は、リーダーで開くすべてのコミックに適用されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些默认设置会应用于在阅读器中打开的所有漫画。"
           }
         }
       }
@@ -24043,28 +24065,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "网络漫画"
-          }
-        }
-      }
-    },
-    "Webcomics Defaults": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "網路漫畫預設值"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ウェブコミックのデフォルト設定"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络漫画默认设置"
           }
         }
       }

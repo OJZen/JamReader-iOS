@@ -53,6 +53,7 @@ final class RemoteServerBrowsingService {
     private let supportedComicFileExtensions = SupportedComicFormats.comicFileExtensions
     private let credentialStore: RemoteServerCredentialStore
     private let cachePolicyStore: RemoteCachePolicyStore
+    private let remoteOfflineCopyStore: RemoteOfflineCopyStore?
     private let webDAVClient: RemoteWebDAVClient
     private let fileManager: FileManager
     private let remoteComicCacheRootURL: URL
@@ -77,11 +78,13 @@ final class RemoteServerBrowsingService {
     init(
         credentialStore: RemoteServerCredentialStore = RemoteServerCredentialStore(),
         cachePolicyStore: RemoteCachePolicyStore = RemoteCachePolicyStore(),
+        remoteOfflineCopyStore: RemoteOfflineCopyStore? = nil,
         webDAVClient: RemoteWebDAVClient = RemoteWebDAVClient(),
         fileManager: FileManager = .default
     ) {
         self.credentialStore = credentialStore
         self.cachePolicyStore = cachePolicyStore
+        self.remoteOfflineCopyStore = remoteOfflineCopyStore
         self.webDAVClient = webDAVClient
         self.fileManager = fileManager
         let remoteComicCacheRootURL = (
@@ -3102,6 +3105,8 @@ final class RemoteServerBrowsingService {
             return
         }
 
+        let explicitOfflineProtection = try explicitOfflineCacheProtection()
+
         cacheLogger.notice(
             """
             Remote cache trim started fileCount=\(cachedResources.count, privacy: .public) \
@@ -3119,7 +3124,8 @@ final class RemoteServerBrowsingService {
         var remainingBytes = totalBytes
         var removedFileCount = 0
         var removedBytes: Int64 = 0
-        var protectedSkipCount = 0
+        var activeReaderSkipCount = 0
+        var explicitOfflineSkipCount = 0
 
         for candidate in evictionCandidates {
             guard remainingFileCount > cachePolicy.maximumCachedComicFileCount
@@ -3129,7 +3135,15 @@ final class RemoteServerBrowsingService {
             }
 
             guard !isProtectedByActiveReaderLease(candidate.resourceURL) else {
-                protectedSkipCount += 1
+                activeReaderSkipCount += 1
+                continue
+            }
+
+            guard !isProtectedByExplicitOfflineCopy(
+                candidate.resourceURL,
+                protection: explicitOfflineProtection
+            ) else {
+                explicitOfflineSkipCount += 1
                 continue
             }
 
@@ -3150,7 +3164,7 @@ final class RemoteServerBrowsingService {
                 removedBytes += candidate.size
             } catch {
                 cacheLogger.error(
-                    "Remote cache trim failed removedFiles=\(removedFileCount, privacy: .public) removedBytes=\(removedBytes, privacy: .public) protectedSkipped=\(protectedSkipCount, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+                    "Remote cache trim failed removedFiles=\(removedFileCount, privacy: .public) removedBytes=\(removedBytes, privacy: .public) activeReaderSkipped=\(activeReaderSkipCount, privacy: .public) explicitOfflineSkipped=\(explicitOfflineSkipCount, privacy: .public) error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
                 )
                 throw RemoteServerBrowsingError.cacheMaintenanceFailed(
                     "The downloaded remote comic cache could not be trimmed automatically. \(error.userFacingMessage)"
@@ -3165,7 +3179,8 @@ final class RemoteServerBrowsingService {
                 removedBytes=\(removedBytes, privacy: .public) \
                 remainingFiles=\(remainingFileCount, privacy: .public) \
                 remainingBytes=\(remainingBytes, privacy: .public) \
-                protectedSkipped=\(protectedSkipCount, privacy: .public)
+                activeReaderSkipped=\(activeReaderSkipCount, privacy: .public) \
+                explicitOfflineSkipped=\(explicitOfflineSkipCount, privacy: .public)
                 """
             )
         }
@@ -3176,10 +3191,87 @@ final class RemoteServerBrowsingService {
                 """
                 Remote cache trim incomplete remainingFiles=\(remainingFileCount, privacy: .public) \
                 remainingBytes=\(remainingBytes, privacy: .public) \
-                protectedSkipped=\(protectedSkipCount, privacy: .public)
+                activeReaderSkipped=\(activeReaderSkipCount, privacy: .public) \
+                explicitOfflineSkipped=\(explicitOfflineSkipCount, privacy: .public)
                 """
             )
         }
+    }
+
+    private func explicitOfflineCacheProtection() throws -> ExplicitOfflineCacheProtection {
+        guard let remoteOfflineCopyStore else {
+            return .empty
+        }
+
+        let records: [RemoteOfflineCopyRecord]
+        do {
+            records = try remoteOfflineCopyStore.loadRecordsForAutomaticCacheProtection()
+        } catch {
+            cacheLogger.error(
+                "Remote cache trim blocked because explicit offline records could not be loaded error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            throw RemoteServerBrowsingError.cacheMaintenanceFailed(
+                "Saved offline copies could not be verified, so automatic cache trimming was not performed."
+            )
+        }
+
+        var protectedPaths = Set<String>()
+        var legacyIdentities = Set<ExplicitOfflineCacheIdentity>()
+        for record in records {
+            for candidateURL in cachedFileCandidateURLs(for: record.reference) {
+                protectedPaths.insert(candidateURL.standardizedFileURL.path)
+            }
+
+            if record.cacheScopeKey == nil {
+                legacyIdentities.insert(
+                    ExplicitOfflineCacheIdentity(
+                        serverID: record.serverID,
+                        contentKind: record.contentKind,
+                        normalizedPath: normalizeDisplayPath(record.path)
+                    )
+                )
+            }
+        }
+
+        return ExplicitOfflineCacheProtection(
+            protectedPaths: protectedPaths,
+            legacyIdentities: legacyIdentities
+        )
+    }
+
+    private func isProtectedByExplicitOfflineCopy(
+        _ resourceURL: URL,
+        protection: ExplicitOfflineCacheProtection
+    ) -> Bool {
+        if protection.protectedPaths.contains(resourceURL.standardizedFileURL.path) {
+            return true
+        }
+
+        guard !protection.legacyIdentities.isEmpty,
+              let serverID = cachedResourceServerID(for: resourceURL),
+              let metadata = loadCachedMetadata(at: resourceURL),
+              let metadataPath = metadata.path else {
+            return false
+        }
+
+        return protection.legacyIdentities.contains(
+            ExplicitOfflineCacheIdentity(
+                serverID: serverID,
+                contentKind: metadata.contentKind,
+                normalizedPath: normalizeDisplayPath(metadataPath)
+            )
+        )
+    }
+
+    private func cachedResourceServerID(for resourceURL: URL) -> UUID? {
+        let rootComponents = remoteComicCacheRootURL.standardizedFileURL.pathComponents
+        let resourceComponents = resourceURL.standardizedFileURL.pathComponents
+        guard resourceComponents.count > rootComponents.count,
+              Array(resourceComponents.prefix(rootComponents.count)) == rootComponents else {
+            return nil
+        }
+
+        return UUID(uuidString: resourceComponents[rootComponents.count])
     }
 
     private func trimCacheIfNeededIfPossible(reason: String) {
@@ -3873,6 +3965,22 @@ private struct CachedComicResourceRecord {
     let resourceURL: URL
     let size: Int64
     let lastAccessDate: Date
+}
+
+private struct ExplicitOfflineCacheIdentity: Hashable {
+    let serverID: UUID
+    let contentKind: RemoteComicReferenceKind
+    let normalizedPath: String
+}
+
+private struct ExplicitOfflineCacheProtection {
+    let protectedPaths: Set<String>
+    let legacyIdentities: Set<ExplicitOfflineCacheIdentity>
+
+    static let empty = ExplicitOfflineCacheProtection(
+        protectedPaths: [],
+        legacyIdentities: []
+    )
 }
 
 private struct ActiveReaderCacheLeaseRecord {

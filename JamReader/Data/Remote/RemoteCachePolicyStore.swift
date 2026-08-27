@@ -62,6 +62,8 @@ struct RemoteComicCachePolicy: Hashable {
 }
 
 final class RemoteCachePolicyStore {
+    static let downloadFullCopyWhileReadingStorageKey = "remoteBrowser.downloadFullCopyWhileReading"
+
     private let userDefaults: UserDefaults
     private let logger = AppLog.remoteCache
 
@@ -99,6 +101,41 @@ final class RemoteCachePolicyStore {
 
     func savePreset(_ preset: RemoteComicCachePolicyPreset) {
         userDefaults.set(preset.rawValue, forKey: storageKey)
+    }
+
+    func loadDownloadsFullCopyWhileReading() -> Bool {
+        guard let storedValue = userDefaults.object(
+            forKey: Self.downloadFullCopyWhileReadingStorageKey
+        ) else {
+            return true
+        }
+
+        guard let number = storedValue as? NSNumber else {
+            userDefaults.set(true, forKey: Self.downloadFullCopyWhileReadingStorageKey)
+            logger.warning(
+                "Remote reader download preference ignored rawValue=\(AppLogSanitizer.truncated(String(describing: storedValue)), privacy: .public) fallback=true"
+            )
+            return true
+        }
+
+        return number.boolValue
+    }
+
+    func saveDownloadsFullCopyWhileReading(_ isEnabled: Bool) {
+        let previousValue = userDefaults.object(
+            forKey: Self.downloadFullCopyWhileReadingStorageKey
+        ) as? NSNumber
+        guard previousValue?.boolValue != isEnabled else {
+            return
+        }
+
+        userDefaults.set(
+            isEnabled,
+            forKey: Self.downloadFullCopyWhileReadingStorageKey
+        )
+        logger.info(
+            "Remote reader download preference saved enabled=\(isEnabled, privacy: .public)"
+        )
     }
 
     private func legacyPreset(for rawValue: String) -> RemoteComicCachePolicyPreset? {

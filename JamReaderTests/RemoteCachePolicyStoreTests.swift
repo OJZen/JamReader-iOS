@@ -31,6 +31,48 @@ final class RemoteCachePolicyStoreTests: XCTestCase {
         XCTAssertEqual(store.loadPolicy().maximumTotalCacheBytes, 4 * 1_024 * 1_024 * 1_024)
     }
 
+    func testFullCopyWhileReadingDefaultsToEnabled() {
+        let store = RemoteCachePolicyStore(userDefaults: makeUserDefaults())
+
+        XCTAssertTrue(store.loadDownloadsFullCopyWhileReading())
+    }
+
+    func testFullCopyWhileReadingRoundTrips() {
+        let userDefaults = makeUserDefaults()
+        let store = RemoteCachePolicyStore(userDefaults: userDefaults)
+
+        store.saveDownloadsFullCopyWhileReading(false)
+
+        XCTAssertFalse(
+            RemoteCachePolicyStore(userDefaults: userDefaults)
+                .loadDownloadsFullCopyWhileReading()
+        )
+
+        store.saveDownloadsFullCopyWhileReading(true)
+
+        XCTAssertTrue(
+            RemoteCachePolicyStore(userDefaults: userDefaults)
+                .loadDownloadsFullCopyWhileReading()
+        )
+    }
+
+    func testInvalidFullCopyPreferenceRepairsToEnabled() {
+        let userDefaults = makeUserDefaults()
+        userDefaults.set(
+            "invalid",
+            forKey: RemoteCachePolicyStore.downloadFullCopyWhileReadingStorageKey
+        )
+
+        let store = RemoteCachePolicyStore(userDefaults: userDefaults)
+
+        XCTAssertTrue(store.loadDownloadsFullCopyWhileReading())
+        XCTAssertTrue(
+            userDefaults.bool(
+                forKey: RemoteCachePolicyStore.downloadFullCopyWhileReadingStorageKey
+            )
+        )
+    }
+
     func testLegacyPresetValuesAreMappedToCurrentPresets() {
         XCTAssertEqual(loadPreset(fromLegacyRawValue: "compact"), .fiveHundredMB)
         XCTAssertEqual(loadPreset(fromLegacyRawValue: "balanced"), .twoGigabytes)

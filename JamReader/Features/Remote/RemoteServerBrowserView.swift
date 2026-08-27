@@ -1468,9 +1468,12 @@ struct RemoteServerBrowserView: View {
     private func defaultImportScope(for request: RemoteBrowserImportRequest) -> RemoteDirectoryImportScope {
         switch request {
         case .currentFolder:
-            return supportsVisibleResultsImportScope ? .visibleResults : .includeSubfolders
+            if supportsVisibleResultsImportScope {
+                return .visibleResults
+            }
+            return dependencies.remoteBrowserPreferencesStore.loadDefaultFolderImportScope()
         case .directory:
-            return .includeSubfolders
+            return dependencies.remoteBrowserPreferencesStore.loadDefaultFolderImportScope()
         case .comic:
             return .currentFolderOnly
         }

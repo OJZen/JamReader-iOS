@@ -31,7 +31,7 @@ This is the current implementation-facing UI contract. It consolidates and super
 - Lists and grids must remain responsive with large libraries and remote directories. Reuse UIKit-backed high-frequency surfaces and bound thumbnail/prefetch work.
 - Loading should preserve context when possible. Empty states offer one useful next action; error states preserve the real error and a recovery action.
 - Use semantic colors and materials so light/dark mode, contrast, and iPad selection remain coherent. Do not encode state with color alone.
-- Settings uses an Overview plus Reading, Library, Storage, and About. Keep summaries short; put details in the destination screen or confirmation dialog.
+- Settings uses the same General, Reading, Library, and Storage categories on every size. iPhone starts from the category list; iPad presents that list as a persistent sidebar and restores its selected detail. General includes startup behavior and app information. Reading exposes one shared reader default rather than file-type profiles. Expose only enforceable global defaults; leave one-off or context-specific choices in their owning flow. Open Storage management directly, without duplicate overview, summary, or management layers.
 
 ## Change Checklist
 

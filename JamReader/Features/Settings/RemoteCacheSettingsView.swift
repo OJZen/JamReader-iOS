@@ -124,6 +124,7 @@ struct RemoteCacheSettingsView: View {
 
     @State private var remoteCacheSummary: RemoteComicCacheSummary = .empty
     @State private var remoteCachePolicyPreset: RemoteComicCachePolicyPreset = .oneGigabyte
+    @State private var downloadsFullCopyWhileReading = true
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
     @State private var pendingConfirmation: CacheMaintenanceAction?
@@ -140,12 +141,22 @@ struct RemoteCacheSettingsView: View {
         _remoteCachePolicyPreset = State(
             initialValue: dependencies.remoteCachePolicyStore.loadPreset()
         )
+        _downloadsFullCopyWhileReading = State(
+            initialValue: dependencies.remoteCachePolicyStore.loadDownloadsFullCopyWhileReading()
+        )
     }
 
     private var cachePolicyBinding: Binding<RemoteComicCachePolicyPreset> {
         Binding(
             get: { remoteCachePolicyPreset },
             set: setRemoteCachePolicyPreset
+        )
+    }
+
+    private var downloadsFullCopyWhileReadingBinding: Binding<Bool> {
+        Binding(
+            get: { downloadsFullCopyWhileReading },
+            set: setDownloadsFullCopyWhileReading
         )
     }
 
@@ -164,27 +175,19 @@ struct RemoteCacheSettingsView: View {
         maintenanceAction != nil || isApplyingPolicy
     }
 
-    private var managedStorageBytes: Int64 {
-        remoteCacheSummary.totalBytes
-            + remoteThumbnailCacheSummary.totalBytes
-            + importedComicsLibrarySummary.totalBytes
-    }
-
     var body: some View {
         Form {
-            RemoteCacheSummarySection(
-                remoteCacheSummary: remoteCacheSummary,
-                remoteThumbnailCacheSummary: remoteThumbnailCacheSummary,
-                importedComicsLibrarySummary: importedComicsLibrarySummary,
-                totalBytes: managedStorageBytes
-            )
-
             Section {
                 Picker("Download Limit", selection: cachePolicyBinding) {
                     ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
                         Text(preset.settingsLocalizedTitle).tag(preset)
                     }
                 }
+
+                Toggle(
+                    "Download Full Copy While Reading",
+                    isOn: downloadsFullCopyWhileReadingBinding
+                )
 
                 if isApplyingPolicy {
                     HStack(spacing: Spacing.sm) {
@@ -196,7 +199,9 @@ struct RemoteCacheSettingsView: View {
                     .accessibilityElement(children: .combine)
                 }
             } header: {
-                Text("Policy")
+                Text("Downloads")
+            } footer: {
+                Text("For streamed remote comics. Required downloads and explicit offline saves are unchanged.")
             }
 
             DownloadedCopiesCacheSection(
@@ -225,7 +230,7 @@ struct RemoteCacheSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.surfaceGrouped)
-        .navigationTitle("Downloads & Storage")
+        .navigationTitle("Storage")
         .navigationBarTitleDisplayMode(.inline)
         .disabled(isBusy)
         .accessibilityHidden(maintenanceAction != nil)
@@ -264,6 +269,11 @@ struct RemoteCacheSettingsView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    private func setDownloadsFullCopyWhileReading(_ isEnabled: Bool) {
+        downloadsFullCopyWhileReading = isEnabled
+        dependencies.remoteCachePolicyStore.saveDownloadsFullCopyWhileReading(isEnabled)
     }
 
     private func refresh() async {
@@ -484,57 +494,6 @@ struct RemoteCacheSettingsView: View {
             return
         }
         UIAccessibility.post(notification: .announcement, argument: message)
-    }
-}
-
-private struct RemoteCacheSummarySection: View {
-    let remoteCacheSummary: RemoteComicCacheSummary
-    let remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary
-    let importedComicsLibrarySummary: LibraryStorageFootprintSummary
-    let totalBytes: Int64
-
-    var body: some View {
-        Section("Storage Summary") {
-            SettingsSummaryGrid(
-                metrics: [
-                    SettingsSummaryMetric(
-                        title: "Downloads",
-                        value: remoteCacheSummary.hasCachedComics
-                            ? remoteCacheSummary.cachedComicSizeText
-                            : String(localized: "None"),
-                        systemImage: "arrow.down.circle.fill",
-                        tint: .blue
-                    ),
-                    SettingsSummaryMetric(
-                        title: "Covers",
-                        value: remoteThumbnailCacheSummary.isEmpty
-                            ? String(localized: "None")
-                            : remoteThumbnailCacheSummary.sizeText,
-                        systemImage: "photo.stack.fill",
-                        tint: .orange
-                    ),
-                    SettingsSummaryMetric(
-                        title: "Imported",
-                        value: importedComicsLibrarySummary.isEmpty
-                            ? String(localized: "None")
-                            : importedComicsLibrarySummary.summaryText,
-                        systemImage: "books.vertical.fill",
-                        tint: .purple
-                    ),
-                    SettingsSummaryMetric(
-                        title: "Total",
-                        value: totalBytes > 0
-                            ? ByteCountFormatter.string(
-                                fromByteCount: totalBytes,
-                                countStyle: .file
-                            )
-                            : String(localized: "None"),
-                        systemImage: "internaldrive.fill",
-                        tint: .teal
-                    )
-                ]
-            )
-        }
     }
 }
 

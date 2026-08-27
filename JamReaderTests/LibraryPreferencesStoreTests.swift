@@ -51,19 +51,19 @@ final class LibraryPreferencesStoreTests: XCTestCase {
         store.saveRecentWindow(.thirtyDays)
 
         var snapshot = SettingsSnapshot.empty
-        let comicLayout = ReaderDisplayLayout(
+        let readerLayout = ReaderDisplayLayout(
             pagingMode: .paged,
             spreadMode: .doublePage,
             readingDirection: .rightToLeft,
             coverAsSinglePage: false,
             fitMode: .height
         )
-        snapshot.comicLayout = comicLayout
+        snapshot.readerLayout = readerLayout
         snapshot.localLibraryCount = 42
         snapshot.reloadLibraryPreferences(preferencesStore: store)
 
         XCTAssertEqual(snapshot.recentWindow, .thirtyDays)
-        XCTAssertEqual(snapshot.comicLayout, comicLayout)
+        XCTAssertEqual(snapshot.readerLayout, readerLayout)
         XCTAssertEqual(snapshot.localLibraryCount, 42)
     }
 

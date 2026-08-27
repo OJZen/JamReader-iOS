@@ -12,125 +12,172 @@ final class ReaderPreferenceStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    func testReaderLayoutDefaultsFollowFileType() {
+    func testReaderLayoutUsesOneSharedDefault() {
         let store = ReaderLayoutPreferencesStore(userDefaults: makeUserDefaults())
 
-        XCTAssertEqual(store.loadLayout(for: .manga), ReaderDisplayLayout(defaultsFor: .manga))
-        XCTAssertEqual(store.loadLayout(for: .webComic), ReaderDisplayLayout(defaultsFor: .webComic))
-        XCTAssertEqual(store.loadLayout(for: .comic), ReaderDisplayLayout(defaultsFor: .comic))
+        XCTAssertEqual(store.loadLayout(), ReaderDisplayLayout())
     }
 
-    func testReaderLayoutRoundTripsByPreferenceScope() {
+    func testReaderLayoutRoundTripsThroughSharedScope() {
         let userDefaults = makeUserDefaults()
         let store = ReaderLayoutPreferencesStore(userDefaults: userDefaults)
-        let mangaLayout = ReaderDisplayLayout(
-            pagingMode: .verticalContinuous,
+        let layout = ReaderDisplayLayout(
+            pagingMode: .paged,
             spreadMode: .doublePage,
-            readingDirection: .leftToRight,
+            readingDirection: .rightToLeft,
             coverAsSinglePage: false,
             fitMode: .height
         )
-        let comicLayout = ReaderDisplayLayout(
-            pagingMode: .paged,
+
+        store.saveLayout(layout)
+
+        XCTAssertEqual(
+            ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(),
+            layout
+        )
+    }
+
+    func testSingleLegacyProfileMigratesToSharedLayout() {
+        let userDefaults = makeUserDefaults()
+        let legacyLayout = ReaderDisplayLayout(
+            pagingMode: .verticalContinuous,
             spreadMode: .singlePage,
             readingDirection: .rightToLeft,
-            coverAsSinglePage: true,
+            coverAsSinglePage: false,
             fitMode: .width
         )
-        let webcomicLayout = ReaderDisplayLayout(
+        setStoredLayout(legacyLayout, scope: "manga", userDefaults: userDefaults)
+
+        let store = ReaderLayoutPreferencesStore(userDefaults: userDefaults)
+
+        XCTAssertEqual(store.loadLayout(), legacyLayout)
+        XCTAssertEqual(
+            userDefaults.string(forKey: "reader.layout.shared.pagingMode"),
+            ReaderPagingMode.verticalContinuous.rawValue
+        )
+
+        userDefaults.set(
+            ReaderPagingMode.paged.rawValue,
+            forKey: "reader.layout.manga.pagingMode"
+        )
+
+        XCTAssertEqual(
+            ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(),
+            legacyLayout
+        )
+    }
+
+    func testConflictingLegacyProfilesPreferFormerGeneralComicProfile() {
+        let userDefaults = makeUserDefaults()
+        let comicLayout = ReaderDisplayLayout(
+            pagingMode: .paged,
+            spreadMode: .doublePage,
+            readingDirection: .rightToLeft,
+            coverAsSinglePage: false,
+            fitMode: .height
+        )
+        let mangaLayout = ReaderDisplayLayout(
             pagingMode: .verticalContinuous,
             spreadMode: .singlePage,
             readingDirection: .leftToRight,
             coverAsSinglePage: true,
             fitMode: .width
         )
-
-        store.saveLayout(mangaLayout, for: .manga)
-        store.saveLayout(comicLayout, for: .comic)
-        store.saveLayout(webcomicLayout, for: .webComic)
-
-        XCTAssertEqual(ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(for: .manga), mangaLayout)
-        XCTAssertEqual(ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(for: .yonkoma), mangaLayout)
-        XCTAssertEqual(ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(for: .comic), comicLayout)
-        XCTAssertEqual(ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(for: .westernManga), comicLayout)
-        XCTAssertEqual(ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(for: .webComic), webcomicLayout)
-    }
-
-    func testLegacyComicPreferencesMigrateToIndependentWebcomicScope() {
-        let userDefaults = makeUserDefaults()
-        userDefaults.set(ReaderPagingMode.paged.rawValue, forKey: "reader.layout.comic.pagingMode")
-        userDefaults.set(ReaderSpreadMode.doublePage.rawValue, forKey: "reader.layout.comic.spreadMode")
-        userDefaults.set(ReaderReadingDirection.rightToLeft.rawValue, forKey: "reader.layout.comic.readingDirection")
-        userDefaults.set(ReaderFitMode.height.rawValue, forKey: "reader.layout.comic.fitMode")
-        userDefaults.set(false, forKey: "reader.layout.comic.coverAsSinglePage")
+        setStoredLayout(mangaLayout, scope: "manga", userDefaults: userDefaults)
+        setStoredLayout(comicLayout, scope: "comic", userDefaults: userDefaults)
 
         let store = ReaderLayoutPreferencesStore(userDefaults: userDefaults)
 
+        XCTAssertEqual(store.loadLayout(), comicLayout)
+    }
+
+    func testMigrationPrefersTheMostCompleteLegacyProfile() {
+        let userDefaults = makeUserDefaults()
+        let mangaLayout = ReaderDisplayLayout(
+            pagingMode: .verticalContinuous,
+            spreadMode: .singlePage,
+            readingDirection: .rightToLeft,
+            coverAsSinglePage: false,
+            fitMode: .width
+        )
+        userDefaults.set(
+            ReaderPagingMode.paged.rawValue,
+            forKey: "reader.layout.comic.pagingMode"
+        )
+        setStoredLayout(mangaLayout, scope: "manga", userDefaults: userDefaults)
+
         XCTAssertEqual(
-            store.loadLayout(for: .webComic),
+            ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(),
+            mangaLayout
+        )
+    }
+
+    func testExistingSharedLayoutWinsOverLegacyProfiles() {
+        let userDefaults = makeUserDefaults()
+        let sharedLayout = ReaderDisplayLayout(
+            pagingMode: .verticalContinuous,
+            spreadMode: .singlePage,
+            readingDirection: .leftToRight,
+            coverAsSinglePage: true,
+            fitMode: .width
+        )
+        let legacyLayout = ReaderDisplayLayout(
+            pagingMode: .paged,
+            spreadMode: .doublePage,
+            readingDirection: .rightToLeft,
+            coverAsSinglePage: false,
+            fitMode: .height
+        )
+        setStoredLayout(sharedLayout, scope: "shared", userDefaults: userDefaults)
+        setStoredLayout(legacyLayout, scope: "comic", userDefaults: userDefaults)
+
+        XCTAssertEqual(
+            ReaderLayoutPreferencesStore(userDefaults: userDefaults).loadLayout(),
+            sharedLayout
+        )
+    }
+
+    func testResetReaderLayoutRemovesSharedStoredValues() {
+        let userDefaults = makeUserDefaults()
+        let store = ReaderLayoutPreferencesStore(userDefaults: userDefaults)
+        store.saveLayout(
             ReaderDisplayLayout(
-                pagingMode: .paged,
-                spreadMode: .doublePage,
+                pagingMode: .verticalContinuous,
+                spreadMode: .singlePage,
                 readingDirection: .rightToLeft,
                 coverAsSinglePage: false,
-                fitMode: .height
+                fitMode: .width
             )
         )
 
-        store.saveLayout(ReaderDisplayLayout(defaultsFor: .comic), for: .comic)
+        store.resetLayout()
 
-        XCTAssertEqual(store.loadLayout(for: .webComic).spreadMode, .doublePage)
-        XCTAssertEqual(store.loadLayout(for: .webComic).readingDirection, .rightToLeft)
-    }
-
-    func testResetReaderLayoutRemovesStoredValuesForOnlyThatScope() {
-        let userDefaults = makeUserDefaults()
-        let store = ReaderLayoutPreferencesStore(userDefaults: userDefaults)
-        let customComicLayout = ReaderDisplayLayout(
-            pagingMode: .paged,
-            spreadMode: .doublePage,
-            readingDirection: .rightToLeft,
-            coverAsSinglePage: false,
-            fitMode: .height
-        )
-        let customMangaLayout = ReaderDisplayLayout(
-            pagingMode: .verticalContinuous,
-            spreadMode: .singlePage,
-            readingDirection: .leftToRight,
-            coverAsSinglePage: true,
-            fitMode: .width
-        )
-        store.saveLayout(customComicLayout, for: .comic)
-        store.saveLayout(customMangaLayout, for: .manga)
-
-        store.resetLayout(for: .comic)
-
-        XCTAssertEqual(store.loadLayout(for: .comic), ReaderDisplayLayout(defaultsFor: .comic))
-        XCTAssertEqual(store.loadLayout(for: .manga), customMangaLayout)
+        XCTAssertEqual(store.loadLayout(), ReaderDisplayLayout())
+        XCTAssertNil(userDefaults.object(forKey: "reader.layout.shared.pagingMode"))
     }
 
     func testInvalidReaderLayoutFieldFallsBackWithoutDiscardingValidFields() {
         let userDefaults = makeUserDefaults()
-        userDefaults.set("invalid", forKey: "reader.layout.manga.pagingMode")
-        userDefaults.set(ReaderFitMode.height.rawValue, forKey: "reader.layout.manga.fitMode")
+        userDefaults.set("invalid", forKey: "reader.layout.shared.pagingMode")
+        userDefaults.set(ReaderFitMode.height.rawValue, forKey: "reader.layout.shared.fitMode")
 
         let layout = ReaderLayoutPreferencesStore(userDefaults: userDefaults)
-            .loadLayout(for: .manga)
+            .loadLayout()
 
-        XCTAssertEqual(layout.pagingMode, ReaderDisplayLayout(defaultsFor: .manga).pagingMode)
+        XCTAssertEqual(layout.pagingMode, ReaderDisplayLayout().pagingMode)
         XCTAssertEqual(layout.fitMode, .height)
     }
 
     func testReaderLayoutNotificationOnlyPostsForPersistedChanges() {
         let store = ReaderLayoutPreferencesStore(userDefaults: makeUserDefaults())
-        var notifiedTypes: [Int] = []
+        var notifiedScopes: [String] = []
         let observer = NotificationCenter.default.addObserver(
             forName: .readerLayoutPreferencesDidChange,
             object: store,
             queue: nil
         ) { notification in
-            if let type = notification.userInfo?["type"] as? Int {
-                notifiedTypes.append(type)
+            if let scope = notification.userInfo?["scope"] as? String {
+                notifiedScopes.append(scope)
             }
         }
         defer {
@@ -144,14 +191,14 @@ final class ReaderPreferenceStoreTests: XCTestCase {
             coverAsSinglePage: false,
             fitMode: .height
         )
-        store.saveLayout(layout, for: .comic)
-        store.saveLayout(layout, for: .comic)
+        store.saveLayout(layout)
+        store.saveLayout(layout)
 
         var rotatedLayout = layout
         rotatedLayout.rotation = .degrees90
-        store.saveLayout(rotatedLayout, for: .comic)
+        store.saveLayout(rotatedLayout)
 
-        XCTAssertEqual(notifiedTypes, [LibraryFileType.comic.rawValue])
+        XCTAssertEqual(notifiedScopes, ["shared"])
     }
 
     func testResetReaderLayoutOnlyNotifiesWhenStoredValuesExist() {
@@ -168,7 +215,7 @@ final class ReaderPreferenceStoreTests: XCTestCase {
             NotificationCenter.default.removeObserver(observer)
         }
 
-        store.resetLayout(for: .comic)
+        store.resetLayout()
         store.saveLayout(
             ReaderDisplayLayout(
                 pagingMode: .paged,
@@ -176,32 +223,31 @@ final class ReaderPreferenceStoreTests: XCTestCase {
                 readingDirection: .leftToRight,
                 coverAsSinglePage: true,
                 fitMode: .page
-            ),
-            for: .comic
+            )
         )
-        store.resetLayout(for: .comic)
-        store.resetLayout(for: .comic)
+        store.resetLayout()
+        store.resetLayout()
 
         XCTAssertEqual(notificationCount, 2)
     }
 
     func testSettingsSnapshotReaderRefreshOnlyChangesReaderFields() {
         let store = ReaderLayoutPreferencesStore(userDefaults: makeUserDefaults())
-        let comicLayout = ReaderDisplayLayout(
+        let readerLayout = ReaderDisplayLayout(
             pagingMode: .paged,
             spreadMode: .doublePage,
             readingDirection: .rightToLeft,
             coverAsSinglePage: false,
             fitMode: .height
         )
-        store.saveLayout(comicLayout, for: .comic)
+        store.saveLayout(readerLayout)
 
         var snapshot = SettingsSnapshot.empty
         snapshot.recentWindow = .ninetyDays
         snapshot.localLibraryCount = 42
         snapshot.reloadReaderPreferences(preferencesStore: store)
 
-        XCTAssertEqual(snapshot.comicLayout, comicLayout)
+        XCTAssertEqual(snapshot.readerLayout, readerLayout)
         XCTAssertEqual(snapshot.recentWindow, .ninetyDays)
         XCTAssertEqual(snapshot.localLibraryCount, 42)
     }
@@ -232,6 +278,19 @@ final class ReaderPreferenceStoreTests: XCTestCase {
         let reloadedStore = EPUBReadingLocationStore(defaults: userDefaults)
         XCTAssertNil(reloadedStore.location(for: firstDocument))
         XCTAssertEqual(reloadedStore.location(for: secondDocument), "chapter-2")
+    }
+
+    private func setStoredLayout(
+        _ layout: ReaderDisplayLayout,
+        scope: String,
+        userDefaults: UserDefaults
+    ) {
+        let prefix = "reader.layout.\(scope)"
+        userDefaults.set(layout.pagingMode.rawValue, forKey: "\(prefix).pagingMode")
+        userDefaults.set(layout.spreadMode.rawValue, forKey: "\(prefix).spreadMode")
+        userDefaults.set(layout.readingDirection.rawValue, forKey: "\(prefix).readingDirection")
+        userDefaults.set(layout.fitMode.rawValue, forKey: "\(prefix).fitMode")
+        userDefaults.set(layout.coverAsSinglePage, forKey: "\(prefix).coverAsSinglePage")
     }
 
     private func makeUserDefaults() -> UserDefaults {

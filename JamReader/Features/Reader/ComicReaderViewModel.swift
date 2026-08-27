@@ -43,9 +43,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     ) {
         self.request = request
         self.dependencies = dependencies
-        self.readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(
-            for: request.preferredLayoutType
-        )
+        self.readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout()
         self.currentPageIndex = request.fallbackPageIndex
     }
 
@@ -622,15 +620,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     }
 
     func applyUpdatedComic(_ updatedComic: LibraryComic) {
-        let previousType = libraryComic?.type
-        if let previousType, updatedComic.type != previousType {
-            persistLayoutPreferences(for: previousType)
-        }
-
         publishLibraryComicUpdate(updatedComic)
-        if updatedComic.type != previousType {
-            readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: updatedComic.type)
-        }
     }
 
     func openPreviousComic() {
@@ -771,7 +761,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         activeDocument = document
         currentPageIndex = session.initialPageIndex
         bookmarkPageIndices = session.bookmarkPageIndices
-        readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: session.layoutType)
+        readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout()
         libraryComic = session.libraryComic
         navigationContext = session.navigationContext
         isFavorite = session.libraryComic?.isFavorite ?? false
@@ -815,6 +805,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
 
     private func startBackgroundDownloadIfNeeded(for session: ComicReaderSession) {
         guard session.shouldStartBackgroundDownload,
+              dependencies.remoteCachePolicyStore.loadDownloadsFullCopyWhileReading(),
               let context = session.remoteContext,
               backgroundDownloadTask == nil else {
             return
@@ -862,7 +853,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                     guard self.activeSession?.id == sessionID else {
                         return
                     }
-                    self.noticeMessage = String(localized: "Offline copy ready.")
+                    self.noticeMessage = String(localized: "Downloaded copy ready.")
                     self.scheduleNoticeDismissalIfNeeded()
                 }
             } catch {
@@ -1007,7 +998,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             newComic.bookmarkPageIndices,
             maximumCount: 3
         )
-        readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout(for: newComic.type)
+        readerLayout = dependencies.readerLayoutPreferencesStore.loadLayout()
         isFavorite = newComic.isFavorite
         rating = Self.normalizedRatingValue(from: newComic.rating)
         lastPersistedProgressSnapshot = nil
@@ -1057,13 +1048,10 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         }
     }
 
-    private func persistLayoutPreferences(for type: LibraryFileType? = nil) {
+    private func persistLayoutPreferences() {
         var persistedLayout = readerLayout
         persistedLayout.rotation = .degrees0
-        dependencies.readerLayoutPreferencesStore.saveLayout(
-            persistedLayout,
-            for: type ?? activeSession?.layoutType ?? request.preferredLayoutType
-        )
+        dependencies.readerLayoutPreferencesStore.saveLayout(persistedLayout)
     }
 
     private func applyStateWriteResult(_ result: ComicReaderStateWriteResult) {

@@ -3,30 +3,25 @@ import SwiftUI
 struct SettingsPaneSections: View {
     let pane: SettingsHomePane
     let snapshot: SettingsSnapshot
-    let onOpenReaderDefaults: (ReaderDefaultProfile) -> Void
+    let onSetAppLaunchDestination: (AppLaunchDestination) -> Void
+    let onSetKeepsScreenAwake: (Bool) -> Void
+    let onOpenReaderDefaults: () -> Void
     let onSetRecentWindow: (LibraryRecentWindowOption) -> Void
-    let onOpenCacheManagement: () -> Void
+    let onSetDefaultFolderImportScope: (RemoteDirectoryImportScope) -> Void
 
     @ViewBuilder
     var body: some View {
         switch pane {
-        case .overview:
-            SettingsOverviewSummarySection(snapshot: snapshot)
-            ReadingDefaultsSettingsSection(
+        case .general:
+            GeneralSettingsSection(
                 snapshot: snapshot,
-                onOpenReaderDefaults: onOpenReaderDefaults
+                onSetAppLaunchDestination: onSetAppLaunchDestination
             )
-            LibraryPreferencesSettingsSection(
-                snapshot: snapshot,
-                onSetRecentWindow: onSetRecentWindow
-            )
-            StorageSettingsSection(
-                snapshot: snapshot,
-                showsBreakdown: false,
-                onOpenCacheManagement: onOpenCacheManagement
-            )
-            AboutSettingsSection(snapshot: snapshot)
         case .reading:
+            ReadingBehaviorSettingsSection(
+                snapshot: snapshot,
+                onSetKeepsScreenAwake: onSetKeepsScreenAwake
+            )
             ReadingDefaultsSettingsSection(
                 snapshot: snapshot,
                 onOpenReaderDefaults: onOpenReaderDefaults
@@ -36,80 +31,110 @@ struct SettingsPaneSections: View {
                 snapshot: snapshot,
                 onSetRecentWindow: onSetRecentWindow
             )
-        case .storage:
-            StorageSettingsSection(
+            RemoteImportPreferencesSettingsSection(
                 snapshot: snapshot,
-                showsBreakdown: true,
-                onOpenCacheManagement: onOpenCacheManagement
+                onSetDefaultFolderImportScope: onSetDefaultFolderImportScope
             )
-        case .about:
-            AboutSettingsSection(snapshot: snapshot)
+        case .storage:
+            EmptyView()
         }
     }
 }
 
-private struct SettingsOverviewSummarySection: View {
+private struct GeneralSettingsSection: View {
     let snapshot: SettingsSnapshot
+    let onSetAppLaunchDestination: (AppLaunchDestination) -> Void
+
+    private var launchDestinationBinding: Binding<AppLaunchDestination> {
+        Binding(
+            get: { snapshot.appLaunchDestination },
+            set: onSetAppLaunchDestination
+        )
+    }
 
     var body: some View {
-        Section("At a Glance") {
-            SettingsSummaryGrid(
-                metrics: [
-                    SettingsSummaryMetric(
-                        title: "Reading Defaults",
-                        value: String(localized: "3 Profiles"),
-                        systemImage: "book.closed.fill",
-                        tint: .blue
-                    ),
-                    SettingsSummaryMetric(
-                        title: "Recent Items",
-                        value: snapshot.recentWindow.title,
-                        systemImage: "clock.fill",
-                        tint: .purple
-                    ),
-                    SettingsSummaryMetric(
-                        title: "Download Limit",
-                        value: snapshot.remoteCachePolicyPreset.title,
-                        systemImage: "arrow.down.circle.fill",
-                        tint: .teal
-                    ),
-                    SettingsSummaryMetric(
-                        title: "On Device",
-                        value: snapshot.managedStorageText,
-                        systemImage: "internaldrive.fill",
-                        tint: .orange
-                    )
-                ]
-            )
+        Section("Startup") {
+            Picker("Open at Launch", selection: launchDestinationBinding) {
+                ForEach(AppLaunchDestination.allCases) { destination in
+                    Text(destination.settingsLocalizedTitle).tag(destination)
+                }
+            }
+        }
+
+        AboutSettingsSection(snapshot: snapshot)
+    }
+}
+
+private struct ReadingBehaviorSettingsSection: View {
+    let snapshot: SettingsSnapshot
+    let onSetKeepsScreenAwake: (Bool) -> Void
+
+    private var keepsScreenAwakeBinding: Binding<Bool> {
+        Binding(
+            get: { snapshot.keepsScreenAwake },
+            set: onSetKeepsScreenAwake
+        )
+    }
+
+    var body: some View {
+        Section {
+            Toggle("Keep Screen Awake", isOn: keepsScreenAwakeBinding)
+        } header: {
+            Text("Display")
+        } footer: {
+            Text("Prevents automatic locking only while a comic is open and visible.")
         }
     }
 }
 
 private struct ReadingDefaultsSettingsSection: View {
     let snapshot: SettingsSnapshot
-    let onOpenReaderDefaults: (ReaderDefaultProfile) -> Void
+    let onOpenReaderDefaults: () -> Void
 
     var body: some View {
         Section {
-            ForEach(ReaderDefaultProfile.allCases) { profile in
-                Button {
-                    onOpenReaderDefaults(profile)
-                } label: {
-                    SettingsNavigationRow(
-                        systemImage: profile.systemImage,
-                        tint: profile.tint,
-                        title: profile.title,
-                        detail: profile.summary(
-                            for: snapshot.layout(for: profile)
-                        )
-                    )
-                }
-                .buttonStyle(.plain)
-                .pointerHoverEffect()
-                .accessibilityHint("Opens reading defaults")
+            Button(action: onOpenReaderDefaults) {
+                SettingsNavigationRow(
+                    systemImage: "book.closed.fill",
+                    tint: .blue,
+                    title: String(localized: "Reading Defaults"),
+                    detail: snapshot.readerLayout.settingsSummary
+                )
+            }
+            .buttonStyle(.plain)
+            .pointerHoverEffect()
+            .accessibilityHint("Opens reading defaults")
+        } header: {
+            Text("Reader")
+        } footer: {
+            Text("These defaults apply to every comic opened in the reader.")
+        }
+    }
+}
+
+private struct RemoteImportPreferencesSettingsSection: View {
+    let snapshot: SettingsSnapshot
+    let onSetDefaultFolderImportScope: (RemoteDirectoryImportScope) -> Void
+
+    private var importScopeBinding: Binding<RemoteDirectoryImportScope> {
+        Binding(
+            get: { snapshot.defaultFolderImportScope },
+            set: onSetDefaultFolderImportScope
+        )
+    }
+
+    var body: some View {
+        Section {
+            Picker("Default Folder Import Scope", selection: importScopeBinding) {
+                Text(RemoteDirectoryImportScope.currentFolderOnly.title)
+                    .tag(RemoteDirectoryImportScope.currentFolderOnly)
+                Text(RemoteDirectoryImportScope.includeSubfolders.title)
+                    .tag(RemoteDirectoryImportScope.includeSubfolders)
             }
         } header: {
-            Text("Reading")
+            Text("Remote Import")
+        } footer: {
+            Text("Preselected when importing a remote folder. You can still change it before importing.")
         }
     }
 }
@@ -143,73 +168,6 @@ private struct LibraryPreferencesSettingsSection: View {
     }
 }
 
-private struct StorageSettingsSection: View {
-    let snapshot: SettingsSnapshot
-    let showsBreakdown: Bool
-    let onOpenCacheManagement: () -> Void
-
-    var body: some View {
-        Section {
-            Button(action: onOpenCacheManagement) {
-                SettingsNavigationRow(
-                    systemImage: "internaldrive.fill",
-                    tint: .orange,
-                    title: String(localized: "Manage Downloads & Cache"),
-                    detail: nil,
-                    value: snapshot.managedStorageText
-                )
-            }
-            .buttonStyle(.plain)
-            .pointerHoverEffect()
-
-            LabeledContent("Download Limit") {
-                Text(snapshot.remoteCachePolicyPreset.title)
-                    .foregroundStyle(Color.textSecondary)
-            }
-
-            if showsBreakdown {
-                storageValueRow(
-                    title: String(localized: "Downloaded Copies"),
-                    value: snapshot.remoteCacheSummary.hasCachedComics
-                        ? snapshot.remoteCacheSummary.summaryText
-                        : String(localized: "None")
-                )
-
-                if snapshot.remoteCacheSummary.hasOtherCacheData {
-                    storageValueRow(
-                        title: String(localized: "Temporary Cache"),
-                        value: snapshot.remoteCacheSummary.otherCacheSizeText
-                    )
-                }
-
-                storageValueRow(
-                    title: String(localized: "Cover Thumbnails"),
-                    value: snapshot.remoteThumbnailCacheSummary.isEmpty
-                        ? String(localized: "None")
-                        : snapshot.remoteThumbnailCacheSummary.summaryText
-                )
-
-                storageValueRow(
-                    title: String(localized: "Imported Comics"),
-                    value: snapshot.importedComicsLibrarySummary.isEmpty
-                        ? String(localized: "None")
-                        : snapshot.importedComicsLibrarySummary.summaryText
-                )
-            }
-        } header: {
-            Text("Storage")
-        }
-    }
-
-    private func storageValueRow(title: String, value: String) -> some View {
-        LabeledContent(title) {
-            Text(value)
-                .foregroundStyle(Color.textSecondary)
-                .multilineTextAlignment(.trailing)
-        }
-    }
-}
-
 private struct AboutSettingsSection: View {
     let snapshot: SettingsSnapshot
 
@@ -225,20 +183,6 @@ private struct AboutSettingsSection: View {
                     SettingsIcon(
                         systemName: "info.circle.fill",
                         color: .gray
-                    )
-                }
-            }
-
-            LabeledContent {
-                Text("\(snapshot.localLibraryCount)")
-                    .foregroundStyle(Color.textSecondary)
-            } label: {
-                Label {
-                    Text("Local Libraries")
-                } icon: {
-                    SettingsIcon(
-                        systemName: "books.vertical.fill",
-                        color: .appAccent
                     )
                 }
             }

@@ -1,7 +1,15 @@
 import Foundation
 import os
 
+extension Notification.Name {
+    static let remoteBrowserPreferencesDidChange = Notification.Name(
+        "JamReader.remoteBrowserPreferencesDidChange"
+    )
+}
+
 final class RemoteBrowserPreferencesStore {
+    static let defaultFolderImportScopeStorageKey = "remoteServerBrowser.defaultFolderImportScope"
+
     private let userDefaults: UserDefaults
     private let logger = AppLog.remote
 
@@ -71,6 +79,53 @@ final class RemoteBrowserPreferencesStore {
         userDefaults.set(mode.rawValue, forKey: key(for: serverID, field: "sortMode"))
         logger.info(
             "Remote browser preference saved serverID=\(serverID.uuidString, privacy: .public) field=sortMode value=\(mode.rawValue, privacy: .public)"
+        )
+    }
+
+    func loadDefaultFolderImportScope() -> RemoteDirectoryImportScope {
+        guard let rawValue = userDefaults.string(
+            forKey: Self.defaultFolderImportScopeStorageKey
+        ) else {
+            return .includeSubfolders
+        }
+
+        guard let scope = RemoteDirectoryImportScope(rawValue: rawValue),
+              scope == .currentFolderOnly || scope == .includeSubfolders else {
+            userDefaults.set(
+                RemoteDirectoryImportScope.includeSubfolders.rawValue,
+                forKey: Self.defaultFolderImportScopeStorageKey
+            )
+            logger.warning(
+                "Remote browser import scope ignored rawValue=\(AppLogSanitizer.truncated(rawValue), privacy: .public) fallback=\(RemoteDirectoryImportScope.includeSubfolders.rawValue, privacy: .public)"
+            )
+            return .includeSubfolders
+        }
+
+        return scope
+    }
+
+    func saveDefaultFolderImportScope(_ scope: RemoteDirectoryImportScope) {
+        guard scope == .currentFolderOnly || scope == .includeSubfolders else {
+            return
+        }
+
+        let previousValue = userDefaults.string(
+            forKey: Self.defaultFolderImportScopeStorageKey
+        )
+        guard previousValue != scope.rawValue else {
+            return
+        }
+
+        userDefaults.set(
+            scope.rawValue,
+            forKey: Self.defaultFolderImportScopeStorageKey
+        )
+        logger.info(
+            "Remote browser preference saved field=defaultFolderImportScope value=\(scope.rawValue, privacy: .public)"
+        )
+        NotificationCenter.default.post(
+            name: .remoteBrowserPreferencesDidChange,
+            object: self
         )
     }
 

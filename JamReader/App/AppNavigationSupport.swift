@@ -30,6 +30,27 @@ enum AppRootTab: String, Hashable {
     }
 }
 
+enum AppLaunchDestination: String, CaseIterable, Identifiable, Hashable {
+    case lastUsedTab
+    case library
+    case browse
+
+    static let defaultValue = AppLaunchDestination.lastUsedTab
+
+    var id: String { rawValue }
+
+    func resolvedTab(lastUsedTab: AppRootTab) -> AppRootTab {
+        switch self {
+        case .lastUsedTab:
+            return lastUsedTab
+        case .library:
+            return .library
+        case .browse:
+            return .browse
+        }
+    }
+}
+
 enum AppNavigationStorageKeys {
     static let selectedTab = "appRoot.selectedTab"
     static let libraryHomeSelectedLibraryID = "libraryHome.selectedLibraryID"
@@ -129,11 +150,11 @@ enum BrowseStoredNavigationSelection: Equatable {
 
 enum SettingsNavigationRoute {
     case overview
+    case general
     case reading
-    case readerDefaults(ReaderDefaultProfile)
+    case readerDefaults
     case library
     case storage
-    case about
     case remoteCache
 }
 

@@ -5,6 +5,7 @@ final class RemoteServerBrowsingServiceCacheTests: XCTestCase {
     private var harnesses: [RemoteCacheServiceTestHarness] = []
 
     override func tearDown() {
+        URLProtocolStub.reset()
         for harness in harnesses {
             harness.remove()
         }
@@ -198,8 +199,226 @@ final class RemoteServerBrowsingServiceCacheTests: XCTestCase {
         XCTAssertFalse(harness.fileManager.fileExists(atPath: cachedURL.path))
     }
 
-    private func makeHarness(testName: String = #function) throws -> RemoteCacheServiceTestHarness {
-        let harness = try RemoteCacheServiceTestHarness.make(testName: testName)
+    func testApplyingCacheLimitPreservesExplicitOfflineCopiesAtScopedAndLegacyPaths() throws {
+        let harness = try makeHarness()
+        let profile = harness.makeSMBProfile()
+        let scopedOfflineReference = harness.makeReference(
+            for: profile,
+            path: "/Offline/Scoped.cbz",
+            fileName: "Scoped.cbz",
+            bytes: [1],
+            cacheScopeKey: profile.remoteCacheScopeKey
+        )
+        let legacyOfflineReference = harness.makeReference(
+            for: profile,
+            path: "/Offline/Legacy.cbz",
+            fileName: "Legacy.cbz",
+            bytes: [2],
+            cacheScopeKey: nil
+        )
+        let migratedLegacyRecordReference = harness.makeReference(
+            for: profile,
+            path: "/Offline/Migrated.cbz",
+            fileName: "Migrated.cbz",
+            bytes: [3],
+            cacheScopeKey: nil
+        )
+        let migratedScopedCacheReference = harness.makeReference(
+            for: profile,
+            path: migratedLegacyRecordReference.path,
+            fileName: migratedLegacyRecordReference.fileName,
+            bytes: [3],
+            cacheScopeKey: profile.remoteCacheScopeKey
+        )
+        let scopedOfflineURL = harness.resolver.cachedFileURL(for: scopedOfflineReference)
+        let legacyOfflineURL = harness.resolver.cachedFileURL(for: legacyOfflineReference)
+        let migratedScopedCacheURL = harness.resolver.cachedFileURL(for: migratedScopedCacheReference)
+
+        try harness.writeCachedComic(
+            for: scopedOfflineReference,
+            bytes: [1],
+            lastAccessDate: Date(timeIntervalSince1970: 1)
+        )
+        try harness.writeCachedComic(
+            for: legacyOfflineReference,
+            bytes: [2],
+            lastAccessDate: Date(timeIntervalSince1970: 2)
+        )
+        try harness.writeCachedComic(
+            for: migratedScopedCacheReference,
+            bytes: [3],
+            lastAccessDate: Date(timeIntervalSince1970: 3)
+        )
+        try harness.offlineCopyStore.recordDownloadedCopies(
+            for: [
+                scopedOfflineReference,
+                legacyOfflineReference,
+                migratedLegacyRecordReference
+            ]
+        )
+
+        let ordinaryReferences = try (0..<12).map { index in
+            let reference = harness.makeReference(
+                for: profile,
+                path: "/Ordinary/Book-\(index).cbz",
+                fileName: "Book-\(index).cbz",
+                bytes: [UInt8(index)],
+                cacheScopeKey: profile.remoteCacheScopeKey
+            )
+            try harness.writeCachedComic(
+                for: reference,
+                bytes: [UInt8(index)],
+                lastAccessDate: Date(timeIntervalSince1970: TimeInterval(100 + index))
+            )
+            return reference
+        }
+
+        try harness.service.applyCachePolicyPreset(.fiveHundredMB)
+
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: scopedOfflineURL.path))
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: legacyOfflineURL.path))
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: migratedScopedCacheURL.path))
+        XCTAssertEqual(harness.service.cacheSummary().fileCount, 12)
+        XCTAssertEqual(
+            ordinaryReferences.filter {
+                harness.fileManager.fileExists(
+                    atPath: harness.resolver.cachedFileURL(for: $0).path
+                )
+            }.count,
+            9
+        )
+        XCTAssertEqual(try harness.offlineCopyStore.loadRecords().count, 3)
+    }
+
+    func testAutomaticTrimAfterDownloadPreservesExplicitOfflineCopy() async throws {
+        let harness = try makeHarness()
+        let profile = harness.makeWebDAVProfile()
+        let offlineReference = harness.makeReference(
+            for: profile,
+            path: "/Offline/Saved.cbz",
+            fileName: "Saved.cbz",
+            bytes: [1],
+            cacheScopeKey: profile.remoteCacheScopeKey
+        )
+        let offlineURL = harness.resolver.cachedFileURL(for: offlineReference)
+
+        try harness.writeCachedComic(
+            for: offlineReference,
+            bytes: [1],
+            lastAccessDate: Date(timeIntervalSince1970: 1)
+        )
+        try harness.offlineCopyStore.recordDownloadedCopy(for: offlineReference)
+
+        for index in 0..<11 {
+            let reference = harness.makeReference(
+                for: profile,
+                path: "/Ordinary/Book-\(index).cbz",
+                fileName: "Book-\(index).cbz",
+                bytes: [UInt8(index)],
+                cacheScopeKey: profile.remoteCacheScopeKey
+            )
+            try harness.writeCachedComic(
+                for: reference,
+                bytes: [UInt8(index)],
+                lastAccessDate: Date(timeIntervalSince1970: TimeInterval(100 + index))
+            )
+        }
+
+        try harness.service.applyCachePolicyPreset(.fiveHundredMB)
+        XCTAssertEqual(harness.service.cacheSummary().fileCount, 12)
+
+        let downloadedBytes: [UInt8] = [7, 8, 9]
+        let downloadedReference = harness.makeReference(
+            for: profile,
+            path: "/New/Downloaded.cbz",
+            fileName: "Downloaded.cbz",
+            bytes: downloadedBytes,
+            cacheScopeKey: profile.remoteCacheScopeKey
+        )
+        URLProtocolStub.setHandler { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            return (
+                HTTPURLResponse(
+                    url: request.url!,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Length": String(downloadedBytes.count)]
+                )!,
+                Data(downloadedBytes)
+            )
+        }
+
+        let result = try await harness.service.downloadComicFile(
+            for: profile,
+            reference: downloadedReference
+        )
+
+        XCTAssertEqual(result.source, .downloaded)
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: offlineURL.path))
+        XCTAssertTrue(harness.fileManager.fileExists(atPath: result.localFileURL.path))
+        XCTAssertEqual(harness.service.cacheSummary().fileCount, 12)
+        XCTAssertEqual(try harness.offlineCopyStore.loadRecords().map(\.id), [offlineReference.id])
+    }
+
+    func testApplyingCacheLimitFailsClosedWhenOfflineRecordsCannotBeDecoded() throws {
+        let harness = try makeHarness(completeOfflineMigration: false)
+        let profile = harness.makeSMBProfile()
+        let invalidRecordsData = Data("invalid-offline-records".utf8)
+        try invalidRecordsData.write(
+            to: harness.offlineCopyStorageURL,
+            options: .atomic
+        )
+
+        for index in 0..<13 {
+            let reference = harness.makeReference(
+                for: profile,
+                path: "/Book-\(index).cbz",
+                fileName: "Book-\(index).cbz",
+                bytes: [UInt8(index)],
+                cacheScopeKey: profile.remoteCacheScopeKey
+            )
+            try harness.writeCachedComic(for: reference, bytes: [UInt8(index)])
+        }
+
+        XCTAssertThrowsError(
+            try harness.service.applyCachePolicyPreset(.fiveHundredMB)
+        )
+        XCTAssertEqual(harness.service.cachePolicyPreset(), .unlimited)
+        XCTAssertEqual(harness.service.cacheSummary().fileCount, 13)
+        XCTAssertEqual(try Data(contentsOf: harness.offlineCopyStorageURL), invalidRecordsData)
+    }
+
+    func testApplyingCacheLimitFailsClosedBeforeExistingCacheRecoveryCompletes() throws {
+        let harness = try makeHarness(completeOfflineMigration: false)
+        let profile = harness.makeSMBProfile()
+
+        for index in 0..<13 {
+            let reference = harness.makeReference(
+                for: profile,
+                path: "/Legacy/Book-\(index).cbz",
+                fileName: "Book-\(index).cbz",
+                bytes: [UInt8(index)],
+                cacheScopeKey: nil
+            )
+            try harness.writeCachedComic(for: reference, bytes: [UInt8(index)])
+        }
+
+        XCTAssertThrowsError(
+            try harness.service.applyCachePolicyPreset(.fiveHundredMB)
+        )
+        XCTAssertEqual(harness.service.cachePolicyPreset(), .unlimited)
+        XCTAssertEqual(harness.service.cacheSummary().fileCount, 13)
+        XCTAssertFalse(harness.fileManager.fileExists(atPath: harness.offlineCopyStorageURL.path))
+    }
+
+    private func makeHarness(
+        testName: String = #function,
+        completeOfflineMigration: Bool = true
+    ) throws -> RemoteCacheServiceTestHarness {
+        let harness = try RemoteCacheServiceTestHarness.make(
+            testName: testName,
+            completeOfflineMigration: completeOfflineMigration
+        )
         harnesses.append(harness)
         return harness
     }
@@ -252,9 +471,16 @@ private struct RemoteCacheServiceTestHarness {
     let remoteComicCacheRootURL: URL
     let fileManager: TestCachesFileManager
     let resolver: RemoteCachePathResolver
+    let offlineCopyStorageURL: URL
+    let userDefaults: UserDefaults
+    let userDefaultsSuiteName: String
+    let offlineCopyStore: RemoteOfflineCopyStore
     let service: RemoteServerBrowsingService
 
-    static func make(testName: String = #function) throws -> RemoteCacheServiceTestHarness {
+    static func make(
+        testName: String = #function,
+        completeOfflineMigration: Bool = true
+    ) throws -> RemoteCacheServiceTestHarness {
         let sanitizedTestName = testName
             .replacingOccurrences(of: "(", with: "-")
             .replacingOccurrences(of: ")", with: "")
@@ -264,13 +490,36 @@ private struct RemoteCacheServiceTestHarness {
             .appendingPathComponent(sanitizedTestName, isDirectory: true)
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let cachesURL = rootURL.appendingPathComponent("Caches", isDirectory: true)
+        let storageURL = rootURL.appendingPathComponent("Storage", isDirectory: true)
         let remoteComicCacheRootURL = cachesURL
             .appendingPathComponent("JamReader", isDirectory: true)
             .appendingPathComponent("RemoteComics", isDirectory: true)
         let fileManager = TestCachesFileManager(cachesRootURL: cachesURL)
         let resolver = RemoteCachePathResolver(remoteComicCacheRootURL: remoteComicCacheRootURL)
+        let userDefaultsSuiteName = "RemoteCacheServiceTestHarness.\(UUID().uuidString)"
+        guard let userDefaults = UserDefaults(suiteName: userDefaultsSuiteName) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        userDefaults.removePersistentDomain(forName: userDefaultsSuiteName)
+        let cachePolicyStore = RemoteCachePolicyStore(userDefaults: userDefaults)
+        cachePolicyStore.savePreset(.unlimited)
+        let offlineCopyStore = RemoteOfflineCopyStore(
+            storage: FileBackedJSONStore(
+                fileName: "remote_offline_copies.json",
+                storageDirectoryURL: storageURL
+            )
+        )
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [URLProtocolStub.self]
+        let webDAVClient = RemoteWebDAVClient(
+            session: URLSession(configuration: configuration)
+        )
 
         try fileManager.createDirectory(at: cachesURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: storageURL, withIntermediateDirectories: true)
+        if completeOfflineMigration {
+            _ = try offlineCopyStore.loadRecords(recoveringExistingCache: { [] })
+        }
 
         return RemoteCacheServiceTestHarness(
             rootURL: rootURL,
@@ -278,11 +527,21 @@ private struct RemoteCacheServiceTestHarness {
             remoteComicCacheRootURL: remoteComicCacheRootURL,
             fileManager: fileManager,
             resolver: resolver,
-            service: RemoteServerBrowsingService(fileManager: fileManager)
+            offlineCopyStorageURL: storageURL.appendingPathComponent("remote_offline_copies.json"),
+            userDefaults: userDefaults,
+            userDefaultsSuiteName: userDefaultsSuiteName,
+            offlineCopyStore: offlineCopyStore,
+            service: RemoteServerBrowsingService(
+                cachePolicyStore: cachePolicyStore,
+                remoteOfflineCopyStore: offlineCopyStore,
+                webDAVClient: webDAVClient,
+                fileManager: fileManager
+            )
         )
     }
 
     func remove() {
+        userDefaults.removePersistentDomain(forName: userDefaultsSuiteName)
         try? fileManager.removeItem(at: rootURL)
     }
 
@@ -343,7 +602,8 @@ private struct RemoteCacheServiceTestHarness {
     func writeCachedComic(
         for reference: RemoteComicFileReference,
         bytes: [UInt8],
-        at explicitURL: URL? = nil
+        at explicitURL: URL? = nil,
+        lastAccessDate: Date? = nil
     ) throws {
         let fileURL = explicitURL ?? resolver.cachedFileURL(for: reference)
         try fileManager.createDirectory(
@@ -361,6 +621,12 @@ private struct RemoteCacheServiceTestHarness {
         )
         let metadataData = try JSONEncoder().encode(metadata)
         try metadataData.write(to: fileURL.appendingPathExtension("yacmeta"), options: .atomic)
+        if let lastAccessDate {
+            try fileManager.setAttributes(
+                [.modificationDate: lastAccessDate],
+                ofItemAtPath: fileURL.path
+            )
+        }
     }
 
     func writePartialArtifacts(for cachedURL: URL) throws {

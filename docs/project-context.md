@@ -8,7 +8,7 @@ JamReader is a native iPhone and iPad comic reader with three primary areas:
 
 - **Library** manages app-owned and linked local libraries, imports, folders, search, metadata, tags, reading lists, and reading progress.
 - **Browse** manages SMB/WebDAV servers, remote directories, saved folders, history, online reading, imports, and offline copies.
-- **Settings** owns reader defaults, storage/cache policy, library maintenance, and app information.
+- **Settings** owns app startup behavior, the shared reader default and display behavior, reusable import defaults, storage/cache policy, library maintenance, and app information.
 
 Image directories are supported through the scanner and `DirectoryImageSequenceReader`. Supported file extensions are centralized in `JamReader/Core/Types/SupportedComicFormats.swift`:
 
@@ -73,6 +73,7 @@ Remote cover work must stay bounded. Prefer a valid same-name image; otherwise u
 - `ZoomableImagePageView` owns zoom/pan coordination.
 - `ReaderGestureCoordinator` and UIKit recognizers own reader gestures.
 - `ReaderChromeOverlay` and related controls are presentation layers; they must not change reader viewport geometry.
+- `ReaderLayoutPreferencesStore` owns one layout default shared by every image-sequence comic; library file types do not create separate reader profiles.
 
 Reader lifecycle, viewport synchronization, zoom preservation, gestures, transitions, and background restoration are high-risk. Read the reader sections of [`maintenance-pitfalls.md`](maintenance-pitfalls.md) and run focused tests before changing them.
 

@@ -22,15 +22,6 @@ enum ComicOpenRequest {
         }
     }
 
-    var preferredLayoutType: LibraryFileType {
-        switch self {
-        case .library(let request):
-            return request.comic.type
-        case .remote, .file:
-            return .comic
-        }
-    }
-
     var fallbackDocumentURL: URL {
         switch self {
         case .library(let request):
@@ -145,7 +136,6 @@ struct ComicReaderSession {
     let fallbackPageCount: Int
     let initialPageIndex: Int
     let bookmarkPageIndices: [Int]
-    let layoutType: LibraryFileType
     let navigationContext: ReaderNavigationContext?
     let libraryComic: LibraryComic?
     let onLibraryComicUpdated: ((LibraryComic) -> Void)?
@@ -728,7 +718,6 @@ final class ComicOpenCoordinator {
                 request.comic.bookmarkPageIndices,
                 maximumCount: 3
             ),
-            layoutType: request.comic.type,
             navigationContext: request.navigationContext,
             libraryComic: request.comic,
             onLibraryComicUpdated: request.onComicUpdated,
@@ -766,7 +755,6 @@ final class ComicOpenCoordinator {
             fallbackPageCount: max(storedProgress?.pageCount ?? reference.pageCountHint ?? 1, 1),
             initialPageIndex: initialPageIndex,
             bookmarkPageIndices: ReaderBookmarkNormalizer.normalized(storedProgress?.bookmarkPageIndices ?? []),
-            layoutType: .comic,
             navigationContext: nil,
             libraryComic: nil,
             onLibraryComicUpdated: nil,
@@ -803,7 +791,6 @@ final class ComicOpenCoordinator {
             fallbackPageCount: 1,
             initialPageIndex: 0,
             bookmarkPageIndices: [],
-            layoutType: .comic,
             navigationContext: nil,
             libraryComic: nil,
             onLibraryComicUpdated: nil,
@@ -901,7 +888,6 @@ private extension ComicReaderSession {
                 pageCount: document.pageCount,
                 maximumCount: isLibraryBacked ? 3 : nil
             ),
-            layoutType: layoutType,
             navigationContext: navigationContext,
             libraryComic: libraryComic,
             onLibraryComicUpdated: onLibraryComicUpdated,

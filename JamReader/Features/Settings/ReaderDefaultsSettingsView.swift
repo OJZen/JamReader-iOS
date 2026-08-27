@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ReaderDefaultsSettingsView: View {
-    let profile: ReaderDefaultProfile
     let preferencesStore: ReaderLayoutPreferencesStore
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -12,14 +11,10 @@ struct ReaderDefaultsSettingsView: View {
         layout.pagingMode == .verticalContinuous
     }
 
-    init(
-        profile: ReaderDefaultProfile,
-        preferencesStore: ReaderLayoutPreferencesStore
-    ) {
-        self.profile = profile
+    init(preferencesStore: ReaderLayoutPreferencesStore) {
         self.preferencesStore = preferencesStore
         _layout = State(
-            initialValue: preferencesStore.loadLayout(for: profile.fileType)
+            initialValue: preferencesStore.loadLayout()
         )
     }
 
@@ -70,7 +65,7 @@ struct ReaderDefaultsSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(Color.surfaceGrouped)
-        .navigationTitle(profile.navigationTitle)
+        .navigationTitle("Reading Defaults")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: layout) { oldValue, newValue in
             persistLayout(oldValue: oldValue, newValue: newValue)
@@ -132,15 +127,12 @@ struct ReaderDefaultsSettingsView: View {
             return
         }
 
-        preferencesStore.saveLayout(
-            normalizedLayout,
-            for: profile.fileType
-        )
+        preferencesStore.saveLayout(normalizedLayout)
     }
 
     private func resetToRecommendedDefaults() {
-        let defaultLayout = ReaderDisplayLayout(defaultsFor: profile.fileType)
-        preferencesStore.resetLayout(for: profile.fileType)
+        let defaultLayout = ReaderDisplayLayout()
+        preferencesStore.resetLayout()
         guard layout != defaultLayout else {
             return
         }

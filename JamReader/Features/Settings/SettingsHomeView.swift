@@ -1,15 +1,99 @@
 import SwiftUI
 
 struct SettingsHomeView: View {
+    @Environment(\.appNavigator) private var appNavigator
+
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
+    @State private var snapshot = SettingsSnapshot.empty
+
     var body: some View {
-        SettingsContentView(
-            pane: .overview,
-            title: "Settings",
-            titleDisplayMode: .large,
-            viewModel: viewModel,
+        List {
+            ForEach(SettingsHomePane.allCases) { pane in
+                Button {
+                    appNavigator?.navigate(.settings(pane.navigationRoute))
+                } label: {
+                    SettingsPaneRow(
+                        pane: pane,
+                        detail: snapshot.detailText(for: pane),
+                        showsDisclosureIndicator: true
+                    )
+                }
+                .buttonStyle(.plain)
+                .pointerHoverEffect()
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.surfaceGrouped)
+        .navigationTitle("Settings")
+        .navigationBarTitleDisplayMode(.large)
+        .task {
+            refresh()
+        }
+        .onChange(of: viewModel.items.count) { _, count in
+            snapshot.localLibraryCount = count
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .appLaunchPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadAppLaunchPreference(
+                preferencesStore: dependencies.appLaunchPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerBehaviorPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadReaderBehaviorPreference(
+                preferencesStore: dependencies.readerBehaviorPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerLayoutPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadReaderPreferences(
+                preferencesStore: dependencies.readerLayoutPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .remoteBrowserPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadRemoteBrowserPreferences(
+                preferencesStore: dependencies.remoteBrowserPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .libraryPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadLibraryPreferences(
+                preferencesStore: dependencies.libraryPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .remoteCacheSettingsDidChange
+            )
+        ) { _ in
+            snapshot.reloadRemoteCachePolicy(
+                policyStore: dependencies.remoteCachePolicyStore
+            )
+        }
+    }
+
+    private func refresh() {
+        snapshot = SettingsSnapshot.load(
+            libraryCount: viewModel.items.count,
             dependencies: dependencies
         )
     }
@@ -18,32 +102,29 @@ struct SettingsHomeView: View {
 struct SettingsSidebarView: View {
     @Environment(\.appNavigator) private var appNavigator
 
-    @AppStorage(AppNavigationStorageKeys.settingsHomeSelectedPane) private var selectedPaneRawValue = SettingsHomePane.overview.rawValue
+    @ObservedObject var selectionState: SettingsSelectionState
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
     @State private var snapshot = SettingsSnapshot.empty
-    @State private var refreshGeneration: UInt64 = 0
-
-    private var selectedPane: SettingsHomePane {
-        SettingsHomePane.restored(from: selectedPaneRawValue)
-    }
 
     var body: some View {
         List {
             ForEach(SettingsHomePane.allCases) { pane in
                 Button {
-                    select(pane)
+                    appNavigator?.navigate(.settings(pane.navigationRoute))
                 } label: {
                     SettingsPaneRow(
                         pane: pane,
-                        detail: detailText(for: pane),
-                        isSelected: pane == selectedPane
+                        detail: snapshot.detailText(for: pane)
                     )
                 }
                 .buttonStyle(.plain)
                 .persistentSidebarSelection(
-                    isSelected: pane == selectedPane
+                    isSelected: pane == selectionState.selectedPane
+                )
+                .accessibilityAddTraits(
+                    pane == selectionState.selectedPane ? .isSelected : []
                 )
             }
         }
@@ -51,10 +132,28 @@ struct SettingsSidebarView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await refresh()
+            refresh()
         }
         .onChange(of: viewModel.items.count) { _, count in
             snapshot.localLibraryCount = count
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .appLaunchPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadAppLaunchPreference(
+                preferencesStore: dependencies.appLaunchPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerBehaviorPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadReaderBehaviorPreference(
+                preferencesStore: dependencies.readerBehaviorPreferencesStore
+            )
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -63,6 +162,15 @@ struct SettingsSidebarView: View {
         ) { _ in
             snapshot.reloadReaderPreferences(
                 preferencesStore: dependencies.readerLayoutPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .remoteBrowserPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadRemoteBrowserPreferences(
+                preferencesStore: dependencies.remoteBrowserPreferencesStore
             )
         }
         .onReceive(
@@ -79,57 +187,17 @@ struct SettingsSidebarView: View {
                 for: .remoteCacheSettingsDidChange
             )
         ) { _ in
-            Task { await refreshStorage() }
+            snapshot.reloadRemoteCachePolicy(
+                policyStore: dependencies.remoteCachePolicyStore
+            )
         }
     }
 
-    private func select(_ pane: SettingsHomePane) {
-        selectedPaneRawValue = pane.rawValue
-        appNavigator?.navigate(.settings(pane.navigationRoute))
-    }
-
-    private func refresh() async {
-        refreshGeneration &+= 1
-        let generation = refreshGeneration
-        let refreshedSnapshot = await SettingsSnapshot.load(
+    private func refresh() {
+        snapshot = SettingsSnapshot.load(
             libraryCount: viewModel.items.count,
             dependencies: dependencies
         )
-        guard generation == refreshGeneration else {
-            return
-        }
-        snapshot = refreshedSnapshot
-        snapshot.localLibraryCount = viewModel.items.count
-        if selectedPaneRawValue != selectedPane.rawValue {
-            selectedPaneRawValue = selectedPane.rawValue
-        }
-    }
-
-    private func refreshStorage() async {
-        refreshGeneration &+= 1
-        let generation = refreshGeneration
-        let storage = await SettingsSnapshot.loadStorage(dependencies: dependencies)
-        guard generation == refreshGeneration else {
-            return
-        }
-        snapshot.applyStorage(storage)
-    }
-
-    private func detailText(for pane: SettingsHomePane) -> String? {
-        switch pane {
-        case .overview:
-            return nil
-        case .reading:
-            return String(localized: "3 Profiles")
-        case .library:
-            return snapshot.recentWindow.settingsLocalizedTitle
-        case .storage:
-            return String(
-                localized: "\(snapshot.remoteCachePolicyPreset.settingsLocalizedTitle) · \(snapshot.managedStorageText)"
-            )
-        case .about:
-            return snapshot.appVersion
-        }
     }
 }
 
@@ -138,14 +206,18 @@ struct SettingsPaneContentView: View {
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
+    @ViewBuilder
     var body: some View {
-        SettingsContentView(
-            pane: pane,
-            title: pane.title,
-            titleDisplayMode: .inline,
-            viewModel: viewModel,
-            dependencies: dependencies
-        )
+        if pane == .storage {
+            RemoteCacheSettingsView(dependencies: dependencies)
+        } else {
+            SettingsContentView(
+                pane: pane,
+                title: pane.title,
+                viewModel: viewModel,
+                dependencies: dependencies
+            )
+        }
     }
 }
 
@@ -154,36 +226,51 @@ private struct SettingsContentView: View {
 
     let pane: SettingsHomePane
     let title: LocalizedStringKey
-    let titleDisplayMode: NavigationBarItem.TitleDisplayMode
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
     @State private var snapshot = SettingsSnapshot.empty
-    @State private var refreshGeneration: UInt64 = 0
 
     var body: some View {
         List {
             SettingsPaneSections(
                 pane: pane,
                 snapshot: snapshot,
+                onSetAppLaunchDestination: setAppLaunchDestination,
+                onSetKeepsScreenAwake: setKeepsScreenAwake,
                 onOpenReaderDefaults: openReaderDefaults,
                 onSetRecentWindow: setRecentWindow,
-                onOpenCacheManagement: openCacheManagement
+                onSetDefaultFolderImportScope: setDefaultFolderImportScope
             )
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.surfaceGrouped)
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(titleDisplayMode)
+        .navigationBarTitleDisplayMode(.inline)
         .task {
-            await refresh()
-        }
-        .refreshable {
-            await refresh()
+            refresh()
         }
         .onChange(of: viewModel.items.count) { _, count in
             snapshot.localLibraryCount = count
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .appLaunchPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadAppLaunchPreference(
+                preferencesStore: dependencies.appLaunchPreferencesStore
+            )
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: .readerBehaviorPreferencesDidChange
+            )
+        ) { _ in
+            snapshot.reloadReaderBehaviorPreference(
+                preferencesStore: dependencies.readerBehaviorPreferencesStore
+            )
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -205,15 +292,27 @@ private struct SettingsContentView: View {
         }
         .onReceive(
             NotificationCenter.default.publisher(
-                for: .remoteCacheSettingsDidChange
+                for: .remoteBrowserPreferencesDidChange
             )
         ) { _ in
-            Task { await refreshStorage() }
+            snapshot.reloadRemoteBrowserPreferences(
+                preferencesStore: dependencies.remoteBrowserPreferencesStore
+            )
         }
     }
 
-    private func openReaderDefaults(_ profile: ReaderDefaultProfile) {
-        appNavigator?.navigate(.settings(.readerDefaults(profile)))
+    private func setAppLaunchDestination(_ destination: AppLaunchDestination) {
+        snapshot.appLaunchDestination = destination
+        dependencies.appLaunchPreferencesStore.saveDestination(destination)
+    }
+
+    private func setKeepsScreenAwake(_ keepsScreenAwake: Bool) {
+        snapshot.keepsScreenAwake = keepsScreenAwake
+        dependencies.readerBehaviorPreferencesStore.saveKeepsScreenAwake(keepsScreenAwake)
+    }
+
+    private func openReaderDefaults() {
+        appNavigator?.navigate(.settings(.readerDefaults))
     }
 
     private func setRecentWindow(_ option: LibraryRecentWindowOption) {
@@ -221,31 +320,42 @@ private struct SettingsContentView: View {
         dependencies.libraryPreferencesStore.saveRecentWindow(option)
     }
 
-    private func openCacheManagement() {
-        appNavigator?.navigate(.settings(.remoteCache))
+    private func setDefaultFolderImportScope(_ scope: RemoteDirectoryImportScope) {
+        snapshot.defaultFolderImportScope = scope
+        dependencies.remoteBrowserPreferencesStore.saveDefaultFolderImportScope(scope)
     }
 
-    private func refresh() async {
-        refreshGeneration &+= 1
-        let generation = refreshGeneration
-        let refreshedSnapshot = await SettingsSnapshot.load(
+    private func refresh() {
+        snapshot = SettingsSnapshot.load(
             libraryCount: viewModel.items.count,
             dependencies: dependencies
         )
-        guard generation == refreshGeneration else {
-            return
-        }
-        snapshot = refreshedSnapshot
-        snapshot.localLibraryCount = viewModel.items.count
     }
+}
 
-    private func refreshStorage() async {
-        refreshGeneration &+= 1
-        let generation = refreshGeneration
-        let storage = await SettingsSnapshot.loadStorage(dependencies: dependencies)
-        guard generation == refreshGeneration else {
-            return
+private extension SettingsSnapshot {
+    func detailText(for pane: SettingsHomePane) -> String {
+        switch pane {
+        case .general:
+            return [
+                String(localized: "Open at Launch"),
+                appLaunchDestination.settingsLocalizedTitle
+            ]
+                .joined(separator: " · ")
+        case .reading:
+            return readerLayout.settingsSummary
+        case .library:
+            return [
+                String(localized: "Recent Items"),
+                recentWindow.settingsLocalizedTitle
+            ]
+                .joined(separator: " · ")
+        case .storage:
+            return [
+                String(localized: "Download Limit"),
+                remoteCachePolicyPreset.settingsLocalizedTitle
+            ]
+                .joined(separator: " · ")
         }
-        snapshot.applyStorage(storage)
     }
 }
