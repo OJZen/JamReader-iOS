@@ -44,14 +44,17 @@ struct ReaderDefaultsSettingsView: View {
                     }
 
                     if layout.spreadMode == .doublePage {
-                        Toggle(
-                            "Show Covers as Single Page",
-                            isOn: $layout.coverAsSinglePage
+                        ReaderDoublePagePairingPicker(
+                            keepsFirstPageSingle: $layout.coverAsSinglePage
                         )
                     }
                 }
             } header: {
                 Text("Display")
+            } footer: {
+                if layout.spreadMode == .doublePage {
+                    Text("Choose the grouping that keeps scanned two-page artwork aligned.")
+                }
             }
 
             Section {

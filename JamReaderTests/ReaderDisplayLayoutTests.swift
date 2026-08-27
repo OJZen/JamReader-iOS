@@ -46,7 +46,7 @@ final class ReaderDisplayLayoutTests: XCTestCase {
         XCTAssertEqual(normalizedLayout.spreadMode, .singlePage)
     }
 
-    func testDoublePageSpreadsRespectCoverAsSinglePage() {
+    func testDoublePageSpreadsCanKeepFirstPageSingle() {
         let layout = ReaderDisplayLayout(
             pagingMode: .paged,
             spreadMode: .doublePage,
@@ -58,6 +58,21 @@ final class ReaderDisplayLayoutTests: XCTestCase {
         let spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: 5, layout: layout)
 
         XCTAssertEqual(spreads.map(\.pageIndices), [[0], [1, 2], [3, 4]])
+        XCTAssertEqual(ReaderSpreadDescriptor.spreadIndex(containing: 2, in: spreads), 1)
+    }
+
+    func testDoublePageSpreadsCanPairFirstAndSecondPages() {
+        let layout = ReaderDisplayLayout(
+            pagingMode: .paged,
+            spreadMode: .doublePage,
+            readingDirection: .leftToRight,
+            coverAsSinglePage: false,
+            fitMode: .page
+        )
+
+        let spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: 5, layout: layout)
+
+        XCTAssertEqual(spreads.map(\.pageIndices), [[0, 1], [2, 3], [4]])
         XCTAssertEqual(ReaderSpreadDescriptor.spreadIndex(containing: 2, in: spreads), 1)
     }
 

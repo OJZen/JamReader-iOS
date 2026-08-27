@@ -116,6 +116,40 @@ struct ReaderControlsContainer<Content: View>: View {
     }
 }
 
+// MARK: - Double-Page Pairing
+
+struct ReaderDoublePagePairingPicker: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Binding var keepsFirstPageSingle: Bool
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            pairingPicker
+                .pickerStyle(.menu)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Page Pairing")
+                    .font(AppFont.subheadline())
+
+                pairingPicker
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+            }
+        }
+    }
+
+    private var pairingPicker: some View {
+        Picker("Page Pairing", selection: $keepsFirstPageSingle) {
+            Text(verbatim: "1–2 · 3–4")
+                .accessibilityLabel("Pair pages 1 and 2, then 3 and 4")
+                .tag(false)
+            Text(verbatim: "1 · 2–3 · 4–5")
+                .accessibilityLabel("Show page 1 alone, then pair pages 2 and 3, 4 and 5")
+                .tag(true)
+        }
+    }
+}
+
 // MARK: - Layout Section (Page Mode + Direction)
 
 struct ReaderLayoutControlsSection: View {
@@ -170,8 +204,9 @@ struct ReaderLayoutControlsSection: View {
                         .pickerStyle(.segmented)
 
                         if spreadMode == .doublePage {
-                            Toggle("Cover as Single Page", isOn: coverAsSinglePageBinding)
-                                .font(AppFont.subheadline())
+                            ReaderDoublePagePairingPicker(
+                                keepsFirstPageSingle: coverAsSinglePageBinding
+                            )
                         }
                     }
 
@@ -486,7 +521,9 @@ struct ReaderDisplaySettingsControlsSection: View {
                     .pickerStyle(.segmented)
 
                     if supportsDoublePageSpread, spreadMode == .doublePage {
-                        Toggle("Show Covers as Single Page", isOn: coverAsSinglePageBinding)
+                        ReaderDoublePagePairingPicker(
+                            keepsFirstPageSingle: coverAsSinglePageBinding
+                        )
                     }
                 }
             } header: {
@@ -494,6 +531,8 @@ struct ReaderDisplaySettingsControlsSection: View {
             } footer: {
                 if isVerticalContinuousMode {
                     Text("Page layout and rotation are unavailable in vertical scroll.")
+                } else if supportsDoublePageSpread, spreadMode == .doublePage {
+                    Text("Choose the grouping that keeps scanned two-page artwork aligned.")
                 }
             }
         }

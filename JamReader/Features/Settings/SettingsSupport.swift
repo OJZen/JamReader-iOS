@@ -18,11 +18,10 @@ extension ReaderDisplayLayout {
             fitMode.settingsLocalizedTitle
         ]
         if spreadMode == .doublePage {
-            parts.append(
-                coverAsSinglePage
-                    ? String(localized: "Cover Single")
-                    : String(localized: "Cover Spread")
-            )
+            let pairing = coverAsSinglePage
+                ? "1 / 2–3 / 4–5"
+                : "1–2 / 3–4"
+            parts.append("\(String(localized: "Page Pairing")): \(pairing)")
         }
         return parts.joined(separator: " · ")
     }

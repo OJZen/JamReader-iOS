@@ -3612,6 +3612,28 @@
         }
       }
     },
+    "Choose the grouping that keeps scanned two-page artwork aligned.": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇讓掃描版跨頁畫面正確對齊的頁面配對方式。"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スキャン版の見開きが正しく揃うページの組み合わせを選択します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择让扫描版跨页画面正确对齐的页面配对方式。"
+          }
+        }
+      }
+    },
     "Classification": {
       "localizations": {
         "zh-Hant-TW": {
@@ -4796,72 +4818,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "封面画师"
-          }
-        }
-      }
-    },
-    "Cover as Single Page": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面顯示為單頁"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表紙を単ページで表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面作为单页"
-          }
-        }
-      }
-    },
-    "Cover Single": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面單頁"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表紙を単ページ表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面单页"
-          }
-        }
-      }
-    },
-    "Cover Spread": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面跨頁"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表紙を見開き表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面跨页"
           }
         }
       }
@@ -15403,6 +15359,28 @@
         }
       }
     },
+    "Page Pairing": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "頁面配對"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ページの組み合わせ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "页面配对"
+          }
+        }
+      }
+    },
     "Paged": {
       "localizations": {
         "zh-Hant-TW": {
@@ -15443,6 +15421,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "页面"
+          }
+        }
+      }
+    },
+    "Pair pages 1 and 2, then 3 and 4": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將第 1、2 頁配對，然後將第 3、4 頁配對"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1ページ目と2ページ目、次に3ページ目と4ページ目を組み合わせる"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将第 1、2 页配对，然后将第 3、4 页配对"
           }
         }
       }
@@ -19541,28 +19541,6 @@
         }
       }
     },
-    "Show Covers as Single Page": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面顯示為單頁"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表紙を単ページで表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将封面显示为单页"
-          }
-        }
-      }
-    },
     "Show File Info": {
       "localizations": {
         "zh-Hant-TW": {
@@ -19625,6 +19603,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示列表"
+          }
+        }
+      }
+    },
+    "Show page 1 alone, then pair pages 2 and 3, 4 and 5": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 1 頁單獨顯示，然後將第 2、3 頁和第 4、5 頁分別配對"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1ページ目を単独表示し、2ページ目と3ページ目、4ページ目と5ページ目を組み合わせる"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 1 页单独显示，然后将第 2、3 页和第 4、5 页分别配对"
           }
         }
       }
