@@ -13,7 +13,8 @@ final class ReaderLayoutPreferencesStore {
         "spreadMode",
         "readingDirection",
         "fitMode",
-        "coverAsSinglePage"
+        "coverAsSinglePage",
+        "pageSpacingEnabled"
     ]
     private static let sharedScope = "shared"
     private static let sharedScopeMigrationKey = "reader.layout.sharedScopeMigrated"
@@ -49,7 +50,8 @@ final class ReaderLayoutPreferencesStore {
             spreadMode=\(persistedLayout.spreadMode.rawValue, privacy: .public) \
             readingDirection=\(persistedLayout.readingDirection.rawValue, privacy: .public) \
             fitMode=\(persistedLayout.fitMode.rawValue, privacy: .public) \
-            coverAsSinglePage=\(persistedLayout.coverAsSinglePage, privacy: .public)
+            coverAsSinglePage=\(persistedLayout.coverAsSinglePage, privacy: .public) \
+            pageSpacingEnabled=\(persistedLayout.pageSpacingEnabled, privacy: .public)
             """
         )
         notifyPreferencesChanged()
@@ -113,6 +115,10 @@ final class ReaderLayoutPreferencesStore {
             layout.coverAsSinglePage = userDefaults.bool(forKey: key(for: scope, field: "coverAsSinglePage"))
         }
 
+        if userDefaults.object(forKey: key(for: scope, field: "pageSpacingEnabled")) != nil {
+            layout.pageSpacingEnabled = userDefaults.bool(forKey: key(for: scope, field: "pageSpacingEnabled"))
+        }
+
         return layout
     }
 
@@ -122,6 +128,7 @@ final class ReaderLayoutPreferencesStore {
         userDefaults.set(layout.readingDirection.rawValue, forKey: key(for: scope, field: "readingDirection"))
         userDefaults.set(layout.fitMode.rawValue, forKey: key(for: scope, field: "fitMode"))
         userDefaults.set(layout.coverAsSinglePage, forKey: key(for: scope, field: "coverAsSinglePage"))
+        userDefaults.set(layout.pageSpacingEnabled, forKey: key(for: scope, field: "pageSpacingEnabled"))
     }
 
     private func key(for scope: String, field: String) -> String {

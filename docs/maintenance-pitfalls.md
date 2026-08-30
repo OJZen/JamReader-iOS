@@ -423,6 +423,8 @@ SwiftUI 原始缩略图列表在大量页面时性能很差。现在应使用 UI
 
 垂直页面在 1 倍时使用完整 reader viewport 宽度，不叠加横向安全区或 iPad 固定宽度上限。缩放应统一放大 collection 布局并保留触点锚点，不要给复用 cell 嵌套独立滚动视图；缩放后由 collection 自身处理双轴平移并阻止右滑关闭，viewport 尺寸变化时回到 1 倍并重新锚定当前页。
 
+页面间距由共享 `ReaderDisplayLayout.pageSpacingEnabled` 持久化，默认开启，且只在垂直连续或双页布局下显示设置入口；隐藏入口不能清空保存值。关闭时仅把相邻漫画页之间的线距设为 0，不能改变页宽、外层 viewport 或手势 owner。
+
 ## 7. 导航和转场
 
 ### 7.1 SwiftUI 导航状态和 UIKit 转场不要互相抢控制权

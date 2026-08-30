@@ -15359,6 +15359,28 @@
         }
       }
     },
+    "Page Spacing": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "頁面間距"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ページ間隔"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "页面间距"
+          }
+        }
+      }
+    },
     "Page layout and rotation are unavailable in vertical scroll.": {
       "localizations": {
         "zh-Hant-TW": {

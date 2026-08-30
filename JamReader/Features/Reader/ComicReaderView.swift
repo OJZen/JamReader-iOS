@@ -268,6 +268,10 @@ struct ComicReaderView: View {
                 viewModel.setCoverAsSinglePage(coverAsSinglePage)
                 scheduleReaderSessionSynchronization()
             },
+            onSetPageSpacingEnabled: { pageSpacingEnabled in
+                viewModel.setPageSpacingEnabled(pageSpacingEnabled)
+                scheduleReaderSessionSynchronization()
+            },
             onRotateCounterClockwise: {
                 viewModel.rotateCounterClockwise()
                 scheduleReaderSessionSynchronization()
@@ -635,6 +639,7 @@ private struct PresentedReaderControlsSheet: View {
                 spreadMode: viewModel.effectiveReaderLayout.spreadMode,
                 readingDirection: viewModel.effectiveReaderLayout.readingDirection,
                 coverAsSinglePage: viewModel.effectiveReaderLayout.coverAsSinglePage,
+                pageSpacingEnabled: viewModel.effectiveReaderLayout.pageSpacingEnabled,
                 rotation: viewModel.effectiveReaderLayout.rotation
             ),
             capabilities: ReaderControlsCapabilities(

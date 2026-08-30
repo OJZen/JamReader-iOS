@@ -6,6 +6,20 @@ final class ReaderDisplayLayoutTests: XCTestCase {
         XCTAssertEqual(ReaderDisplayLayout().readingDirection, .rightToLeft)
     }
 
+    func testSharedDefaultsEnablePageSpacing() {
+        XCTAssertTrue(ReaderDisplayLayout().pageSpacingEnabled)
+    }
+
+    func testPageSpacingCanOnlyBeConfiguredForVerticalOrDoublePageLayouts() {
+        XCTAssertFalse(ReaderDisplayLayout().canConfigurePageSpacing)
+        XCTAssertTrue(
+            ReaderDisplayLayout(pagingMode: .verticalContinuous).canConfigurePageSpacing
+        )
+        XCTAssertTrue(
+            ReaderDisplayLayout(spreadMode: .doublePage).canConfigurePageSpacing
+        )
+    }
+
     func testSinglePageSettingsSummaryOmitsReadingDirection() {
         let summary = ReaderDisplayLayout(
             spreadMode: .singlePage,
@@ -96,5 +110,20 @@ final class ReaderDisplayLayoutTests: XCTestCase {
 
         XCTAssertEqual(spread.displayPageIndices(for: .leftToRight), [1, 2])
         XCTAssertEqual(spread.displayPageIndices(for: .rightToLeft), [2, 1])
+    }
+
+    func testDoublePageSpacingCanBeRemovedCompletely() {
+        XCTAssertEqual(
+            ReaderSpreadPageGeometry.spacing(pageCount: 2, pageSpacingEnabled: true),
+            12
+        )
+        XCTAssertEqual(
+            ReaderSpreadPageGeometry.spacing(pageCount: 2, pageSpacingEnabled: false),
+            0
+        )
+        XCTAssertEqual(
+            ReaderSpreadPageGeometry.spacing(pageCount: 1, pageSpacingEnabled: true),
+            0
+        )
     }
 }

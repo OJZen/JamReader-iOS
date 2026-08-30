@@ -18,6 +18,7 @@ struct ReaderControlsDisplayState {
     let spreadMode: ReaderSpreadMode
     let readingDirection: ReaderReadingDirection
     let coverAsSinglePage: Bool
+    let pageSpacingEnabled: Bool
     let rotation: ReaderRotationAngle
 }
 
@@ -71,6 +72,7 @@ struct ReaderControlsActions {
     let onSetSpreadMode: (ReaderSpreadMode) -> Void
     let onSetReadingDirection: (ReaderReadingDirection) -> Void
     let onSetCoverAsSinglePage: (Bool) -> Void
+    let onSetPageSpacingEnabled: (Bool) -> Void
 
     // Rotation
     let onRotateCounterClockwise: () -> Void
@@ -147,6 +149,14 @@ struct ReaderDoublePagePairingPicker: View {
                 .accessibilityHint("Show page 1 alone, then pair pages 2 and 3, 4 and 5")
                 .tag(true)
         }
+    }
+}
+
+struct ReaderPageSpacingToggle: View {
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        Toggle("Page Spacing", isOn: $isEnabled)
     }
 }
 
@@ -440,11 +450,13 @@ struct ReaderDisplaySettingsControlsSection: View {
     let spreadMode: ReaderSpreadMode
     let readingDirection: ReaderReadingDirection
     let coverAsSinglePage: Bool
+    let pageSpacingEnabled: Bool
     let onSetFitMode: (ReaderFitMode) -> Void
     let onSetPagingMode: (ReaderPagingMode) -> Void
     let onSetSpreadMode: (ReaderSpreadMode) -> Void
     let onSetReadingDirection: (ReaderReadingDirection) -> Void
     let onSetCoverAsSinglePage: (Bool) -> Void
+    let onSetPageSpacingEnabled: (Bool) -> Void
 
     private var fitModeBinding: Binding<ReaderFitMode> {
         Binding(
@@ -478,6 +490,13 @@ struct ReaderDisplaySettingsControlsSection: View {
         Binding(
             get: { coverAsSinglePage },
             set: onSetCoverAsSinglePage
+        )
+    }
+
+    private var pageSpacingEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { pageSpacingEnabled },
+            set: onSetPageSpacingEnabled
         )
     }
 
@@ -525,6 +544,11 @@ struct ReaderDisplaySettingsControlsSection: View {
                             keepsFirstPageSingle: coverAsSinglePageBinding
                         )
                     }
+                }
+
+                if isVerticalContinuousMode ||
+                    (supportsDoublePageSpread && spreadMode == .doublePage) {
+                    ReaderPageSpacingToggle(isEnabled: pageSpacingEnabledBinding)
                 }
             } header: {
                 Text("Display")

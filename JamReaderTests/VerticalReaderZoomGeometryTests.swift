@@ -29,6 +29,25 @@ final class VerticalReaderZoomGeometryTests: XCTestCase {
         XCTAssertTrue(VerticalReaderZoomGeometry.isZoomed(1.02))
     }
 
+    func testVerticalPageSpacingCanBeRemovedCompletely() {
+        XCTAssertEqual(
+            VerticalReaderZoomGeometry.lineSpacing(
+                viewportWidth: 1_024,
+                scale: 2,
+                pageSpacingEnabled: true
+            ),
+            36
+        )
+        XCTAssertEqual(
+            VerticalReaderZoomGeometry.lineSpacing(
+                viewportWidth: 1_024,
+                scale: 2,
+                pageSpacingEnabled: false
+            ),
+            0
+        )
+    }
+
     func testZoomPreservesViewportAnchor() {
         let offset = VerticalReaderZoomGeometry.contentOffset(
             preserving: CGPoint(x: 100, y: 200),

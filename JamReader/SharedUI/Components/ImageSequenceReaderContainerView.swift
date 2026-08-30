@@ -90,6 +90,12 @@ enum ReaderViewportLayoutAction: Equatable {
     }
 }
 
+enum ReaderSpreadPageGeometry {
+    static func spacing(pageCount: Int, pageSpacingEnabled: Bool) -> CGFloat {
+        pageCount > 1 && pageSpacingEnabled ? 12 : 0
+    }
+}
+
 @MainActor
 final class ReaderPagedCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     var onPageChanged: (Int) -> Void
@@ -340,21 +346,32 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         layout: ReaderDisplayLayout,
         requestedPageIndex: Int
     ) {
+        let previousLayout = self.layout
         let documentChanged = self.document.url != document.url
             || self.document.pageNames != document.pageNames
             || ObjectIdentifier(self.document.pageSource) != ObjectIdentifier(document.pageSource)
-        let layoutChanged = self.layout != layout
+        let layoutChanged = previousLayout != layout
+        var previousLayoutWithUpdatedSpacing = previousLayout
+        previousLayoutWithUpdatedSpacing.pageSpacingEnabled = layout.pageSpacingEnabled
+        let pageSpacingOnlyChanged = previousLayout.pageSpacingEnabled != layout.pageSpacingEnabled
+            && previousLayoutWithUpdatedSpacing == layout
 
         self.document = document
         self.layout = layout
 
-        if documentChanged || layoutChanged {
+        if documentChanged || (layoutChanged && !pageSpacingOnlyChanged) {
             self.spreads = ReaderSpreadDescriptor.makeSpreads(pageCount: document.pageCount, layout: layout)
             staleRequestedPageIndexToIgnore = nil
             clearControllerCache()
             collectionView.reloadData()
             displaySpread(containing: requestedPageIndex, animated: false)
             return
+        }
+
+        if pageSpacingOnlyChanged {
+            for controller in controllerCache.values {
+                controller.setPageSpacingEnabled(layout.pageSpacingEnabled)
+            }
         }
 
         if let staleRequestedPageIndexToIgnore {
@@ -877,7 +894,7 @@ private final class ComicImageSpreadViewController: UIViewController {
 
     private let spread: ReaderSpreadDescriptor
     private let document: ImageSequenceComicDocument
-    private let layout: ReaderDisplayLayout
+    private var layout: ReaderDisplayLayout
     private let zoomablePageView = ZoomableImagePageView()
     private let rotationContainerView = UIView()
     private let activityIndicator = UIActivityIndicatorView(style: .large)
@@ -1191,7 +1208,10 @@ private final class ComicImageSpreadViewController: UIViewController {
             return false
         }
 
-        let spacing: CGFloat = loadedPages.count > 1 ? 12 : 0
+        let spacing = ReaderSpreadPageGeometry.spacing(
+            pageCount: loadedPages.count,
+            pageSpacingEnabled: layout.pageSpacingEnabled
+        )
         let naturalSizes = loadedPages.map(\.image.size)
         let naturalContentHeight = naturalSizes.map(\.height).max() ?? 0
         let naturalContentWidth = naturalSizes.reduce(CGFloat(0)) { partialResult, size in
@@ -1228,6 +1248,19 @@ private final class ComicImageSpreadViewController: UIViewController {
             resetZoomScale: shouldSnapToPreferredViewport
         )
         return true
+    }
+
+    func setPageSpacingEnabled(_ pageSpacingEnabled: Bool) {
+        guard layout.pageSpacingEnabled != pageSpacingEnabled else {
+            return
+        }
+
+        layout.pageSpacingEnabled = pageSpacingEnabled
+        guard isViewLoaded else {
+            return
+        }
+
+        _ = synchronizeLoadedPages(for: zoomablePageView.bounds.size)
     }
 
     private func presentError(_ message: String) {

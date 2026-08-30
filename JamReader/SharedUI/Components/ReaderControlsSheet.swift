@@ -49,11 +49,13 @@ struct ReaderControlsSheet: View {
                 spreadMode: displayState.spreadMode,
                 readingDirection: displayState.readingDirection,
                 coverAsSinglePage: displayState.coverAsSinglePage,
+                pageSpacingEnabled: displayState.pageSpacingEnabled,
                 onSetFitMode: actions.onSetFitMode,
                 onSetPagingMode: actions.onSetPagingMode,
                 onSetSpreadMode: actions.onSetSpreadMode,
                 onSetReadingDirection: actions.onSetReadingDirection,
-                onSetCoverAsSinglePage: actions.onSetCoverAsSinglePage
+                onSetCoverAsSinglePage: actions.onSetCoverAsSinglePage,
+                onSetPageSpacingEnabled: actions.onSetPageSpacingEnabled
             )
 
             ReaderRotationControlsSection(

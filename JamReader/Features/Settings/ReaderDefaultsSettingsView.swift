@@ -49,6 +49,10 @@ struct ReaderDefaultsSettingsView: View {
                         )
                     }
                 }
+
+                if layout.canConfigurePageSpacing {
+                    ReaderPageSpacingToggle(isEnabled: $layout.pageSpacingEnabled)
+                }
             } header: {
                 Text("Display")
             } footer: {

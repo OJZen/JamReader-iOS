@@ -121,6 +121,7 @@ struct ReaderDisplayLayout: Equatable {
     var spreadMode: ReaderSpreadMode
     var readingDirection: ReaderReadingDirection
     var coverAsSinglePage: Bool
+    var pageSpacingEnabled: Bool
     var fitMode: ReaderFitMode
     var rotation: ReaderRotationAngle
 
@@ -129,6 +130,7 @@ struct ReaderDisplayLayout: Equatable {
         spreadMode: ReaderSpreadMode = .singlePage,
         readingDirection: ReaderReadingDirection = .rightToLeft,
         coverAsSinglePage: Bool = true,
+        pageSpacingEnabled: Bool = true,
         fitMode: ReaderFitMode = .page,
         rotation: ReaderRotationAngle = .degrees0
     ) {
@@ -136,6 +138,7 @@ struct ReaderDisplayLayout: Equatable {
         self.spreadMode = spreadMode
         self.readingDirection = readingDirection
         self.coverAsSinglePage = coverAsSinglePage
+        self.pageSpacingEnabled = pageSpacingEnabled
         self.fitMode = fitMode
         self.rotation = rotation
     }
@@ -181,6 +184,10 @@ struct ReaderDisplayLayout: Equatable {
         }
 
         return adjustedLayout
+    }
+
+    var canConfigurePageSpacing: Bool {
+        pagingMode == .verticalContinuous || spreadMode == .doublePage
     }
 }
 

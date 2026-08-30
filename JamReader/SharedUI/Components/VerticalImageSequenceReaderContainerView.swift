@@ -28,7 +28,15 @@ enum VerticalReaderZoomGeometry {
         return baseInset * clampedScale(scale)
     }
 
-    static func lineSpacing(viewportWidth: CGFloat, scale: CGFloat) -> CGFloat {
+    static func lineSpacing(
+        viewportWidth: CGFloat,
+        scale: CGFloat,
+        pageSpacingEnabled: Bool
+    ) -> CGFloat {
+        guard pageSpacingEnabled else {
+            return 0
+        }
+
         let baseSpacing: CGFloat = usesRegularMetrics(viewportWidth: viewportWidth) ? 18 : 10
         return baseSpacing * clampedScale(scale)
     }
@@ -185,6 +193,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         func attach(to viewController: VerticalReaderViewController) {
             self.viewController = viewController
+            viewController.collectionLayout.pageSpacingEnabled = layout.pageSpacingEnabled
             viewController.collectionLayout.aspectRatioProvider = { [weak self] index in
                 self?.pageAspectRatios[index] ?? 1.42
             }
@@ -227,11 +236,13 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 || self.document.pageNames != document.pageNames
                 || ObjectIdentifier(self.document.pageSource) != ObjectIdentifier(document.pageSource)
             let layoutChanged = self.layout != layout
+            let pageSpacingChanged = self.layout.pageSpacingEnabled != layout.pageSpacingEnabled
 
             self.document = document
             self.layout = layout
 
             if documentChanged {
+                viewController?.collectionLayout.pageSpacingEnabled = layout.pageSpacingEnabled
                 resetZoomScale()
                 pageAspectRatios.removeAll()
                 imageCache.removeAllObjects()
@@ -242,7 +253,9 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 return
             }
 
-            if layoutChanged {
+            if pageSpacingChanged {
+                updatePageSpacingEnabled(layout.pageSpacingEnabled)
+            } else if layoutChanged {
                 viewController?.collectionView.collectionViewLayout.invalidateLayout()
             }
 
@@ -251,6 +264,39 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             }
 
             scrollToPage(index: requestedPageIndex, animated: false)
+        }
+
+        private func updatePageSpacingEnabled(_ pageSpacingEnabled: Bool) {
+            guard let viewController else {
+                return
+            }
+
+            let collectionView = viewController.collectionView
+            let indexPath = IndexPath(item: currentPageIndex, section: 0)
+            collectionView.layoutIfNeeded()
+            let previousFrame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+            let previousOffset = collectionView.contentOffset
+            let pageRelativeOffsetY = previousFrame.map { previousOffset.y - $0.minY }
+
+            viewController.collectionLayout.pageSpacingEnabled = pageSpacingEnabled
+            collectionView.layoutIfNeeded()
+
+            guard let pageRelativeOffsetY,
+                  let updatedFrame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+            else {
+                return
+            }
+
+            let updatedOffset = VerticalReaderZoomGeometry.clampedContentOffset(
+                CGPoint(
+                    x: previousOffset.x,
+                    y: updatedFrame.minY + pageRelativeOffsetY
+                ),
+                contentSize: collectionView.contentSize,
+                viewportSize: collectionView.bounds.size,
+                adjustedInsets: collectionView.adjustedContentInset
+            )
+            collectionView.setContentOffset(updatedOffset, animated: false)
         }
 
         func scrollToPage(index: Int, animated: Bool) {
@@ -869,6 +915,14 @@ fileprivate final class VerticalReaderCollectionViewLayout: UICollectionViewLayo
         }
     }
 
+    var pageSpacingEnabled = true {
+        didSet {
+            if pageSpacingEnabled != oldValue {
+                invalidateLayout()
+            }
+        }
+    }
+
     private var cachedAttributes: [UICollectionViewLayoutAttributes] = []
     private var cachedContentSize = CGSize.zero
 
@@ -885,7 +939,8 @@ fileprivate final class VerticalReaderCollectionViewLayout: UICollectionViewLayo
         )
         let spacing = VerticalReaderZoomGeometry.lineSpacing(
             viewportWidth: viewportWidth,
-            scale: zoomScale
+            scale: zoomScale,
+            pageSpacingEnabled: pageSpacingEnabled
         )
         let itemCount = collectionView.numberOfSections > 0
             ? collectionView.numberOfItems(inSection: 0)

@@ -26,6 +26,7 @@ final class ReaderPreferenceStoreTests: XCTestCase {
             spreadMode: .doublePage,
             readingDirection: .rightToLeft,
             coverAsSinglePage: false,
+            pageSpacingEnabled: false,
             fitMode: .height
         )
 
@@ -154,6 +155,7 @@ final class ReaderPreferenceStoreTests: XCTestCase {
 
         XCTAssertEqual(store.loadLayout(), ReaderDisplayLayout())
         XCTAssertNil(userDefaults.object(forKey: "reader.layout.shared.pagingMode"))
+        XCTAssertNil(userDefaults.object(forKey: "reader.layout.shared.pageSpacingEnabled"))
     }
 
     func testInvalidReaderLayoutFieldFallsBackWithoutDiscardingValidFields() {

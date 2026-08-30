@@ -394,6 +394,14 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         persistLayoutPreferences()
     }
 
+    func setPageSpacingEnabled(_ pageSpacingEnabled: Bool) {
+        guard readerLayout.pageSpacingEnabled != pageSpacingEnabled else {
+            return
+        }
+        readerLayout.pageSpacingEnabled = pageSpacingEnabled
+        persistLayoutPreferences()
+    }
+
     func rotateCounterClockwise() {
         readerLayout.rotation = readerLayout.rotation.rotatedCounterClockwise()
     }
