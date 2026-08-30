@@ -2,12 +2,93 @@ import SwiftUI
 import ImageIO
 import UIKit
 
+enum VerticalReaderZoomGeometry {
+    static let minimumScale: CGFloat = 1
+    static let maximumScale: CGFloat = 4
+    static let zoomedTolerance: CGFloat = 0.01
+
+    static func clampedScale(_ scale: CGFloat) -> CGFloat {
+        min(max(scale, minimumScale), maximumScale)
+    }
+
+    static func isZoomed(_ scale: CGFloat) -> Bool {
+        scale > minimumScale + zoomedTolerance
+    }
+
+    static func pageSize(viewportWidth: CGFloat, aspectRatio: CGFloat, scale: CGFloat) -> CGSize {
+        let baseWidth = max(viewportWidth, 1)
+        let safeRatio = max(aspectRatio, 0.01)
+        let resolvedScale = clampedScale(scale)
+        let baseHeight = max(baseWidth * safeRatio, 220)
+        return CGSize(width: baseWidth * resolvedScale, height: baseHeight * resolvedScale)
+    }
+
+    static func verticalSectionInset(viewportWidth: CGFloat, scale: CGFloat) -> CGFloat {
+        let baseInset: CGFloat = usesRegularMetrics(viewportWidth: viewportWidth) ? 24 : 12
+        return baseInset * clampedScale(scale)
+    }
+
+    static func lineSpacing(viewportWidth: CGFloat, scale: CGFloat) -> CGFloat {
+        let baseSpacing: CGFloat = usesRegularMetrics(viewportWidth: viewportWidth) ? 18 : 10
+        return baseSpacing * clampedScale(scale)
+    }
+
+    static func usesRegularMetrics(viewportWidth: CGFloat) -> Bool {
+        max(viewportWidth, 0) >= AppLayout.regularReaderLayoutMinWidth
+    }
+
+    static func contentOffset(
+        preserving viewportLocation: CGPoint,
+        currentContentOffset: CGPoint,
+        from oldScale: CGFloat,
+        to newScale: CGFloat,
+        contentSize: CGSize,
+        viewportSize: CGSize,
+        adjustedInsets: UIEdgeInsets
+    ) -> CGPoint {
+        let safeOldScale = max(oldScale, 0.01)
+        let scaleRatio = clampedScale(newScale) / safeOldScale
+        let anchorInContent = CGPoint(
+            x: currentContentOffset.x + viewportLocation.x,
+            y: currentContentOffset.y + viewportLocation.y
+        )
+        let proposedOffset = CGPoint(
+            x: anchorInContent.x * scaleRatio - viewportLocation.x,
+            y: anchorInContent.y * scaleRatio - viewportLocation.y
+        )
+        return clampedContentOffset(
+            proposedOffset,
+            contentSize: contentSize,
+            viewportSize: viewportSize,
+            adjustedInsets: adjustedInsets
+        )
+    }
+
+    static func clampedContentOffset(
+        _ offset: CGPoint,
+        contentSize: CGSize,
+        viewportSize: CGSize,
+        adjustedInsets: UIEdgeInsets
+    ) -> CGPoint {
+        let minX = -adjustedInsets.left
+        let maxX = max(minX, contentSize.width - viewportSize.width + adjustedInsets.right)
+        let minY = -adjustedInsets.top
+        let maxY = max(minY, contentSize.height - viewportSize.height + adjustedInsets.bottom)
+        return CGPoint(
+            x: min(max(offset.x, minX), maxX),
+            y: min(max(offset.y, minY), maxY)
+        )
+    }
+}
+
 struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let document: ImageSequenceComicDocument
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
+    let isDismissGestureActive: Bool
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
+    let onZoomStateChanged: ((Bool) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -15,20 +96,24 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             layout: layout,
             currentPageIndex: clampedPageIndex(initialPageIndex),
             onPageChanged: onPageChanged,
-            onReaderTap: onReaderTap
+            onReaderTap: onReaderTap,
+            onZoomStateChanged: onZoomStateChanged
         )
     }
 
     func makeUIViewController(context: Context) -> VerticalReaderViewController {
         let viewController = VerticalReaderViewController()
+        viewController.isDismissGestureActive = isDismissGestureActive
         context.coordinator.attach(to: viewController)
         context.coordinator.scrollToPage(index: clampedPageIndex(initialPageIndex), animated: false)
         return viewController
     }
 
     func updateUIViewController(_ viewController: VerticalReaderViewController, context: Context) {
+        viewController.isDismissGestureActive = isDismissGestureActive
         context.coordinator.onPageChanged = onPageChanged
         context.coordinator.onReaderTap = onReaderTap
+        context.coordinator.onZoomStateChanged = onZoomStateChanged
         context.coordinator.update(
             document: document,
             layout: layout,
@@ -44,7 +129,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         return min(max(pageIndex, 0), document.pageCount - 1)
     }
 
-    final class Coordinator: NSObject, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, UICollectionViewDataSourcePrefetching {
+    final class Coordinator: NSObject, UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDataSourcePrefetching, UIGestureRecognizerDelegate {
         private weak var viewController: VerticalReaderViewController?
         private let imageCache: NSCache<NSNumber, UIImage>
 
@@ -52,12 +137,17 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         private var pageLoadTasks: [Int: Task<Void, Never>] = [:]
         private var memoryWarningObserver: NSObjectProtocol?
         private var previewObserver: NSObjectProtocol?
+        private weak var pinchGestureRecognizer: UIPinchGestureRecognizer?
+        private var pinchStartScale = VerticalReaderZoomGeometry.minimumScale
+        private var zoomScale = VerticalReaderZoomGeometry.minimumScale
+        private var lastReportedZoomState = false
 
         private(set) var document: ImageSequenceComicDocument
         private(set) var layout: ReaderDisplayLayout
         private(set) var currentPageIndex: Int
         var onPageChanged: (Int) -> Void
         var onReaderTap: (ReaderTapRegion) -> Void
+        var onZoomStateChanged: ((Bool) -> Void)?
         private var lastReportedPageIndex: Int?
 
         init(
@@ -65,7 +155,8 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             layout: ReaderDisplayLayout,
             currentPageIndex: Int,
             onPageChanged: @escaping (Int) -> Void,
-            onReaderTap: @escaping (ReaderTapRegion) -> Void
+            onReaderTap: @escaping (ReaderTapRegion) -> Void,
+            onZoomStateChanged: ((Bool) -> Void)?
         ) {
             self.document = document
             self.layout = layout
@@ -73,6 +164,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             self.lastReportedPageIndex = currentPageIndex
             self.onPageChanged = onPageChanged
             self.onReaderTap = onReaderTap
+            self.onZoomStateChanged = onZoomStateChanged
 
             let cache = NSCache<NSNumber, UIImage>()
             cache.countLimit = 6
@@ -81,6 +173,9 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         }
 
         deinit {
+            if let pinchGestureRecognizer {
+                pinchGestureRecognizer.view?.removeGestureRecognizer(pinchGestureRecognizer)
+            }
             cancelPageTasks()
             if let memoryWarningObserver {
                 NotificationCenter.default.removeObserver(memoryWarningObserver)
@@ -90,6 +185,9 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         func attach(to viewController: VerticalReaderViewController) {
             self.viewController = viewController
+            viewController.collectionLayout.aspectRatioProvider = { [weak self] index in
+                self?.pageAspectRatios[index] ?? 1.42
+            }
             viewController.collectionView.dataSource = self
             viewController.collectionView.delegate = self
             viewController.collectionView.prefetchDataSource = self
@@ -110,6 +208,15 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 self?.navigateByPage(step: -1)
             }
 
+            let pinchGestureRecognizer = UIPinchGestureRecognizer(
+                target: self,
+                action: #selector(handlePinch(_:))
+            )
+            pinchGestureRecognizer.delegate = self
+            pinchGestureRecognizer.cancelsTouchesInView = false
+            viewController.collectionView.addGestureRecognizer(pinchGestureRecognizer)
+            self.pinchGestureRecognizer = pinchGestureRecognizer
+
             observeMemoryWarningsIfNeeded()
             observePreviewUpdatesIfNeeded()
             viewController.collectionView.reloadData()
@@ -125,6 +232,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             self.layout = layout
 
             if documentChanged {
+                resetZoomScale()
                 pageAspectRatios.removeAll()
                 imageCache.removeAllObjects()
                 cancelPageTasks()
@@ -161,6 +269,9 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             }
 
             let pageDidChange = currentPageIndex != clampedIndex
+            if pageDidChange {
+                resetZoomScale()
+            }
             currentPageIndex = clampedIndex
             collectionView.layoutIfNeeded()
             if let targetOffset = targetContentOffset(for: indexPath, in: collectionView) {
@@ -208,40 +319,6 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             return cell
         }
 
-        func collectionView(
-            _ collectionView: UICollectionView,
-            layout collectionViewLayout: UICollectionViewLayout,
-            sizeForItemAt indexPath: IndexPath
-        ) -> CGSize {
-            let contentWidth = max(preferredContentWidth(for: collectionView), 1)
-            let ratio = pageAspectRatios[indexPath.item] ?? 1.42
-            let height = max(contentWidth * ratio, 220)
-            return CGSize(width: contentWidth, height: height)
-        }
-
-        func collectionView(
-            _ collectionView: UICollectionView,
-            layout collectionViewLayout: UICollectionViewLayout,
-            insetForSectionAt section: Int
-        ) -> UIEdgeInsets {
-            let horizontalInset = max(0, (usableCollectionWidth(for: collectionView) - preferredContentWidth(for: collectionView)) * 0.5)
-            let verticalInset = verticalSectionInset(for: collectionView.bounds.width)
-            return UIEdgeInsets(
-                top: verticalInset,
-                left: horizontalInset,
-                bottom: verticalInset,
-                right: horizontalInset
-            )
-        }
-
-        func collectionView(
-            _ collectionView: UICollectionView,
-            layout collectionViewLayout: UICollectionViewLayout,
-            minimumLineSpacingForSectionAt section: Int
-        ) -> CGFloat {
-            usesRegularReaderMetrics(for: collectionView.bounds.width) ? 18 : 10
-        }
-
         func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
             for indexPath in indexPaths {
                 ensurePageLoaded(at: indexPath.item, priority: .utility)
@@ -275,6 +352,108 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             updateCurrentPageFromVisibleCells()
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            guard let collectionView = viewController?.collectionView,
+                  let pinchGestureRecognizer
+            else {
+                return false
+            }
+
+            return (gestureRecognizer === pinchGestureRecognizer
+                && otherGestureRecognizer === collectionView.panGestureRecognizer)
+                || (otherGestureRecognizer === pinchGestureRecognizer
+                    && gestureRecognizer === collectionView.panGestureRecognizer)
+        }
+
+        @objc
+        private func handlePinch(_ gestureRecognizer: UIPinchGestureRecognizer) {
+            guard let collectionView = viewController?.collectionView else {
+                return
+            }
+
+            let anchor = gestureRecognizer.location(in: collectionView)
+            switch gestureRecognizer.state {
+            case .began:
+                pinchStartScale = zoomScale
+            case .changed:
+                applyZoomScale(pinchStartScale * gestureRecognizer.scale, around: anchor)
+            case .ended:
+                let settledScale = VerticalReaderZoomGeometry.isZoomed(zoomScale)
+                    ? zoomScale
+                    : VerticalReaderZoomGeometry.minimumScale
+                applyZoomScale(settledScale, around: anchor)
+                pinchStartScale = zoomScale
+            case .cancelled, .failed:
+                applyZoomScale(pinchStartScale, around: anchor)
+            default:
+                break
+            }
+        }
+
+        private func applyZoomScale(_ proposedScale: CGFloat, around anchorInContent: CGPoint) {
+            guard let viewController else {
+                return
+            }
+
+            let collectionView = viewController.collectionView
+            let resolvedScale = VerticalReaderZoomGeometry.clampedScale(proposedScale)
+            guard abs(resolvedScale - zoomScale) > 0.0001 else {
+                reportZoomStateIfNeeded()
+                return
+            }
+
+            let oldScale = zoomScale
+            let oldOffset = collectionView.contentOffset
+            let viewportLocation = CGPoint(
+                x: anchorInContent.x - collectionView.bounds.minX,
+                y: anchorInContent.y - collectionView.bounds.minY
+            )
+            zoomScale = resolvedScale
+            viewController.collectionLayout.zoomScale = resolvedScale
+
+            UIView.performWithoutAnimation {
+                collectionView.layoutIfNeeded()
+                let targetOffset = VerticalReaderZoomGeometry.contentOffset(
+                    preserving: viewportLocation,
+                    currentContentOffset: oldOffset,
+                    from: oldScale,
+                    to: resolvedScale,
+                    contentSize: collectionView.contentSize,
+                    viewportSize: collectionView.bounds.size,
+                    adjustedInsets: collectionView.adjustedContentInset
+                )
+                collectionView.setContentOffset(targetOffset, animated: false)
+            }
+            reportZoomStateIfNeeded()
+        }
+
+        private func resetZoomScale() {
+            guard let collectionView = viewController?.collectionView else {
+                zoomScale = VerticalReaderZoomGeometry.minimumScale
+                lastReportedZoomState = false
+                return
+            }
+
+            let viewportCenter = CGPoint(
+                x: collectionView.bounds.midX,
+                y: collectionView.bounds.midY
+            )
+            applyZoomScale(VerticalReaderZoomGeometry.minimumScale, around: viewportCenter)
+        }
+
+        private func reportZoomStateIfNeeded() {
+            let isZoomed = VerticalReaderZoomGeometry.isZoomed(zoomScale)
+            guard isZoomed != lastReportedZoomState else {
+                return
+            }
+
+            lastReportedZoomState = isZoomed
+            onZoomStateChanged?(isZoomed)
         }
 
         private func updateCurrentPageFromVisibleCells() {
@@ -550,7 +729,8 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
 
         private func handleTap(at location: CGPoint, in collectionView: UICollectionView) {
             let width = max(collectionView.bounds.width, 1)
-            let horizontalRatio = location.x / width
+            let viewportX = location.x - collectionView.bounds.minX
+            let horizontalRatio = viewportX / width
             let edgeRatio = preferredTapEdgeRatio(for: width)
 
             if horizontalRatio < edgeRatio {
@@ -579,7 +759,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         }
 
         private func preferredTapEdgeRatio(for width: CGFloat) -> CGFloat {
-            usesRegularReaderMetrics(for: width) ? 0.18 : 0.24
+            VerticalReaderZoomGeometry.usesRegularMetrics(viewportWidth: width) ? 0.18 : 0.24
         }
 
         private func preferredDecodeMaxPixelSize() -> Int {
@@ -587,11 +767,11 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 return 3072
             }
 
-            let contentWidth = max(preferredContentWidth(for: collectionView), 640)
+            let contentWidth = max(collectionView.bounds.width, 640)
             let screenScale = collectionView.window?.windowScene?.screen.scale
                 ?? collectionView.traitCollection.displayScale
             let estimated = contentWidth * screenScale * 2.5
-            return max(1800, min(Int(estimated.rounded()), 8192))
+            return max(1800, min(Int(estimated.rounded()), 4_608))
         }
 
         private func handleContainerBoundsChanged() {
@@ -599,35 +779,10 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 return
             }
 
+            resetZoomScale()
             collectionView.collectionViewLayout.invalidateLayout()
             collectionView.layoutIfNeeded()
             scrollToPage(index: currentPageIndex, animated: false)
-        }
-
-        private func usableCollectionWidth(for collectionView: UICollectionView) -> CGFloat {
-            let adjustedInsets = collectionView.adjustedContentInset
-            return max(
-                collectionView.bounds.width - adjustedInsets.left - adjustedInsets.right,
-                1
-            )
-        }
-
-        private func preferredContentWidth(for collectionView: UICollectionView) -> CGFloat {
-            let availableWidth = usableCollectionWidth(for: collectionView)
-            guard usesRegularReaderMetrics(for: collectionView.bounds.width) else {
-                return availableWidth
-            }
-
-            let maxReadableWidth: CGFloat = collectionView.bounds.width > 1_000 ? 920 : 820
-            return min(availableWidth, maxReadableWidth)
-        }
-
-        private func verticalSectionInset(for width: CGFloat) -> CGFloat {
-            usesRegularReaderMetrics(for: width) ? 24 : 12
-        }
-
-        private func usesRegularReaderMetrics(for width: CGFloat) -> Bool {
-            max(width, 0) >= AppLayout.regularReaderLayoutMinWidth
         }
 
         private func targetContentOffset(for indexPath: IndexPath, in collectionView: UICollectionView) -> CGPoint? {
@@ -641,9 +796,18 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 minOffsetY,
                 collectionView.contentSize.height - viewportHeight + collectionView.adjustedContentInset.bottom
             )
-            let preferredOffsetY = attributes.frame.minY - verticalSectionInset(for: collectionView.bounds.width)
+            let scaledInset = VerticalReaderZoomGeometry.verticalSectionInset(
+                viewportWidth: collectionView.bounds.width,
+                scale: zoomScale
+            )
+            let preferredOffsetY = attributes.frame.minY - scaledInset
             let clampedOffsetY = min(max(preferredOffsetY, minOffsetY), maxOffsetY)
-            return CGPoint(x: -collectionView.adjustedContentInset.left, y: clampedOffsetY)
+            return VerticalReaderZoomGeometry.clampedContentOffset(
+                CGPoint(x: collectionView.contentOffset.x, y: clampedOffsetY),
+                contentSize: collectionView.contentSize,
+                viewportSize: collectionView.bounds.size,
+                adjustedInsets: collectionView.adjustedContentInset
+            )
         }
 
         private func observeMemoryWarningsIfNeeded() {
@@ -690,8 +854,133 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
     }
 }
 
+fileprivate final class VerticalReaderCollectionViewLayout: UICollectionViewLayout {
+    var aspectRatioProvider: ((Int) -> CGFloat)? {
+        didSet {
+            invalidateLayout()
+        }
+    }
+
+    var zoomScale = VerticalReaderZoomGeometry.minimumScale {
+        didSet {
+            if abs(zoomScale - oldValue) > 0.0001 {
+                invalidateLayout()
+            }
+        }
+    }
+
+    private var cachedAttributes: [UICollectionViewLayoutAttributes] = []
+    private var cachedContentSize = CGSize.zero
+
+    override func prepare() {
+        super.prepare()
+        guard cachedAttributes.isEmpty, let collectionView else {
+            return
+        }
+
+        let viewportWidth = max(collectionView.bounds.width, 1)
+        let inset = VerticalReaderZoomGeometry.verticalSectionInset(
+            viewportWidth: viewportWidth,
+            scale: zoomScale
+        )
+        let spacing = VerticalReaderZoomGeometry.lineSpacing(
+            viewportWidth: viewportWidth,
+            scale: zoomScale
+        )
+        let itemCount = collectionView.numberOfSections > 0
+            ? collectionView.numberOfItems(inSection: 0)
+            : 0
+
+        cachedAttributes.reserveCapacity(itemCount)
+        var nextY = inset
+        for item in 0..<itemCount {
+            let indexPath = IndexPath(item: item, section: 0)
+            let size = VerticalReaderZoomGeometry.pageSize(
+                viewportWidth: viewportWidth,
+                aspectRatio: aspectRatioProvider?(item) ?? 1.42,
+                scale: zoomScale
+            )
+            let attributes = UICollectionViewLayoutAttributes(forCellWith: indexPath)
+            attributes.frame = CGRect(origin: CGPoint(x: 0, y: nextY), size: size)
+            cachedAttributes.append(attributes)
+            nextY += size.height + spacing
+        }
+
+        let contentHeight = itemCount > 0 ? nextY - spacing + inset : 0
+        let scaledWidth = viewportWidth * VerticalReaderZoomGeometry.clampedScale(zoomScale)
+        cachedContentSize = CGSize(
+            width: max(collectionView.bounds.width, scaledWidth),
+            height: max(contentHeight, 0)
+        )
+    }
+
+    override var collectionViewContentSize: CGSize {
+        cachedContentSize
+    }
+
+    override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
+        guard !cachedAttributes.isEmpty else {
+            return []
+        }
+
+        var lowerBound = 0
+        var upperBound = cachedAttributes.count
+        while lowerBound < upperBound {
+            let midpoint = (lowerBound + upperBound) / 2
+            if cachedAttributes[midpoint].frame.maxY < rect.minY {
+                lowerBound = midpoint + 1
+            } else {
+                upperBound = midpoint
+            }
+        }
+
+        var result: [UICollectionViewLayoutAttributes] = []
+        var index = lowerBound
+        while index < cachedAttributes.count {
+            let attributes = cachedAttributes[index]
+            guard attributes.frame.minY <= rect.maxY else {
+                break
+            }
+            if attributes.frame.intersects(rect) {
+                result.append(attributes)
+            }
+            index += 1
+        }
+        return result
+    }
+
+    override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
+        guard indexPath.section == 0, cachedAttributes.indices.contains(indexPath.item) else {
+            return nil
+        }
+        return cachedAttributes[indexPath.item]
+    }
+
+    override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
+        guard let collectionView else {
+            return false
+        }
+        return collectionView.bounds.size != newBounds.size
+    }
+
+    override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
+        cachedAttributes.removeAll(keepingCapacity: true)
+        cachedContentSize = .zero
+        super.invalidateLayout(with: context)
+    }
+}
+
 final class VerticalReaderViewController: UIViewController {
+    fileprivate let collectionLayout: VerticalReaderCollectionViewLayout
     let collectionView: UICollectionView
+    var isDismissGestureActive = false {
+        didSet {
+            guard isDismissGestureActive != oldValue else {
+                return
+            }
+            collectionView.isScrollEnabled = !isDismissGestureActive
+        }
+    }
     var onTap: ((CGPoint) -> Void)?
     var onBoundsChanged: (() -> Void)?
     var onAdvancePage: (() -> Void)?
@@ -707,12 +996,9 @@ final class VerticalReaderViewController: UIViewController {
     }()
 
     init() {
-        let flowLayout = UICollectionViewFlowLayout()
-        flowLayout.scrollDirection = .vertical
-        flowLayout.minimumLineSpacing = 10
-        flowLayout.minimumInteritemSpacing = 0
-        flowLayout.sectionInset = .zero
-        self.collectionView = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
+        let collectionLayout = VerticalReaderCollectionViewLayout()
+        self.collectionLayout = collectionLayout
+        self.collectionView = UICollectionView(frame: .zero, collectionViewLayout: collectionLayout)
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -731,7 +1017,7 @@ final class VerticalReaderViewController: UIViewController {
         collectionView.showsVerticalScrollIndicator = true
         collectionView.showsHorizontalScrollIndicator = false
         collectionView.keyboardDismissMode = .onDrag
-        collectionView.contentInsetAdjustmentBehavior = .automatic
+        collectionView.contentInsetAdjustmentBehavior = .never
         collectionView.register(
             VerticalReaderPageCell.self,
             forCellWithReuseIdentifier: VerticalReaderPageCell.reuseIdentifier

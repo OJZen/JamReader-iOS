@@ -1,19 +1,107 @@
 import SwiftUI
 import UIKit
 
+enum ReaderDismissGestureDirection: Equatable {
+    case down
+    case right
+
+    private static let directionalDominanceRatio: CGFloat = 2
+
+    func accepts(_ vector: CGPoint) -> Bool {
+        let primary = primaryComponent(of: vector)
+        let crossAxis = abs(crossAxisComponent(of: vector))
+        return primary > 0 && primary > crossAxis * Self.directionalDominanceRatio
+    }
+
+    func distance(from translation: CGPoint) -> CGFloat {
+        max(primaryComponent(of: translation), 0)
+    }
+
+    func velocity(from velocity: CGPoint) -> CGFloat {
+        primaryComponent(of: velocity)
+    }
+
+    func offset(for distance: CGFloat) -> CGSize {
+        switch self {
+        case .down:
+            return CGSize(width: 0, height: max(distance, 0))
+        case .right:
+            return CGSize(width: max(distance, 0), height: 0)
+        }
+    }
+
+    func shouldDefer(to scrollView: UIScrollView) -> Bool {
+        guard scrollView.isScrollEnabled else {
+            return false
+        }
+
+        let isZoomed = scrollView.maximumZoomScale > scrollView.minimumZoomScale + 0.01
+            && scrollView.zoomScale > scrollView.minimumZoomScale + 0.01
+        if isZoomed {
+            return true
+        }
+
+        if let flowLayout = (scrollView as? UICollectionView)?.collectionViewLayout as? UICollectionViewFlowLayout,
+           !matches(flowLayout.scrollDirection) {
+            return false
+        }
+
+        switch self {
+        case .down:
+            let contentHeight = scrollView.contentSize.height
+                + scrollView.adjustedContentInset.top
+                + scrollView.adjustedContentInset.bottom
+            return contentHeight > scrollView.bounds.height + 1
+        case .right:
+            let contentWidth = scrollView.contentSize.width
+                + scrollView.adjustedContentInset.left
+                + scrollView.adjustedContentInset.right
+            return contentWidth > scrollView.bounds.width + 1
+        }
+    }
+
+    private func matches(_ scrollDirection: UICollectionView.ScrollDirection) -> Bool {
+        switch (self, scrollDirection) {
+        case (.down, .vertical), (.right, .horizontal):
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func primaryComponent(of point: CGPoint) -> CGFloat {
+        switch self {
+        case .down:
+            return point.y
+        case .right:
+            return point.x
+        }
+    }
+
+    private func crossAxisComponent(of point: CGPoint) -> CGFloat {
+        switch self {
+        case .down:
+            return point.x
+        case .right:
+            return point.y
+        }
+    }
+}
+
 // MARK: - View Modifier
 
 extension View {
-    /// Adds a pull-down-to-dismiss gesture similar to the Photos app.
-    /// Only activates when the content is not zoomed in.
+    /// Adds an interactive directional dismissal gesture to the reader.
+    /// Zoomed or scrollable content along the dismissal axis keeps ownership.
     /// - Parameter onDismissGestureActiveChanged: Called when the dismiss drag starts/ends.
-    ///   Use this to temporarily disable conflicting gestures (e.g. horizontal paging).
+    ///   Use this to temporarily disable the active reader scroller.
     /// - Parameter onDismiss: Called when the custom dismiss transition should
     ///   take over and finish the close animation.
     ///   Wrap your `dismiss()` call in `withTransaction(Transaction(animation: .none))`
     ///   to prevent the system presentation animation from competing with ours.
     func pullDownToDismiss(
         isEnabled: Bool = true,
+        direction: ReaderDismissGestureDirection = .down,
         isZoomed: Bool = false,
         onDismissGestureActiveChanged: ((Bool) -> Void)? = nil,
         onDismiss: @escaping () -> Void
@@ -21,6 +109,7 @@ extension View {
         modifier(
             PullDownToDismissModifier(
                 isEnabled: isEnabled,
+                direction: direction,
                 isZoomed: isZoomed,
                 onDismissGestureActiveChanged: onDismissGestureActiveChanged,
                 onDismiss: onDismiss
@@ -33,11 +122,12 @@ extension View {
 
 private struct PullDownToDismissModifier: ViewModifier {
     let isEnabled: Bool
+    let direction: ReaderDismissGestureDirection
     let isZoomed: Bool
     let onDismissGestureActiveChanged: ((Bool) -> Void)?
     let onDismiss: () -> Void
 
-    @State private var dragOffset: CGSize = .zero
+    @State private var dragDistance: CGFloat = 0
     @State private var isDragging = false
     @State private var isCompletingDismiss = false
 
@@ -53,24 +143,28 @@ private struct PullDownToDismissModifier: ViewModifier {
             content
         }
         .opacity(isEnabled ? contentOpacity : 1)
-        .offset(y: isEnabled ? dragOffset.height : 0)
+        .offset(isEnabled ? direction.offset(for: dragDistance) : .zero)
         .background {
             PullDownGestureLayer(
                 isEnabled: isEnabled && !isZoomed && !isCompletingDismiss,
+                direction: direction,
                 onDragChanged: handleDragChanged,
                 onDragEnded: handleDragEnded,
                 onDragCancelled: handleDragCancelled
             )
         }
-        .animation(isDragging || isCompletingDismiss ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragOffset)
+        .animation(isDragging || isCompletingDismiss ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragDistance)
         .onChange(of: dismissGestureState) { _, newValue in
             onDismissGestureActiveChanged?(newValue)
+        }
+        .onChange(of: direction) { _, _ in
+            handleDragCancelled()
         }
     }
 
     private var contentOpacity: Double {
-        guard dragOffset.height > 0 else { return 1.0 }
-        let progress = min(dragOffset.height / 350, 1.0)
+        guard dragDistance > 0 else { return 1.0 }
+        let progress = min(dragDistance / 350, 1.0)
         return max(0, 1.0 - progress)
     }
 
@@ -78,46 +172,48 @@ private struct PullDownToDismissModifier: ViewModifier {
         isDragging || isCompletingDismiss
     }
 
-    private func handleDragChanged(_ height: CGFloat) {
+    private func handleDragChanged(_ distance: CGFloat) {
         isCompletingDismiss = false
         isDragging = true
-        dragOffset = CGSize(width: 0, height: height)
+        dragDistance = distance
     }
 
-    private func handleDragEnded(_ height: CGFloat, _ velocity: CGFloat) {
+    private func handleDragEnded(_ distance: CGFloat, _ velocity: CGFloat) {
         isDragging = false
-        dragOffset = CGSize(width: 0, height: height)
+        dragDistance = distance
 
-        if height > dismissThreshold || velocity > velocityThreshold {
+        if distance > dismissThreshold || velocity > velocityThreshold {
             isCompletingDismiss = true
             DispatchQueue.main.async {
                 onDismiss()
             }
         } else {
             isCompletingDismiss = false
-            dragOffset = .zero
+            dragDistance = 0
         }
     }
 
     private func handleDragCancelled() {
         isDragging = false
         isCompletingDismiss = false
-        dragOffset = .zero
+        dragDistance = 0
     }
 }
 
 // MARK: - UIKit Gesture Layer (replaces SwiftUI DragGesture for CI compliance)
 
 /// Installs a UIPanGestureRecognizer on a suitable ancestor view to detect
-/// vertical pull-down drags. Allows simultaneous recognition with all other gestures.
+/// directional dismissal drags. Allows simultaneous recognition with reader scrolling.
 private struct PullDownGestureLayer: UIViewRepresentable {
     let isEnabled: Bool
+    let direction: ReaderDismissGestureDirection
     let onDragChanged: (CGFloat) -> Void
     let onDragEnded: (CGFloat, CGFloat) -> Void
     let onDragCancelled: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
+            direction: direction,
             onDragChanged: onDragChanged,
             onDragEnded: onDragEnded,
             onDragCancelled: onDragCancelled
@@ -129,10 +225,11 @@ private struct PullDownGestureLayer: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: GestureInstallerView, context: Context) {
-        context.coordinator.panRecognizer?.isEnabled = isEnabled
+        context.coordinator.direction = direction
         context.coordinator.onDragChanged = onDragChanged
         context.coordinator.onDragEnded = onDragEnded
         context.coordinator.onDragCancelled = onDragCancelled
+        context.coordinator.panRecognizer?.isEnabled = isEnabled
     }
 
     /// Invisible UIView that installs its gesture recognizer on an ancestor view.
@@ -173,6 +270,7 @@ private struct PullDownGestureLayer: UIViewRepresentable {
             pan.cancelsTouchesInView = false
             pan.delaysTouchesBegan = false
             pan.delaysTouchesEnded = false
+            pan.maximumNumberOfTouches = 1
             host.addGestureRecognizer(pan)
             coordinator.panRecognizer = pan
         }
@@ -202,17 +300,20 @@ private struct PullDownGestureLayer: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var direction: ReaderDismissGestureDirection
         var onDragChanged: (CGFloat) -> Void
         var onDragEnded: (CGFloat, CGFloat) -> Void
         var onDragCancelled: () -> Void
         weak var panRecognizer: UIPanGestureRecognizer?
-        private var hasStartedVerticalDrag = false
+        private var hasStartedDirectionalDrag = false
 
         init(
+            direction: ReaderDismissGestureDirection,
             onDragChanged: @escaping (CGFloat) -> Void,
             onDragEnded: @escaping (CGFloat, CGFloat) -> Void,
             onDragCancelled: @escaping () -> Void
         ) {
+            self.direction = direction
             self.onDragChanged = onDragChanged
             self.onDragEnded = onDragEnded
             self.onDragCancelled = onDragCancelled
@@ -220,34 +321,44 @@ private struct PullDownGestureLayer: UIViewRepresentable {
 
         @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
             let translation = recognizer.translation(in: recognizer.view)
+            let distance = direction.distance(from: translation)
 
             switch recognizer.state {
             case .changed:
-                if !hasStartedVerticalDrag {
-                    // Only activate for steep downward drags (≥63° from horizontal).
-                    // The 2.0× ratio prevents accidental activation when the user swipes
-                    // on the thumbnail scrubber with a slight vertical component.
-                    guard abs(translation.y) > abs(translation.x) * 2.0,
-                          translation.y > 12 else {
+                if !hasStartedDirectionalDrag {
+                    guard direction.accepts(translation), distance > 12 else {
                         return
                     }
-                    hasStartedVerticalDrag = true
+                    hasStartedDirectionalDrag = true
                 }
-                onDragChanged(max(translation.y, 0))
+                onDragChanged(distance)
             case .ended:
-                if hasStartedVerticalDrag {
+                if hasStartedDirectionalDrag {
                     let velocity = recognizer.velocity(in: recognizer.view)
-                    onDragEnded(max(translation.y, 0), velocity.y)
+                    onDragEnded(distance, direction.velocity(from: velocity))
                 }
-                hasStartedVerticalDrag = false
+                hasStartedDirectionalDrag = false
             case .cancelled, .failed:
-                if hasStartedVerticalDrag {
+                if hasStartedDirectionalDrag {
                     onDragCancelled()
                 }
-                hasStartedVerticalDrag = false
+                hasStartedDirectionalDrag = false
             default:
                 break
             }
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let panRecognizer = gestureRecognizer as? UIPanGestureRecognizer else {
+                return true
+            }
+
+            let velocity = panRecognizer.velocity(in: panRecognizer.view)
+            guard direction.accepts(velocity) else {
+                return false
+            }
+
+            return !shouldDeferToTouchedContent(for: gestureRecognizer)
         }
 
         func gestureRecognizer(
@@ -255,6 +366,31 @@ private struct PullDownGestureLayer: UIViewRepresentable {
             shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
         ) -> Bool {
             true
+        }
+
+        private func shouldDeferToTouchedContent(for gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let host = gestureRecognizer.view else {
+                return false
+            }
+
+            let location = gestureRecognizer.location(in: host)
+            var touchedView = host.hitTest(location, with: nil)
+
+            while let view = touchedView {
+                if view is UIControl {
+                    return true
+                }
+                if let scrollView = view as? UIScrollView,
+                   direction.shouldDefer(to: scrollView) {
+                    return true
+                }
+                if view === host {
+                    break
+                }
+                touchedView = view.superview
+            }
+
+            return false
         }
     }
 }

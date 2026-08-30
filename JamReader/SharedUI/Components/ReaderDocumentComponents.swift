@@ -41,7 +41,7 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
     let document: ComicDocument
     let pageIndex: Int
     let layout: ReaderDisplayLayout
-    let isHorizontalScrollingDisabled: Bool
+    let isDismissGestureActive: Bool
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
     let onZoomStateChanged: ((Bool) -> Void)?
@@ -69,8 +69,10 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 document: document,
                 initialPageIndex: pageIndex,
                 layout: resolvedLayout,
+                isDismissGestureActive: isDismissGestureActive,
                 onPageChanged: onPageChanged,
-                onReaderTap: onReaderTap
+                onReaderTap: onReaderTap,
+                onZoomStateChanged: onZoomStateChanged
             )
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())
@@ -79,7 +81,7 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 document: document,
                 initialPageIndex: pageIndex,
                 layout: resolvedLayout,
-                isHorizontalScrollingDisabled: isHorizontalScrollingDisabled,
+                isHorizontalScrollingDisabled: isDismissGestureActive,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap,
                 onZoomStateChanged: onZoomStateChanged

@@ -69,8 +69,8 @@ Remote cover work must stay bounded. Prefer a valid same-name image; otherwise u
 
 - `ComicDocumentLoader` routes directories and supported file formats.
 - `ImageSequenceReaderContainerView` owns horizontal paging with `UICollectionView`.
-- `VerticalImageSequenceReaderContainerView` owns continuous reading.
-- `ZoomableImagePageView` owns zoom/pan coordination.
+- `VerticalImageSequenceReaderContainerView` owns continuous layout plus its canvas zoom/pan coordination.
+- `ZoomableImagePageView` owns zoom/pan coordination for paged image readers.
 - `ReaderGestureCoordinator` and UIKit recognizers own reader gestures.
 - `ReaderChromeOverlay` and related controls are presentation layers; they must not change reader viewport geometry.
 - `ReaderLayoutPreferencesStore` owns one layout default shared by every image-sequence comic; library file types do not create separate reader profiles.

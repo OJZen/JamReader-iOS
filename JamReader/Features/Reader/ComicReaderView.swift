@@ -97,6 +97,7 @@ struct ComicReaderView: View {
         }
         .pullDownToDismiss(
             isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting && !isAnySheetPresented,
+            direction: dismissGestureDirection,
             isZoomed: isContentZoomed,
             onDismissGestureActiveChanged: { active in
                 isDismissGestureActive = active
@@ -150,6 +151,10 @@ struct ComicReaderView: View {
         .onChange(of: viewModel.readerLayout) { _, _ in
             scheduleReaderSessionSynchronization()
         }
+        .onChange(of: dismissGestureDirection) { _, _ in
+            isContentZoomed = false
+            isDismissGestureActive = false
+        }
         .onChange(of: viewModel.currentPageIndex) { oldValue, newValue in
             guard oldValue != newValue else {
                 return
@@ -177,6 +182,17 @@ struct ComicReaderView: View {
         supportsDoublePageSpread && (viewModel.pageCount ?? 0) > 1
     }
 
+    private var dismissGestureDirection: ReaderDismissGestureDirection {
+        guard readerSession.state.layout.pagingMode == .verticalContinuous,
+              case .imageSequence(let imageSequence) = viewModel.document,
+              imageSequence.usesComicImageLayout
+        else {
+            return .down
+        }
+
+        return .right
+    }
+
     private var readerRenderIdentity: String {
         viewModel.documentIdentity ?? "opening-\(viewModel.hasAttemptedInitialLoad)"
     }
@@ -187,7 +203,7 @@ struct ComicReaderView: View {
             document: document,
             pageIndex: readerSession.state.currentPageIndex,
             layout: readerSession.state.layout,
-            isHorizontalScrollingDisabled: isDismissGestureActive,
+            isDismissGestureActive: isDismissGestureActive,
             onPageChanged: handleVisiblePageChange(to:),
             onReaderTap: handleReaderTap,
             onZoomStateChanged: { zoomed in
