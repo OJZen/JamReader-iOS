@@ -140,11 +140,11 @@ struct ReaderDoublePagePairingPicker: View {
 
     private var pairingPicker: some View {
         Picker("Page Pairing", selection: $keepsFirstPageSingle) {
-            Text(verbatim: "1–2 · 3–4")
-                .accessibilityLabel("Pair pages 1 and 2, then 3 and 4")
+            Text("Odd Page Ordering")
+                .accessibilityHint("Pair pages 1 and 2, then 3 and 4")
                 .tag(false)
-            Text(verbatim: "1 · 2–3 · 4–5")
-                .accessibilityLabel("Show page 1 alone, then pair pages 2 and 3, 4 and 5")
+            Text("Even Page Ordering")
+                .accessibilityHint("Show page 1 alone, then pair pages 2 and 3, 4 and 5")
                 .tag(true)
         }
     }
@@ -204,18 +204,18 @@ struct ReaderLayoutControlsSection: View {
                         .pickerStyle(.segmented)
 
                         if spreadMode == .doublePage {
+                            Picker("Direction", selection: readingDirectionBinding) {
+                                ForEach(ReaderReadingDirection.allCases, id: \.self) { dir in
+                                    Text(dir.title).tag(dir)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+
                             ReaderDoublePagePairingPicker(
                                 keepsFirstPageSingle: coverAsSinglePageBinding
                             )
                         }
                     }
-
-                    Picker("Direction", selection: readingDirectionBinding) {
-                        ForEach(ReaderReadingDirection.allCases, id: \.self) { dir in
-                            Text(dir.title).tag(dir)
-                        }
-                    }
-                    .pickerStyle(.segmented)
                 }
             }
         }
@@ -513,14 +513,14 @@ struct ReaderDisplaySettingsControlsSection: View {
                         LabeledContent("Page Layout", value: ReaderSpreadMode.singlePage.title)
                     }
 
-                    Picker("Reading Direction", selection: readingDirectionBinding) {
-                        ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
-                            Text(readingDirection.title).tag(readingDirection)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
                     if supportsDoublePageSpread, spreadMode == .doublePage {
+                        Picker("Reading Direction", selection: readingDirectionBinding) {
+                            ForEach(ReaderReadingDirection.allCases, id: \.self) { readingDirection in
+                                Text(readingDirection.title).tag(readingDirection)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
                         ReaderDoublePagePairingPicker(
                             keepsFirstPageSingle: coverAsSinglePageBinding
                         )

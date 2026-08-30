@@ -13,15 +13,18 @@ extension ReaderDisplayLayout {
 
         var parts = [
             pagingMode.settingsLocalizedTitle,
-            spreadMode.settingsLocalizedTitle,
-            readingDirection.settingsLocalizedTitle,
-            fitMode.settingsLocalizedTitle
+            spreadMode.settingsLocalizedTitle
         ]
         if spreadMode == .doublePage {
-            let pairing = coverAsSinglePage
-                ? "1 / 2–3 / 4–5"
-                : "1–2 / 3–4"
-            parts.append("\(String(localized: "Page Pairing")): \(pairing)")
+            parts.append(readingDirection.settingsLocalizedTitle)
+        }
+        parts.append(fitMode.settingsLocalizedTitle)
+        if spreadMode == .doublePage {
+            parts.append(
+                coverAsSinglePage
+                    ? String(localized: "Even Page Ordering")
+                    : String(localized: "Odd Page Ordering")
+            )
         }
         return parts.joined(separator: " · ")
     }

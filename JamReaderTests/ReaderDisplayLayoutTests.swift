@@ -2,6 +2,19 @@ import XCTest
 @testable import JamReader
 
 final class ReaderDisplayLayoutTests: XCTestCase {
+    func testSharedDefaultsUseRightToLeftReadingDirection() {
+        XCTAssertEqual(ReaderDisplayLayout().readingDirection, .rightToLeft)
+    }
+
+    func testSinglePageSettingsSummaryOmitsReadingDirection() {
+        let summary = ReaderDisplayLayout(
+            spreadMode: .singlePage,
+            readingDirection: .rightToLeft
+        ).settingsSummary
+
+        XCTAssertFalse(summary.contains(String(localized: "Right to Left")))
+    }
+
     func testMangaDefaultsUseRightToLeftPagedSinglePageLayout() {
         let layout = ReaderDisplayLayout(defaultsFor: .manga)
 
@@ -46,7 +59,7 @@ final class ReaderDisplayLayoutTests: XCTestCase {
         XCTAssertEqual(normalizedLayout.spreadMode, .singlePage)
     }
 
-    func testDoublePageSpreadsCanKeepFirstPageSingle() {
+    func testEvenPageOrderingKeepsFirstPageSingle() {
         let layout = ReaderDisplayLayout(
             pagingMode: .paged,
             spreadMode: .doublePage,
@@ -59,9 +72,10 @@ final class ReaderDisplayLayoutTests: XCTestCase {
 
         XCTAssertEqual(spreads.map(\.pageIndices), [[0], [1, 2], [3, 4]])
         XCTAssertEqual(ReaderSpreadDescriptor.spreadIndex(containing: 2, in: spreads), 1)
+        XCTAssertTrue(layout.settingsSummary.contains(String(localized: "Even Page Ordering")))
     }
 
-    func testDoublePageSpreadsCanPairFirstAndSecondPages() {
+    func testOddPageOrderingPairsFirstAndSecondPages() {
         let layout = ReaderDisplayLayout(
             pagingMode: .paged,
             spreadMode: .doublePage,
@@ -74,6 +88,7 @@ final class ReaderDisplayLayoutTests: XCTestCase {
 
         XCTAssertEqual(spreads.map(\.pageIndices), [[0, 1], [2, 3], [4]])
         XCTAssertEqual(ReaderSpreadDescriptor.spreadIndex(containing: 2, in: spreads), 1)
+        XCTAssertTrue(layout.settingsSummary.contains(String(localized: "Odd Page Ordering")))
     }
 
     func testDisplayPageIndicesReverseForRightToLeftDoublePageSpread() {

@@ -34,16 +34,16 @@ struct ReaderDefaultsSettingsView: View {
 
                     pageLayoutPicker
 
-                    Picker(
-                        "Reading Direction",
-                        selection: $layout.readingDirection
-                    ) {
-                        ForEach(ReaderReadingDirection.allCases, id: \.self) { direction in
-                            Text(direction.title).tag(direction)
-                        }
-                    }
-
                     if layout.spreadMode == .doublePage {
+                        Picker(
+                            "Reading Direction",
+                            selection: $layout.readingDirection
+                        ) {
+                            ForEach(ReaderReadingDirection.allCases, id: \.self) { direction in
+                                Text(direction.title).tag(direction)
+                            }
+                        }
+
                         ReaderDoublePagePairingPicker(
                             keepsFirstPageSingle: $layout.coverAsSinglePage
                         )

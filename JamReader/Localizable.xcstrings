@@ -6748,6 +6748,28 @@
         }
       }
     },
+    "Even Page Ordering": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偶數頁排序"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偶数ページ順"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "偶数页排序"
+          }
+        }
+      }
+    },
     "Expand Import": {
       "localizations": {
         "zh-Hant-TW": {
@@ -13935,6 +13957,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在阅读"
+          }
+        }
+      }
+    },
+    "Odd Page Ordering": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "奇數頁排序"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "奇数ページ順"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "奇数页排序"
           }
         }
       }
@@ -24026,28 +24070,6 @@
       }
     },
     "Webcomic": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "網路漫畫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ウェブコミック"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络漫画"
-          }
-        }
-      }
-    },
-    "Webcomics": {
       "localizations": {
         "zh-Hant-TW": {
           "stringUnit": {

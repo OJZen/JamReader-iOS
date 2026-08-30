@@ -127,7 +127,7 @@ struct ReaderDisplayLayout: Equatable {
     init(
         pagingMode: ReaderPagingMode = .paged,
         spreadMode: ReaderSpreadMode = .singlePage,
-        readingDirection: ReaderReadingDirection = .leftToRight,
+        readingDirection: ReaderReadingDirection = .rightToLeft,
         coverAsSinglePage: Bool = true,
         fitMode: ReaderFitMode = .page,
         rotation: ReaderRotationAngle = .degrees0
