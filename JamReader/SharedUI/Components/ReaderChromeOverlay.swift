@@ -125,12 +125,20 @@ private struct ReaderScrubberLayout {
 
 // MARK: - Surface Container
 
-struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay: View, ModalOverlay: View>: View {
+struct ReaderSurface<
+    Content: View,
+    TopBar: View,
+    BottomBar: View,
+    SideOverlay: View,
+    StatusOverlay: View,
+    ModalOverlay: View
+>: View {
     let isInteractionLocked: Bool
     let isChromeHidden: Bool
     @ViewBuilder let content: () -> Content
     @ViewBuilder let topBar: () -> TopBar
     @ViewBuilder let bottomBar: (_ viewportSize: CGSize) -> BottomBar
+    @ViewBuilder let sideOverlay: (_ viewportSize: CGSize, _ safeAreaInsets: EdgeInsets) -> SideOverlay
     @ViewBuilder let statusOverlay: () -> StatusOverlay
     @ViewBuilder let modalOverlay: () -> ModalOverlay
 
@@ -157,6 +165,10 @@ struct ReaderSurface<Content: View, TopBar: View, BottomBar: View, StatusOverlay
                     bottomBar(proxy.size)
                 }
                 .allowsHitTesting(!isInteractionLocked)
+
+                sideOverlay(proxy.size, safeAreaInsets)
+                    .chromeVisibility(!isChromeHidden)
+                    .allowsHitTesting(!isInteractionLocked)
 
                 ReaderTopStatusStack(
                     isChromeHidden: isChromeHidden,
@@ -432,6 +444,7 @@ struct ReaderBottomBar: View {
     let currentPage: Int
     let pageCount: Int
     let viewportHeight: CGFloat
+    let showsThumbnailScrubber: Bool
     let onPageSelected: (Int) -> Void
     let onPageIndicatorTapped: () -> Void
     let onScrubberInteractionChanged: (Bool) -> Void
@@ -445,6 +458,7 @@ struct ReaderBottomBar: View {
         currentPage: Int,
         pageCount: Int,
         viewportHeight: CGFloat,
+        showsThumbnailScrubber: Bool = true,
         onPageSelected: @escaping (Int) -> Void,
         onPageIndicatorTapped: @escaping () -> Void,
         onScrubberInteractionChanged: @escaping (Bool) -> Void = { _ in }
@@ -453,6 +467,7 @@ struct ReaderBottomBar: View {
         self.currentPage = currentPage
         self.pageCount = pageCount
         self.viewportHeight = viewportHeight
+        self.showsThumbnailScrubber = showsThumbnailScrubber
         self.onPageSelected = onPageSelected
         self.onPageIndicatorTapped = onPageIndicatorTapped
         self.onScrubberInteractionChanged = onScrubberInteractionChanged
@@ -483,7 +498,7 @@ struct ReaderBottomBar: View {
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
-            if pageCount > 1 {
+            if showsThumbnailScrubber && pageCount > 1 {
                 ReaderThumbnailScrubber(
                     document: document,
                     pageCount: pageCount,

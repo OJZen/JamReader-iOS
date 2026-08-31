@@ -19,7 +19,7 @@ struct ComicReaderView: View {
     @State private var isShowingThumbnailBrowser = false
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
-    @State private var isProgressScrubberInteracting = false
+    @State private var isPageNavigationInteracting = false
     @State private var keepsScreenAwake: Bool
 
     @MainActor
@@ -82,6 +82,11 @@ struct ComicReaderView: View {
             readerTopBar
         } bottomBar: { viewportSize in
             readerBottomBar(viewportHeight: viewportSize.height)
+        } sideOverlay: { viewportSize, safeAreaInsets in
+            readerSideOverlay(
+                viewportSize: viewportSize,
+                safeAreaInsets: safeAreaInsets
+            )
         } statusOverlay: {
             readerStatusOverlay
         } modalOverlay: {
@@ -96,7 +101,7 @@ struct ComicReaderView: View {
             }
         }
         .pullDownToDismiss(
-            isEnabled: !readerSession.state.isPageJumpPresented && !isProgressScrubberInteracting && !isAnySheetPresented,
+            isEnabled: !readerSession.state.isPageJumpPresented && !isPageNavigationInteracting && !isAnySheetPresented,
             direction: dismissGestureDirection,
             isZoomed: isContentZoomed,
             onDismissGestureActiveChanged: { active in
@@ -183,14 +188,21 @@ struct ComicReaderView: View {
     }
 
     private var dismissGestureDirection: ReaderDismissGestureDirection {
-        guard readerSession.state.layout.pagingMode == .verticalContinuous,
-              case .imageSequence(let imageSequence) = viewModel.document,
-              imageSequence.usesComicImageLayout
-        else {
+        guard usesVerticalContinuousComicLayout else {
             return .down
         }
 
         return .right
+    }
+
+    private var usesVerticalContinuousComicLayout: Bool {
+        guard readerSession.state.layout.pagingMode == .verticalContinuous,
+              case .imageSequence(let imageSequence) = viewModel.document
+        else {
+            return false
+        }
+
+        return imageSequence.usesComicImageLayout
     }
 
     private var readerRenderIdentity: String {
@@ -350,13 +362,41 @@ struct ComicReaderView: View {
                 currentPage: currentPage,
                 pageCount: pageCount,
                 viewportHeight: viewportHeight,
+                showsThumbnailScrubber: !usesVerticalContinuousComicLayout,
                 onPageSelected: { pageNumber in
                     viewModel.goToPage(number: pageNumber)
                     readerSession.apply(.goToPage(pageNumber - 1))
                 },
                 onPageIndicatorTapped: presentPageJump,
                 onScrubberInteractionChanged: { isInteracting in
-                    isProgressScrubberInteracting = isInteracting
+                    isPageNavigationInteracting = isInteracting
+                }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func readerSideOverlay(
+        viewportSize: CGSize,
+        safeAreaInsets: EdgeInsets
+    ) -> some View {
+        if usesVerticalContinuousComicLayout,
+           let document = viewModel.document,
+           let currentPage = viewModel.currentPageNumber,
+           let pageCount = viewModel.pageCount,
+           pageCount > 1 {
+            ReaderVerticalThumbnailRail(
+                document: document,
+                currentPage: currentPage,
+                pageCount: pageCount,
+                viewportSize: viewportSize,
+                safeAreaInsets: safeAreaInsets,
+                onPageSelected: { pageNumber in
+                    viewModel.goToPage(number: pageNumber)
+                    readerSession.apply(.goToPage(pageNumber - 1))
+                },
+                onInteractionChanged: { isInteracting in
+                    isPageNavigationInteracting = isInteracting
                 }
             )
         }
