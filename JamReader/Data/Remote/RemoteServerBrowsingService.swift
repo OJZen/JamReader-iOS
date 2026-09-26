@@ -1074,22 +1074,26 @@ final class RemoteServerBrowsingService {
 
         switch profile.providerKind {
         case .smb:
-            let credentials = try resolvedCredentials(for: profile)
-            return try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
+            let connect: @MainActor () async throws -> ManagedSMBRemoteFileReader.Resources = { [self] in
+                try Task.checkCancellation()
+                let credentials = try resolvedCredentials(for: profile)
+                let client = SMBClient(host: profile.normalizedHost, port: profile.port, connectTimeout: 30)
                 do {
-                    let client = SMBClient(host: profile.normalizedHost, port: profile.port, connectTimeout: 30)
                     try await client.login(
                         username: credentials.username,
                         password: credentials.password
                     )
                     try await client.connectShare(profile.normalizedShareName)
-                    return ManagedSMBRemoteFileReader(
+                    try Task.checkCancellation()
+                    return ManagedSMBRemoteFileReader.Resources(
                         client: client,
                         fileReader: client.fileReader(
                             path: smbRelativePath(forDisplayPath: reference.path)
                         )
                     )
                 } catch {
+                    client.session.disconnect()
+                    if error is CancellationError { throw error }
                     throw normalizeBrowsingError(
                         error,
                         profile: profile,
@@ -1097,6 +1101,8 @@ final class RemoteServerBrowsingService {
                     )
                 }
             }
+            let resources = try await withRetry(maxAttempts: 3, baseDelay: 1.0, operation: connect)
+            return ManagedSMBRemoteFileReader(resources: resources, reconnect: connect)
         case .webdav:
             return RemoteHTTPRangeFileReader(
                 url: try webDAVURL(

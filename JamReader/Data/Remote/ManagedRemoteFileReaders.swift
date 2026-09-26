@@ -1,34 +1,41 @@
 import Foundation
+import Network
 import os
 
+@MainActor
 final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked Sendable {
-    private struct Resources: @unchecked Sendable {
+    struct Resources: @unchecked Sendable {
         let client: SMBClient
         let fileReader: FileReader
     }
 
-    private let lock = NSLock()
     private var resources: Resources?
+    private let reconnect: @MainActor () async throws -> Resources
+    private var reconnectTask: Task<Void, Error>?
+    private var expectedFileSize: UInt64?
 
-    init(client: SMBClient, fileReader: FileReader) {
-        self.resources = Resources(client: client, fileReader: fileReader)
+    init(resources: Resources, reconnect: @escaping @MainActor () async throws -> Resources) {
+        self.resources = resources
+        self.reconnect = reconnect
     }
 
     var fileSize: UInt64 {
         get async throws {
-            let fileReader = try currentFileReader()
-            return try await fileReader.fileSize
+            let size = try await withFileReader { try await $0.fileSize }
+            expectedFileSize = size
+            return size
         }
     }
 
     func read(offset: UInt64, length: UInt32) async throws -> Data {
-        try Task.checkCancellation()
-        let fileReader = try currentFileReader()
-        return try await fileReader.read(offset: offset, length: length)
+        try await withFileReader { try await $0.read(offset: offset, length: length) }
     }
 
     func close() async throws {
-        let resources = takeResources()
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        let resources = self.resources
+        self.resources = nil
         guard let resources else {
             return
         }
@@ -37,7 +44,7 @@ final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked
     }
 
     deinit {
-        let resources = takeResources()
+        reconnectTask?.cancel()
         guard let resources else {
             return
         }
@@ -45,6 +52,84 @@ final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked
         Task {
             await Self.closeResources(resources, context: "deinit")
         }
+    }
+
+    private func withFileReader<T>(_ operation: (FileReader) async throws -> T) async throws -> T {
+        try Task.checkCancellation()
+        let fileReader = try currentFileReader()
+        do {
+            let result = try await operation(fileReader)
+            try Task.checkCancellation()
+            _ = try currentFileReader()
+            return result
+        } catch {
+            try Task.checkCancellation()
+            guard Self.shouldReconnect(after: error) else { throw error }
+            try await recoverConnection(after: fileReader)
+            let result = try await operation(currentFileReader())
+            try Task.checkCancellation()
+            _ = try currentFileReader()
+            return result
+        }
+    }
+
+    private func recoverConnection(after failedReader: FileReader) async throws {
+        // Another page may already have replaced the connection that failed this read.
+        guard try currentFileReader() === failedReader else { return }
+        if reconnectTask == nil {
+            resources?.client.session.disconnect()
+            let reconnect = self.reconnect
+            let expectedFileSize = self.expectedFileSize
+            reconnectTask = Task { @MainActor [weak self] in
+                AppLog.smb.notice("SMB streaming reader reconnect requested")
+                do {
+                    let replacement = try await reconnect()
+                    do {
+                        try Task.checkCancellation()
+                        if let expectedFileSize,
+                           try await replacement.fileReader.fileSize != expectedFileSize {
+                            throw CocoaError(.fileReadCorruptFile)
+                        }
+                        try Task.checkCancellation()
+                        guard let self, self.resources != nil else { throw CancellationError() }
+                        self.resources = replacement
+                        self.reconnectTask = nil
+                        AppLog.smb.info("SMB streaming reader reconnect completed")
+                    } catch {
+                        // Closing the reader while login is suspended must not revive it.
+                        replacement.client.session.disconnect()
+                        await Self.closeResources(replacement, context: "discardedReconnect")
+                        throw error
+                    }
+                } catch {
+                    self?.reconnectTask = nil
+                    if !Task.isCancelled {
+                        AppLog.smb.warning(
+                            "SMB streaming reader reconnect failed error=\(AppLogSanitizer.errorDescription(error), privacy: .private)"
+                        )
+                    }
+                    throw error
+                }
+            }
+        }
+        try await reconnectTask?.value
+        try Task.checkCancellation()
+        _ = try currentFileReader()
+    }
+
+    private static func shouldReconnect(after error: Error) -> Bool {
+        if error is CancellationError { return false }
+        if error is ConnectionError || error is NWError || error is POSIXError { return true }
+        if let response = error as? ErrorResponse {
+            switch NTStatus(response.header.status) {
+            case .userSessionDeleted, .networkSessionExpired, .networkNameDeleted,
+                 .fileClosed, .smbBadTid, .smbBadUID, .ioTimeout, .connectionRefused:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     private static func closeResources(_ resources: Resources, context: String) async {
@@ -78,22 +163,10 @@ final class ManagedSMBRemoteFileReader: RemoteRandomAccessFileReader, @unchecked
     }
 
     private func currentFileReader() throws -> FileReader {
-        lock.lock()
-        defer { lock.unlock() }
-
         guard let resources else {
             throw CancellationError()
         }
 
         return resources.fileReader
-    }
-
-    private func takeResources() -> Resources? {
-        lock.lock()
-        defer { lock.unlock() }
-
-        let currentResources = resources
-        resources = nil
-        return currentResources
     }
 }
