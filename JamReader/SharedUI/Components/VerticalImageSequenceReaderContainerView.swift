@@ -365,6 +365,23 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             return cell
         }
 
+        func collectionView(
+            _ collectionView: UICollectionView,
+            willDisplay cell: UICollectionViewCell,
+            forItemAt indexPath: IndexPath
+        ) {
+            guard let cell = cell as? VerticalReaderPageCell, !cell.hasPageImage else {
+                return
+            }
+
+            if let image = imageCache.object(forKey: NSNumber(value: indexPath.item)) {
+                cell.setImage(image)
+            } else {
+                // A prepared cell can survive cancellation of its prefetch request.
+                ensurePageLoaded(at: indexPath.item, priority: .userInitiated)
+            }
+        }
+
         func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
             for indexPath in indexPaths {
                 ensurePageLoaded(at: indexPath.item, priority: .utility)
@@ -630,14 +647,11 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                     }
                 }.value
 
-                guard !Task.isCancelled else {
-                    await MainActor.run {
-                        self.pageLoadTasks[index] = nil
-                    }
-                    return
-                }
-
                 await MainActor.run {
+                    // Cancellation already removed this task; it must not clear a replacement.
+                    guard !Task.isCancelled else {
+                        return
+                    }
                     self.pageLoadTasks[index] = nil
                     guard let collectionView = self.viewController?.collectionView else {
                         return
@@ -710,6 +724,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 guard let self,
                       let info = readerPagePreviewUpdateInfo(from: notification),
                       info.namespace == self.previewNamespace,
+                      self.pageLoadTasks[info.pageIndex] != nil,
                       self.imageCache.object(forKey: NSNumber(value: info.pageIndex)) == nil,
                       let collectionView = self.viewController?.collectionView,
                       let cell = collectionView.cellForItem(at: IndexPath(item: info.pageIndex, section: 0))
@@ -738,14 +753,15 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
             to cell: VerticalReaderPageCell,
             in collectionView: UICollectionView
         ) {
-            guard let image = ReaderPagePreviewStore.shared.image(
-                namespace: previewNamespace,
-                pageIndex: index
-            ) else {
+            guard !cell.hasPageImage,
+                  let image = ReaderPagePreviewStore.shared.image(
+                    namespace: previewNamespace,
+                    pageIndex: index
+                  ) else {
                 return
             }
 
-            cell.setImage(image)
+            cell.setImage(image, isPreview: true)
             updateAspectRatioIfNeeded(
                 for: index,
                 ratio: image.size.height / max(image.size.width, 1),
@@ -866,16 +882,20 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.imageCache.removeAllObjects()
-                self?.cancelPageTasks()
+                guard let self else {
+                    return
+                }
+                self.imageCache.removeAllObjects()
+                let visiblePages = self.viewController?.collectionView.indexPathsForVisibleItems.map(\.item) ?? []
+                self.cancelPageTasks(except: Set(visiblePages))
             }
         }
 
-        private func cancelPageTasks() {
-            for task in pageLoadTasks.values {
+        private func cancelPageTasks(except retainedPages: Set<Int> = []) {
+            for (index, task) in pageLoadTasks where !retainedPages.contains(index) {
                 task.cancel()
+                pageLoadTasks[index] = nil
             }
-            pageLoadTasks.removeAll()
         }
 
         nonisolated private static func decodeImage(from data: Data, maxPixelSize: Int) -> UIImage? {
@@ -1161,9 +1181,10 @@ final class VerticalReaderViewController: UIViewController {
     }
 }
 
-private final class VerticalReaderPageCell: UICollectionViewCell {
+final class VerticalReaderPageCell: UICollectionViewCell {
     static let reuseIdentifier = "VerticalReaderPageCell"
 
+    private(set) var hasPageImage = false
     private let imageView = UIImageView()
     private let activityIndicator = UIActivityIndicatorView(style: .medium)
     private let messageLabel = UILabel()
@@ -1180,6 +1201,7 @@ private final class VerticalReaderPageCell: UICollectionViewCell {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        hasPageImage = false
         imageView.image = nil
         imageView.isHidden = true
         messageLabel.text = nil
@@ -1188,6 +1210,7 @@ private final class VerticalReaderPageCell: UICollectionViewCell {
     }
 
     func configurePlaceholder(pageNumber: Int) {
+        hasPageImage = false
         messageLabel.isHidden = true
         imageView.isHidden = true
         imageView.image = nil
@@ -1195,7 +1218,11 @@ private final class VerticalReaderPageCell: UICollectionViewCell {
         accessibilityLabel = String(localized: "Page \(pageNumber)")
     }
 
-    func setImage(_ image: UIImage) {
+    func setImage(_ image: UIImage, isPreview: Bool = false) {
+        guard !isPreview || !hasPageImage else {
+            return
+        }
+        hasPageImage = !isPreview
         imageView.image = image
         imageView.isHidden = false
         messageLabel.isHidden = true
@@ -1203,6 +1230,7 @@ private final class VerticalReaderPageCell: UICollectionViewCell {
     }
 
     func setError(_ message: String) {
+        hasPageImage = false
         imageView.image = nil
         imageView.isHidden = true
         messageLabel.text = message
