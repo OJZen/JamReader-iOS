@@ -1,4 +1,5 @@
 import Combine
+import SwiftUI
 import UIKit
 import XCTest
 import zlib
@@ -6,6 +7,159 @@ import zlib
 
 @MainActor
 final class ReaderVerticalRailPreviewTests: XCTestCase {
+    func testDragOnlyCommitsOnReleaseAndCancellationKeepsOriginalPage() {
+        let coordinator = ReaderVerticalThumbnailRailCoordinator(initialPageIndex: 2)
+        coordinator.beginInteraction()
+        coordinator.updateFocusedPage(8, pageCount: 20)
+        XCTAssertTrue(coordinator.isInteracting)
+        XCTAssertEqual(coordinator.focusedPageIndex, 8)
+        XCTAssertEqual(coordinator.thumbnailPageIndex, 2)
+        XCTAssertEqual(coordinator.endInteraction(commit: true, pageCount: 20), 8)
+        XCTAssertFalse(coordinator.isInteracting)
+        XCTAssertNil(coordinator.endInteraction(commit: true, pageCount: 20))
+
+        coordinator.beginInteraction()
+        coordinator.updateFocusedPage(13, pageCount: 20)
+        XCTAssertNil(coordinator.endInteraction(commit: false, pageCount: 20))
+        XCTAssertFalse(coordinator.isInteracting)
+        XCTAssertEqual(coordinator.focusedPageIndex, 8)
+    }
+
+    func testLargeFocusedPreviewUpgradesSmallCachedImage() async throws {
+        let root = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            ReaderPagePreviewStore.shared.clear()
+        }
+        let image = makeImage()
+        try XCTUnwrap(image.pngData()).write(to: root.appendingPathComponent("page.png"))
+        let document = try DirectoryImageSequenceReader().loadDocument(at: root)
+        let smallImage = await image.byPreparingThumbnail(ofSize: CGSize(width: 24, height: 24))
+        ReaderPagePreviewStore.shared.store(
+            try XCTUnwrap(smallImage), namespace: ReaderPageCache.namespace(for: root), pageIndex: 0
+        )
+
+        let coordinator = ReaderVerticalRailPreviewCoordinator()
+        defer { coordinator.reset() }
+        coordinator.loadFocusedPreview(document: .imageSequence(document), pageIndex: 0, maxPixelSize: 180)
+        await waitUntil { !coordinator.isFocusedPreviewLoading }
+        let preview = try XCTUnwrap(coordinator.previewImage(for: 0, maxPixelSize: 180))
+        XCTAssertEqual(max(preview.size.width, preview.size.height) * preview.scale, 180, accuracy: 1)
+    }
+
+    func testRevisitedPreviewImmediatelyUsesSharpCacheAcrossIdleAndPageChanges() async throws {
+        let source = SuspendedFocusedPageSource()
+        defer {
+            Task { await source.close() }
+            ReaderPagePreviewStore.shared.clear()
+        }
+        let document = ComicDocument.imageSequence(ImageSequenceComicDocument(
+            url: URL(fileURLWithPath: "/revisited-preview-\(UUID().uuidString).cbz"),
+            pageNames: ["0.png", "1.png"], pageSource: source
+        ))
+        let coordinator = ReaderVerticalRailPreviewCoordinator()
+        defer { coordinator.reset() }
+        coordinator.loadFocusedPreview(document: document, pageIndex: 0, maxPixelSize: 180)
+        await waitUntil { await source.requestCount == 1 }
+        await source.complete(pageIndex: 0, data: try XCTUnwrap(makeImage().pngData()))
+        await waitUntil { !coordinator.isFocusedPreviewLoading }
+        let sharpImage = try XCTUnwrap(coordinator.previewImage(for: 0, maxPixelSize: 180))
+        XCTAssertEqual(max(sharpImage.size.width, sharpImage.size.height) * sharpImage.scale, 180, accuracy: 1)
+
+        // Releasing the rail prepares a small image, but must not downgrade the next preview.
+        coordinator.loadFocusedPreview(document: document, pageIndex: 0, maxPixelSize: 72)
+        XCTAssertTrue(coordinator.previewImage(for: 0, maxPixelSize: 180) === sharpImage)
+        await waitUntil { !coordinator.isFocusedPreviewLoading }
+        XCTAssertTrue(coordinator.previewImage(for: 0, maxPixelSize: 180) === sharpImage)
+
+        // Full reader pages can evict the shared display cache while the pipeline still has the sharp thumbnail.
+        ReaderPagePreviewStore.shared.clear()
+        XCTAssertTrue(coordinator.previewImage(for: 0, maxPixelSize: 180) === sharpImage)
+
+        coordinator.loadFocusedPreview(document: document, pageIndex: 1, maxPixelSize: 180)
+        await waitUntil { await source.requestCount == 2 }
+        // The finger can return to page 0 before the debounced focused-page request changes.
+        XCTAssertTrue(coordinator.previewImage(for: 0, maxPixelSize: 180) === sharpImage)
+        coordinator.loadFocusedPreview(document: document, pageIndex: 0, maxPixelSize: 180)
+        XCTAssertTrue(coordinator.previewImage(for: 0, maxPixelSize: 180) === sharpImage)
+        await waitUntil { !coordinator.isFocusedPreviewLoading }
+        XCTAssertTrue(coordinator.previewImage(for: 0, maxPixelSize: 180) === sharpImage)
+        let requestCount = await source.requestCount
+        XCTAssertEqual(requestCount, 2)
+
+        coordinator.configure(namespace: UUID().uuidString, pageSource: source, pageCount: 0, maxPixelSize: 36)
+        XCTAssertNil(coordinator.previewImage(for: 0, maxPixelSize: 180))
+    }
+
+    func testLargePreviewIgnoresLateImageFromPreviousPage() async throws {
+        let source = SuspendedFocusedPageSource()
+        defer { Task { await source.close() } }
+        let document = ComicDocument.imageSequence(ImageSequenceComicDocument(
+            url: URL(fileURLWithPath: "/focused-preview-\(UUID().uuidString).cbz"),
+            pageNames: ["0.png", "1.png"], pageSource: source
+        ))
+        let coordinator = ReaderVerticalRailPreviewCoordinator()
+        defer { coordinator.reset() }
+        coordinator.loadFocusedPreview(document: document, pageIndex: 0, maxPixelSize: 180)
+        await waitUntil { await source.requestCount == 1 }
+        coordinator.loadFocusedPreview(document: document, pageIndex: 1, maxPixelSize: 180)
+        await waitUntil { await source.requestCount == 2 }
+        XCTAssertNil(coordinator.previewImage(for: 0, maxPixelSize: 180))
+
+        let data = try XCTUnwrap(makeImage().pngData())
+        await source.complete(pageIndex: 1, data: data)
+        await waitUntil { !coordinator.isFocusedPreviewLoading }
+        let currentImage = try XCTUnwrap(coordinator.previewImage(for: 1, maxPixelSize: 180))
+        let lateUpdate = expectation(description: "Previous page must not replace current preview")
+        lateUpdate.isInverted = true
+        let subscription = coordinator.$focusedPreviewImage.dropFirst().sink { _ in lateUpdate.fulfill() }
+        await source.complete(pageIndex: 0, data: data)
+        await fulfillment(of: [lateUpdate], timeout: 0.2)
+        subscription.cancel()
+        XCTAssertTrue(coordinator.previewImage(for: 1, maxPixelSize: 180) === currentImage)
+        XCTAssertEqual(coordinator.focusedPageIndex, 1)
+
+        coordinator.reset()
+        XCTAssertNil(coordinator.previewImage(for: 1, maxPixelSize: 180))
+        XCTAssertFalse(coordinator.isFocusedPreviewLoading)
+    }
+
+    func testRailUpgradesTinyCacheLocallyForMagnificationAndRejectsLaterDowngrade() async throws {
+        let namespace = UUID().uuidString
+        let source = SuspendedLocalPageSource()
+        let image = makeImage()
+        let preparedSmallImage = await image.byPreparingThumbnail(ofSize: CGSize(width: 24, height: 24))
+        let smallImage = try XCTUnwrap(preparedSmallImage)
+        ReaderPagePreviewStore.shared.store(smallImage, namespace: namespace, pageIndex: 0)
+        defer { ReaderPagePreviewStore.shared.clear() }
+        let layout = ReaderVerticalThumbnailRailLayout.adaptive(
+            viewportSize: CGSize(width: 834, height: 1_194),
+            safeAreaInsets: .init(top: 24, leading: 0, bottom: 20, trailing: 0),
+            pageCount: 1_000, userInterfaceIdiom: .pad
+        )
+        let maxPixelSize = layout.thumbnailMaxPixelSize(displayScale: 2)
+        XCTAssertEqual(maxPixelSize, 112)
+
+        let coordinator = ReaderVerticalRailPreviewCoordinator()
+        defer { coordinator.reset() }
+        coordinator.configure(namespace: namespace, pageSource: source, pageCount: 1, maxPixelSize: maxPixelSize)
+        await waitUntil { await source.localReadCount == 1 }
+        await source.complete(try XCTUnwrap(image.pngData()))
+        await waitUntil { coordinator.railPreviewImages[0] != nil }
+        let preview = try XCTUnwrap(coordinator.railPreviewImages[0])
+        XCTAssertEqual(max(preview.size.width, preview.size.height) * preview.scale, 112, accuracy: 1)
+        let normalReadCount = await source.normalReadCount
+        XCTAssertEqual(normalReadCount, 0)
+
+        let downgrade = expectation(description: "A tiny cached image must not replace a sharp rail thumbnail")
+        downgrade.isInverted = true
+        let subscription = coordinator.$railPreviewImages.dropFirst().sink { _ in downgrade.fulfill() }
+        coordinator.ingestPreview(smallImage, pageIndex: 0, maxPixelSize: maxPixelSize)
+        await fulfillment(of: [downgrade], timeout: 0.2)
+        subscription.cancel()
+        XCTAssertTrue(coordinator.railPreviewImages[0] === preview)
+    }
+
     func testLocalDirectoryFillsWholeRailWithoutCachingFullPages() async throws {
         let root = try makeTemporaryDirectory()
         defer {
@@ -201,5 +355,24 @@ private actor SuspendedLocalPageSource: ComicPageDataSource {
     func complete(_ data: Data) {
         continuation?.resume(returning: data)
         continuation = nil
+    }
+}
+
+private actor SuspendedFocusedPageSource: ComicPageDataSource {
+    private(set) var requestCount = 0
+    private var requests: [Int: CheckedContinuation<Data, Error>] = [:]
+
+    func dataForPage(at index: Int) async throws -> Data {
+        requestCount += 1
+        return try await withCheckedThrowingContinuation { requests[index] = $0 }
+    }
+
+    func complete(pageIndex: Int, data: Data) {
+        requests.removeValue(forKey: pageIndex)?.resume(returning: data)
+    }
+
+    func close() async {
+        for continuation in requests.values { continuation.resume(throwing: CancellationError()) }
+        requests.removeAll()
     }
 }

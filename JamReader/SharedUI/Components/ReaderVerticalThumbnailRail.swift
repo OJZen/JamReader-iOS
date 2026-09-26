@@ -57,6 +57,19 @@ struct ReaderVerticalThumbnailRail: View {
                     )
             }
         }
+        .overlay {
+            ZStack {
+                if coordinator.isInteracting {
+                    centeredPagePreview
+                        .transition(.opacity)
+                }
+            }
+            .animation(
+                accessibilityReduceMotion ? nil : .easeOut(duration: 0.12),
+                value: coordinator.isInteracting
+            )
+            .allowsHitTesting(false)
+        }
         .onAppear {
             coordinator.syncCurrentPage(currentPageIndex, pageCount: pageCount)
             refreshRailPreviews()
@@ -77,12 +90,11 @@ struct ReaderVerticalThumbnailRail: View {
         .onChange(of: railPreviewMaxPixelSize) { _, _ in
             refreshRailPreviews()
         }
-        .onChange(of: coordinator.thumbnailPageIndex) { _, pageIndex in
-            previewCoordinator.loadFocusedPreview(
-                document: document,
-                pageIndex: pageIndex,
-                maxPixelSize: focusedPreviewMaxPixelSize
-            )
+        .onChange(of: focusedPreviewMaxPixelSize) { _, _ in
+            loadFocusedPreview()
+        }
+        .onChange(of: coordinator.thumbnailPageIndex) { _, _ in
+            loadFocusedPreview()
         }
         .onReceive(NotificationCenter.default.publisher(for: .readerPagePreviewDidUpdate)) { notification in
             guard let previewNamespace,
@@ -147,13 +159,57 @@ struct ReaderVerticalThumbnailRail: View {
     }
 
     private var railPreviewMaxPixelSize: Int {
-        let layout = railLayout
-        let longestSide = max(layout.railThumbnailWidth, layout.railThumbnailHeight)
-        return max(1, Int((longestSide * displayScale).rounded(.up)))
+        railLayout.thumbnailMaxPixelSize(displayScale: displayScale)
     }
 
     private var focusedPreviewMaxPixelSize: Int {
-        UIDevice.current.userInterfaceIdiom == .pad ? 96 : 72
+        if coordinator.isInteracting {
+            return max(1, Int((max(centeredPreviewBounds.width, centeredPreviewBounds.height) * displayScale).rounded(.up)))
+        }
+        return railPreviewMaxPixelSize
+    }
+
+    private var centeredPreviewBounds: CGSize {
+        let width = max(viewportSize.width / 2, 1)
+        let availableHeight = max(viewportSize.height - 2 * max(safeAreaInsets.top, safeAreaInsets.bottom) - 32, 1)
+        return CGSize(width: width, height: availableHeight)
+    }
+
+    private var centeredPagePreview: some View {
+        let pageIndex = coordinator.focusedPageIndex
+        let image = previewCoordinator.previewImage(for: pageIndex, maxPixelSize: focusedPreviewMaxPixelSize)
+        return ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else if previewCoordinator.focusedPageIndex != pageIndex || previewCoordinator.isFocusedPreviewLoading {
+                ProgressView().tint(.white)
+            } else {
+                Image(systemName: "photo")
+                    .font(.title)
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+        }
+        .aspectRatio(image?.size ?? CGSize(width: 2, height: 3), contentMode: .fit)
+        .background(.black.opacity(0.8))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.white.opacity(0.15), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
+        .frame(width: centeredPreviewBounds.width, height: centeredPreviewBounds.height)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func loadFocusedPreview() {
+        previewCoordinator.loadFocusedPreview(
+            document: document,
+            pageIndex: coordinator.thumbnailPageIndex,
+            maxPixelSize: focusedPreviewMaxPixelSize
+        )
     }
 
     private func refreshRailPreviews() {
@@ -169,11 +225,7 @@ struct ReaderVerticalThumbnailRail: View {
             pageCount: pageCount,
             maxPixelSize: railPreviewMaxPixelSize
         )
-        previewCoordinator.loadFocusedPreview(
-            document: document,
-            pageIndex: coordinator.thumbnailPageIndex,
-            maxPixelSize: focusedPreviewMaxPixelSize
-        )
+        loadFocusedPreview()
     }
 
     private func railContent(layout: ReaderVerticalThumbnailRailLayout) -> some View {
@@ -198,8 +250,6 @@ struct ReaderVerticalThumbnailRail: View {
             ReaderVerticalThumbnailRibbon(
                 pageCount: pageCount,
                 focusedPagePosition: CGFloat(coordinator.focusedPageIndex),
-                focusedPreviewPageIndex: previewCoordinator.focusedPageIndex,
-                focusedPreviewImage: previewCoordinator.focusedPreviewImage,
                 layout: layout,
                 railCenterX: railCenterX,
                 previewImages: previewCoordinator.railPreviewImages
@@ -344,8 +394,6 @@ struct ReaderVerticalThumbnailRail: View {
 private struct ReaderVerticalThumbnailRibbon: View, Animatable {
     let pageCount: Int
     var focusedPagePosition: CGFloat
-    let focusedPreviewPageIndex: Int?
-    let focusedPreviewImage: UIImage?
     let layout: ReaderVerticalThumbnailRailLayout
     let railCenterX: CGFloat
     let previewImages: [Int: UIImage]
@@ -403,10 +451,7 @@ private struct ReaderVerticalThumbnailRibbon: View, Animatable {
                 itemContext.opacity = 0.48 + (0.52 * influence)
                 itemContext.fill(path, with: .color(.white.opacity(0.12)))
 
-                let previewImage = pageIndex == focusedPreviewPageIndex
-                    ? focusedPreviewImage ?? previewImages[pageIndex]
-                    : previewImages[pageIndex]
-                if let previewImage {
+                if let previewImage = previewImages[pageIndex] {
                     var imageContext = itemContext
                     imageContext.clip(to: path)
                     imageContext.draw(
@@ -723,6 +768,11 @@ struct ReaderVerticalThumbnailRailLayout: Equatable {
     let trailingInset: CGFloat
     let verticalOffset: CGFloat
 
+    func thumbnailMaxPixelSize(displayScale: CGFloat) -> Int {
+        let longestSide = max(maximumFocusedThumbnailWidth, maximumFocusedThumbnailHeight)
+        return max(1, Int((longestSide * max(displayScale, 1)).rounded(.up)))
+    }
+
     static func adaptive(
         viewportSize: CGSize,
         safeAreaInsets: EdgeInsets,
@@ -809,8 +859,12 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
     @Published private(set) var railPreviewImages: [Int: UIImage] = [:]
     @Published private(set) var focusedPageIndex: Int?
     @Published private(set) var focusedPreviewImage: UIImage?
+    @Published private(set) var isFocusedPreviewLoading = false
 
     private var configurationID: String?
+    private var railPreviewMaxPixelSize = 1
+    private var previewNamespace: String?
+    private var previewPageNames: [String] = []
     private var focusedRequestID: String?
     private var focusedPreviewIsPrepared = false
     private var scanTask: Task<Void, Never>?
@@ -832,11 +886,15 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
 
         cancelTasks()
         configurationID = newConfigurationID
+        railPreviewMaxPixelSize = resolvedPixelSize
+        previewNamespace = namespace
+        previewPageNames = []
         focusedRequestID = nil
         focusedPreviewIsPrepared = false
         railPreviewImages = [:]
         focusedPageIndex = nil
         focusedPreviewImage = nil
+        isFocusedPreviewLoading = false
 
         scanTask = Task.detached(priority: .utility) { [weak self] in
             var batch: [Int: UIImage] = [:]
@@ -865,7 +923,9 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
         finished: Bool = false
     ) {
         guard !Task.isCancelled, self.configurationID == configurationID else { return }
-        railPreviewImages.merge(images) { existing, _ in existing }
+        railPreviewImages.merge(images) { existing, scanned in
+            Self.pixelSize(of: existing) >= Self.pixelSize(of: scanned) ? existing : scanned
+        }
         if finished {
             scanTask = nil
         }
@@ -873,6 +933,9 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
 
     func ingestPreview(_ sourceImage: UIImage, pageIndex: Int, maxPixelSize: Int) {
         guard pageIndex >= 0, let configurationID else {
+            return
+        }
+        if let existing = railPreviewImages[pageIndex], Self.pixelSize(of: existing) >= CGFloat(maxPixelSize) {
             return
         }
 
@@ -891,12 +954,21 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
                 return
             }
 
-            self.railPreviewImages[pageIndex] = preparedImage
+            let existingSize = self.railPreviewImages[pageIndex].map { Self.pixelSize(of: $0) } ?? 0
+            if Self.pixelSize(of: preparedImage) > existingSize {
+                self.railPreviewImages[pageIndex] = preparedImage
+            }
             self.ingestTasks[pageIndex] = nil
         }
     }
 
     func loadFocusedPreview(document: ComicDocument, pageIndex: Int, maxPixelSize: Int) {
+        previewNamespace = ReaderPageCache.namespace(for: document.fileURL)
+        if case .imageSequence(let imageSequence) = document {
+            previewPageNames = imageSequence.pageNames
+        } else {
+            previewPageNames = []
+        }
         let resolvedPixelSize = max(maxPixelSize, 1)
         let requestID = "\(document.fileURL.path)#\(pageIndex)#\(resolvedPixelSize)"
         if focusedRequestID == requestID,
@@ -909,18 +981,13 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
         focusedPreviewIsPrepared = false
         focusedPageIndex = pageIndex
         focusedPreviewImage = railPreviewImages[pageIndex]
+        isFocusedPreviewLoading = true
 
         focusedTask = Task(priority: .utility) { @MainActor [weak self] in
             let sourceImage: UIImage?
             switch document {
             case .imageSequence(let imageSequence):
-                let namespace = ReaderPageCache.namespace(for: imageSequence.url)
-                if let cachedImage = ReaderPagePreviewStore.shared.image(
-                    namespace: namespace,
-                    pageIndex: pageIndex
-                ) {
-                    sourceImage = cachedImage
-                } else if let pageName = imageSequence.pageName(at: pageIndex) {
+                if let pageName = imageSequence.pageName(at: pageIndex) {
                     sourceImage = await ReaderImageSequenceThumbnailPipeline.shared.image(
                         documentURL: imageSequence.url,
                         pageSource: imageSequence.pageSource,
@@ -955,19 +1022,46 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
             if let preparedImage {
                 self.focusedPreviewImage = preparedImage
                 self.focusedPreviewIsPrepared = true
+                self.ingestPreview(preparedImage, pageIndex: pageIndex, maxPixelSize: self.railPreviewMaxPixelSize)
             }
             self.focusedTask = nil
+            self.isFocusedPreviewLoading = false
+        }
+    }
+
+    func previewImage(for pageIndex: Int, maxPixelSize: Int) -> UIImage? {
+        let cachedImage = previewNamespace.flatMap {
+            ReaderPagePreviewStore.shared.image(namespace: $0, pageIndex: pageIndex)
+        }
+        let pipelineImage: UIImage?
+        if let previewNamespace, previewPageNames.indices.contains(pageIndex) {
+            pipelineImage = ReaderImageSequenceThumbnailPipeline.shared.cachedImage(
+                namespace: previewNamespace,
+                pageName: previewPageNames[pageIndex],
+                pageIndex: pageIndex,
+                maxPixelSize: maxPixelSize
+            )
+        } else {
+            pipelineImage = nil
+        }
+        let focusedImage = focusedPageIndex == pageIndex ? focusedPreviewImage : nil
+        // Either bounded cache can evict independently; resolve both before the debounced load.
+        return [cachedImage, pipelineImage, focusedImage, railPreviewImages[pageIndex]].compactMap { $0 }.max {
+            max($0.size.width, $0.size.height) * $0.scale < max($1.size.width, $1.size.height) * $1.scale
         }
     }
 
     func reset() {
         cancelTasks()
         configurationID = nil
+        previewNamespace = nil
+        previewPageNames = []
         focusedRequestID = nil
         focusedPreviewIsPrepared = false
         railPreviewImages = [:]
         focusedPageIndex = nil
         focusedPreviewImage = nil
+        isFocusedPreviewLoading = false
     }
 
     deinit {
@@ -991,16 +1085,20 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
         pageIndex: Int,
         maxPixelSize: Int
     ) async -> UIImage? {
-        if let sourceImage = ReaderPagePreviewStore.shared.image(namespace: namespace, pageIndex: pageIndex) {
-            return await prepareThumbnail(sourceImage, maxPixelSize: maxPixelSize)
+        let cachedImage = ReaderPagePreviewStore.shared.image(namespace: namespace, pageIndex: pageIndex)
+        if let cachedImage, pixelSize(of: cachedImage) >= CGFloat(maxPixelSize) {
+            return await prepareThumbnail(cachedImage, maxPixelSize: maxPixelSize)
         }
         guard let data = try? await pageSource.localDataForPage(at: pageIndex),
               !Task.isCancelled else {
+            if let cachedImage, !Task.isCancelled {
+                return await prepareThumbnail(cachedImage, maxPixelSize: maxPixelSize)
+            }
             return nil
         }
         let image = autoreleasepool {
             ReaderImageSequenceThumbnailPipeline.loadDownsampledImage(from: data, maxPixelSize: maxPixelSize)
-        }
+        } ?? cachedImage
         guard let image else { return nil }
         return await prepareThumbnail(image, maxPixelSize: maxPixelSize)
     }
@@ -1009,14 +1107,19 @@ final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
         _ image: UIImage,
         maxPixelSize: Int
     ) async -> UIImage? {
-        await image.byPreparingThumbnail(
-            ofSize: CGSize(width: maxPixelSize, height: maxPixelSize)
+        let size = max(1, min(CGFloat(maxPixelSize), pixelSize(of: image)))
+        return await image.byPreparingThumbnail(
+            ofSize: CGSize(width: size, height: size)
         )
+    }
+
+    nonisolated private static func pixelSize(of image: UIImage) -> CGFloat {
+        max(image.size.width, image.size.height) * image.scale
     }
 }
 
 @MainActor
-private final class ReaderVerticalThumbnailRailCoordinator: ObservableObject {
+final class ReaderVerticalThumbnailRailCoordinator: ObservableObject {
     @Published private(set) var focusedPageIndex: Int
     @Published private(set) var thumbnailPageIndex: Int
     @Published private(set) var isInteracting = false

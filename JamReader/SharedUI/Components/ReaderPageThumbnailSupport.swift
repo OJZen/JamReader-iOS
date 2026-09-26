@@ -454,12 +454,23 @@ private extension ReaderPageThumbnailLoader.Phase {
 actor ReaderImageSequenceThumbnailPipeline {
     static let shared = ReaderImageSequenceThumbnailPipeline()
 
-    private let cache = NSCache<NSString, UIImage>()
+    // NSCache is thread-safe; display can read a hit without waiting for an actor hop or a new load.
+    nonisolated(unsafe) private let cache = NSCache<NSString, UIImage>()
     private var inFlightTasks: [String: Task<UIImage?, Never>] = [:]
 
     init() {
         cache.countLimit = 256
         cache.totalCostLimit = 48 * 1_024 * 1_024
+    }
+
+    nonisolated func cachedImage(namespace: String, pageName: String, pageIndex: Int, maxPixelSize: Int) -> UIImage? {
+        cache.object(forKey: Self.cacheKey(
+            namespace: namespace, pageName: pageName, pageIndex: pageIndex, maxPixelSize: maxPixelSize
+        ) as NSString)
+    }
+
+    nonisolated private static func cacheKey(namespace: String, pageName: String, pageIndex: Int, maxPixelSize: Int) -> String {
+        "\(namespace)#\(pageIndex)#\(pageName)#\(maxPixelSize)"
     }
 
     func image(
@@ -470,7 +481,7 @@ actor ReaderImageSequenceThumbnailPipeline {
         maxPixelSize: Int
     ) async -> UIImage? {
         let namespace = ReaderPageCache.namespace(for: documentURL)
-        let cacheKey = "\(namespace)#\(pageIndex)#\(pageName)#\(maxPixelSize)"
+        let cacheKey = Self.cacheKey(namespace: namespace, pageName: pageName, pageIndex: pageIndex, maxPixelSize: maxPixelSize)
         let nsCacheKey = cacheKey as NSString
 
         if let cachedImage = cache.object(forKey: nsCacheKey) {
