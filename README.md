@@ -28,5 +28,3 @@ Open `JamReader.xcodeproj` in Xcode. Canonical build, test, validation, artifact
 
 - [Agent entry point](AGENTS.md)
 - [Documentation index](docs/README.md)
-- [Current architecture and data flows](docs/project-context.md)
-- [Build, test, and repository workflow](docs/development-workflow.md)

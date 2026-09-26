@@ -10,11 +10,7 @@ JamReader is a native iPhone and iPad comic reader with three primary areas:
 - **Browse** manages SMB/WebDAV servers, remote directories, saved folders, history, online reading, imports, and offline copies.
 - **Settings** owns app startup behavior, the shared reader default and display behavior, reusable import defaults, storage/cache policy, library maintenance, and app information.
 
-Image directories are supported through the scanner and `DirectoryImageSequenceReader`. Supported file extensions are centralized in `JamReader/Core/Types/SupportedComicFormats.swift`:
-
-- ZIP/CBZ, RAR/CBR, 7Z/CB7, ARJ, TAR/CBT
-- PDF when the local MuPDF engine is linked
-- EPUB through MuPDF when available, otherwise the bundled epub.js reader
+The [root README](../README.md#highlights) lists supported formats. Extension policy is centralized in `JamReader/Core/Types/SupportedComicFormats.swift`; image directories are recognized by the scanner and opened through `DirectoryImageSequenceReader`. Engine selection and local MuPDF build inputs are documented in the [development workflow](development-workflow.md#build-and-static-checks).
 
 MOBI is intentionally unsupported. Adding a format requires coordinated importing, scanning, local opening, remote presentation, tests, localization, and product documentation; `SupportedComicFormats` remains the runtime policy owner.
 
@@ -51,7 +47,7 @@ The Xcode project uses file-system-synchronized groups. New source files under `
 4. Opening creates `ComicOpenRequest.library`; `ComicOpenCoordinator` resolves access, state, and document lifetime.
 5. `ComicReaderView` and `ComicReaderViewModel` render the session and persist progress/metadata through the shared state store.
 
-Local library kinds are `appManaged`, `linkedFolder`, and the default `Imported Comics` app-managed library. Importing content is different from creating a remote offline copy: an import must end inside a selected local library and be indexed before it is complete.
+`LibraryKind` has three cases: `appManaged`, `linkedFolder`, and `importedComics`. The last is the built-in `Imported Comics` library; both managed kinds store content inside the app. Importing content is different from creating a remote offline copy: an import must end inside a selected local library and be indexed before it is complete.
 
 ### Remote Browse And Read
 
@@ -61,7 +57,7 @@ Local library kinds are `appManaged`, `linkedFolder`, and the default `Imported 
 4. ZIP/CBZ can use remote random access when the provider supports it. Other formats fall back to a complete local download before opening.
 5. Active reader leases protect in-use cache files from cleanup or eviction.
 
-Remote cover work must stay bounded. Prefer a valid same-name image; otherwise use supported random/range reads. A WebDAV server without Range support must not trigger a full comic download merely to show a thumbnail.
+Remote cover work uses the thumbnail pipeline and supported random/range readers, with local-cache fallback. It must stay bounded and must not trigger a full comic download merely to show a thumbnail. See the [remote pitfalls](maintenance-pitfalls.md#4-远程-smbwebdav) for Range detection and the differences from local cover extraction.
 
 ### Reader
 
@@ -79,7 +75,7 @@ Reader lifecycle, viewport synchronization, zoom preservation, gestures, transit
 
 ## Data Ownership
 
-The app-owned database is the business source of truth:
+The app-owned database is the source of truth for local-library business state; remote state and preferences have separate owners:
 
 - `Application Support/JamReader/AppLibraryV2.sqlite` stores libraries, folders, comics, organization, and reading state.
 - `Application Support/JamReader/LibraryAssets/<library-id>/` stores derived covers and library assets.

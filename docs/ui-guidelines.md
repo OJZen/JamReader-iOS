@@ -1,6 +1,6 @@
 # JamReader UI Guidelines
 
-This is the current implementation-facing UI contract. It consolidates and supersedes the former design/Figma handoff documents for repository work; code and tested behavior remain authoritative.
+Use these requirements when changing UI. They do not imply that every manual accessibility or device scenario below has been verified.
 
 ## Product Character
 
@@ -31,7 +31,7 @@ This is the current implementation-facing UI contract. It consolidates and super
 - Lists and grids must remain responsive with large libraries and remote directories. Reuse UIKit-backed high-frequency surfaces and bound thumbnail/prefetch work.
 - Loading should preserve context when possible. Empty states offer one useful next action; error states preserve the real error and a recovery action.
 - Use semantic colors and materials so light/dark mode, contrast, and iPad selection remain coherent. Do not encode state with color alone.
-- Settings uses the same General, Reading, Library, and Storage categories on every size. iPhone starts from the category list; iPad presents that list as a persistent sidebar and restores its selected detail. General includes startup behavior and app information. Reading exposes one shared reader default rather than file-type profiles. Expose only enforceable global defaults; leave one-off or context-specific choices in their owning flow. Open Storage management directly, without duplicate overview, summary, or management layers.
+- Settings uses the General, Reading, Library, and Storage categories defined by `SettingsHomePane` on every size. iPhone starts from the category list; iPad presents that list as a persistent sidebar and restores its selected detail. Expose only enforceable global defaults; leave one-off or context-specific choices in their owning flow. Open Storage management directly, without duplicate overview, summary, or management layers.
 
 ## Change Checklist
 
@@ -42,6 +42,5 @@ For UI, sheet, or navigation changes, review:
 - light/dark mode, Dynamic Type, Reduce Motion, and VoiceOver
 - English, Simplified Chinese, Traditional Chinese (Taiwan), and Japanese text expansion
 - loading, empty, error, cancellation, dismissal, and destructive confirmation paths
-- main-thread work, task cancellation, list/grid reuse, and bounded image work
 
 Reader-specific changes additionally require the focused reader tests and device checks in [`development-workflow.md`](development-workflow.md) and [`maintenance-pitfalls.md`](maintenance-pitfalls.md).
