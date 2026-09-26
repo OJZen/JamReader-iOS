@@ -195,6 +195,7 @@ private struct RemoteZIPEndOfCentralDirectory {
 }
 
 private actor RemoteZIPArchivePageSource: ComicPageDataSource {
+    private let documentURL: URL
     private let fileReaderBox: RemoteRandomAccessFileReaderBox
     private let entries: [ZIPArchiveEntry]
     private let sharedCache = ReaderPageCache.shared
@@ -212,34 +213,56 @@ private actor RemoteZIPArchivePageSource: ComicPageDataSource {
         fileReader: any RemoteRandomAccessFileReader,
         entries: [ZIPArchiveEntry]
     ) {
+        self.documentURL = documentURL
         self.fileReaderBox = RemoteRandomAccessFileReaderBox(fileReader)
         self.entries = entries
         self.cacheNamespace = ReaderPageCache.namespace(for: documentURL)
     }
 
     func dataForPage(at index: Int) async throws -> Data {
+        try Task.checkCancellation()
+        guard !hasClosed else { throw CancellationError() }
         guard entries.indices.contains(index) else {
             throw ZIPArchiveError.pageIndexOutOfBounds(index)
-        }
-
-        if let cachedValue = cache.object(forKey: NSNumber(value: index)) {
-            return Data(referencing: cachedValue)
         }
 
         let cacheKey = ReaderPageCacheKey(
             namespace: cacheNamespace,
             pageIdentifier: entries[index].path
         )
-        if let cachedPage = await sharedCache.data(for: cacheKey) {
+        if let cachedPage = try? await localDataForPage(at: index) {
+            try Task.checkCancellation()
+            guard !hasClosed else { throw CancellationError() }
             cache.setObject(cachedPage as NSData, forKey: NSNumber(value: index), cost: cachedPage.count)
             return cachedPage
         }
 
         try Task.checkCancellation()
+        guard !hasClosed else { throw CancellationError() }
         let pageData = try await data(for: entries[index])
         cache.setObject(pageData as NSData, forKey: NSNumber(value: index), cost: pageData.count)
         await sharedCache.store(pageData, for: cacheKey)
         return pageData
+    }
+
+    func localDataForPage(at index: Int) async throws -> Data? {
+        try Task.checkCancellation()
+        guard !hasClosed, entries.indices.contains(index) else { return nil }
+        if let cachedValue = cache.object(forKey: NSNumber(value: index)) {
+            return Data(referencing: cachedValue)
+        }
+        let cacheKey = ReaderPageCacheKey(
+            namespace: cacheNamespace,
+            pageIdentifier: entries[index].path
+        )
+        if let cachedPage = await sharedCache.data(for: cacheKey) {
+            return cachedPage
+        }
+
+        try Task.checkCancellation()
+        guard !hasClosed, FileManager.default.fileExists(atPath: documentURL.path) else { return nil }
+        // The background download can finish while this source is still streaming.
+        return try ZIPArchiveEntryReader.data(in: documentURL, for: entries[index])
     }
 
     func prefetchPages(at indices: [Int]) async {

@@ -379,7 +379,7 @@ nonisolated private struct ZIPEndOfCentralDirectory {
     let centralDirectoryOffset: UInt32
 }
 
-private enum ZIPArchiveEntryReader {
+enum ZIPArchiveEntryReader {
     nonisolated static func data(in archiveURL: URL, for entry: ZIPArchiveEntry) throws -> Data {
         let fileHandle = try FileHandle(forReadingFrom: archiveURL)
         defer {
@@ -569,6 +569,12 @@ private actor ZIPArchivePageSource: ComicPageDataSource {
         cache.setObject(pageData as NSData, forKey: NSNumber(value: index), cost: pageData.count)
         await sharedCache.store(pageData, for: cacheKey)
         return pageData
+    }
+
+    func localDataForPage(at index: Int) async throws -> Data? {
+        try Task.checkCancellation()
+        guard entries.indices.contains(index) else { return nil }
+        return try ZIPArchiveEntryReader.data(in: archiveURL, for: entries[index])
     }
 
     func prefetchPages(at indices: [Int]) async {

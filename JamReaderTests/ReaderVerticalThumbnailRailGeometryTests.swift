@@ -157,7 +157,7 @@ final class ReaderVerticalThumbnailRailGeometryTests: XCTestCase {
         )
     }
 
-    func testLongDocumentsStayInsideAdaptivePhoneAndPadTracks() {
+    func testAdaptivePresetsPackItemsWithinPhoneAndPadTracks() {
         let configurations: [(UIUserInterfaceIdiom, CGSize, EdgeInsets)] = [
             (
                 .phone,
@@ -172,16 +172,30 @@ final class ReaderVerticalThumbnailRailGeometryTests: XCTestCase {
         ]
 
         for (idiom, viewportSize, safeAreaInsets) in configurations {
-            for pageCount in [500, 1_000] {
+            for pageCount in [2, 5, 10, 19, 20, 30, 60, 100, 500, 1_000] {
                 let layout = ReaderVerticalThumbnailRailLayout.adaptive(
                     viewportSize: viewportSize,
                     safeAreaInsets: safeAreaInsets,
                     pageCount: pageCount,
                     userInterfaceIdiom: idiom
                 )
+                XCTAssertLessThanOrEqual(layout.trackHeight, viewportSize.height * 2 / 3)
+                let widths: [CGFloat] = idiom == .pad ? [6, 10, 16, 24] : [4, 8, 12, 18]
+                XCTAssertTrue(widths.contains(layout.railThumbnailWidth))
+                let naturalStride = ReaderVerticalThumbnailRailGeometry.naturalPageStride(
+                    pageCount: pageCount,
+                    trackHeight: layout.trackHeight,
+                    trackInset: layout.trackInset
+                )
+                XCTAssertEqual(
+                    naturalStride - layout.railThumbnailHeight,
+                    layout.minimumThumbnailGap,
+                    accuracy: 0.001
+                )
+                XCTAssertLessThanOrEqual(layout.minimumThumbnailGap, 1)
                 let finalPagePosition = CGFloat(pageCount - 1)
                 let leadingFocusPositions = Array(
-                    stride(from: CGFloat.zero, through: 4, by: 0.25)
+                    stride(from: CGFloat.zero, through: min(finalPagePosition, 4), by: 0.25)
                 )
                 let focusPositions = leadingFocusPositions
                     + [finalPagePosition / 2]
@@ -197,6 +211,61 @@ final class ReaderVerticalThumbnailRailGeometryTests: XCTestCase {
                     focusPositions: focusPositions
                 )
             }
+        }
+    }
+
+    func testWidestPresetCapsShortDocumentSize() {
+        let viewportSize = CGSize(width: 834, height: 1_194)
+        let insets = EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0)
+        for idiom in [UIUserInterfaceIdiom.phone, .pad] {
+            for pageCount in [2, 5, 10] {
+                let layout = ReaderVerticalThumbnailRailLayout.adaptive(
+                    viewportSize: viewportSize,
+                    safeAreaInsets: insets,
+                    pageCount: pageCount,
+                    userInterfaceIdiom: idiom
+                )
+
+                XCTAssertEqual(layout.railThumbnailWidth, idiom == .pad ? 24 : 18)
+                XCTAssertEqual(layout.railThumbnailHeight, layout.railThumbnailWidth * 1.5, accuracy: 0.001)
+                XCTAssertLessThan(layout.trackHeight, viewportSize.height * 2 / 3)
+            }
+        }
+    }
+
+    func testIPadChoosesNarrowerPresetsForMorePages() {
+        let configurations: [(Int, CGFloat)] = [(10, 24), (25, 16), (40, 10), (60, 6), (1_000, 6)]
+        for (pageCount, expectedWidth) in configurations {
+            let layout = ReaderVerticalThumbnailRailLayout.adaptive(
+                viewportSize: CGSize(width: 834, height: 1_194),
+                safeAreaInsets: EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0),
+                pageCount: pageCount,
+                userInterfaceIdiom: .pad
+            )
+
+            XCTAssertEqual(layout.railThumbnailWidth, expectedWidth)
+            if pageCount == 1_000 {
+                XCTAssertEqual(layout.trackHeight, 796, accuracy: 0.001)
+                XCTAssertLessThan(layout.railThumbnailHeight, expectedWidth * 1.5)
+            }
+        }
+    }
+
+    func testAdaptiveTrackHonorsLandscapeAndSmallWindowClearance() {
+        for viewportSize in [CGSize(width: 844, height: 390), CGSize(width: 600, height: 200)] {
+            let insets = EdgeInsets(top: 24, leading: 0, bottom: 20, trailing: 0)
+            let layout = ReaderVerticalThumbnailRailLayout.adaptive(
+                viewportSize: viewportSize,
+                safeAreaInsets: insets,
+                pageCount: 1_000,
+                userInterfaceIdiom: .pad
+            )
+
+            XCTAssertEqual(
+                layout.trackHeight,
+                min(viewportSize.height * 2 / 3, viewportSize.height - 24 - 20 - 112),
+                accuracy: 0.001
+            )
         }
     }
 

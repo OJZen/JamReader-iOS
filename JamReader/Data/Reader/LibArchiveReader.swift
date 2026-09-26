@@ -153,6 +153,12 @@ private actor LibArchivePageSource: ComicPageDataSource {
         return pageData
     }
 
+    func localDataForPage(at index: Int) async throws -> Data? {
+        try Task.checkCancellation()
+        guard entries.indices.contains(index) else { return nil }
+        return try archiveReaderBox.archiveReader.dataForEntry(at: entries[index].archiveIndex)
+    }
+
     func prefetchPages(at indices: [Int]) async {
         for index in indices {
             guard entries.indices.contains(index) else {

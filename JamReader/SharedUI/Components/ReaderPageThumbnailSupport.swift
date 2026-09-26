@@ -523,7 +523,7 @@ actor ReaderImageSequenceThumbnailPipeline {
         inFlightTasks.removeAll()
     }
 
-    private static func loadDownsampledImage(from data: Data, maxPixelSize: Int) -> UIImage? {
+    nonisolated static func loadDownsampledImage(from data: Data, maxPixelSize: Int) -> UIImage? {
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
 
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {

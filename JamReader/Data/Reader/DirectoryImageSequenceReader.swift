@@ -216,6 +216,12 @@ private actor DirectoryImagePageSource: ComicPageDataSource {
         return data
     }
 
+    func localDataForPage(at index: Int) async throws -> Data? {
+        try Task.checkCancellation()
+        guard pageFiles.indices.contains(index) else { return nil }
+        return try Data(contentsOf: pageFiles[index], options: [.mappedIfSafe])
+    }
+
     func prefetchPages(at indices: [Int]) async {
         for index in indices {
             guard pageFiles.indices.contains(index) else {

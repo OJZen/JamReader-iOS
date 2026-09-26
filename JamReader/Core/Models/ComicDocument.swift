@@ -47,11 +47,17 @@ struct EBookComicDocument: Sendable {
 
 nonisolated protocol ComicPageDataSource: AnyObject, Sendable {
     func dataForPage(at index: Int) async throws -> Data
+    /// Reads cached bytes or extracts a local page, without downloading or caching newly extracted bytes.
+    func localDataForPage(at index: Int) async throws -> Data?
     func prefetchPages(at indices: [Int]) async
     func close() async
 }
 
 extension ComicPageDataSource {
+    func localDataForPage(at index: Int) async throws -> Data? {
+        nil
+    }
+
     func prefetchPages(at indices: [Int]) async {
         _ = indices
     }

@@ -391,6 +391,12 @@ private actor TARArchivePageSource: ComicPageDataSource {
         return data
     }
 
+    func localDataForPage(at index: Int) async throws -> Data? {
+        try Task.checkCancellation()
+        guard entries.indices.contains(index) else { return nil }
+        return try TARArchiveEntryReader.data(in: archiveURL, for: entries[index])
+    }
+
     func prefetchPages(at indices: [Int]) async {
         for index in indices {
             guard entries.indices.contains(index) else {

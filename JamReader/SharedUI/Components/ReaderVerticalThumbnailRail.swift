@@ -12,6 +12,7 @@ struct ReaderVerticalThumbnailRail: View {
     let onInteractionChanged: (Bool) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.displayScale) private var displayScale
     @StateObject private var coordinator: ReaderVerticalThumbnailRailCoordinator
     @StateObject private var previewCoordinator = ReaderVerticalRailPreviewCoordinator()
 
@@ -41,11 +42,7 @@ struct ReaderVerticalThumbnailRail: View {
     }
 
     var body: some View {
-        let layout = ReaderVerticalThumbnailRailLayout.adaptive(
-            viewportSize: viewportSize,
-            safeAreaInsets: safeAreaInsets,
-            pageCount: pageCount
-        )
+        let layout = railLayout
 
         Group {
             if pageCount > 1, layout.trackHeight >= 90 {
@@ -66,6 +63,8 @@ struct ReaderVerticalThumbnailRail: View {
         }
         .onChange(of: currentPage) { _, _ in
             coordinator.syncCurrentPage(currentPageIndex, pageCount: pageCount)
+            // A streaming document may now have its completed local copy.
+            refreshRailPreviews()
         }
         .onChange(of: pageCount) { _, _ in
             coordinator.syncCurrentPage(currentPageIndex, pageCount: pageCount)
@@ -73,6 +72,9 @@ struct ReaderVerticalThumbnailRail: View {
         }
         .onChange(of: document.fileURL) { _, _ in
             coordinator.syncCurrentPage(currentPageIndex, pageCount: pageCount)
+            refreshRailPreviews()
+        }
+        .onChange(of: railPreviewMaxPixelSize) { _, _ in
             refreshRailPreviews()
         }
         .onChange(of: coordinator.thumbnailPageIndex) { _, pageIndex in
@@ -136,8 +138,18 @@ struct ReaderVerticalThumbnailRail: View {
         return ReaderPageCache.namespace(for: imageSequence.url)
     }
 
+    private var railLayout: ReaderVerticalThumbnailRailLayout {
+        ReaderVerticalThumbnailRailLayout.adaptive(
+            viewportSize: viewportSize,
+            safeAreaInsets: safeAreaInsets,
+            pageCount: pageCount
+        )
+    }
+
     private var railPreviewMaxPixelSize: Int {
-        UIDevice.current.userInterfaceIdiom == .pad ? 18 : 12
+        let layout = railLayout
+        let longestSide = max(layout.railThumbnailWidth, layout.railThumbnailHeight)
+        return max(1, Int((longestSide * displayScale).rounded(.up)))
     }
 
     private var focusedPreviewMaxPixelSize: Int {
@@ -145,13 +157,15 @@ struct ReaderVerticalThumbnailRail: View {
     }
 
     private func refreshRailPreviews() {
-        guard let previewNamespace else {
+        guard case .imageSequence(let imageSequence) = document,
+              let previewNamespace else {
             previewCoordinator.reset()
             return
         }
 
         previewCoordinator.configure(
             namespace: previewNamespace,
+            pageSource: imageSequence.pageSource,
             pageCount: pageCount,
             maxPixelSize: railPreviewMaxPixelSize
         )
@@ -171,6 +185,16 @@ struct ReaderVerticalThumbnailRail: View {
         let interactionCenterX = layout.containerWidth - (layout.interactionWidth / 2)
 
         return ZStack(alignment: .topLeading) {
+            Capsule()
+                .fill(.black.opacity(0.28))
+                .overlay {
+                    Capsule().stroke(.white.opacity(0.08), lineWidth: 0.5)
+                }
+                .frame(width: layout.railThumbnailWidth + 8, height: layout.trackHeight)
+                .position(x: railCenterX, y: layout.trackHeight / 2)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             ReaderVerticalThumbnailRibbon(
                 pageCount: pageCount,
                 focusedPagePosition: CGFloat(coordinator.focusedPageIndex),
@@ -186,23 +210,51 @@ struct ReaderVerticalThumbnailRail: View {
             if coordinator.isInteracting {
                 let focusedThumbnailWidth = layout.maximumFocusedThumbnailWidth
                 let focusedThumbnailX = railCenterX - layout.maximumLeadingOffset
-                Text(verbatim: "\(coordinator.focusedPageIndex + 1) / \(pageCount)")
-                    .font(AppFont.caption(.semibold).monospacedDigit())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay {
-                        Capsule()
-                            .stroke(.white.opacity(0.12), lineWidth: 1)
-                    }
-                    .fixedSize()
-                    .position(
-                        x: max((focusedThumbnailX - focusedThumbnailWidth / 2 - 8) / 2, 28),
-                        y: focusedCenterY
-                    )
-                    .transition(.scale(scale: 0.94).combined(with: .opacity))
-                    .accessibilityHidden(true)
+                let indicatorTrailingX = max(focusedThumbnailX - focusedThumbnailWidth / 2 - 10, 0)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    // Reserve the largest page number so digit changes never resize the bubble.
+                    Text(verbatim: "\(pageCount)")
+                        .hidden()
+                        .overlay(alignment: .trailing) {
+                            Text(verbatim: "\(coordinator.focusedPageIndex + 1)")
+                                .contentTransition(
+                                    accessibilityReduceMotion
+                                        ? .identity
+                                        : .numericText(value: Double(coordinator.focusedPageIndex + 1))
+                                )
+                                .animation(
+                                    accessibilityReduceMotion ? nil : .easeOut(duration: 0.14),
+                                    value: coordinator.focusedPageIndex
+                                )
+                        }
+                        .font(AppFont.subheadline(.semibold).monospacedDigit())
+
+                    Text(verbatim: "/ \(pageCount)")
+                        .font(AppFont.caption(.medium).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .fontDesign(.rounded)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 7)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                }
+                .fixedSize()
+                .transition(
+                    accessibilityReduceMotion
+                        ? .opacity
+                        : .scale(scale: 0.94, anchor: .trailing).combined(with: .opacity)
+                )
+                .frame(width: indicatorTrailingX, alignment: .trailing)
+                .position(
+                    x: indicatorTrailingX / 2,
+                    y: focusedCenterY
+                )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
 
             ReaderVerticalThumbnailRailInteractionBridge(
@@ -686,7 +738,6 @@ struct ReaderVerticalThumbnailRailLayout: Equatable {
                 - chromeClearance,
             0
         )
-        let preferredPageStride: CGFloat = isPad ? 3.8 : 2.8
         let nominalFocusedThumbnailHeight: CGFloat = isPad ? 56 : 44
         let preferredTrackInset = max(
             isPad ? 72 : 58,
@@ -694,21 +745,31 @@ struct ReaderVerticalThumbnailRailLayout: Equatable {
                 maximumThumbnailHeight: nominalFocusedThumbnailHeight
             ).rounded(.up)
         )
-        let viewportHeightLimit = viewportSize.height * (isPad ? 0.50 : 0.52)
-        let absoluteHeightLimit: CGFloat = isPad ? 540 : 380
         let maximumTrackHeight = min(
             availableHeight,
-            min(viewportHeightLimit, absoluteHeightLimit)
+            viewportSize.height * 2 / 3
         )
+        let availableStride = ReaderVerticalThumbnailRailGeometry.naturalPageStride(
+            pageCount: pageCount,
+            trackHeight: maximumTrackHeight,
+            trackInset: preferredTrackInset
+        )
+        let widthOptions: [CGFloat] = isPad ? [6, 10, 16, 24] : [4, 8, 12, 18]
+        let thumbnailAspectRatio: CGFloat = 1.5
+        let preferredGap: CGFloat = 1
+        let railThumbnailWidth = widthOptions.last {
+            $0 * thumbnailAspectRatio + preferredGap <= availableStride
+        } ?? widthOptions[0]
+        let preferredThumbnailHeight = railThumbnailWidth * thumbnailAspectRatio
         let trackHeight = ReaderVerticalThumbnailRailGeometry.compactTrackHeight(
             pageCount: pageCount,
-            preferredPageStride: preferredPageStride,
+            preferredPageStride: preferredThumbnailHeight + preferredGap,
             focusInset: preferredTrackInset,
             minimumHeight: isPad ? 148 : 120,
             maximumHeight: maximumTrackHeight
         )
         let focusScale = min(
-            max(trackHeight / (isPad ? 540 : 320), isPad ? 0.72 : 0.68),
+            max(maximumTrackHeight / (isPad ? 540 : 320), isPad ? 0.72 : 0.68),
             1
         )
         let maximumFocusedThumbnailWidth = (isPad ? 38 : 30) * focusScale
@@ -719,19 +780,11 @@ struct ReaderVerticalThumbnailRailLayout: Equatable {
             trackHeight: trackHeight,
             trackInset: trackInset
         )
-        let densityAwareGap = min(
-            max(naturalStride * 0.18, 0.08),
-            naturalStride * 0.35
-        )
-        let minimumThumbnailGap = min(densityAwareGap, isPad ? 1.2 : 1)
+        let minimumThumbnailGap = min(preferredGap, naturalStride * 0.15)
         let railThumbnailHeight = ReaderVerticalThumbnailRailGeometry.compactThumbnailHeight(
             naturalStride: naturalStride,
-            maximumHeight: isPad ? 12 : 10,
+            maximumHeight: preferredThumbnailHeight,
             minimumGap: minimumThumbnailGap
-        )
-        let railThumbnailWidth = min(
-            isPad ? 8 : 7,
-            max(railThumbnailHeight * 0.68, min(railThumbnailHeight, 0.75))
         )
 
         return ReaderVerticalThumbnailRailLayout(
@@ -752,7 +805,7 @@ struct ReaderVerticalThumbnailRailLayout: Equatable {
 }
 
 @MainActor
-private final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
+final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
     @Published private(set) var railPreviewImages: [Int: UIImage] = [:]
     @Published private(set) var focusedPageIndex: Int?
     @Published private(set) var focusedPreviewImage: UIImage?
@@ -764,10 +817,15 @@ private final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
     private var focusedTask: Task<Void, Never>?
     private var ingestTasks: [Int: Task<Void, Never>] = [:]
 
-    func configure(namespace: String, pageCount: Int, maxPixelSize: Int) {
+    func configure(
+        namespace: String,
+        pageSource: any ComicPageDataSource,
+        pageCount: Int,
+        maxPixelSize: Int
+    ) {
         let resolvedPageCount = max(pageCount, 0)
         let resolvedPixelSize = max(maxPixelSize, 1)
-        let newConfigurationID = "\(namespace)#\(resolvedPageCount)#\(resolvedPixelSize)"
+        let newConfigurationID = "\(namespace)#\(ObjectIdentifier(pageSource))#\(resolvedPageCount)#\(resolvedPixelSize)"
         guard configurationID != newConfigurationID else {
             return
         }
@@ -781,26 +839,35 @@ private final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
         focusedPreviewImage = nil
 
         scanTask = Task.detached(priority: .utility) { [weak self] in
-            let preparedImages = await Self.prepareCachedThumbnails(
-                namespace: namespace,
-                pageCount: resolvedPageCount,
-                maxPixelSize: resolvedPixelSize
-            )
-            guard !Task.isCancelled else {
-                return
-            }
-
-            await MainActor.run {
-                guard let self,
-                      !Task.isCancelled,
-                      self.configurationID == newConfigurationID
-                else {
-                    return
+            var batch: [Int: UIImage] = [:]
+            for pageIndex in 0..<resolvedPageCount {
+                guard !Task.isCancelled else { return }
+                if let image = await Self.prepareLocalThumbnail(
+                    namespace: namespace,
+                    pageSource: pageSource,
+                    pageIndex: pageIndex,
+                    maxPixelSize: resolvedPixelSize
+                ) {
+                    batch[pageIndex] = image
                 }
-
-                self.railPreviewImages.merge(preparedImages) { existing, _ in existing }
-                self.scanTask = nil
+                if batch.count >= 12 {
+                    await self?.mergeScanPreviews(batch, configurationID: newConfigurationID)
+                    batch.removeAll(keepingCapacity: true)
+                }
             }
+            await self?.mergeScanPreviews(batch, configurationID: newConfigurationID, finished: true)
+        }
+    }
+
+    private func mergeScanPreviews(
+        _ images: [Int: UIImage],
+        configurationID: String,
+        finished: Bool = false
+    ) {
+        guard !Task.isCancelled, self.configurationID == configurationID else { return }
+        railPreviewImages.merge(images) { existing, _ in existing }
+        if finished {
+            scanTask = nil
         }
     }
 
@@ -918,32 +985,27 @@ private final class ReaderVerticalRailPreviewCoordinator: ObservableObject {
         ingestTasks.removeAll()
     }
 
-    nonisolated private static func prepareCachedThumbnails(
+    nonisolated private static func prepareLocalThumbnail(
         namespace: String,
-        pageCount: Int,
+        pageSource: any ComicPageDataSource,
+        pageIndex: Int,
         maxPixelSize: Int
-    ) async -> [Int: UIImage] {
-        var preparedImages: [Int: UIImage] = [:]
-        for pageIndex in 0..<pageCount {
-            guard !Task.isCancelled else {
-                return [:]
-            }
-            guard let sourceImage = ReaderPagePreviewStore.shared.image(
-                namespace: namespace,
-                pageIndex: pageIndex
-            ), let preparedImage = await prepareThumbnail(
-                sourceImage,
-                maxPixelSize: maxPixelSize
-            ) else {
-                continue
-            }
-
-            preparedImages[pageIndex] = preparedImage
+    ) async -> UIImage? {
+        if let sourceImage = ReaderPagePreviewStore.shared.image(namespace: namespace, pageIndex: pageIndex) {
+            return await prepareThumbnail(sourceImage, maxPixelSize: maxPixelSize)
         }
-        return preparedImages
+        guard let data = try? await pageSource.localDataForPage(at: pageIndex),
+              !Task.isCancelled else {
+            return nil
+        }
+        let image = autoreleasepool {
+            ReaderImageSequenceThumbnailPipeline.loadDownsampledImage(from: data, maxPixelSize: maxPixelSize)
+        }
+        guard let image else { return nil }
+        return await prepareThumbnail(image, maxPixelSize: maxPixelSize)
     }
 
-    nonisolated private static func prepareThumbnail(
+    @MainActor private static func prepareThumbnail(
         _ image: UIImage,
         maxPixelSize: Int
     ) async -> UIImage? {
