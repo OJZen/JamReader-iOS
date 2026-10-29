@@ -28,6 +28,8 @@ struct LibraryBrowserView: View {
     private let dependencies: AppDependencies
 
     @AppStorage(LibraryPreferencesStore.recentWindowStorageKey) private var recentWindowRawValue = LibraryRecentWindowOption.defaultOption.rawValue
+    @AppStorage(LibraryPreferencesStore.continueReadingPlacementStorageKey)
+    private var continueReadingPlacementRawValue = ContinueReadingPlacement.defaultValue.rawValue
     @StateObject private var viewModel: LibraryBrowserViewModel
     @State private var comicSortMode: LibraryComicSortMode
     @State private var displayMode: LibraryBrowserDisplayMode
@@ -558,10 +560,12 @@ struct LibraryBrowserView: View {
         )
     }
 
-    /// Continue reading stays inside the library in this batch.
+    /// Shown here only when Settings puts continue reading inside each library;
+    /// otherwise the library home aggregates it and the In Progress filter finds it here.
     @ViewBuilder
     private var continueReadingSection: some View {
-        if let comic = viewModel.continueReadingComic {
+        if continueReadingPlacementRawValue == ContinueReadingPlacement.insideLibraries.rawValue,
+           let comic = viewModel.continueReadingComic {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 collectionPreviewHeader(for: .reading)
                 HeroTapButton { frame in

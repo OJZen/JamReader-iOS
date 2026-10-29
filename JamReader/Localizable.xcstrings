@@ -4,6 +4,28 @@
     "": {
       "shouldTranslate": false
     },
+    "%lld libraries": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件のライブラリ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个书库"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個書庫"
+          }
+        }
+      }
+    },
     "%lld lists": {
       "localizations": {
         "ja": {
@@ -110,6 +132,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已匯入 1 本"
+          }
+        }
+      }
+    },
+    "1 library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1件のライブラリ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 个书库"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 個書庫"
           }
         }
       }
@@ -1214,6 +1258,28 @@
         }
       }
     },
+    "Inside Each Library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各ライブラリ内"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各书库内"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各書庫內"
+          }
+        }
+      }
+    },
     "Issue": {
       "localizations": {
         "ja": {
@@ -1276,6 +1342,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "上次掃描"
+          }
+        }
+      }
+    },
+    "Library Home": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリのホーム"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书库首页"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書庫首頁"
           }
         }
       }
@@ -1456,28 +1544,6 @@
         }
       }
     },
-    "No comics in %@ matched “%@”. No comics were deleted.": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "「%1$@」に「%2$@」に一致するコミックはありません。コミックは削除されていません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "“%1$@”中没有与“%2$@”匹配的漫画。漫画没有被删除。"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "「%1$@」中沒有與「%2$@」相符的漫畫。漫畫沒有被刪除。"
-          }
-        }
-      }
-    },
     "No comics in this folder match “%@”.": {
       "localizations": {
         "ja": {
@@ -1496,6 +1562,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "這個資料夾裡沒有「%@」的漫畫。"
+          }
+        }
+      }
+    },
+    "No comics in “%@” match “%@”.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」に「%2$@」に一致するコミックはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@”中没有符合“%2$@”的漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」中沒有符合「%2$@」的漫畫。"
           }
         }
       }
@@ -1562,6 +1650,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "沒有與「%@」相符的結果。"
+          }
+        }
+      }
+    },
+    "No “%@” comics in “%@” match “%@”.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%2$@」に「%1$@」かつ「%3$@」に一致するコミックはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%2$@”中没有同时符合“%1$@”和“%3$@”的漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%2$@」中沒有同時符合「%1$@」和「%3$@」的漫畫。"
+          }
+        }
+      }
+    },
+    "No “%@” comics in “%@”.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%2$@」に「%1$@」のコミックはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%2$@”中没有“%1$@”的漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%2$@」中沒有「%1$@」的漫畫。"
           }
         }
       }
@@ -2002,6 +2134,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "顯示全部"
+          }
+        }
+      }
+    },
+    "Show Continue Reading": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「続きを読む」の表示場所"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续阅读显示在"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "繼續閱讀顯示在"
+          }
+        }
+      }
+    },
+    "Show in Library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリで表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在书库中显示"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在書庫中顯示"
           }
         }
       }

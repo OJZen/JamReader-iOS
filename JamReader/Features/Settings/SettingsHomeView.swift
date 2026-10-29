@@ -240,6 +240,7 @@ private struct SettingsContentView: View {
                 onSetKeepsScreenAwake: setKeepsScreenAwake,
                 onOpenReaderDefaults: openReaderDefaults,
                 onSetRecentWindow: setRecentWindow,
+                onSetContinueReadingPlacement: setContinueReadingPlacement,
                 onSetDefaultFolderImportScope: setDefaultFolderImportScope
             )
         }
@@ -320,6 +321,11 @@ private struct SettingsContentView: View {
         dependencies.libraryPreferencesStore.saveRecentWindow(option)
     }
 
+    private func setContinueReadingPlacement(_ placement: ContinueReadingPlacement) {
+        snapshot.continueReadingPlacement = placement
+        dependencies.libraryPreferencesStore.saveContinueReadingPlacement(placement)
+    }
+
     private func setDefaultFolderImportScope(_ scope: RemoteDirectoryImportScope) {
         snapshot.defaultFolderImportScope = scope
         dependencies.remoteBrowserPreferencesStore.saveDefaultFolderImportScope(scope)
@@ -346,8 +352,8 @@ private extension SettingsSnapshot {
             return readerLayout.settingsSummary
         case .library:
             return [
-                String(localized: "Recent Items"),
-                recentWindow.settingsLocalizedTitle
+                String(localized: "Continue Reading"),
+                continueReadingPlacement.title
             ]
                 .joined(separator: " · ")
         case .storage:

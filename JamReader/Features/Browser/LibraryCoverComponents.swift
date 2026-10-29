@@ -405,12 +405,9 @@ struct LibraryCollectionCard: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: item.systemImageName)
-                .font(AppFont.subheadline(.semibold))
-                .foregroundStyle(item.tint)
-                .frame(width: 32, height: 32)
-                .background(item.tint.opacity(0.14), in: Circle())
-                .accessibilityHidden(true)
+            LibraryCollectionBadge(systemImageName: item.systemImageName, tint: item.tint)
+                // Large text gives the width to the name; the icon stops growing.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
 
             Text(item.title)
                 .font(AppFont.body(.medium))
@@ -430,6 +427,23 @@ struct LibraryCollectionCard: View {
         .background(Color.surfaceSecondary, in: RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Tinted icon in a circle that grows with the glyph.
+private struct LibraryCollectionBadge: View {
+    let systemImageName: String
+    let tint: Color
+
+    @ScaledMetric(relativeTo: .subheadline) private var size: CGFloat = 32
+
+    var body: some View {
+        Image(systemName: systemImageName)
+            .font(AppFont.subheadline(.semibold))
+            .foregroundStyle(tint)
+            .frame(width: size, height: size)
+            .background(tint.opacity(0.14), in: Circle())
+            .accessibilityHidden(true)
     }
 }
 

@@ -77,6 +77,8 @@ enum LibraryNavigationRoute {
     case openFolder(LibraryDescriptor, folderID: Int64)
     /// A breadcrumb level above the current folder.
     case openAncestorFolder(LibraryDescriptor, folderID: Int64)
+    /// Continue reading aggregated across libraries (library home "All" / iPad sidebar).
+    case continueReading
     case specialCollection(LibraryDescriptor, LibrarySpecialCollectionKind)
     case organization(LibraryDescriptor, LibraryOrganizationSectionKind)
     case organizationCollection(LibraryDescriptor, LibraryOrganizationCollection)
@@ -191,6 +193,12 @@ struct LocalReaderPresentation {
         self.onComicUpdated = onComicUpdated
         self.onDismiss = onDismiss
     }
+}
+
+extension Notification.Name {
+    /// Posted once when a local reader closes, for lists other than the one
+    /// that opened it (the library home's continue reading).
+    static let localReaderDidClose = Notification.Name("LocalReaderDidClose")
 }
 
 struct RemoteReaderPresentation {

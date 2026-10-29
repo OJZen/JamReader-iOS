@@ -9,6 +9,7 @@ extension Notification.Name {
 
 final class LibraryPreferencesStore {
     static let recentWindowStorageKey = "libraryRecentWindowDays"
+    static let continueReadingPlacementStorageKey = "libraryContinueReadingPlacement"
 
     private let userDefaults: UserDefaults
     private let logger = AppLog.library
@@ -56,6 +57,40 @@ final class LibraryPreferencesStore {
         userDefaults.set(option.rawValue, forKey: Self.recentWindowStorageKey)
         logger.info(
             "Library recent window preference saved days=\(option.rawValue, privacy: .public)"
+        )
+        NotificationCenter.default.post(
+            name: .libraryPreferencesDidChange,
+            object: self
+        )
+    }
+
+    func loadContinueReadingPlacement() -> ContinueReadingPlacement {
+        guard let rawValue = userDefaults.string(forKey: Self.continueReadingPlacementStorageKey) else {
+            return .defaultValue
+        }
+
+        guard let placement = ContinueReadingPlacement(rawValue: rawValue) else {
+            userDefaults.set(
+                ContinueReadingPlacement.defaultValue.rawValue,
+                forKey: Self.continueReadingPlacementStorageKey
+            )
+            logger.warning(
+                "Continue reading placement ignored rawValue=\(AppLogSanitizer.truncated(rawValue), privacy: .public) fallback=\(ContinueReadingPlacement.defaultValue.rawValue, privacy: .public)"
+            )
+            return .defaultValue
+        }
+
+        return placement
+    }
+
+    func saveContinueReadingPlacement(_ placement: ContinueReadingPlacement) {
+        guard userDefaults.string(forKey: Self.continueReadingPlacementStorageKey) != placement.rawValue else {
+            return
+        }
+
+        userDefaults.set(placement.rawValue, forKey: Self.continueReadingPlacementStorageKey)
+        logger.info(
+            "Continue reading placement saved value=\(placement.rawValue, privacy: .public)"
         )
         NotificationCenter.default.post(
             name: .libraryPreferencesDidChange,

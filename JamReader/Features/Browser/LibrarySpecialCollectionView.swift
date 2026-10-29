@@ -41,7 +41,8 @@ struct LibrarySpecialCollectionView: View {
             emptyStateDescription: viewModel.kind.emptyStateDescriptionText(recentDays: viewModel.currentRecentDays),
             sortStorageKey: "librarySpecialCollectionSortMode.\(viewModel.kind.rawValue)",
             displayStorageKey: "librarySpecialCollectionDisplayMode.\(viewModel.kind.rawValue)",
-            defaultSortMode: Self.defaultSortMode(for: viewModel.kind)
+            defaultSortMode: Self.defaultSortMode(for: viewModel.kind),
+            showsQuickFilters: viewModel.kind != .reading
         ) {
             if viewModel.kind == .recent {
                 // The same preference as Settings › Library.

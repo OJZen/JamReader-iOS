@@ -39,7 +39,10 @@ final class UIKitPresentationCoordinator {
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
             transitionStyle = presentation.transitionStyle
-            onDismiss = presentation.onDismiss
+            onDismiss = {
+                presentation.onDismiss?()
+                NotificationCenter.default.post(name: .localReaderDidClose, object: nil)
+            }
         case .remote(let presentation):
             request = .remote(
                 ComicRemoteOpenRequest(

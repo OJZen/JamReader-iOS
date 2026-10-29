@@ -307,6 +307,8 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             openFolder(descriptor, folderID: folderID)
         case .openAncestorFolder(let descriptor, let folderID):
             openFolder(descriptor, folderID: folderID, replacingDeeperLevels: true)
+        case .continueReading:
+            showContinueReading()
         case .specialCollection(let descriptor, let kind):
             pushLibraryDetail(
                 LibrarySpecialCollectionView(
@@ -440,6 +442,20 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         }
 
         navigationController.pushViewController(controller, animated: true)
+    }
+
+    /// iPhone pushes the page; iPad shows it as the detail of its sidebar row.
+    private func showContinueReading() {
+        let controller = makeHostingController(
+            LibraryContinueReadingAllView(dependencies: dependencies),
+            title: String(localized: "Continue Reading")
+        )
+        controller.navigationItem.largeTitleDisplayMode = .always
+        if let compactNavigationController {
+            compactNavigationController.pushViewController(controller, animated: true)
+        } else {
+            detailNavigationController?.setViewControllers([controller], animated: false)
+        }
     }
 
     private static func browserIdentifier(libraryID: UUID, folderID: Int64) -> String {

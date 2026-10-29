@@ -53,10 +53,15 @@ struct ContinueReadingCard: View {
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 if let sourceLibraryName {
-                    Label(sourceLibraryName, systemImage: "books.vertical")
-                        .font(AppFont.caption())
-                        .foregroundStyle(Color.textSecondary)
-                        .lineLimit(1)
+                    HStack(spacing: Spacing.xxs) {
+                        Image(systemName: "books.vertical")
+                            .imageScale(.small)
+                            .accessibilityHidden(true)
+                        Text(sourceLibraryName)
+                    }
+                    .font(AppFont.caption())
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
                 }
 
                 Text(comic.displayTitle)

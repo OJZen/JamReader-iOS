@@ -254,6 +254,7 @@ struct SettingsSnapshot {
     var keepsScreenAwake: Bool
     var readerLayout: ReaderDisplayLayout
     var recentWindow: LibraryRecentWindowOption
+    var continueReadingPlacement: ContinueReadingPlacement
     var defaultFolderImportScope: RemoteDirectoryImportScope
     var remoteCachePolicyPreset: RemoteComicCachePolicyPreset
     var localLibraryCount: Int
@@ -265,6 +266,7 @@ struct SettingsSnapshot {
             keepsScreenAwake: true,
             readerLayout: ReaderDisplayLayout(),
             recentWindow: .defaultOption,
+            continueReadingPlacement: .defaultValue,
             defaultFolderImportScope: .includeSubfolders,
             remoteCachePolicyPreset: .oneGigabyte,
             localLibraryCount: 0,
@@ -281,6 +283,7 @@ struct SettingsSnapshot {
             keepsScreenAwake: dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake(),
             readerLayout: dependencies.readerLayoutPreferencesStore.loadLayout(),
             recentWindow: dependencies.libraryPreferencesStore.loadRecentWindow(),
+            continueReadingPlacement: dependencies.libraryPreferencesStore.loadContinueReadingPlacement(),
             defaultFolderImportScope: dependencies.remoteBrowserPreferencesStore.loadDefaultFolderImportScope(),
             remoteCachePolicyPreset: dependencies.remoteCachePolicyStore.loadPreset(),
             localLibraryCount: libraryCount,
@@ -310,6 +313,7 @@ struct SettingsSnapshot {
         preferencesStore: LibraryPreferencesStore
     ) {
         recentWindow = preferencesStore.loadRecentWindow()
+        continueReadingPlacement = preferencesStore.loadContinueReadingPlacement()
     }
 
     mutating func reloadRemoteBrowserPreferences(

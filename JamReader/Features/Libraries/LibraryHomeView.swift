@@ -9,13 +9,23 @@ struct LibraryHomeView: View {
     @AppStorage(AppNavigationStorageKeys.libraryHomeSelectedLibraryID) private var storedSelectedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedFolderID) private var pendingFocusedFolderID = ""
+    @AppStorage(LibraryPreferencesStore.continueReadingPlacementStorageKey)
+    private var continueReadingPlacementRawValue = ContinueReadingPlacement.defaultValue.rawValue
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
+    @StateObject private var continueReading: LibraryContinueReadingViewModel
+    @State private var isContinueReadingSelected = false
     @State private var selectedLibraryID: UUID?
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
     @State private var pendingLibraryRemoval: LibraryRemovalRequest?
+
+    init(viewModel: LibraryListViewModel, dependencies: AppDependencies) {
+        self.viewModel = viewModel
+        self.dependencies = dependencies
+        _continueReading = StateObject(wrappedValue: LibraryContinueReadingViewModel(dependencies: dependencies))
+    }
 
     var body: some View {
         Group {
@@ -63,10 +73,19 @@ struct LibraryHomeView: View {
             viewModel.reload()
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
+            reloadContinueReading()
         }
         .onChange(of: viewModel.items) { _, _ in
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
+            reloadContinueReading()
+        }
+        .onChange(of: continueReadingPlacementRawValue) { _, _ in
+            reloadContinueReading()
+        }
+        // Progress saved from a library page reaches the iPad sidebar count.
+        .onReceive(NotificationCenter.default.publisher(for: .localReaderDidClose)) { _ in
+            reloadContinueReading()
         }
         .onChange(of: viewModel.completedImport) { _, completedImport in
             // Imports land in the library root, so open it there with the result bar.
@@ -113,9 +132,78 @@ struct LibraryHomeView: View {
 
     private var content: some View {
         List {
+            if showsContinueReading {
+                if usesPersistentSelection {
+                    continueReadingSidebarSection
+                } else {
+                    continueReadingSection
+                }
+            }
             librariesSection
         }
         .adaptiveRootListStyle(usesSidebarStyle: usesPersistentSelection)
+    }
+
+    private var continueReadingPlacement: ContinueReadingPlacement {
+        ContinueReadingPlacement(rawValue: continueReadingPlacementRawValue) ?? .defaultValue
+    }
+
+    /// Only on the home when the setting says so, and only with something to continue.
+    private var showsContinueReading: Bool {
+        continueReadingPlacement == .libraryHome && !continueReading.entries.isEmpty
+    }
+
+    private var continueReadingSection: some View {
+        LibraryHomeContinueReadingSections(
+            model: continueReading,
+            onOpen: openContinueReading,
+            onShowAll: showAllContinueReading,
+            onShowLibrary: { entry in openLibrary(entry.library.id) }
+        )
+    }
+
+    /// iPad: one sidebar row that opens the aggregate page in the detail column.
+    private var continueReadingSidebarSection: some View {
+        Section {
+            Button(action: showAllContinueReading) {
+                LibrarySidebarLabel(
+                    systemImage: "book",
+                    title: String(localized: "Continue Reading"),
+                    isSelected: isContinueReadingSelected
+                ) {
+                    Text("\(continueReading.entries.count)")
+                        .font(AppFont.subheadline().monospacedDigit())
+                        .foregroundStyle(Color.textSecondary)
+                }
+            }
+            .buttonStyle(.plain)
+            .persistentSidebarSelection(isSelected: isContinueReadingSelected)
+        }
+    }
+
+    private func reloadContinueReading() {
+        guard continueReadingPlacement == .libraryHome else {
+            return
+        }
+        continueReading.reload(items: viewModel.items)
+    }
+
+    private func openContinueReading(_ entry: ContinueReadingEntry, frame: CGRect) {
+        LibraryContinueReadingPresenter.open(
+            entry,
+            in: continueReading.entries,
+            sourceFrame: frame,
+            heroSourceID: continueReading.heroSourceID(for: entry),
+            presenter: appPresenter,
+            onComicUpdated: reloadContinueReading
+        )
+    }
+
+    private func showAllContinueReading() {
+        if usesPersistentSelection {
+            isContinueReadingSelected = true
+        }
+        appNavigator?.navigate(.library(.continueReading))
     }
 
     private var librariesSection: some View {
@@ -127,7 +215,7 @@ struct LibraryHomeView: View {
                     if usesPersistentSelection {
                         LibrarySidebarRow(
                             item: item,
-                            isSelected: selectedLibraryID == item.id
+                            isSelected: selectedLibraryID == item.id && !isContinueReadingSelected
                         )
                     } else {
                         LibraryRowView(item: item)
@@ -136,7 +224,7 @@ struct LibraryHomeView: View {
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
                 .persistentSidebarSelection(
-                    isSelected: selectedLibraryID == item.id,
+                    isSelected: selectedLibraryID == item.id && !isContinueReadingSelected,
                     isEnabled: usesPersistentSelection
                 )
                 .contextMenu {
@@ -293,6 +381,7 @@ struct LibraryHomeView: View {
         }
 
         selectedLibraryID = item.id
+        isContinueReadingSelected = false
         appNavigator?.navigate(
             .library(.openLibrary(item.id, folderID: preferredFolderID(for: item)))
         )
@@ -433,28 +522,56 @@ private struct LibrarySidebarRow: View {
     let item: LibraryListItem
     let isSelected: Bool
 
+    var body: some View {
+        LibrarySidebarLabel(
+            systemImage: item.descriptor.kind.systemImageName,
+            title: item.descriptor.displayName,
+            isSelected: isSelected
+        ) {
+            if let status = item.accessStatus, let systemImage = status.systemImage {
+                Image(systemName: systemImage)
+                    .foregroundStyle(status.foregroundColor)
+                    .accessibilityLabel(status.title)
+            } else if item.accessSnapshot.database.exists {
+                Text("\(item.accessSnapshot.database.comicCount)")
+                    .font(AppFont.subheadline().monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+    }
+}
+
+/// Sidebar row layout: accent symbol, title, trailing count or status.
+private struct LibrarySidebarLabel<Trailing: View>: View {
+    let systemImage: String
+    let title: String
+    let isSelected: Bool
+    @ViewBuilder let trailing: () -> Trailing
+
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            Image(systemName: item.descriptor.kind.systemImageName)
+            Image(systemName: systemImage)
                 .font(AppFont.body())
                 .foregroundStyle(Color.appAccent)
                 .frame(width: 24)
+                // The sidebar is narrow: larger text keeps its width for the name.
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .accessibilityHidden(true)
 
-            // Large text moves the count under the name so whole words fit the sidebar.
+            // Large text moves the trailing info under the title so whole words fit.
             if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                    name
-                    trailingInfo
+                    titleText
+                    trailing()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                name
+                titleText
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                trailingInfo
+                trailing()
             }
         }
         .frame(minHeight: 32)
@@ -463,23 +580,10 @@ private struct LibrarySidebarRow: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private var name: some View {
-        Text(item.descriptor.displayName)
+    private var titleText: some View {
+        Text(title)
             .font(AppFont.body(isSelected ? .semibold : .regular))
             .foregroundStyle(Color.textPrimary)
-    }
-
-    @ViewBuilder
-    private var trailingInfo: some View {
-        if let status = item.accessStatus, let systemImage = status.systemImage {
-            Image(systemName: systemImage)
-                .foregroundStyle(status.foregroundColor)
-                .accessibilityLabel(status.title)
-        } else if item.accessSnapshot.database.exists {
-            Text("\(item.accessSnapshot.database.comicCount)")
-                .font(AppFont.subheadline().monospacedDigit())
-                .foregroundStyle(Color.textSecondary)
-        }
     }
 }
 

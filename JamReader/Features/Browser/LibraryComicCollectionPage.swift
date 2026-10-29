@@ -63,6 +63,8 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
     let displayStorageKey: String
     let defaultSortMode: LibraryComicSortMode
     var membershipRemoval: LibraryCollectionMembershipRemoval?
+    /// Off for the in-library Continue Reading page, which is already "In Progress".
+    var showsQuickFilters = true
     /// Page-specific items placed first in the More menu.
     @ViewBuilder let pageMenuContent: () -> MenuContent
 
@@ -70,6 +72,7 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
     @State private var displayMode: LibraryComicDisplayMode = .grid
     @State private var hasLoadedPreferences = false
     @State private var searchQuery = ""
+    @State private var quickFilter: LibraryComicQuickFilter = .all
     @State private var editingComic: LibraryComic?
     @State private var organizingComic: LibraryComic?
     @State private var deletingComic: LibraryComic?
@@ -211,19 +214,41 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
     }
 
     private var header: some View {
-        Text(subtitle)
-            .font(AppFont.subheadline().monospacedDigit())
-            .foregroundStyle(Color.textSecondary)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(subtitle)
+                .font(AppFont.subheadline().monospacedDigit())
+                .foregroundStyle(Color.textSecondary)
+
+            if showsQuickFilters, !model.comics.isEmpty {
+                LibraryComicFilterBar(selection: quickFilter) { filter in
+                    quickFilter = filter
+                }
+            }
+        }
     }
 
+    @ViewBuilder
     private var emptyStateView: some View {
-        EmptyStateView(
-            systemImage: trimmedSearchQuery.isEmpty ? emptyStateSystemImage : "magnifyingglass",
-            title: trimmedSearchQuery.isEmpty ? emptyStateTitle : String(localized: "No Matching Comics"),
-            description: trimmedSearchQuery.isEmpty
-                ? emptyStateDescription
-                : String(localized: "No comics in \(title) matched “\(trimmedSearchQuery)”. No comics were deleted.")
-        )
+        // An empty collection hides the filter bar, so it keeps its own empty state.
+        if !model.comics.isEmpty, let copy = LibraryCollectionFilterCopy.emptyResult(
+            collectionTitle: title,
+            filter: quickFilter,
+            searchQuery: trimmedSearchQuery
+        ) {
+            EmptyStateView(
+                systemImage: copy.searchesText ? "magnifyingglass" : "line.3.horizontal.decrease.circle",
+                title: copy.title,
+                description: copy.description,
+                actionTitle: quickFilter == .all ? nil : String(localized: "Show All"),
+                action: quickFilter == .all ? nil : { quickFilter = .all }
+            )
+        } else {
+            EmptyStateView(
+                systemImage: emptyStateSystemImage,
+                title: emptyStateTitle,
+                description: emptyStateDescription
+            )
+        }
     }
 
     @ViewBuilder
@@ -493,9 +518,11 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
     }
 
     private var displayedComics: [LibraryComic] {
-        model.comics
-            .sorted(using: comicSortMode)
-            .filter { $0.matchesSearchQuery(searchQuery) }
+        LibraryCollectionFilterCopy.displayedComics(
+            model.comics.sorted(using: comicSortMode),
+            filter: showsQuickFilters ? quickFilter : .all,
+            searchQuery: searchQuery
+        )
     }
 
     private var selectedComics: [LibraryComic] {
@@ -751,5 +778,56 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
         isSelectionMode = false
         isConfirmingSelectionDeletion = false
         selectedComicIDs.removeAll()
+    }
+}
+
+/// Quick filter + search on a collection page, and the empty result that
+/// names both conditions. See docs/design-system/components/FilterChips.
+enum LibraryCollectionFilterCopy {
+    struct EmptyResult: Equatable {
+        let title: String
+        let description: String
+        let searchesText: Bool
+    }
+
+    static func displayedComics(
+        _ comics: [LibraryComic],
+        filter: LibraryComicQuickFilter,
+        searchQuery: String
+    ) -> [LibraryComic] {
+        comics
+            .filter(filter.matches)
+            .filter { $0.matchesSearchQuery(searchQuery) }
+    }
+
+    /// `nil` when neither a filter nor a search is active: the collection is empty.
+    static func emptyResult(
+        collectionTitle: String,
+        filter: LibraryComicQuickFilter,
+        searchQuery: String
+    ) -> EmptyResult? {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (filter, query.isEmpty) {
+        case (.all, true):
+            return nil
+        case (.all, false):
+            return EmptyResult(
+                title: String(localized: "No Matching Comics"),
+                description: String(localized: "No comics in “\(collectionTitle)” match “\(query)”."),
+                searchesText: true
+            )
+        case (_, true):
+            return EmptyResult(
+                title: String(localized: "No Matching Comics"),
+                description: String(localized: "No “\(filter.title)” comics in “\(collectionTitle)”."),
+                searchesText: false
+            )
+        case (_, false):
+            return EmptyResult(
+                title: String(localized: "No Matching Comics"),
+                description: String(localized: "No “\(filter.title)” comics in “\(collectionTitle)” match “\(query)”."),
+                searchesText: true
+            )
+        }
     }
 }

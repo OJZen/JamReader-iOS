@@ -7,6 +7,7 @@ struct SettingsPaneSections: View {
     let onSetKeepsScreenAwake: (Bool) -> Void
     let onOpenReaderDefaults: () -> Void
     let onSetRecentWindow: (LibraryRecentWindowOption) -> Void
+    let onSetContinueReadingPlacement: (ContinueReadingPlacement) -> Void
     let onSetDefaultFolderImportScope: (RemoteDirectoryImportScope) -> Void
 
     @ViewBuilder
@@ -29,7 +30,8 @@ struct SettingsPaneSections: View {
         case .library:
             LibraryPreferencesSettingsSection(
                 snapshot: snapshot,
-                onSetRecentWindow: onSetRecentWindow
+                onSetRecentWindow: onSetRecentWindow,
+                onSetContinueReadingPlacement: onSetContinueReadingPlacement
             )
             RemoteImportPreferencesSettingsSection(
                 snapshot: snapshot,
@@ -142,6 +144,14 @@ private struct RemoteImportPreferencesSettingsSection: View {
 private struct LibraryPreferencesSettingsSection: View {
     let snapshot: SettingsSnapshot
     let onSetRecentWindow: (LibraryRecentWindowOption) -> Void
+    let onSetContinueReadingPlacement: (ContinueReadingPlacement) -> Void
+
+    private var continueReadingPlacementBinding: Binding<ContinueReadingPlacement> {
+        Binding(
+            get: { snapshot.continueReadingPlacement },
+            set: onSetContinueReadingPlacement
+        )
+    }
 
     private var recentWindowBinding: Binding<LibraryRecentWindowOption> {
         Binding(
@@ -152,6 +162,12 @@ private struct LibraryPreferencesSettingsSection: View {
 
     var body: some View {
         Section {
+            Picker("Show Continue Reading", selection: continueReadingPlacementBinding) {
+                ForEach(ContinueReadingPlacement.allCases) { placement in
+                    Text(placement.title).tag(placement)
+                }
+            }
+
             Picker("Recent Items", selection: recentWindowBinding) {
                 ForEach(LibraryRecentWindowOption.allCases) { option in
                     Text(option.title).tag(option)
