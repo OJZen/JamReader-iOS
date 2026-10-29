@@ -40,6 +40,38 @@ final class ImportedComicsImportServiceIntegrationTests: XCTestCase {
         XCTAssertEqual(comics.compactMap(\.path), ["/Source.cbz"])
     }
 
+    func testDeletedImportedLibraryStaysTheDefaultDestinationAndIsRecreatedEmpty() throws {
+        let harness = try makeHarness()
+        let service = harness.makeImportedComicsImportService()
+        let firstURL = try writeSourceFile("First.cbz", bytes: [1, 2, 3], harness: harness)
+        _ = try service.importComicResources(
+            from: [firstURL],
+            traverseDirectories: false,
+            accessSecurityScopedResources: false
+        )
+
+        // Delete it the way the library list does: drop the record, then the files.
+        let deleted = try importedLibraryDescriptor(harness: harness)
+        let store = LibraryDescriptorStore(fileManager: harness.fileManager)
+        try store.save(try store.load().filter { $0.id != deleted.id })
+        try LibraryStorageManager(fileManager: harness.fileManager, database: harness.database)
+            .deleteManagedLibraryFilesIfNeeded(for: deleted)
+
+        XCTAssertEqual(try service.availableDestinationOptions().first?.selection, .importedComics)
+
+        let secondURL = try writeSourceFile("Second.cbz", bytes: [4, 5, 6], harness: harness)
+        let result = try service.importComicResources(
+            from: [secondURL],
+            traverseDirectories: false,
+            accessSecurityScopedResources: false
+        )
+
+        XCTAssertTrue(result.createdLibrary)
+        let recreated = try importedLibraryDescriptor(harness: harness)
+        XCTAssertNotEqual(recreated.id, deleted.id)
+        XCTAssertEqual(try importedComics(for: recreated, harness: harness).map(\.fileName), ["Second.cbz"])
+    }
+
     func testImportingSameFileTwiceReusesExistingDestinationWithoutDuplicateCopies() throws {
         let harness = try makeHarness()
         let sourceURL = try writeSourceFile("Repeated.cbz", bytes: [7, 8, 9], harness: harness)

@@ -183,6 +183,7 @@ struct RemoteCacheSettingsView: View {
                         Text(preset.settingsLocalizedTitle).tag(preset)
                     }
                 }
+                .settingsPickerStyle()
 
                 Toggle(
                     "Download Full Copy While Reading",

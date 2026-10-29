@@ -327,6 +327,16 @@ struct LibraryRemovalRequest {
     }
 
     var message: String {
+        let text = baseMessage
+        // Imports to Imported Comics recreate it, so deleting it doesn't lose
+        // the default destination.
+        guard items.contains(where: { $0.descriptor.isImportedComics }) else {
+            return text
+        }
+        return text + "\n\n" + String(localized: "The next import to Imported Comics creates it again, empty.")
+    }
+
+    private var baseMessage: String {
         if items.count == 1, let item = items.first {
             if item.descriptor.kind.isManagedByApp {
                 return String(

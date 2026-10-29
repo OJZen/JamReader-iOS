@@ -31,6 +31,7 @@ struct ReaderDefaultsSettingsView: View {
                             Text(mode.title).tag(mode)
                         }
                     }
+                    .settingsPickerStyle()
 
                     pageLayoutPicker
 
@@ -43,10 +44,12 @@ struct ReaderDefaultsSettingsView: View {
                                 Text(direction.title).tag(direction)
                             }
                         }
+                        .settingsPickerStyle()
 
                         ReaderDoublePagePairingPicker(
                             keepsFirstPageSingle: $layout.coverAsSinglePage
                         )
+                        .settingsPickerStyle()
                     }
                 }
 
@@ -83,7 +86,7 @@ struct ReaderDefaultsSettingsView: View {
     private var readingModePicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
             readingModePickerContent
-                .pickerStyle(.menu)
+                .settingsPickerStyle()
         } else {
             readingModePickerContent
                 .pickerStyle(.segmented)
@@ -102,7 +105,7 @@ struct ReaderDefaultsSettingsView: View {
     private var pageLayoutPicker: some View {
         if dynamicTypeSize.isAccessibilitySize {
             pageLayoutPickerContent
-                .pickerStyle(.menu)
+                .settingsPickerStyle()
         } else {
             pageLayoutPickerContent
                 .pickerStyle(.segmented)

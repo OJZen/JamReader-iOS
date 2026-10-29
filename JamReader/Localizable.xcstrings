@@ -2006,6 +2006,28 @@
         }
       }
     },
+    "Recently Added Period": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近追加の期間"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近加入时限"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近加入時限"
+          }
+        }
+      }
+    },
     "Remote": {
       "localizations": {
         "zh-Hant-TW": {
@@ -2354,6 +2376,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "資料夾唯讀"
+          }
+        }
+      }
+    },
+    "The next import to Imported Comics creates it again, empty.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次に「インポート済みコミック」へインポートすると、空のライブラリとして作り直されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后导入到“已导入漫画”时，会重新创建一个空书库。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之後匯入到「已匯入的漫畫」時，會重新建立一個空書庫。"
           }
         }
       }
@@ -18339,28 +18383,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "最近漫画：%1$lld 本"
-          }
-        }
-      }
-    },
-    "Recent Items": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最近項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最近の項目"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最近项目"
           }
         }
       }

@@ -126,8 +126,8 @@ struct ReaderDoublePagePairingPicker: View {
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
+            // Forms default to a menu; Settings moves it to the next page.
             pairingPicker
-                .pickerStyle(.menu)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Page Pairing")

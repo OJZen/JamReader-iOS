@@ -476,3 +476,23 @@ struct SettingsIcon: View {
             .accessibilityHidden(true)
     }
 }
+
+extension View {
+    /// Large text truncates a menu picker's value next to its label, so the
+    /// choice moves to the next page, where the label and value both wrap.
+    func settingsPickerStyle() -> some View {
+        modifier(SettingsPickerStyleModifier())
+    }
+}
+
+private struct SettingsPickerStyleModifier: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            content.pickerStyle(.navigationLink)
+        } else {
+            content
+        }
+    }
+}

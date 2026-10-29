@@ -61,6 +61,7 @@ private struct GeneralSettingsSection: View {
                     Text(destination.settingsLocalizedTitle).tag(destination)
                 }
             }
+            .settingsPickerStyle()
         }
 
         AboutSettingsSection(snapshot: snapshot)
@@ -133,6 +134,7 @@ private struct RemoteImportPreferencesSettingsSection: View {
                 Text(RemoteDirectoryImportScope.includeSubfolders.title)
                     .tag(RemoteDirectoryImportScope.includeSubfolders)
             }
+            .settingsPickerStyle()
         } header: {
             Text("Remote Import")
         } footer: {
@@ -167,12 +169,14 @@ private struct LibraryPreferencesSettingsSection: View {
                     Text(placement.title).tag(placement)
                 }
             }
+            .settingsPickerStyle()
 
-            Picker("Recent Items", selection: recentWindowBinding) {
+            Picker("Recently Added Period", selection: recentWindowBinding) {
                 ForEach(LibraryRecentWindowOption.allCases) { option in
                     Text(option.title).tag(option)
                 }
             }
+            .settingsPickerStyle()
         } header: {
             Text("Library")
         }
