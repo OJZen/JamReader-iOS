@@ -577,7 +577,9 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 }
             }
 
-            folderID = resolvedFolderID
+            // Folder IDs are shared by all libraries, so a stored root ID can be
+            // any number; 1 stays this model's root sentinel.
+            folderID = content?.folder.isRoot == true ? 1 : resolvedFolderID
             emptyStateMessage = nil
             hasAttemptedAutomaticImportRecovery = false
             refreshSpecialCollectionPreviewsIfNeeded()

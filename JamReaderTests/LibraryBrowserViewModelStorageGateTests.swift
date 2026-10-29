@@ -137,6 +137,47 @@ final class LibraryBrowserViewModelStorageGateTests: XCTestCase {
         XCTAssertTrue(didReleaseGate)
     }
 
+    func testStoredRootFolderIDOfLaterLibraryStillLoadsRootSections() throws {
+        let harness = try makeHarness()
+        let otherLibrary = try harness.registerAdditionalLibrary(
+            named: "Other Library",
+            directoryName: "OtherSourceLibrary"
+        )
+        try Data([2]).write(to: otherLibrary.sourceRootURL.appendingPathComponent("Other.cbz"))
+        // Indexing another library first moves this library's root off ID 1.
+        _ = try harness.makeScanner().scanLibrary(
+            sourceRootURL: otherLibrary.sourceRootURL,
+            databaseURL: otherLibrary.databaseURL,
+            cancellationCheck: nil,
+            progressHandler: nil
+        )
+        _ = try harness.writeFile("Issue.cbz")
+        _ = try harness.makeScanner().scanLibrary(
+            sourceRootURL: harness.sourceRootURL,
+            databaseURL: harness.databaseURL,
+            cancellationCheck: nil,
+            progressHandler: nil
+        )
+        let rootFolderID = try harness.makeReader().loadFolderContent(
+            databaseURL: harness.databaseURL,
+            folderID: 1
+        ).folder.id
+        XCTAssertNotEqual(rootFolderID, 1)
+
+        // The browser persists the loaded folder's ID and reopens with it.
+        let viewModel = makeViewModel(
+            harness: harness,
+            folderID: rootFolderID,
+            libraryScanner: harness.makeScanner(),
+            controller: RemoteBackgroundImportController()
+        )
+        viewModel.load()
+
+        XCTAssertEqual(viewModel.folderID, 1)
+        XCTAssertEqual(viewModel.specialCollectionCount(for: .recent), 1)
+        XCTAssertFalse(viewModel.canRefreshCurrentFolder)
+    }
+
     private func makeHarness(testName: String = #function) throws -> LibraryDatabaseTestHarness {
         let harness = try LibraryDatabaseTestHarness.make(testName: testName)
         harnesses.append(harness)
