@@ -36,7 +36,7 @@ struct LibraryImportDestinationOptionRow: View {
                     if showsSelectionIndicator {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(isSelected ? accentColor : Color.textTertiary)
+                            .foregroundStyle(isSelected ? Color.appJam : Color.textTertiary)
                             .accessibilityHidden(true)
                     }
                 }
@@ -82,7 +82,7 @@ struct LibraryImportDestinationOptionRow: View {
     }
 
     private var accentColor: Color {
-        option.status?.tintColor ?? .blue
+        option.status?.tintColor ?? Color(.systemGray)
     }
 
     private var iconSystemName: String {
@@ -127,7 +127,7 @@ struct LibraryImportDestinationOptionRow: View {
 
     private var cardBackgroundColor: Color {
         if isSelected {
-            return accentColor.opacity(0.10)
+            return .appAccentSoft
         }
 
         return Color.surfaceSecondary
@@ -135,7 +135,7 @@ struct LibraryImportDestinationOptionRow: View {
 
     private var cardBorderColor: Color {
         if isSelected {
-            return accentColor.opacity(0.55)
+            return .appAccent
         }
 
         return Color.black.opacity(0.06)
@@ -146,11 +146,11 @@ private extension LibraryImportDestinationOption.Status {
     var tintColor: Color {
         switch self {
         case .appManaged:
-            return .teal
+            return LibraryKind.appManaged.tileColor
         case .linkedFolder:
-            return .blue
+            return LibraryKind.linkedFolder.tileColor
         case .readOnly:
-            return .orange
+            return .appWarning
         }
     }
 
@@ -418,6 +418,7 @@ struct LibraryImportDestinationSheet: View {
                             .padding(.vertical, Spacing.sm)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(.appJam)
                     .disabled(!isSelectedDestinationSelectable)
                 }
                 .padding(.horizontal, Spacing.lg)

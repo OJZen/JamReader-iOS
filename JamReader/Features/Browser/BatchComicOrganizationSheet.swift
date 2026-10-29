@@ -31,9 +31,9 @@ enum BatchOrganizationMode: String, CaseIterable, Identifiable {
     var actionTint: Color {
         switch self {
         case .add:
-            return .blue
+            return .appAccent
         case .remove:
-            return .red
+            return .appDanger
         }
     }
 
@@ -47,9 +47,29 @@ enum BatchOrganizationMode: String, CaseIterable, Identifiable {
     }
 }
 
-enum BatchComicInfoImportScope {
+/// Which comics "Import Comic Info" reads from: chosen first, before the policy.
+enum BatchComicInfoImportScope: Hashable, Identifiable {
     case selected
     case visible
+    case folderAndSubfolders
+    case library
+
+    var id: Self {
+        self
+    }
+
+    var title: String {
+        switch self {
+        case .selected:
+            return String(localized: "Selected Comics")
+        case .visible:
+            return String(localized: "Current List")
+        case .folderAndSubfolders:
+            return String(localized: "This Folder and Subfolders")
+        case .library:
+            return String(localized: "Entire Library")
+        }
+    }
 }
 
 @MainActor
@@ -552,37 +572,70 @@ struct BatchComicMetadataSheet: View {
 @MainActor
 final class BatchComicInfoImportSheetViewModel: ObservableObject {
     @Published private(set) var isImporting = false
+    @Published var scope: BatchComicInfoImportScope
     @Published var policy: ComicInfoImportPolicy = .fillMissing
     @Published var alert: AppAlertState?
 
-    let selectedComics: [LibraryComic]
-    let importScope: BatchComicInfoImportScope
+    let availableScopes: [BatchComicInfoImportScope]
 
+    private let listedComics: [LibraryComic]
+    private let folderID: Int64?
     private let descriptor: LibraryDescriptor
     private let comicInfoImportService: ComicInfoImportService
+    private let databaseReader: LibraryDatabaseReader
+    private let databaseURL: URL
 
     init(
         descriptor: LibraryDescriptor,
         comics: [LibraryComic],
         scope: BatchComicInfoImportScope,
-        comicInfoImportService: ComicInfoImportService
+        folderID: Int64?,
+        includesLibraryScope: Bool,
+        dependencies: AppDependencies
     ) {
         self.descriptor = descriptor
-        self.selectedComics = comics
-        self.importScope = scope
-        self.comicInfoImportService = comicInfoImportService
+        self.listedComics = comics
+        self.folderID = folderID
+        self.comicInfoImportService = dependencies.comicInfoImportService
+        self.databaseReader = dependencies.libraryDatabaseReader
+        self.databaseURL = dependencies.libraryStorageManager.databaseURL(for: descriptor)
+        self.scope = scope
+
+        // A selection is its own scope; otherwise widen from the list to the library.
+        var scopes = [scope]
+        if scope != .selected {
+            if folderID != nil {
+                scopes.append(.folderAndSubfolders)
+            }
+            if includesLibraryScope {
+                scopes.append(.library)
+            }
+        }
+        self.availableScopes = scopes
     }
 
-    var selectedComicCount: Int {
-        selectedComics.count
+    func comicCountText(for scope: BatchComicInfoImportScope) -> String? {
+        switch scope {
+        case .selected, .visible:
+            return listedComics.count == 1
+                ? String(localized: "1 comic")
+                : String(localized: "\(listedComics.count) comics")
+        case .folderAndSubfolders, .library:
+            return nil
+        }
     }
 
-    var policySummaryText: String {
-        policy.summaryText
+    var canApply: Bool {
+        switch scope {
+        case .selected, .visible:
+            return !listedComics.isEmpty && !isImporting
+        case .folderAndSubfolders, .library:
+            return !isImporting
+        }
     }
 
     func apply() async -> ComicInfoImportBatchResult? {
-        guard !selectedComics.isEmpty, !isImporting else {
+        guard canApply else {
             return nil
         }
 
@@ -592,9 +645,18 @@ final class BatchComicInfoImportSheetViewModel: ObservableObject {
         }
 
         do {
+            let comics = try comicsForScope()
+            guard !comics.isEmpty else {
+                alert = AppAlertState(
+                    title: String(localized: "No Comics Found"),
+                    message: String(localized: "There are no comics in this scope.")
+                )
+                return nil
+            }
+
             return try await comicInfoImportService.importEmbeddedComicInfo(
                 for: descriptor,
-                comics: selectedComics,
+                comics: comics,
                 policy: policy
             )
         } catch {
@@ -605,8 +667,24 @@ final class BatchComicInfoImportSheetViewModel: ObservableObject {
             return nil
         }
     }
+
+    private func comicsForScope() throws -> [LibraryComic] {
+        switch scope {
+        case .selected, .visible:
+            return listedComics
+        case .folderAndSubfolders:
+            guard let folderID else {
+                return listedComics
+            }
+            return try databaseReader.loadComicsRecursively(databaseURL: databaseURL, folderID: folderID)
+        case .library:
+            return try databaseReader.loadAllComics(databaseURL: databaseURL)
+        }
+    }
 }
 
+/// "Import Comic Info…": one entry that asks for the scope, then whether to
+/// fill only empty fields or overwrite existing ones.
 struct BatchComicInfoImportSheet: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -618,6 +696,8 @@ struct BatchComicInfoImportSheet: View {
         descriptor: LibraryDescriptor,
         comics: [LibraryComic],
         scope: BatchComicInfoImportScope,
+        folderID: Int64? = nil,
+        includesLibraryScope: Bool = false,
         dependencies: AppDependencies,
         onComplete: @escaping (ComicInfoImportBatchResult) -> Void
     ) {
@@ -627,7 +707,9 @@ struct BatchComicInfoImportSheet: View {
                 descriptor: descriptor,
                 comics: comics,
                 scope: scope,
-                comicInfoImportService: dependencies.comicInfoImportService
+                folderID: folderID,
+                includesLibraryScope: includesLibraryScope,
+                dependencies: dependencies
             )
         )
     }
@@ -635,37 +717,44 @@ struct BatchComicInfoImportSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Selection") {
-                    LabeledContent("Scope", value: scopeTitle)
-                    LabeledContent("Comics", value: "\(viewModel.selectedComicCount)")
+                Section("Scope") {
+                    if viewModel.availableScopes.count == 1, let scope = viewModel.availableScopes.first {
+                        LabeledContent(scope.title, value: viewModel.comicCountText(for: scope) ?? "")
+                    } else {
+                        Picker("Scope", selection: $viewModel.scope) {
+                            ForEach(viewModel.availableScopes) { scope in
+                                VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                                    Text(scope.title)
+                                    if let countText = viewModel.comicCountText(for: scope) {
+                                        Text(countText)
+                                            .font(AppFont.footnote())
+                                            .foregroundStyle(Color.textSecondary)
+                                    }
+                                }
+                                .tag(scope)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    }
                 }
 
                 Section {
-                    Picker("Strategy", selection: $viewModel.policy) {
+                    Picker("Existing Fields", selection: $viewModel.policy) {
                         ForEach(ComicInfoImportPolicy.allCases) { policy in
                             Text(policy.title)
                                 .tag(policy)
                         }
                     }
                     .pickerStyle(.inline)
+                    .labelsHidden()
                 } header: {
-                    Text("Strategy")
+                    Text("Existing Fields")
                 } footer: {
-                    Text(viewModel.policySummaryText)
-                }
-
-                Section("Included Fields") {
-                    LabeledContent(
-                        "Core",
-                        value: String(localized: "Title, series, issue number, volume, and story arc")
-                    )
-                    LabeledContent(
-                        "Details",
-                        value: String(localized: "Credits, publisher, format, language, characters, teams, locations, review, and tags")
-                    )
+                    Text(viewModel.policy.summaryText)
                 }
             }
-            .navigationTitle("ComicInfo")
+            .navigationTitle("Import Comic Info")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -687,13 +776,13 @@ struct BatchComicInfoImportSheet: View {
                                 }
                             }
                         }
-                        .disabled(viewModel.selectedComics.isEmpty)
+                        .disabled(!viewModel.canApply)
                     }
                 }
             }
         }
         .adaptiveSheetWidth(680)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(viewModel.isImporting)
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -728,16 +817,5 @@ private extension BatchComicMetadataSheet {
         viewModel.patch.enabledFieldCount == 1
             ? String(localized: "1 field")
             : String(localized: "\(viewModel.patch.enabledFieldCount) fields")
-    }
-}
-
-private extension BatchComicInfoImportSheet {
-    var scopeTitle: String {
-        switch viewModel.importScope {
-        case .selected:
-            return String(localized: "Selected")
-        case .visible:
-            return String(localized: "Visible")
-        }
     }
 }

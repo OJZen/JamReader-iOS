@@ -22,6 +22,7 @@ struct ErrorStateView: View {
                     Label("Retry", systemImage: "arrow.clockwise")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(.appJam)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

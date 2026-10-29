@@ -14,11 +14,11 @@ enum LibrarySpecialCollectionKind: String, CaseIterable, Hashable, Identifiable 
     var title: String {
         switch self {
         case .reading:
-            return String(localized: "Reading")
+            return String(localized: "Continue Reading")
         case .favorites:
             return String(localized: "Favorites")
         case .recent:
-            return String(localized: "Recent")
+            return String(localized: "Recently Added")
         }
     }
 

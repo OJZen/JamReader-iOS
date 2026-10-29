@@ -43,7 +43,7 @@ struct ThumbnailView<Loader: ThumbnailLoading>: View {
             } else {
                 Image(systemName: placeholderSystemName)
                     .font(.title2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textTertiary)
             }
         }
         .frame(width: width, height: height)

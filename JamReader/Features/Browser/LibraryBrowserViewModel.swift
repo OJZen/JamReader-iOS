@@ -26,6 +26,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     @Published private(set) var isImportingComics = false
     @Published var searchQuery = ""
     @Published var alert: AppAlertState?
+    /// Result of the last import into this library, shown in the task bar.
+    @Published var taskResult: TaskBannerContent?
 
     let descriptor: LibraryDescriptor
     private(set) var folderID: Int64
@@ -124,8 +126,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     var canRefreshLibrary: Bool {
-        folderID == 1
-            && databaseSummary.exists
+        databaseSummary.exists
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
@@ -143,8 +144,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
     }
 
     var canImportLibraryComicInfo: Bool {
-        folderID == 1
-            && databaseSummary.exists
+        databaseSummary.exists
             && !isInitializingLibrary
             && !isRefreshingLibrary
     }
@@ -230,7 +230,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 self.content = LibraryFolderContent(
                     folder: content.folder,
                     subfolders: content.subfolders,
-                    comics: updatedComics
+                    comics: updatedComics,
+                    ancestors: content.ancestors
                 )
             }
         }
@@ -441,6 +442,43 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
             )
             return false
         }
+    }
+
+    /// Deletes several comics in one storage operation and reloads once.
+    func removeComics(_ comics: [LibraryComic]) -> Bool {
+        guard !comics.isEmpty else {
+            return true
+        }
+        guard beginExclusiveLibraryStorageOperation() else {
+            return false
+        }
+        defer {
+            remoteBackgroundImportController.endExclusiveStorageMaintenance()
+        }
+
+        var failedTitles: [String] = []
+        var lastError: Error?
+        for comic in comics {
+            do {
+                try comicRemovalService.removeComic(comic, from: descriptor)
+            } catch {
+                failedTitles.append(comic.displayTitle)
+                lastError = error
+            }
+        }
+
+        AppHaptics.warning()
+        loadContent(respectingTransientState: false)
+
+        if let lastError {
+            let preview = NamePreviewFormatter.preview(from: failedTitles)
+            alert = AppAlertState(
+                title: String(localized: "Failed to Remove Comic"),
+                message: "\(preview)\n\(lastError.userFacingMessage)"
+            )
+            return false
+        }
+        return true
     }
 
     func loadIfNeeded() {
@@ -840,7 +878,8 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         }
     }
 
-    func importComicFiles(from urls: [URL]) {
+    /// Imports files, or folders when `traverseDirectories` is true, into the current folder.
+    func importComicFiles(from urls: [URL], traverseDirectories: Bool = false) {
         guard canImportComicFiles else {
             if let libraryImportNotice {
                 alert = AppAlertState(
@@ -867,9 +906,11 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         alert = nil
         let destinationRelativePath = importDestinationRelativePath()
 
+        taskResult = nil
         comicImportTask = Task {
             await performComicFileImport(
                 from: urls,
+                traverseDirectories: traverseDirectories,
                 destinationRelativePath: destinationRelativePath,
                 cancellationController: cancellationController,
                 importID: importID
@@ -884,6 +925,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
 
     private func performComicFileImport(
         from urls: [URL],
+        traverseDirectories: Bool,
         destinationRelativePath: String?,
         cancellationController: LibraryImportCancellationController,
         importID: UUID
@@ -900,7 +942,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
         do {
             let result = try await importedComicsImportService.importComicResourcesAsync(
                 from: urls,
-                traverseDirectories: false,
+                traverseDirectories: traverseDirectories,
                 accessSecurityScopedResources: true,
                 destinationSelection: .library(descriptor.id),
                 destinationRelativePath: destinationRelativePath,
@@ -923,47 +965,7 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 return
             }
 
-            var messageLines: [String] = []
-            if result.importedComicCount > 0 {
-                if result.importedComicCount == 1 {
-                    messageLines.append(String(localized: "Imported 1 comic file into the current library location."))
-                } else {
-                    messageLines.append(
-                        String(localized: "Imported \(result.importedComicCount) comic files into the current library location.")
-                    )
-                }
-            }
-            if let scanSummary = result.scanSummary {
-                messageLines.append(scanSummary.indexedSummaryLine + ".")
-            } else if let scanErrorMessage = result.scanErrorMessage {
-                messageLines.append(String(localized: "Automatic indexing failed: \(scanErrorMessage)"))
-            }
-            if !result.unsupportedItemNames.isEmpty {
-                if result.unsupportedItemNames.count == 1 {
-                    messageLines.append(String(localized: "Skipped 1 unsupported item."))
-                } else {
-                    messageLines.append(
-                        String(localized: "Skipped \(result.unsupportedItemNames.count) unsupported items.")
-                    )
-                }
-            }
-            if !result.failedItemNames.isEmpty {
-                let failedItemsPreview = NamePreviewFormatter.preview(from: result.failedItemNames)
-                if result.failedItemNames.count == 1 {
-                    messageLines.append(String(localized: "Failed to import 1 item: \(failedItemsPreview)."))
-                } else {
-                    messageLines.append(
-                        String(localized: "Failed to import \(result.failedItemNames.count) items: \(failedItemsPreview).")
-                    )
-                }
-            }
-
-            alert = AppAlertState(
-                title: result.hasImportedAnyComics
-                    ? String(localized: "Import Completed")
-                    : String(localized: "Import Finished with Warnings"),
-                message: messageLines.joined(separator: "\n")
-            )
+            taskResult = result.taskBannerContent
         } catch is CancellationError {
             logger.notice(
                 "Library browser comic import canceled libraryID=\(self.descriptor.id.uuidString, privacy: .public)"
@@ -1159,6 +1161,14 @@ final class LibraryBrowserViewModel: ObservableObject, LoadableViewModel {
                 self.loadContent(respectingTransientState: false)
             }
             .store(in: &cancellables)
+    }
+
+    /// Picks up the result of an import started from the library home. Called
+    /// by the visible page so a page that is no longer shown cannot take it.
+    func takePendingTaskResult() {
+        if let result = LibraryTaskResultInbox.shared.take(for: descriptor.id) {
+            taskResult = result
+        }
     }
 
     private func showScanCompletion(title: String, summary: LibraryScanSummary) {

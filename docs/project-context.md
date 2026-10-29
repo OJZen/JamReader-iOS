@@ -7,7 +7,7 @@ This is the current engineering map for JamReader and the default orientation do
 JamReader is a native iPhone and iPad comic reader with three primary areas:
 
 - **Library** manages app-owned and linked local libraries, imports, folders, search, metadata, tags, reading lists, and reading progress.
-- **Browse** manages SMB/WebDAV servers, remote directories, saved folders, history, online reading, imports, and offline copies.
+- **Remote** (tab title; the code keeps `AppRootTab.browse` and the `Browse` / `Remote` feature folders) manages SMB/WebDAV servers, remote directories, saved folders, history, online reading, imports, and offline copies.
 - **Settings** owns app startup behavior, the shared reader default and display behavior, reusable import defaults, storage/cache policy, library maintenance, and app information.
 
 The [root README](../README.md#highlights) lists supported formats. Extension policy is centralized in `JamReader/Core/Types/SupportedComicFormats.swift`; image directories are recognized by the scanner and opened through `DirectoryImageSequenceReader`. Engine selection and local MuPDF build inputs are documented in the [development workflow](development-workflow.md#build-and-static-checks).

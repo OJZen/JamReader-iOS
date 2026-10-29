@@ -127,15 +127,4 @@ struct RemoteComicCachedAvailability: Hashable {
     var hasLocalCopy: Bool {
         kind != .unavailable
     }
-
-    var badgeTitle: String? {
-        switch kind {
-        case .unavailable:
-            return nil
-        case .current:
-            return String(localized: "Offline Ready")
-        case .stale:
-            return String(localized: "Older Local Copy")
-        }
-    }
 }

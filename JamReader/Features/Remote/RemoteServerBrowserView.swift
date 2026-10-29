@@ -671,6 +671,7 @@ struct RemoteServerBrowserView: View {
             Label("Try Again", systemImage: "arrow.clockwise")
         }
         .buttonStyle(.borderedProminent)
+        .tint(.appJam)
     }
 
     @ViewBuilder
@@ -722,7 +723,7 @@ struct RemoteServerBrowserView: View {
                 RemoteBrowserHeaderActionChip(
                     title: String(localized: "Up"),
                     systemImage: "arrow.up.left",
-                    tint: .blue
+                    tint: .appAccent
                 )
             }
             .buttonStyle(.plain)
@@ -738,7 +739,7 @@ struct RemoteServerBrowserView: View {
                 RemoteBrowserHeaderActionChip(
                     title: String(localized: "Root"),
                     systemImage: "arrow.uturn.backward.circle",
-                    tint: .teal
+                    tint: .appAccent
                 )
             }
             .buttonStyle(.plain)
@@ -1555,7 +1556,7 @@ struct RemoteServerBrowserView: View {
 struct RemoteBrowserHeaderActionChip: View {
     let title: String
     let systemImage: String
-    var tint: Color = .blue
+    var tint: Color = .appAccent
 
     var body: some View {
         HStack(spacing: Spacing.xs) {

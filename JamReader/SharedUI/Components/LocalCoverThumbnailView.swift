@@ -41,7 +41,7 @@ struct LocalCoverThumbnailView: View {
             placeholderSystemName: placeholderSystemName,
             width: width,
             height: height,
-            cornerRadius: 12,
+            cornerRadius: CornerRadius.thumbnail,
             contentID: Self.contentID(for: url, fallbackSource: fallbackSource)
         ) { loader, targetSize, scale in
             loader.load(

@@ -29,10 +29,8 @@ enum RemoteProviderKind: String, Codable, Hashable, CaseIterable, Identifiable {
 
     var tintColor: Color {
         switch self {
-        case .smb:
-            return .blue
-        case .webdav:
-            return .indigo
+        case .smb, .webdav:
+            return .appAccent
         }
     }
 

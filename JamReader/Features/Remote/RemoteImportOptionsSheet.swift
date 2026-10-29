@@ -102,6 +102,7 @@ struct RemoteImportOptionsSheet: View {
                             .padding(.vertical, Spacing.sm)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(.appJam)
                     .disabled(!isSelectedDestinationSelectable)
                 }
                 .padding(.horizontal, Spacing.lg)
@@ -183,11 +184,11 @@ private struct RemoteImportScopeRow: View {
         HStack(alignment: .top, spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-                    .fill(.blue.opacity(isSelected ? 0.18 : 0.10))
+                    .fill(Color.appAccent.opacity(isSelected ? 0.18 : 0.10))
 
                 Image(systemName: iconName)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appAccent)
             }
             .frame(width: 42, height: 42)
             .accessibilityHidden(true)
@@ -208,18 +209,18 @@ private struct RemoteImportScopeRow: View {
 
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(isSelected ? .blue : Color.textTertiary)
+                .foregroundStyle(isSelected ? Color.appJam : Color.textTertiary)
                 .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(Spacing.md)
         .background(
             RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
-                .fill(isSelected ? Color.blue.opacity(0.10) : Color.surfaceSecondary)
+                .fill(isSelected ? Color.appAccent.opacity(0.10) : Color.surfaceSecondary)
         )
         .overlay(
             RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
-                .strokeBorder(isSelected ? Color.blue.opacity(0.55) : Color.black.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
+                .strokeBorder(isSelected ? Color.appAccent.opacity(0.55) : Color.black.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
         .accessibilityElement(children: .combine)

@@ -4,6 +4,7 @@ import UIKit
 struct BrowseHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
     @AppStorage(AppNavigationStorageKeys.browseHomeSelection) private var storedSelectionRawValue = ""
+    @AppStorage(AppNavigationStorageKeys.pendingAddRemoteServer) private var pendingAddServer = false
 
     let dependencies: AppDependencies
 
@@ -24,7 +25,7 @@ struct BrowseHomeView: View {
 
     var body: some View {
         content
-        .navigationTitle("Browse")
+        .navigationTitle("Remote")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             addServerToolbarItem
@@ -38,6 +39,10 @@ struct BrowseHomeView: View {
         .onAppear {
             viewModel.refreshOfflineCopyCounts(forceRefresh: true)
             restoreSelectionIfNeeded()
+            presentPendingAddServerIfNeeded()
+        }
+        .onChange(of: pendingAddServer) { _, _ in
+            presentPendingAddServerIfNeeded()
         }
         .onChange(of: displayedProfiles.map(\.id)) { _, _ in
             synchronizeSelection()
@@ -142,7 +147,7 @@ struct BrowseHomeView: View {
                     } label: {
                         Label("Edit", systemImage: "square.and.pencil")
                     }
-                    .tint(.blue)
+                    .tint(.appJam)
 
                     Button(role: .destructive) {
                         pendingDeletionProfile = profile
@@ -236,7 +241,7 @@ struct BrowseHomeView: View {
                         ? String(localized: "1 saved")
                         : String(localized: "\(totalSavedFolderCount) saved"),
                     systemImage: "star.fill",
-                    tint: .teal,
+                    tint: .appAccent,
                     splitSelection: .savedFolders
                 )
             )
@@ -251,7 +256,7 @@ struct BrowseHomeView: View {
                         ? String(localized: "1 downloaded")
                         : String(localized: "\(totalOfflineCopyCount) downloaded"),
                     systemImage: "arrow.down.circle.fill",
-                    tint: .green,
+                    tint: .appOffline,
                     splitSelection: .offlineShelf
                 )
             )
@@ -272,6 +277,14 @@ struct BrowseHomeView: View {
 
     private func presentCreateServerSheet() {
         requestEditorPresentation(viewModel.makeCreateDraft())
+    }
+
+    private func presentPendingAddServerIfNeeded() {
+        guard pendingAddServer else {
+            return
+        }
+        pendingAddServer = false
+        presentCreateServerSheet()
     }
 
     private func requestEditorPresentation(_ draft: RemoteServerEditorDraft) {
@@ -515,6 +528,7 @@ struct BrowseHomeDetailPlaceholder: View {
                     Label("Add Server", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(.appJam)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

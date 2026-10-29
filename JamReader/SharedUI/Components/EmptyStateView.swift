@@ -21,6 +21,7 @@ struct EmptyStateView: View {
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .buttonStyle(.borderedProminent)
+                    .tint(.appJam)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

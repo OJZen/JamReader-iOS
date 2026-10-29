@@ -910,7 +910,7 @@ private final class ReaderThumbnailBrowserSummaryCell: UICollectionViewCell {
         detailLabel.numberOfLines = 2
         textStack.addArrangedSubview(detailLabel)
 
-        progressView.progressTintColor = tintColor
+        progressView.progressTintColor = UIColor(resource: .jam)
         progressView.trackTintColor = UIColor.systemFill
         textStack.addArrangedSubview(progressView)
 
@@ -1037,6 +1037,8 @@ private final class ReaderThumbnailBrowserJumpCell: UICollectionViewCell, UIText
         controls.addArrangedSubview(pageCountLabel)
 
         var goToConfig = UIButton.Configuration.filled()
+        goToConfig.baseBackgroundColor = UIColor(resource: .jam)
+        goToConfig.baseForegroundColor = UIColor(resource: .onJam)
         goToConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
         goToButton.configuration = goToConfig
         goToButton.setTitle(String(localized: "Go To"), for: .normal)

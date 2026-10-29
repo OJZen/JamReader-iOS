@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RemoteComicInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let profile: RemoteServerProfile
     let item: RemoteDirectoryItem
@@ -53,7 +54,13 @@ struct RemoteComicInfoSheet: View {
     }
 
     private var summaryContent: some View {
-        HStack(alignment: .top, spacing: 16) {
+        // At accessibility sizes the cover sits above the text so titles and
+        // badges get the full row width.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+
+        return layout {
             RemoteComicThumbnailView(
                 profile: profile,
                 item: item,
@@ -70,6 +77,7 @@ struct RemoteComicInfoSheet: View {
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
 
                 Text(formatDisplayName)
@@ -77,36 +85,23 @@ struct RemoteComicInfoSheet: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    infoChip(
-                        title: offlineStatusText,
-                        systemImage: offlineStatusSymbolName,
-                        tint: offlineStatusTint
-                    )
+                // Reading progress is plain text; only the read state is a status.
+                if let readingSession, !readingSession.read {
+                    Text(readingSession.progressText)
+                        .font(AppFont.subheadline().monospacedDigit())
+                        .foregroundStyle(Color.textSecondary)
+                }
 
-                    if let readingSession {
-                        infoChip(
-                            title: readingSession.progressText,
-                            systemImage: "book.closed",
-                            tint: .blue
-                        )
+                WrappingHStack(horizontalSpacing: Spacing.xs, verticalSpacing: Spacing.xs) {
+                    StatusBadge(status: cacheAvailability.detailStatusBadgeStatus)
+
+                    if readingSession?.read == true {
+                        StatusBadge(status: .read)
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    private func infoChip(title: String, systemImage: String, tint: Color) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                tint.opacity(0.12),
-                in: Capsule(style: .continuous)
-            )
     }
 
     @ViewBuilder
@@ -220,29 +215,7 @@ struct RemoteComicInfoSheet: View {
     }
 
     private var offlineStatusText: String {
-        cacheAvailability.badgeTitle ?? String(localized: "Not Downloaded")
-    }
-
-    private var offlineStatusSymbolName: String {
-        switch cacheAvailability.kind {
-        case .unavailable:
-            return "icloud.slash"
-        case .current:
-            return "arrow.down.circle"
-        case .stale:
-            return "arrow.clockwise.circle"
-        }
-    }
-
-    private var offlineStatusTint: Color {
-        switch cacheAvailability.kind {
-        case .unavailable:
-            return .secondary
-        case .current:
-            return .blue
-        case .stale:
-            return .orange
-        }
+        cacheAvailability.detailStatusBadgeStatus.title
     }
 }
 

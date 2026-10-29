@@ -305,6 +305,8 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             openLibrary(libraryID, folderID: folderID)
         case .openFolder(let descriptor, let folderID):
             openFolder(descriptor, folderID: folderID)
+        case .openAncestorFolder(let descriptor, let folderID):
+            openFolder(descriptor, folderID: folderID, replacingDeeperLevels: true)
         case .specialCollection(let descriptor, let kind):
             pushLibraryDetail(
                 LibrarySpecialCollectionView(
@@ -402,23 +404,52 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         openLibrary(libraryID, folderID: nil, animated: false)
     }
 
-    private func openFolder(_ descriptor: LibraryDescriptor, folderID: Int64) {
+    private func openFolder(
+        _ descriptor: LibraryDescriptor,
+        folderID: Int64,
+        replacingDeeperLevels: Bool = false
+    ) {
         selectedLibraryID = descriptor.id
         UserDefaults.standard.set(
             descriptor.id.uuidString,
             forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
         )
-        let controller = makeLibraryBrowser(descriptor: descriptor, folderID: folderID)
-        if let compactNavigationController {
-            compactNavigationController.pushViewController(controller, animated: true)
-        } else if let detailNavigationController {
-            detailNavigationController.pushViewController(controller, animated: true)
+        // Breadcrumb taps return to a level already on the stack instead of pushing it again.
+        let identifier = Self.browserIdentifier(libraryID: descriptor.id, folderID: folderID)
+        if let navigationController = compactNavigationController ?? detailNavigationController,
+           let existing = navigationController.viewControllers.last(where: { $0.restorationIdentifier == identifier }) {
+            navigationController.popToViewController(existing, animated: true)
+            return
         }
+
+        let controller = makeLibraryBrowser(descriptor: descriptor, folderID: folderID)
+        guard let navigationController = compactNavigationController ?? detailNavigationController else {
+            return
+        }
+
+        // A restored subfolder has no ancestors below it on the stack; going up
+        // replaces this library's deeper levels so Back still leads out of the library.
+        let browserPrefix = "library.browser.\(descriptor.id.uuidString)."
+        if replacingDeeperLevels,
+           let firstLevel = navigationController.viewControllers.firstIndex(where: {
+               $0.restorationIdentifier?.hasPrefix(browserPrefix) == true
+           }) {
+            let kept = Array(navigationController.viewControllers[..<firstLevel])
+            navigationController.setViewControllers(kept + [controller], animated: true)
+            return
+        }
+
+        navigationController.pushViewController(controller, animated: true)
+    }
+
+    private static func browserIdentifier(libraryID: UUID, folderID: Int64) -> String {
+        "library.browser.\(libraryID.uuidString).\(max(folderID, 1))"
     }
 
     private func pushLibraryDetail<Content: View>(_ view: Content, title: String) {
         let controller = makeHostingController(view, title: title)
-        controller.navigationItem.largeTitleDisplayMode = .never
+        // Collection pages use a large title with the library and count below it.
+        controller.navigationItem.largeTitleDisplayMode = .always
         if let compactNavigationController {
             compactNavigationController.pushViewController(controller, animated: true)
         } else if let detailNavigationController {
@@ -446,7 +477,9 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             ),
             title: descriptor.displayName
         )
-        controller.navigationItem.largeTitleDisplayMode = .never
+        // Library pages use a large title with the breadcrumb below it.
+        controller.navigationItem.largeTitleDisplayMode = .always
+        controller.restorationIdentifier = Self.browserIdentifier(libraryID: descriptor.id, folderID: folderID)
         return controller
     }
 
@@ -454,23 +487,16 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         let placeholder = makeHostingController(
             LibraryHomeDetailPlaceholder(
                 itemCount: viewModel.items.count,
-                onAddLibrary: { [weak self] in
-                    self?.presenter.presentSheet(
-                        .content(
-                            id: "library.create",
-                            content: AnyView(
-                                LibraryCreateSheet { proposedName in
-                                    guard let self,
-                                          let libraryID = self.viewModel.createLibrary(named: proposedName)
-                                    else {
-                                        return false
-                                    }
-
-                                    self.presenter.dismissSheet()
-                                    self.openLibrary(libraryID, folderID: nil)
-                                    return true
-                                }
-                            )
+                onAddComics: { [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    self.presenter.presentSheet(
+                        LibraryHomeView.addComicsSheetRoute(
+                            viewModel: self.viewModel,
+                            dependencies: self.dependencies,
+                            presenter: self.presenter,
+                            navigator: self.navigator
                         )
                     )
                 }
@@ -501,6 +527,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
                 view
                     .environment(\.appPresenter, presenter)
                     .environment(\.appNavigator, navigator)
+                    .environment(\.libraryListViewModel, viewModel)
             )
         )
         controller.title = title
@@ -1115,7 +1142,7 @@ extension AppRootTab {
         case .library:
             return String(localized: "Library")
         case .browse:
-            return String(localized: "Browse")
+            return String(localized: "Remote")
         case .settings:
             return String(localized: "Settings")
         }

@@ -375,7 +375,7 @@ struct RemoteServerDetailView: View {
                 title: browserEntryTitle,
                 subtitle: browserEntryDisplayText,
                 systemImage: browserEntryIsRoot ? "square.grid.2x2.fill" : "folder.fill",
-                tint: browserEntryIsRoot ? .teal : .blue,
+                tint: .appAccent,
                 route: .serverBrowser(profile.id, path: browserEntryRawPath)
             )
         ]
@@ -389,7 +389,7 @@ struct RemoteServerDetailView: View {
                         ? String(localized: "1 saved")
                         : String(localized: "\(savedFolderCount) saved"),
                     systemImage: "star.fill",
-                    tint: .teal,
+                    tint: .appAccent,
                     route: .savedFolders(profile.id)
                 )
             )
@@ -404,7 +404,7 @@ struct RemoteServerDetailView: View {
                         ? String(localized: "1 downloaded on this server")
                         : String(localized: "\(offlineCopyCount) downloaded on this server"),
                     systemImage: "arrow.down.circle.fill",
-                    tint: .green,
+                    tint: .appOffline,
                     route: .offlineShelf(profile.id)
                 )
             )

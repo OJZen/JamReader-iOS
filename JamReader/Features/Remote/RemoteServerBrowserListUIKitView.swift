@@ -1111,14 +1111,13 @@ final class RemoteBrowserListItemCardView: UIView {
 
     private let cardView = UIView()
     private let titleLabel = UILabel()
-    private let titleIconView = UIImageView()
     private let metadataLabel = UILabel()
     private let thumbnailImageView = UIImageView()
     private let thumbnailPlaceholderView = UIView()
     private let thumbnailPlaceholderImageView = UIImageView()
     private let symbolTileView = UIView()
     private let symbolImageView = UIImageView()
-    private let cacheDotView = UIView()
+    private let cacheStatusIconView = UIImageView()
     private lazy var tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
     private var thumbnailTask: Task<Void, Never>?
     private var representedItemID: String?
@@ -1152,7 +1151,7 @@ final class RemoteBrowserListItemCardView: UIView {
         thumbnailImageView.isHidden = true
         thumbnailPlaceholderView.isHidden = true
         symbolTileView.isHidden = true
-        cacheDotView.isHidden = true
+        cacheStatusIconView.isHidden = true
         cardView.alpha = 0
         isUserInteractionEnabled = false
         accessibilityElementsHidden = true
@@ -1183,7 +1182,6 @@ final class RemoteBrowserListItemCardView: UIView {
         self.onOpenItem = onOpenItem
         representedItemID = row.item.id
         titleLabel.text = row.item.name
-        configureTitlePrefix(for: row.item)
         metadataLabel.text = metadataText(for: row)
         updateHeroSourceRegistration(for: row.item)
         cardView.alpha = 1
@@ -1208,7 +1206,7 @@ final class RemoteBrowserListItemCardView: UIView {
                 browsingService: browsingService,
                 allowsRemoteFetch: allowsRemoteFetch
             )
-            cacheDotView.isHidden = true
+            cacheStatusIconView.isHidden = true
         } else if row.item.canOpenAsComic, row.item.isPDFDocument {
             configureCachedPDFThumbnail(
                 item: row.item,
@@ -1216,7 +1214,7 @@ final class RemoteBrowserListItemCardView: UIView {
                 browsingService: browsingService,
                 prefersLocalCache: row.cacheAvailability.kind == .current
             )
-            updateCacheDot(for: row.cacheAvailability)
+            updateCacheStatusIcon(for: row.cacheAvailability)
         } else if row.item.canOpenAsComic {
             configureComicThumbnail(
                 item: row.item,
@@ -1226,14 +1224,14 @@ final class RemoteBrowserListItemCardView: UIView {
                 allowsRemoteFetch: allowsRemoteFetch
             )
             symbolTileView.isHidden = true
-            updateCacheDot(for: row.cacheAvailability)
+            updateCacheStatusIcon(for: row.cacheAvailability)
         } else {
             thumbnailTask?.cancel()
             thumbnailTask = nil
             thumbnailImageView.isHidden = true
             thumbnailPlaceholderView.isHidden = true
             symbolTileView.isHidden = false
-            cacheDotView.isHidden = true
+            cacheStatusIconView.isHidden = true
             configureSymbolTile(for: row.item)
         }
     }
@@ -1311,7 +1309,7 @@ final class RemoteBrowserListItemCardView: UIView {
         visualContainer.translatesAutoresizingMaskIntoConstraints = false
 
         thumbnailPlaceholderView.translatesAutoresizingMaskIntoConstraints = false
-        thumbnailPlaceholderView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+        thumbnailPlaceholderView.backgroundColor = .secondarySystemBackground
         thumbnailPlaceholderView.layer.cornerRadius = 16
         thumbnailPlaceholderView.layer.cornerCurve = .continuous
         thumbnailPlaceholderView.isHidden = true
@@ -1319,8 +1317,8 @@ final class RemoteBrowserListItemCardView: UIView {
 
         thumbnailPlaceholderImageView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailPlaceholderImageView.contentMode = .scaleAspectFit
-        thumbnailPlaceholderImageView.tintColor = UIColor.systemBlue.withAlphaComponent(0.85)
-        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
+        thumbnailPlaceholderImageView.tintColor = .tertiaryLabel
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed")
         thumbnailPlaceholderImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
             pointSize: 22,
             weight: .semibold
@@ -1346,15 +1344,18 @@ final class RemoteBrowserListItemCardView: UIView {
         symbolImageView.contentMode = .scaleAspectFit
         symbolTileView.addSubview(symbolImageView)
 
-        cacheDotView.translatesAutoresizingMaskIntoConstraints = false
-        cacheDotView.layer.cornerRadius = 4
-        cacheDotView.layer.cornerCurve = .continuous
-        cacheDotView.layer.shadowColor = UIColor.black.cgColor
-        cacheDotView.layer.shadowOpacity = 0.25
-        cacheDotView.layer.shadowRadius = 1
-        cacheDotView.layer.shadowOffset = CGSize(width: 0, height: 0.5)
-        cacheDotView.isHidden = true
-        visualContainer.addSubview(cacheDotView)
+        cacheStatusIconView.translatesAutoresizingMaskIntoConstraints = false
+        cacheStatusIconView.contentMode = .scaleAspectFit
+        cacheStatusIconView.backgroundColor = .systemBackground
+        cacheStatusIconView.layer.cornerRadius = 8
+        cacheStatusIconView.layer.cornerCurve = .continuous
+        cacheStatusIconView.layer.shadowColor = UIColor.black.cgColor
+        cacheStatusIconView.layer.shadowOpacity = 0.25
+        cacheStatusIconView.layer.shadowRadius = 1
+        cacheStatusIconView.layer.shadowOffset = CGSize(width: 0, height: 0.5)
+        cacheStatusIconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        cacheStatusIconView.isHidden = true
+        visualContainer.addSubview(cacheStatusIconView)
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .preferredFont(forTextStyle: .headline).bold()
@@ -1362,27 +1363,13 @@ final class RemoteBrowserListItemCardView: UIView {
         titleLabel.textColor = .label
         titleLabel.numberOfLines = 2
 
-        titleIconView.translatesAutoresizingMaskIntoConstraints = false
-        titleIconView.contentMode = .scaleAspectFit
-        titleIconView.transform = CGAffineTransform(translationX: 0, y: 1)
-        titleIconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
-            pointSize: 14,
-            weight: .semibold
-        )
-
         metadataLabel.translatesAutoresizingMaskIntoConstraints = false
         metadataLabel.font = .preferredFont(forTextStyle: .footnote)
         metadataLabel.adjustsFontForContentSizeCategory = true
         metadataLabel.textColor = .secondaryLabel
         metadataLabel.numberOfLines = 2
 
-        let titleRow = UIStackView(arrangedSubviews: [titleIconView, titleLabel])
-        titleRow.translatesAutoresizingMaskIntoConstraints = false
-        titleRow.axis = .horizontal
-        titleRow.alignment = .top
-        titleRow.spacing = 6
-
-        let textStack = UIStackView(arrangedSubviews: [titleRow, metadataLabel])
+        let textStack = UIStackView(arrangedSubviews: [titleLabel, metadataLabel])
         textStack.translatesAutoresizingMaskIntoConstraints = false
         textStack.axis = .vertical
         textStack.alignment = .fill
@@ -1424,13 +1411,10 @@ final class RemoteBrowserListItemCardView: UIView {
             symbolImageView.centerXAnchor.constraint(equalTo: symbolTileView.centerXAnchor),
             symbolImageView.centerYAnchor.constraint(equalTo: symbolTileView.centerYAnchor),
 
-            cacheDotView.widthAnchor.constraint(equalToConstant: 8),
-            cacheDotView.heightAnchor.constraint(equalToConstant: 8),
-            cacheDotView.trailingAnchor.constraint(equalTo: visualContainer.trailingAnchor, constant: 2),
-            cacheDotView.bottomAnchor.constraint(equalTo: visualContainer.bottomAnchor, constant: 2),
-
-            titleIconView.widthAnchor.constraint(equalToConstant: 16),
-            titleIconView.heightAnchor.constraint(equalToConstant: 16),
+            cacheStatusIconView.widthAnchor.constraint(equalToConstant: 16),
+            cacheStatusIconView.heightAnchor.constraint(equalToConstant: 16),
+            cacheStatusIconView.trailingAnchor.constraint(equalTo: visualContainer.trailingAnchor, constant: 4),
+            cacheStatusIconView.bottomAnchor.constraint(equalTo: visualContainer.bottomAnchor, constant: 4),
 
             textStack.leadingAnchor.constraint(equalTo: visualContainer.trailingAnchor, constant: 14),
             textStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -14),
@@ -1472,6 +1456,7 @@ final class RemoteBrowserListItemCardView: UIView {
         thumbnailImageView.isHidden = false
         thumbnailPlaceholderView.isHidden = false
         thumbnailPlaceholderImageView.image = UIImage(systemName: "folder.fill")
+        thumbnailPlaceholderImageView.tintColor = UIColor(resource: .accent)
         thumbnailTask?.cancel()
 
         let targetSize = CGSize(width: Metrics.coverWidth, height: Metrics.coverHeight)
@@ -1517,6 +1502,8 @@ final class RemoteBrowserListItemCardView: UIView {
         symbolTileView.isHidden = true
         thumbnailImageView.isHidden = false
         thumbnailPlaceholderView.isHidden = false
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed")
+        thumbnailPlaceholderImageView.tintColor = .tertiaryLabel
         thumbnailTask?.cancel()
 
         let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * UIScreen.main.scale)
@@ -1553,10 +1540,9 @@ final class RemoteBrowserListItemCardView: UIView {
     }
 
     private func configureSymbolTile(for item: RemoteDirectoryItem) {
-        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed")
         let isDirectory = item.isDirectory
         let isPDF = item.isPDFDocument
-        let tintColor: UIColor = isDirectory ? .systemBlue : (isPDF ? .systemRed : .systemGreen)
         let systemName: String
         if isDirectory {
             systemName = "folder.fill"
@@ -1566,21 +1552,10 @@ final class RemoteBrowserListItemCardView: UIView {
             systemName = "doc.richtext.fill"
         }
 
-        symbolTileView.backgroundColor = tintColor.withAlphaComponent(0.14)
+        // Folders use the accent; other files stay neutral (see ComicRow).
+        symbolTileView.backgroundColor = .secondarySystemBackground
         symbolImageView.image = UIImage(systemName: systemName)
-        symbolImageView.tintColor = tintColor
-    }
-
-    private func configureTitlePrefix(for item: RemoteDirectoryItem) {
-        titleIconView.image = UIImage(systemName: item.titleSystemImageName)
-
-        if item.isDirectory {
-            titleIconView.tintColor = .systemBlue
-        } else if item.canOpenAsComic {
-            titleIconView.tintColor = .systemGreen
-        } else {
-            titleIconView.tintColor = .secondaryLabel
-        }
+        symbolImageView.tintColor = isDirectory ? UIColor(resource: .accent) : .tertiaryLabel
     }
 
     private func updateHeroSourceRegistration(for item: RemoteDirectoryItem) {
@@ -1605,17 +1580,16 @@ final class RemoteBrowserListItemCardView: UIView {
         self.registeredHeroSourceID = nil
     }
 
-    private func updateCacheDot(for availability: RemoteComicCachedAvailability) {
-        switch availability.kind {
-        case .current:
-            cacheDotView.backgroundColor = .systemBlue
-            cacheDotView.isHidden = false
-        case .stale:
-            cacheDotView.backgroundColor = .systemOrange
-            cacheDotView.isHidden = false
-        case .unavailable:
-            cacheDotView.isHidden = true
+    private func updateCacheStatusIcon(for availability: RemoteComicCachedAvailability) {
+        guard let status = availability.statusBadgeStatus,
+              let systemImage = status.systemImage else {
+            cacheStatusIconView.isHidden = true
+            return
         }
+
+        cacheStatusIconView.image = UIImage(systemName: systemImage)
+        cacheStatusIconView.tintColor = status.foregroundUIColor
+        cacheStatusIconView.isHidden = false
     }
 
     private func metadataText(for row: RemoteBrowserListRowModel) -> String {
@@ -1630,7 +1604,7 @@ final class RemoteBrowserListItemCardView: UIView {
         }
 
         var parts: [String] = []
-        if let badgeTitle = row.cacheAvailability.badgeTitle {
+        if let badgeTitle = row.cacheAvailability.statusBadgeStatus?.title {
             parts.append(badgeTitle)
         }
         if row.item.isComicDirectory {

@@ -153,7 +153,7 @@ final class RemoteServerBrowserLayoutTests: XCTestCase {
             cacheAvailability: RemoteComicCachedAvailability(kind: .current)
         )
 
-        XCTAssertTrue(RemoteBrowserGridAccessibility.value(for: row).contains("Offline Ready"))
+        XCTAssertTrue(RemoteBrowserGridAccessibility.value(for: row).contains(StatusBadge.Status.offline.title))
         XCTAssertEqual(RemoteBrowserGridAccessibility.hint(for: item), "Opens comic")
     }
 
@@ -197,6 +197,6 @@ final class RemoteServerBrowserLayoutTests: XCTestCase {
 
         let accessibilityValue = RemoteBrowserGridAccessibility.value(for: row)
         XCTAssertTrue(accessibilityValue.contains("Page 4 / 20"))
-        XCTAssertTrue(accessibilityValue.contains("Offline Ready"))
+        XCTAssertTrue(accessibilityValue.contains(StatusBadge.Status.offline.title))
     }
 }

@@ -1,31 +1,38 @@
 import SwiftUI
 
+/// Single-choice quick filters, scrolling sideways (see components/FilterChips).
 struct LibraryComicFilterBar: View {
     let selection: LibraryComicQuickFilter
     let action: (LibraryComicQuickFilter) -> Void
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: Spacing.xs) {
                 ForEach(LibraryComicQuickFilter.allCases) { filter in
+                    let isSelected = selection == filter
+
                     Button {
+                        AppHaptics.selection()
                         action(filter)
                     } label: {
-                        Label(filter.title, systemImage: filter.systemImageName)
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .foregroundStyle(selection == filter ? Color.white : Color.primary)
+                        Text(filter.title)
+                            .font(AppFont.subheadline(isSelected ? .semibold : .regular))
+                            .foregroundStyle(isSelected ? Color.appAccentOnSoft : Color.textPrimary)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.xs)
                             .background(
-                                Capsule(style: .continuous)
-                                    .fill(selection == filter ? Color.accentColor : Color(.secondarySystemBackground))
+                                isSelected ? Color.appAccentSoft : Color(.tertiarySystemFill),
+                                in: Capsule(style: .continuous)
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, Spacing.xxxs)
         }
-        .accessibilityLabel("Comic Filters")
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Comic Filters"))
     }
 }

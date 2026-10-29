@@ -38,9 +38,9 @@ struct RemoteSavedFolderCard: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "star.fill")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(Color.appAccent)
                     .frame(width: 32, height: 32)
-                    .background(.yellow.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Color.appAccentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 6) {
                     if showsServerName {
@@ -89,7 +89,7 @@ struct RemoteSavedFolderCard: View {
             RemoteInlineMetadataItem(
                 systemImage: "folder",
                 text: shortcut.path.isEmpty ? "/" : shortcut.path,
-                tint: .blue
+                tint: .textSecondary
             )
         ]
     }
@@ -238,14 +238,7 @@ struct RemoteOfflineComicCard: View {
     var trailingAccessoryReservedWidth: CGFloat = 0
 
     private var availabilityTint: Color {
-        switch availability.kind {
-        case .unavailable:
-            return .secondary
-        case .current:
-            return .blue
-        case .stale:
-            return .orange
-        }
+        availability.detailStatusBadgeStatus.foregroundColor
     }
 
     private var availabilityStatusText: String {
@@ -314,7 +307,7 @@ struct RemoteOfflineComicCard: View {
             RemoteInlineMetadataItem(
                 systemImage: "folder",
                 text: session.parentDirectoryDisplayText,
-                tint: .blue
+                tint: .textSecondary
             )
         ]
     }
@@ -361,14 +354,7 @@ struct RemoteOfflineComicCard: View {
     }
 
     private var availabilitySystemImage: String {
-        switch availability.kind {
-        case .unavailable:
-            return "icloud"
-        case .current:
-            return "arrow.down.circle.fill"
-        case .stale:
-            return "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90"
-        }
+        availability.detailStatusBadgeStatus.systemImage ?? "arrow.down.circle"
     }
 }
 
@@ -386,11 +372,7 @@ extension RemoteComicReadingSession {
     }
 
     var readingProgressTint: Color {
-        if read {
-            return .green
-        }
-
-        return hasBeenOpened ? .blue : .orange
+        read ? .appSuccess : .textSecondary
     }
 
     var parentDirectoryDisplayText: String {

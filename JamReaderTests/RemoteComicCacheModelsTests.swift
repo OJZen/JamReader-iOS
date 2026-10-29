@@ -43,15 +43,15 @@ final class RemoteComicCacheModelsTests: XCTestCase {
 
     func testCachedAvailabilityPresentationFlags() {
         XCTAssertFalse(RemoteComicCachedAvailability.unavailable.hasLocalCopy)
-        XCTAssertNil(RemoteComicCachedAvailability.unavailable.badgeTitle)
+        XCTAssertNil(RemoteComicCachedAvailability.unavailable.statusBadgeStatus)
 
         let current = RemoteComicCachedAvailability(kind: .current)
         XCTAssertTrue(current.hasLocalCopy)
-        XCTAssertEqual(current.badgeTitle, "Offline Ready")
+        XCTAssertEqual(current.statusBadgeStatus, .offline)
 
         let stale = RemoteComicCachedAvailability(kind: .stale)
         XCTAssertTrue(stale.hasLocalCopy)
-        XCTAssertEqual(stale.badgeTitle, "Older Local Copy")
+        XCTAssertEqual(stale.statusBadgeStatus, .staleCopy)
     }
 
     func testDownloadResultSourceIsHashable() {

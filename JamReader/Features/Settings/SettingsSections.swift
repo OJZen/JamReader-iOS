@@ -157,11 +157,6 @@ private struct LibraryPreferencesSettingsSection: View {
                     Text(option.title).tag(option)
                 }
             }
-
-            LabeledContent("Local Libraries") {
-                Text("\(snapshot.localLibraryCount)")
-                    .foregroundStyle(Color.textSecondary)
-            }
         } header: {
             Text("Library")
         }

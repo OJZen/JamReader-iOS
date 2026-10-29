@@ -12,7 +12,7 @@ enum AppRootTab: String, Hashable {
         case .library:
             return "books.vertical"
         case .browse:
-            return "globe.asia.australia"
+            return "server.rack"
         case .settings:
             return "gearshape"
         }
@@ -23,7 +23,7 @@ enum AppRootTab: String, Hashable {
         case .library:
             return "books.vertical.fill"
         case .browse:
-            return "globe.asia.australia.fill"
+            return "server.rack"
         case .settings:
             return "gearshape.fill"
         }
@@ -59,6 +59,8 @@ enum AppNavigationStorageKeys {
     static let browseHomeSelection = "browseHome.selection"
     static let browseDetailSelection = "browseHome.detailSelection"
     static let browseHomeColumnVisibility = "browseHome.columnVisibility"
+    /// Set by the library empty state; the Remote home opens "Add Server" once.
+    static let pendingAddRemoteServer = "browseHome.pendingAddServer"
     static let settingsHomeSelectedPane = "settingsHome.selectedPane"
 }
 
@@ -73,6 +75,8 @@ enum LibraryNavigationRoute {
     case home
     case openLibrary(UUID, folderID: Int64?)
     case openFolder(LibraryDescriptor, folderID: Int64)
+    /// A breadcrumb level above the current folder.
+    case openAncestorFolder(LibraryDescriptor, folderID: Int64)
     case specialCollection(LibraryDescriptor, LibrarySpecialCollectionKind)
     case organization(LibraryDescriptor, LibraryOrganizationSectionKind)
     case organizationCollection(LibraryDescriptor, LibraryOrganizationCollection)

@@ -4,6 +4,2470 @@
     "": {
       "shouldTranslate": false
     },
+    "%lld lists": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個"
+          }
+        }
+      }
+    },
+    "%lld Selected": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld冊を選択中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %lld 本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已選擇 %lld 本"
+          }
+        }
+      }
+    },
+    "%lld tags": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個"
+          }
+        }
+      }
+    },
+    "%lld unsupported": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件非対応"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 项不支持"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個項目不支援"
+          }
+        }
+      }
+    },
+    "1 imported": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1件インポート済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入 1 项"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已匯入 1 本"
+          }
+        }
+      }
+    },
+    "1 list": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 个"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 個"
+          }
+        }
+      }
+    },
+    "1 Selected": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1冊を選択中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 1 本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已選擇 1 本"
+          }
+        }
+      }
+    },
+    "1 tag": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 个"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 個"
+          }
+        }
+      }
+    },
+    "A new in-app library is created on this device. Import comics into it afterwards.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスにアプリ内ライブラリを作成します。コミックはあとで読み込めます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会在这台设备上新建一个 App 内书库，之后再往里导入漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "會在這台裝置上新增一個 App 內書庫，之後再匯入漫畫。"
+          }
+        }
+      }
+    },
+    "Add Comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックを追加"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入漫畫"
+          }
+        }
+      }
+    },
+    "Add comics from their More menu with Tags & Lists.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックの「その他」メニューの「タグとリスト」から追加できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在漫画的“更多”菜单中用“标签与列表”添加。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在漫畫的「更多」選單中用「標籤與列表」加入。"
+          }
+        }
+      }
+    },
+    "Available Offline": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已離線"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフライン保存済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已离线"
+          }
+        }
+      }
+    },
+    "Choose Files": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを選択"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇檔案"
+          }
+        }
+      }
+    },
+    "Choose Files…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを選択…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇檔案⋯"
+          }
+        }
+      }
+    },
+    "Choose Folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダを選択"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇資料夾"
+          }
+        }
+      }
+    },
+    "Choose Folder…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダを選択…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇資料夾⋯"
+          }
+        }
+      }
+    },
+    "Clear Rating": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "評価を消去"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消评分"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消評分"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閉じる"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關閉"
+          }
+        }
+      }
+    },
+    "Comics are not deleted": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックは削除されません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫画不会被删除"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫畫不會被刪除"
+          }
+        }
+      }
+    },
+    "Comics in this folder can be read, but JamReader can’t import into it or delete from it.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダのコミックは読めますが、ここへの読み込みや削除はできません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以阅读这个文件夹里的漫画，但不能导入到这里，也不能从中删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以閱讀這個資料夾裡的漫畫，但無法匯入到這裡，也無法從中刪除。"
+          }
+        }
+      }
+    },
+    "Common": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常用"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常用"
+          }
+        }
+      }
+    },
+    "Contents": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内容"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内容"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內容"
+          }
+        }
+      }
+    },
+    "Copies files into JamReader. For downloads, AirDrop or comics on a USB drive.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを JamReader にコピーします。ダウンロードや AirDrop、USB ドライブのコミック向けです。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把文件复制进 JamReader。适合下载、AirDrop 或 U 盘里的漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把檔案複製進 JamReader。適合下載、AirDrop 或隨身碟裡的漫畫。"
+          }
+        }
+      }
+    },
+    "Creates a place for comics first. Import into it later.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先に置き場所を作り、あとで読み込みます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先建一个收藏空间，之后再导入。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先建立一個收藏空間，之後再匯入。"
+          }
+        }
+      }
+    },
+    "Creators & Characters": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者と登場人物"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者与角色"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作者與角色"
+          }
+        }
+      }
+    },
+    "Current List": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のリスト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前列表"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前列表"
+          }
+        }
+      }
+    },
+    "Default Import Location": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デフォルトの読み込み先"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认导入位置"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設匯入位置"
+          }
+        }
+      }
+    },
+    "Delete %lld Comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld冊のコミックを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 本漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 %lld 本漫畫"
+          }
+        }
+      }
+    },
+    "Delete %lld Comics?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld冊のコミックを削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 %lld 本漫画？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 %lld 本漫畫？"
+          }
+        }
+      }
+    },
+    "Delete 1 Comic": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1冊のコミックを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 1 本漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 1 本漫畫"
+          }
+        }
+      }
+    },
+    "Delete 1 Comic?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1冊のコミックを削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除 1 本漫画？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除 1 本漫畫？"
+          }
+        }
+      }
+    },
+    "Delete Library…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリを削除…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除书库…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除書庫⋯"
+          }
+        }
+      }
+    },
+    "Delete Reading List “%@”?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リーディングリスト「%@」を削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除阅读列表“%@”？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除閱讀列表「%@」？"
+          }
+        }
+      }
+    },
+    "Delete Tag “%@”?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タグ「%@」を削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除标签“%@”？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除標籤「%@」？"
+          }
+        }
+      }
+    },
+    "Delete “%@”?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除“%@”？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除「%@」？"
+          }
+        }
+      }
+    },
+    "Deletes the file from this device": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスからファイルを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从设备上删除文件"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從裝置上刪除檔案"
+          }
+        }
+      }
+    },
+    "Deselect All": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて選択解除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全不选"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全不選"
+          }
+        }
+      }
+    },
+    "Download Failed": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下載失敗"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード失敗"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载失败"
+          }
+        }
+      }
+    },
+    "Downloading %lld%%": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下載中 %lld%%"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード中 %lld%%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载中 %lld%%"
+          }
+        }
+      }
+    },
+    "Edits the name and color": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前と色を編集します"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑名称和颜色"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編輯名稱和顏色"
+          }
+        }
+      }
+    },
+    "Entire Library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリ全体"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整个书库"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整個書庫"
+          }
+        }
+      }
+    },
+    "Existing Fields": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既存の項目"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有字段"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有欄位"
+          }
+        }
+      }
+    },
+    "Fill only empty fields, or overwrite existing ones.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空欄だけを埋めるか、既存の項目を上書きできます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以只补空白，或覆盖已有字段。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以只補空白，或覆寫已有欄位。"
+          }
+        }
+      }
+    },
+    "Folder in Files": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ファイル」のフォルダ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“文件”中的文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「檔案」中的資料夾"
+          }
+        }
+      }
+    },
+    "Import comic files, or use a comics folder you already have in Files.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックファイルを読み込むか、「ファイル」にあるコミックフォルダをそのまま使えます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入漫画文件，或者直接使用“文件”里已有的漫画文件夹。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入漫畫檔案，或直接使用「檔案」裡已有的漫畫資料夾。"
+          }
+        }
+      }
+    },
+    "Import Comic Info": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミック情報を読み込む"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入漫画资料"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入漫畫資料"
+          }
+        }
+      }
+    },
+    "Import Comic Info…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミック情報を読み込む…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入漫画资料…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入漫畫資料⋯"
+          }
+        }
+      }
+    },
+    "Import Comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックを読み込む"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入漫畫"
+          }
+        }
+      }
+    },
+    "Import Complete": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込み完了"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入完成"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入完成"
+          }
+        }
+      }
+    },
+    "Import Here": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここに読み込む"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入到这里"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入到這裡"
+          }
+        }
+      }
+    },
+    "Import Here…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここに読み込む…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入到这里…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入到這裡⋯"
+          }
+        }
+      }
+    },
+    "Import Partly Complete": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一部のみ読み込み完了"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入部分完成"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入部分完成"
+          }
+        }
+      }
+    },
+    "Import To": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み込み先"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入到"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入到"
+          }
+        }
+      }
+    },
+    "In App": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリ内"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 内"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 內"
+          }
+        }
+      }
+    },
+    "In Progress": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読書中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读中"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閱讀中"
+          }
+        }
+      }
+    },
+    "Issue": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "号"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期号"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期號"
+          }
+        }
+      }
+    },
+    "JamReader can’t open this folder. It may have been moved or renamed, or its permission expired. The library and reading progress are kept.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダを開けません。移動や名前の変更、またはアクセス許可の期限切れが考えられます。ライブラリと読書の進み具合は残っています。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法访问这个文件夹。它可能已被移动或改名，或者授权已失效。书库内容和阅读进度都还在。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法存取這個資料夾。它可能已被移動或改名，或授權已失效。書庫內容和閱讀進度都還在。"
+          }
+        }
+      }
+    },
+    "Last Scan": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回のスキャン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次扫描"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次掃描"
+          }
+        }
+      }
+    },
+    "Library Info": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリ情報"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书库信息"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書庫資訊"
+          }
+        }
+      }
+    },
+    "Mark as Read": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既読にする"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标为已读"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標為已讀"
+          }
+        }
+      }
+    },
+    "Mark as Unread": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未読にする"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标为未读"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標為未讀"
+          }
+        }
+      }
+    },
+    "More": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その他"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多"
+          }
+        }
+      }
+    },
+    "More Details": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細情報"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多资料"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多資料"
+          }
+        }
+      }
+    },
+    "My Libraries": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイライブラリ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的书库"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的書庫"
+          }
+        }
+      }
+    },
+    "Needs Reauthorization": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要重新授權"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再認証が必要"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要重新授权"
+          }
+        }
+      }
+    },
+    "New Empty Library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空のライブラリを作成"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建空书库"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增空書庫"
+          }
+        }
+      }
+    },
+    "No comics in %@ matched “%@”. No comics were deleted.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」に「%2$@」に一致するコミックはありません。コミックは削除されていません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%1$@”中没有与“%2$@”匹配的漫画。漫画没有被删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%1$@」中沒有與「%2$@」相符的漫畫。漫畫沒有被刪除。"
+          }
+        }
+      }
+    },
+    "No comics in this folder match “%@”.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダに「%@」のコミックはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个文件夹里没有“%@”的漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個資料夾裡沒有「%@」的漫畫。"
+          }
+        }
+      }
+    },
+    "No Comics with This Tag": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このタグのコミックはありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有漫画使用这个标签"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有漫畫使用這個標籤"
+          }
+        }
+      }
+    },
+    "No Comics Yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックはまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有漫畫"
+          }
+        }
+      }
+    },
+    "No matches for “%@”.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」に一致する結果はありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有与“%@”匹配的结果。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有與「%@」相符的結果。"
+          }
+        }
+      }
+    },
+    "Not indexed yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未インデックス"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未建立索引"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未建立索引"
+          }
+        }
+      }
+    },
+    "Not Set": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未設定"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未填写"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未填寫"
+          }
+        }
+      }
+    },
+    "Older Copy": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "較舊副本"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "古いコピー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "较旧副本"
+          }
+        }
+      }
+    },
+    "Only changes details in the app, not the file name.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリ内の情報だけを変更し、ファイル名は変えません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只修改 App 内资料，不改文件名。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只修改 App 內資料，不改檔名。"
+          }
+        }
+      }
+    },
+    "Only this comic is updated. Review the result before saving.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコミックだけが対象です。保存する前に結果を確認できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只作用于这一本。保存前可以先检查结果。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只作用於這一本。儲存前可以先檢查結果。"
+          }
+        }
+      }
+    },
+    "Opens the comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックを開きます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开其中的漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開其中的漫畫"
+          }
+        }
+      }
+    },
+    "Or Connect a NAS Server": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "または NAS サーバに接続"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或连接 NAS 服务器"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或連接 NAS 伺服器"
+          }
+        }
+      }
+    },
+    "Publication": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出版情報"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出版信息"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "出版資訊"
+          }
+        }
+      }
+    },
+    "Read & Write": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読み書き可能"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可读写"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可讀寫"
+          }
+        }
+      }
+    },
+    "Read ComicInfo.xml from the File": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイル内の ComicInfo.xml を読み込む"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从文件内读取 ComicInfo.xml"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從檔案內讀取 ComicInfo.xml"
+          }
+        }
+      }
+    },
+    "Read ComicInfo.xml from the File…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイル内の ComicInfo.xml を読み込む…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从文件内 ComicInfo.xml 读取…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從檔案內 ComicInfo.xml 讀取⋯"
+          }
+        }
+      }
+    },
+    "Read to %lld%%": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld%% まで読んだ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读到 %lld%%"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讀到 %lld%%"
+          }
+        }
+      }
+    },
+    "Reading progress, bookmarks, tags and reading list entries are removed too.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読書の進み具合、しおり、タグとリーディングリストの記録も削除されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读进度、书签以及标签和阅读列表中的记录也会一并移除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閱讀進度、書籤以及標籤和閱讀列表中的紀錄也會一併移除。"
+          }
+        }
+      }
+    },
+    "Reads a comics folder in Files directly. Nothing is copied, and the files are not changed.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ファイル」のコミックフォルダを直接読みます。コピーせず、ファイルも変更しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接读取“文件”里的漫画文件夹，不复制，也不会改动其中的文件。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接讀取「檔案」裡的漫畫資料夾，不複製，也不會改動其中的檔案。"
+          }
+        }
+      }
+    },
+    "Remote": {
+      "localizations": {
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远程"
+          }
+        }
+      }
+    },
+    "Remove Library…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリを取り除く…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除书库…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除書庫⋯"
+          }
+        }
+      }
+    },
+    "Rename…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名前を変更…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改名…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新命名⋯"
+          }
+        }
+      }
+    },
+    "Search in “%@”": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」内を検索"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在“%@”中搜索"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「%@」中搜尋"
+          }
+        }
+      }
+    },
+    "Selected Comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したコミック"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所選漫畫"
+          }
+        }
+      }
+    },
+    "Show All": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべて表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示全部"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示全部"
+          }
+        }
+      }
+    },
+    "Summary & Notes": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あらすじとメモ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "简介与备注"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "簡介與備註"
+          }
+        }
+      }
+    },
+    "Tags & Lists": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タグとリスト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标签与列表"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標籤與列表"
+          }
+        }
+      }
+    },
+    "The comic stays in the library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックはライブラリに残ります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫画仍在书库中"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫畫仍在書庫中"
+          }
+        }
+      }
+    },
+    "The file is deleted from the linked folder on this device.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのリンクされたフォルダからファイルが削除されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件会从这台设备的关联文件夹中删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案會從這台裝置的關聯資料夾中刪除。"
+          }
+        }
+      }
+    },
+    "The file is deleted from this device.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスからファイルが削除されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件会从这台设备上删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案會從這台裝置上刪除。"
+          }
+        }
+      }
+    },
+    "The files are deleted from the linked folder on this device.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのリンクされたフォルダからファイルが削除されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件会从这台设备的关联文件夹中删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案會從這台裝置的關聯資料夾中刪除。"
+          }
+        }
+      }
+    },
+    "The files are deleted from this device.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスからファイルが削除されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件会从这台设备上删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檔案會從這台裝置上刪除。"
+          }
+        }
+      }
+    },
+    "The folder is read-only": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダは読み取り専用です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件夹只读"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "資料夾唯讀"
+          }
+        }
+      }
+    },
+    "The reading list is removed. The comics in it are not deleted.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リーディングリストを削除します。中のコミックは削除されません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读列表会被删除，其中的漫画不会被删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閱讀列表會被刪除，其中的漫畫不會被刪除。"
+          }
+        }
+      }
+    },
+    "The tag is removed from its comics. The comics are not deleted.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タグをコミックから外します。コミックは削除されません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标签会从漫画上移除，漫画不会被删除。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標籤會從漫畫上移除，漫畫不會被刪除。"
+          }
+        }
+      }
+    },
+    "There are no comics in this scope.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この範囲にコミックはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个范围里没有漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個範圍裡沒有漫畫。"
+          }
+        }
+      }
+    },
+    "This Folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前資料夾"
+          }
+        }
+      }
+    },
+    "This Folder and Subfolders": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダとサブフォルダ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前文件夹及子文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前資料夾及子資料夾"
+          }
+        }
+      }
+    },
+    "This folder doesn’t contain comics or subfolders yet.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダにはまだコミックもサブフォルダもありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个文件夹里还没有漫画或子文件夹。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個資料夾裡還沒有漫畫或子資料夾。"
+          }
+        }
+      }
+    },
+    "Time Range": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期間"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时间范围"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "時間範圍"
+          }
+        }
+      }
+    },
+    "To %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ へ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "到 %@"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "到 %@"
+          }
+        }
+      }
+    },
+    "Use Existing Folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既存のフォルダを使う"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用已有文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用現有資料夾"
+          }
+        }
+      }
+    },
+    "View As": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示方式"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示方式"
+          }
+        }
+      }
+    },
+    "Volume / Issue": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "巻 / 号"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卷 / 期"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卷 / 期"
+          }
+        }
+      }
+    },
+    "With Bookmarks": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブックマークあり"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有书签"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有書籤"
+          }
+        }
+      }
+    },
+    "Your choice is remembered for next time.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今回の選択を記憶し、次回も同じライブラリに読み込みます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会记住这次的选择，下次默认导入到同一个书库。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "會記住這次的選擇，下次預設匯入到同一個書庫。"
+          }
+        }
+      }
+    },
     "·": {
       "shouldTranslate": false
     },
@@ -491,28 +2955,6 @@
       },
       "shouldTranslate": false
     },
-    "%lld bookmarks": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 個書籤"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld件のブックマーク"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 个书签"
-          }
-        }
-      }
-    },
     "%lld cached comics · %@": {
       "localizations": {
         "en": {
@@ -687,28 +3129,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld 本漫画正在阅读。"
-          }
-        }
-      }
-    },
-    "%lld comics selected": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已選取 %lld 本漫畫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld冊のコミックを選択中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已选择 %1$lld 本漫画"
           }
         }
       }
@@ -1271,28 +3691,6 @@
         }
       }
     },
-    "%lld stars": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 顆星"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lldつ星"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 星"
-          }
-        }
-      }
-    },
     "%lld Stars": {
       "localizations": {
         "zh-Hant-TW": {
@@ -1386,28 +3784,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已阅读 %1$lld%%（共 %2$lld 页）"
-          }
-        }
-      }
-    },
-    "1 bookmark": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 個書籤"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1件のブックマーク"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 个书签"
           }
         }
       }
@@ -1540,28 +3916,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已收藏 1 本漫画。"
-          }
-        }
-      }
-    },
-    "1 comic selected": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已選取 1 本漫畫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1冊のコミックを選択中"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已选择 1 本漫画"
           }
         }
       }
@@ -1830,28 +4184,6 @@
         }
       }
     },
-    "1 star": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 顆星"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1つ星"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 星"
-          }
-        }
-      }
-    },
     "1 Star": {
       "localizations": {
         "zh-Hant-TW": {
@@ -2002,28 +4334,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "此设备上已有 %1$@ 的已下载副本。"
-          }
-        }
-      }
-    },
-    "A new app-managed library will be created on this device.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將在此裝置建立由 App 管理的新書庫。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このデバイスに新しいアプリ管理ライブラリを作成します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将在此设备上创建由 App 管理的新书库。"
           }
         }
       }
@@ -2248,50 +4558,6 @@
         }
       }
     },
-    "Add a Library": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入書庫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリを追加"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加书库"
-          }
-        }
-      }
-    },
-    "Add a library or import comics.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入書庫或匯入漫畫。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリを追加するか、コミックをインポートしてください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加书库或导入漫画。"
-          }
-        }
-      }
-    },
     "Add a Server": {
       "localizations": {
         "zh-Hant-TW": {
@@ -2442,28 +4708,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "添加完成，但有警告"
-          }
-        }
-      }
-    },
-    "Add Library Folder": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入書庫資料夾"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリフォルダを追加"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加书库文件夹"
           }
         }
       }
@@ -2825,19 +5069,19 @@
         "zh-Hant-TW": {
           "stringUnit": {
             "state": "translated",
-            "value": "App 管理"
+            "value": "App 內書庫"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アプリ管理"
+            "value": "アプリ内ライブラリ"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "由 App 管理"
+            "value": "App 内书库"
           }
         }
       }
@@ -3146,28 +5390,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ブラウズ"
-          }
-        }
-      }
-    },
-    "Browse By": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "瀏覽方式"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "カテゴリーから探す"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "浏览方式"
           }
         }
       }
@@ -3587,28 +5809,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "选择目标位置"
-          }
-        }
-      }
-    },
-    "Choose Import Destination": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "選擇匯入目的地"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "インポート先を選択"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "选择导入位置"
           }
         }
       }
@@ -4181,28 +6381,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "收起导入"
-          }
-        }
-      }
-    },
-    "Collection Actions": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "收藏集動作"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コレクションのアクション"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "集合操作"
           }
         }
       }
@@ -4889,28 +7067,6 @@
         }
       }
     },
-    "Create a library, link a folder, or import comics.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "建立書庫、連結資料夾或匯入漫畫。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリを作成するか、フォルダをリンクするか、コミックをインポートしてください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "创建书库、链接文件夹或导入漫画。"
-          }
-        }
-      }
-    },
     "Create reading lists for custom queues.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -5021,28 +7177,6 @@
         }
       }
     },
-    "Credits, publisher, format, language, characters, teams, locations, review, and tags": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "創作者、出版社、格式、語言、角色、團隊、地點、評論與標籤"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "クレジット、出版社、形式、言語、登場人物、チーム、場所、レビュー、タグ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "创作者、出版社、格式、语言、角色、团队、地点、评论和标签"
-          }
-        }
-      }
-    },
     "Current": {
       "localizations": {
         "zh-Hant-TW": {
@@ -5105,28 +7239,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "当前页"
-          }
-        }
-      }
-    },
-    "Custom reading queues": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自訂待讀順序"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "カスタム読書リスト"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自定义待读顺序"
           }
         }
       }
@@ -5281,28 +7393,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除 %1$lld 个书库"
-          }
-        }
-      }
-    },
-    "Delete Collection": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刪除收藏集"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コレクションを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除集合"
           }
         }
       }
@@ -5621,28 +7711,6 @@
         }
       }
     },
-    "Deletes this library and its files from this device.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "從此裝置刪除此書庫及其檔案。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このライブラリとそのファイルをデバイスから削除します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "从此设备删除此书库及其文件。"
-          }
-        }
-      }
-    },
     "Destination": {
       "localizations": {
         "zh-Hant-TW": {
@@ -5775,28 +7843,6 @@
         }
       }
     },
-    "Dismiss Scan Result": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "關閉掃描結果"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スキャン結果を閉じる"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭扫描结果"
-          }
-        }
-      }
-    },
     "Display": {
       "localizations": {
         "zh-Hant-TW": {
@@ -5815,28 +7861,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示"
-          }
-        }
-      }
-    },
-    "Display Mode": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示模式"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示モード"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示模式"
           }
         }
       }
@@ -6336,19 +8360,19 @@
         "zh-Hant-TW": {
           "stringUnit": {
             "state": "translated",
-            "value": "編輯中繼資料"
+            "value": "編輯資料"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "メタデータを編集"
+            "value": "情報を編集"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "编辑元数据"
+            "value": "编辑资料"
           }
         }
       }
@@ -7179,34 +9203,6 @@
         }
       }
     },
-    "Failed to import %lld items: %@.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Failed to import %1$lld items: %2$@."
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "無法匯入 %lld 個項目：%@。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld項目をインポートできませんでした：%@。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入 %1$lld 项失败：%2$@。"
-          }
-        }
-      }
-    },
     "Failed to import %lld items.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -7225,28 +9221,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "导入 %1$lld 项失败。"
-          }
-        }
-      }
-    },
-    "Failed to import 1 item: %@.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "無法匯入 1 個項目：%@。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1項目をインポートできませんでした：%@。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入 1 项失败：%1$@。"
           }
         }
       }
@@ -9259,28 +11233,6 @@
         }
       }
     },
-    "How It Works": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "運作方式"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仕組み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工作方式"
-          }
-        }
-      }
-    },
     "Image folder comic": {
       "localizations": {
         "zh-Hant-TW": {
@@ -9413,50 +11365,6 @@
         }
       }
     },
-    "Import Comic Files": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匯入漫畫檔案"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コミックファイルをインポート"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入漫画文件"
-          }
-        }
-      }
-    },
-    "Import Comic Folder": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匯入漫畫資料夾"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コミックフォルダをインポート"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入漫画文件夹"
-          }
-        }
-      }
-    },
     "Import ComicInfo": {
       "localizations": {
         "zh-Hant-TW": {
@@ -9475,50 +11383,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "导入 ComicInfo"
-          }
-        }
-      }
-    },
-    "Import Completed": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匯入完成"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "インポートが完了しました"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入完成"
-          }
-        }
-      }
-    },
-    "Import Current Folder ComicInfo": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匯入目前資料夾的 ComicInfo"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在のフォルダのComicInfoをインポート"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入当前文件夹的 ComicInfo"
           }
         }
       }
@@ -9677,28 +11541,6 @@
         }
       }
     },
-    "Import Library ComicInfo": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匯入書庫 ComicInfo"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリのComicInfoをインポート"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入书库的 ComicInfo"
-          }
-        }
-      }
-    },
     "Import Requires Current Remote Copy": {
       "localizations": {
         "zh-Hant-TW": {
@@ -9837,28 +11679,6 @@
         }
       }
     },
-    "Imported %lld comic files into the current library location.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已將 %lld 個漫畫檔案匯入目前的書庫位置。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld件のコミックファイルを現在のライブラリの場所にインポートしました。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已将 %1$lld 个漫画文件导入当前书库位置。"
-          }
-        }
-      }
-    },
     "Imported %lld comics into %@.": {
       "localizations": {
         "en": {
@@ -9905,28 +11725,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已将 1 个漫画文件导入 %1$@。"
-          }
-        }
-      }
-    },
-    "Imported 1 comic file into the current library location.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已將 1 個漫畫檔案匯入目前的書庫位置。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1件のコミックファイルを現在のライブラリの場所にインポートしました。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已将 1 个漫画文件导入当前书库位置。"
           }
         }
       }
@@ -10279,28 +12077,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "包含子文件夹"
-          }
-        }
-      }
-    },
-    "Included Fields": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "包含的欄位"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "対象フィールド"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "包含字段"
           }
         }
       }
@@ -10955,28 +12731,6 @@
         }
       }
     },
-    "Last Action": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上次動作"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "前回の操作"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上次操作"
-          }
-        }
-      }
-    },
     "Last folder refresh": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11395,28 +13149,6 @@
         }
       }
     },
-    "Library is currently unavailable on this device.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此書庫目前無法在此裝置上使用。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このライブラリは現在、このデバイスで利用できません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此书库当前在设备上不可用。"
-          }
-        }
-      }
-    },
     "Library name": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11708,19 +13440,19 @@
         "zh-Hant-TW": {
           "stringUnit": {
             "state": "translated",
-            "value": "連結的資料夾"
+            "value": "關聯資料夾"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "リンク済みフォルダ"
+            "value": "リンクされたフォルダ"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已链接文件夹"
+            "value": "关联文件夹"
           }
         }
       }
@@ -11853,50 +13585,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "本地副本可能较旧"
-          }
-        }
-      }
-    },
-    "Local Libraries": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本機書庫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ローカルライブラリ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地书库"
-          }
-        }
-      }
-    },
-    "Local State": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本機狀態"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ローカルの状態"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地状态"
           }
         }
       }
@@ -12341,50 +14029,6 @@
         }
       }
     },
-    "More Collection Actions": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更多收藏集動作"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コレクションのその他のアクション"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更多集合操作"
-          }
-        }
-      }
-    },
-    "More Library Actions": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更多書庫動作"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリのその他のアクション"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更多书库操作"
-          }
-        }
-      }
-    },
     "Most Comics": {
       "localizations": {
         "zh-Hant-TW": {
@@ -12608,28 +14252,6 @@
         }
       }
     },
-    "Needs Access": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要取用權限"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アクセスが必要です"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要访问"
-          }
-        }
-      }
-    },
     "New %@ Server": {
       "localizations": {
         "zh-Hant-TW": {
@@ -12648,28 +14270,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "新建 %1$@ 服务器"
-          }
-        }
-      }
-    },
-    "New Library": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "新增書庫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "新規ライブラリ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "新建书库"
           }
         }
       }
@@ -13072,28 +14672,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "此位置没有文件夹或受支持的漫画。"
-          }
-        }
-      }
-    },
-    "No Libraries Yet": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "尚無書庫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリはまだありません"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "尚无书库"
           }
         }
       }
@@ -14050,28 +15628,6 @@
         }
       }
     },
-    "Offline Ready": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可供離線使用"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフラインで利用可能"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "离线就绪"
-          }
-        }
-      }
-    },
     "Offline Save Failed": {
       "localizations": {
         "zh-Hant-TW": {
@@ -14222,28 +15778,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "较旧"
-          }
-        }
-      }
-    },
-    "Older Local Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "舊版本機副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "古いローカルコピー"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "较旧的本地副本"
           }
         }
       }
@@ -16539,28 +18073,6 @@
         }
       }
     },
-    "Ready for direct imports right away": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可立即直接匯入"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "すぐに直接インポートできます"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可立即直接导入"
-          }
-        }
-      }
-    },
     "Ready on device": {
       "localizations": {
         "zh-Hant-TW": {
@@ -16677,28 +18189,6 @@
         }
       }
     },
-    "Recent Window": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最近項目期間"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最近の項目の対象期間"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最近内容范围"
-          }
-        }
-      }
-    },
     "Recently Added": {
       "localizations": {
         "zh-Hant-TW": {
@@ -16710,13 +18200,13 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "最近追加した項目"
+            "value": "最近追加"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "最近添加"
+            "value": "最近加入"
           }
         }
       }
@@ -16827,28 +18317,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "刷新副本"
-          }
-        }
-      }
-    },
-    "Refresh Current Folder": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新整理目前資料夾"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在のフォルダを更新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新当前文件夹"
           }
         }
       }
@@ -17425,28 +18893,6 @@
         }
       }
     },
-    "Remove from %@": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "從 %@ 移除"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@から削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "从 %1$@ 移除"
-          }
-        }
-      }
-    },
     "Remove from App": {
       "localizations": {
         "zh-Hant-TW": {
@@ -17496,19 +18942,19 @@
         "zh-Hant-TW": {
           "stringUnit": {
             "state": "translated",
-            "value": "從閱讀清單移除"
+            "value": "從閱讀列表中移出"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "リーディングリストから削除"
+            "value": "リーディングリストから外す"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "从阅读列表移除"
+            "value": "从阅读列表中移出"
           }
         }
       }
@@ -17518,19 +18964,19 @@
         "zh-Hant-TW": {
           "stringUnit": {
             "state": "translated",
-            "value": "從標籤移除"
+            "value": "從標籤中移出"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "タグから削除"
+            "value": "タグから外す"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "从标签移除"
+            "value": "从标签中移出"
           }
         }
       }
@@ -17827,28 +19273,6 @@
         }
       }
     },
-    "Removes the library from the app. Files stay in the original folder.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "從 App 移除書庫。檔案會保留在原始資料夾。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリをアプリから削除します。ファイルは元のフォルダに残ります。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "从 App 移除书库。文件保留在原文件夹中。"
-          }
-        }
-      }
-    },
     "Removes the shortcut for \"%@\" only.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -18131,28 +19555,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "结果"
-          }
-        }
-      }
-    },
-    "Resume": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "繼續"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "再開"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "继续"
           }
         }
       }
@@ -18993,72 +20395,6 @@
         }
       }
     },
-    "Search %@": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜尋 %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@を検索"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索 %1$@"
-          }
-        }
-      }
-    },
-    "Search comics": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜尋漫畫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コミックを検索"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索漫画"
-          }
-        }
-      }
-    },
-    "Search entire library": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜尋整個書庫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリ全体を検索"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索整个书库"
-          }
-        }
-      }
-    },
     "Search Failed": {
       "localizations": {
         "zh-Hant-TW": {
@@ -19191,28 +20527,6 @@
         }
       }
     },
-    "See All": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "查看全部"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "すべて表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "查看全部"
-          }
-        }
-      }
-    },
     "Select": {
       "localizations": {
         "zh-Hant-TW": {
@@ -19296,7 +20610,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择全部"
+            "value": "全选"
           }
         }
       }
@@ -19917,28 +21231,6 @@
         }
       }
     },
-    "Sort Collections": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "排序收藏集"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コレクションを並べ替え"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "集合排序"
-          }
-        }
-      }
-    },
     "Sort Comics": {
       "localizations": {
         "zh-Hant-TW": {
@@ -19979,50 +21271,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "来源"
-          }
-        }
-      }
-    },
-    "Source Folder": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "來源資料夾"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ソースフォルダ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "源文件夹"
-          }
-        }
-      }
-    },
-    "Source Write": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "來源寫入權限"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ソースへの書き込み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "源文件夹写入权限"
           }
         }
       }
@@ -20181,28 +21429,6 @@
         }
       }
     },
-    "Stored locally inside JamReader": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "儲存在 JamReader 本機空間"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "JamReader内にローカル保存"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地存储于 JamReader"
-          }
-        }
-      }
-    },
     "Stored remote server credentials could not be decoded.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -20265,28 +21491,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "导入方式"
-          }
-        }
-      }
-    },
-    "Switch to %@": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "切換至 %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@に切り替える"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "切换至 %1$@"
           }
         }
       }
@@ -20375,28 +21579,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "标签"
-          }
-        }
-      }
-    },
-    "Tags across folders": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跨資料夾標籤"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フォルダをまたぐタグ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跨文件夹标签"
           }
         }
       }
@@ -21573,28 +22755,6 @@
         }
       }
     },
-    "The selected import action could not be resolved.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "無法解析所選匯入動作。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "選択したインポート操作を特定できませんでした。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法处理所选导入操作。"
-          }
-        }
-      }
-    },
     "The selected library could not be loaded.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -22129,28 +23289,6 @@
         }
       }
     },
-    "This part of the library does not contain subfolders or comics yet.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "書庫的此區域尚無子資料夾或漫畫。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライブラリのこの場所には、まだサブフォルダもコミックもありません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此书库位置中尚无子文件夹或漫画。"
-          }
-        }
-      }
-    },
     "This permanently deletes %@ and its files from this device.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -22200,7 +23338,7 @@
         "zh-Hant-TW": {
           "stringUnit": {
             "state": "translated",
-            "value": "此閱讀清單是空的"
+            "value": "這個閱讀列表是空的"
           }
         },
         "ja": {
@@ -22212,7 +23350,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "该阅读列表为空"
+            "value": "这个阅读列表是空的"
           }
         }
       }
@@ -22465,50 +23603,6 @@
         }
       }
     },
-    "This removes the comic file from the library on this device.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "這會從此裝置上的書庫移除漫畫檔案。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このデバイス上のライブラリからコミックファイルを削除します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这会从此设备的书库中移除漫画文件。"
-          }
-        }
-      }
-    },
-    "This removes the reading list and its assigned comics from the library database.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "這會從書庫資料庫移除閱讀清單及其指派的漫畫。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リーディングリストと、それに割り当てられたコミックをライブラリデータベースから削除します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这会从书库数据库中移除阅读列表及其中的漫画。"
-          }
-        }
-      }
-    },
     "This removes the selected libraries from JamReader. Files remain in their original folders.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -22527,28 +23621,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "这会从 JamReader 移除所选书库。文件会保留在原文件夹中。"
-          }
-        }
-      }
-    },
-    "This removes the tag and its assignments from the library database.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "這會從書庫資料庫移除標籤及其指派項目。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タグとその割り当てをライブラリデータベースから削除します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这会从书库数据库中移除标签及其关联。"
           }
         }
       }
@@ -22681,28 +23753,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "标题"
-          }
-        }
-      }
-    },
-    "Title, series, issue number, volume, and story arc": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "標題、系列、期號、卷號與故事線"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タイトル、シリーズ、号数、巻数、ストーリーアーク"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "标题、系列、期号、卷号和故事线"
           }
         }
       }
@@ -23917,28 +24967,6 @@
         }
       }
     },
-    "View Controls": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "檢視控制項"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示コントロール"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示控制"
-          }
-        }
-      }
-    },
     "Violet": {
       "localizations": {
         "zh-Hant-TW": {
@@ -24309,28 +25337,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "黄色"
-          }
-        }
-      }
-    },
-    "You can rename it later in the app": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你之後可在 App 中重新命名"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "名前は後でアプリ内から変更できます"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "以后可在 App 中重命名"
           }
         }
       }

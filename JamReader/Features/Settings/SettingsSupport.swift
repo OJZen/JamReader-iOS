@@ -103,7 +103,7 @@ extension AppLaunchDestination {
         case .library:
             return String(localized: "Library")
         case .browse:
-            return String(localized: "Browse")
+            return String(localized: "Remote")
         }
     }
 }

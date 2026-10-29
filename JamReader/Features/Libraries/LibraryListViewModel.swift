@@ -27,6 +27,11 @@ struct LibraryListItem: Identifiable, Equatable {
     }
 }
 
+struct CompletedLibraryImport: Equatable {
+    let id = UUID()
+    let libraryID: UUID
+}
+
 private enum ManagedLibraryCreationError: LocalizedError {
     case rollbackFailed
 
@@ -43,6 +48,10 @@ final class LibraryListViewModel: ObservableObject {
     @Published private(set) var items: [LibraryListItem] = []
     @Published private(set) var importProgress: ImportedComicsImportProgress?
     @Published private(set) var isImporting = false
+    /// Name of the library the running import copies into.
+    @Published private(set) var importDestinationName: String?
+    /// Set when an import finishes, so the home page can open the target library.
+    @Published private(set) var completedImport: CompletedLibraryImport?
     @Published var alert: AppAlertState?
 
     private let store: any LibraryDescriptorStoring
@@ -104,12 +113,15 @@ final class LibraryListViewModel: ObservableObject {
         }
     }
 
-    func addLibraryFolders(from urls: [URL]) {
+    /// Links folders as libraries and returns the IDs it added. A single clean
+    /// addition reports no alert because the caller opens the new library.
+    @discardableResult
+    func addLibraryFolders(from urls: [URL]) -> [UUID] {
         guard !urls.isEmpty else {
-            return
+            return []
         }
         guard beginExclusiveLibraryStorageOperation() else {
-            return
+            return []
         }
         defer {
             remoteBackgroundImportController.endExclusiveStorageMaintenance()
@@ -165,7 +177,7 @@ final class LibraryListViewModel: ObservableObject {
                 title: String(localized: "Failed to Save Libraries"),
                 message: error.userFacingMessage
             )
-            return
+            return []
         }
 
         logger.info(
@@ -178,11 +190,16 @@ final class LibraryListViewModel: ObservableObject {
                 title: String(localized: "Library Already Added"),
                 message: names
             )
-            return
+            return []
         }
 
+        let addedIDs = addedDescriptors.map(\.id)
         guard addedCount > 0 || !duplicateNames.isEmpty || !failedItemNames.isEmpty else {
-            return
+            return addedIDs
+        }
+
+        if addedCount == 1, duplicateNames.isEmpty, failedItemNames.isEmpty {
+            return addedIDs
         }
 
         var messageLines: [String] = []
@@ -218,6 +235,7 @@ final class LibraryListViewModel: ObservableObject {
                 : String(localized: "Add Finished with Warnings"),
             message: messageLines.joined(separator: "\n")
         )
+        return addedIDs
     }
 
     func createLibrary(named proposedName: String) -> UUID? {
@@ -425,6 +443,15 @@ final class LibraryListViewModel: ObservableObject {
         )
     }
 
+    private func destinationName(for selection: LibraryImportDestinationSelection) -> String? {
+        switch selection {
+        case .importedComics:
+            return String(localized: "Imported Comics")
+        case .library(let libraryID):
+            return descriptors.first { $0.id == libraryID }?.displayName
+        }
+    }
+
     func cancelComicImport() {
         importCancellationController?.cancel()
         importTask?.cancel()
@@ -448,6 +475,7 @@ final class LibraryListViewModel: ObservableObject {
         activeImportID = importID
         isImporting = true
         importProgress = nil
+        importDestinationName = destinationName(for: destinationSelection)
         alert = nil
 
         importTask = Task {
@@ -471,6 +499,7 @@ final class LibraryListViewModel: ObservableObject {
         defer {
             isImporting = false
             importProgress = nil
+            importDestinationName = nil
             importCancellationController = nil
             importTask = nil
             activeImportID = nil
@@ -503,26 +532,12 @@ final class LibraryListViewModel: ObservableObject {
                 return
             }
 
-            let messageLines = result.completionMessageLines()
-
-            if (result.createdLibrary || result.hasImportedAnyComics) {
-                let action = AppAlertAction.openLibrary(result.importedDestinationID, 1)
-                alert = AppAlertState(
-                    title: result.importedComicCount > 0
-                        ? String(localized: "Import Completed")
-                        : String(localized: "Import Finished with Warnings"),
-                    message: messageLines.joined(separator: "\n"),
-                    actionTitle: action.title,
-                    action: action
-                )
-            } else {
-                alert = AppAlertState(
-                    title: result.importedComicCount > 0
-                        ? String(localized: "Import Completed")
-                        : String(localized: "Import Finished with Warnings"),
-                    message: messageLines.joined(separator: "\n")
-                )
-            }
+            // The result bar appears in the target library, which opens next.
+            LibraryTaskResultInbox.shared.post(
+                result.taskBannerContent,
+                for: result.importedDestinationID
+            )
+            completedImport = CompletedLibraryImport(libraryID: result.importedDestinationID)
         } catch is CancellationError {
             logger.notice("Local comic import canceled")
         } catch {

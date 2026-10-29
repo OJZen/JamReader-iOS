@@ -45,7 +45,7 @@ enum RemoteBrowserGridAccessibility {
         if let readingSession = row.readingSession {
             parts.append(readingSession.progressText)
         }
-        if let badgeTitle = row.cacheAvailability.badgeTitle {
+        if let badgeTitle = row.cacheAvailability.statusBadgeStatus?.title {
             parts.append(badgeTitle)
         }
         if row.readingSession == nil, row.item.isComicDirectory {
@@ -1388,6 +1388,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         thumbnailImageView.isHidden = false
         thumbnailPlaceholderView.isHidden = false
         thumbnailPlaceholderImageView.image = UIImage(systemName: "folder.fill")
+        thumbnailPlaceholderImageView.tintColor = UIColor(resource: .accent)
         symbolView.isHidden = true
         thumbnailTask?.cancel()
 
@@ -1438,13 +1439,13 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         contentView.addSubview(cardView)
 
         thumbnailPlaceholderView.translatesAutoresizingMaskIntoConstraints = false
-        thumbnailPlaceholderView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+        thumbnailPlaceholderView.backgroundColor = .secondarySystemBackground
         cardView.addSubview(thumbnailPlaceholderView)
 
         thumbnailPlaceholderImageView.translatesAutoresizingMaskIntoConstraints = false
         thumbnailPlaceholderImageView.contentMode = .scaleAspectFit
-        thumbnailPlaceholderImageView.tintColor = UIColor.systemBlue.withAlphaComponent(0.85)
-        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
+        thumbnailPlaceholderImageView.tintColor = .tertiaryLabel
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed")
         thumbnailPlaceholderImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
             pointSize: 34,
             weight: .semibold
@@ -1500,7 +1501,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         cardView.addSubview(progressTrackView)
 
         progressFillView.translatesAutoresizingMaskIntoConstraints = false
-        progressFillView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
+        progressFillView.backgroundColor = UIColor(resource: .jam)
         progressTrackView.addSubview(progressFillView)
 
         let titleRow = UIStackView(arrangedSubviews: [titleIconContainer, titleLabel])
@@ -1585,6 +1586,8 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     ) {
         thumbnailImageView.isHidden = false
         thumbnailPlaceholderView.isHidden = false
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed")
+        thumbnailPlaceholderImageView.tintColor = .tertiaryLabel
         symbolView.isHidden = true
         thumbnailTask?.cancel()
 
@@ -1620,10 +1623,9 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     }
 
     private func configureSymbolView(for item: RemoteDirectoryItem) {
-        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed.fill")
+        thumbnailPlaceholderImageView.image = UIImage(systemName: "book.closed")
         let isDirectory = item.isDirectory
         let isPDF = item.isPDFDocument
-        let tintColor: UIColor = isDirectory ? .systemBlue : (isPDF ? .systemRed : .systemBlue)
         let systemName: String
         if isDirectory {
             systemName = "folder.fill"
@@ -1633,9 +1635,10 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             systemName = "doc.fill"
         }
 
-        symbolView.backgroundColor = tintColor.withAlphaComponent(0.16)
+        // Folders use the accent; other files stay neutral (see ComicCover).
+        symbolView.backgroundColor = .secondarySystemBackground
         symbolImageView.image = UIImage(systemName: systemName)
-        symbolImageView.tintColor = tintColor
+        symbolImageView.tintColor = isDirectory ? UIColor(resource: .accent) : .tertiaryLabel
         symbolImageView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(
             pointSize: 34,
             weight: .semibold
@@ -1643,47 +1646,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     }
 
     private func configureTitleText(for item: RemoteDirectoryItem) {
-        let font = titleLabel.font ?? UIFont.preferredFont(forTextStyle: .subheadline).bold()
-        let tintColor: UIColor
-        if item.isDirectory {
-            tintColor = .systemBlue
-        } else if item.canOpenAsComic {
-            tintColor = .systemGreen
-        } else {
-            tintColor = .secondaryLabel
-        }
-
-        let attributed = NSMutableAttributedString()
-        if let symbolImage = UIImage(
-            systemName: item.titleSystemImageName,
-            withConfiguration: UIImage.SymbolConfiguration(
-                pointSize: font.pointSize - 1,
-                weight: .semibold
-            )
-        )?.withTintColor(tintColor, renderingMode: .alwaysOriginal) {
-            let attachment = NSTextAttachment()
-            attachment.image = symbolImage
-            let symbolSide = font.pointSize - 1
-            attachment.bounds = CGRect(
-                x: 0,
-                y: (font.capHeight - symbolSide) / 2 - 1.5,
-                width: symbolSide,
-                height: symbolSide
-            )
-            attributed.append(NSAttributedString(attachment: attachment))
-            attributed.append(NSAttributedString(string: " "))
-        }
-
-        attributed.append(
-            NSAttributedString(
-                string: item.name,
-                attributes: [
-                    .font: font,
-                    .foregroundColor: UIColor.label
-                ]
-            )
-        )
-        titleLabel.attributedText = attributed
+        titleLabel.text = item.name
     }
 
     func heroSourceFrame() -> CGRect {
@@ -1713,18 +1676,15 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
     }
 
     private func updateCacheBadge(for availability: RemoteComicCachedAvailability) {
-        switch availability.kind {
-        case .current:
-            cacheBadgeView.image = UIImage(systemName: "arrow.down.circle.fill")
-            cacheBadgeView.tintColor = .systemBlue
-            cacheBadgeView.isHidden = false
-        case .stale:
-            cacheBadgeView.image = UIImage(systemName: "arrow.down.circle.fill")
-            cacheBadgeView.tintColor = .systemOrange
-            cacheBadgeView.isHidden = false
-        case .unavailable:
+        guard let status = availability.statusBadgeStatus,
+              let systemImage = status.systemImage else {
             cacheBadgeView.isHidden = true
+            return
         }
+
+        cacheBadgeView.image = UIImage(systemName: systemImage)
+        cacheBadgeView.tintColor = status.foregroundUIColor
+        cacheBadgeView.isHidden = false
     }
 
     private func updateProgressBar(for session: RemoteComicReadingSession?) {
@@ -1770,7 +1730,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             return readingSession.progressText
         }
         var parts: [String] = []
-        if let badgeTitle = row.cacheAvailability.badgeTitle {
+        if let badgeTitle = row.cacheAvailability.statusBadgeStatus?.title {
             parts.append(badgeTitle)
         }
         if row.item.isComicDirectory {

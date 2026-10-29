@@ -23,20 +23,44 @@ enum CornerRadius {
     static let lg: CGFloat = 14
     static let xl: CGFloat = 20
 
-    static let thumbnail: CGFloat = 10
+    /// Comic covers only; the protected reader navigation uses its own literal radii.
+    static let thumbnail: CGFloat = 6
     static let card: CGFloat = 14
     static let sheet: CGFloat = 20
 }
 
 // MARK: - Semantic Colors
 
+// Values come from docs/design-system/tokens.json through the asset catalog.
+// Asset symbol generation also creates `Color.jam` etc., so these use an `app` prefix.
 extension Color {
-    // Functional
+    // Brand
+    /// Tappable text and icons (AccentColor). Never a fill behind white text.
     static let appAccent = Color.accentColor
-    static let appSuccess = Color.green
-    static let appWarning = Color.orange
-    static let appDanger = Color.red
-    static let appFavorite = Color.yellow
+    /// Fills and marks: prominent buttons, progress bars, selection checks.
+    static let appJam = Color(.jam)
+    static let appOnJam = Color(.onJam)
+    static let appJamDeep = Color(.jamDeep)
+    /// Accent inside the reader, which does not follow the system appearance.
+    static let appReaderAccent = Color(.readerAccent)
+    static let appAccentSoft = Color(.accentSoft)
+    static let appAccentOnSoft = Color(.accentOnSoft)
+
+    // Functional
+    static let appSuccess = Color(.statusSuccess)
+    static let appOffline = Color(.statusOffline)
+    static let appWarning = Color(.statusWarning)
+    static let appDanger = Color(.statusDanger)
+    static let appFavorite = Color(.statusFavorite)
+    static let appSuccessSoft = Color(.statusSuccessSoft)
+    static let appOfflineSoft = Color(.statusOfflineSoft)
+    static let appWarningSoft = Color(.statusWarningSoft)
+    static let appDangerSoft = Color(.statusDangerSoft)
+
+    // Storage chart
+    static let appChartDownloads = Color(.chartDownloads)
+    static let appChartTemp = Color(.chartTemp)
+    static let appChartThumbs = Color(.chartThumbs)
 
     // Surfaces
     static let surfacePrimary = Color(.systemBackground)
@@ -50,12 +74,11 @@ extension Color {
     static let textTertiary = Color(.tertiaryLabel)
     static let textPlaceholder = Color(.placeholderText)
 
-    // Status
-    static let statusRead = Color.green.opacity(0.8)
+    // Status aliases
+    static let statusRead = appSuccess
     static let statusUnread = Color(.tertiaryLabel)
-    static let statusOffline = Color.blue.opacity(0.8)
-    static let statusStale = Color.orange.opacity(0.8)
-    static let statusCached = Color.green.opacity(0.6)
+    static let statusStale = appWarning
+    static let statusCached = appOffline
 }
 
 // MARK: - Typography
@@ -132,7 +155,12 @@ enum AppAnimation {
 
 enum AppLayout {
     static let gridItemMinWidth: CGFloat = 120
+    /// iPhone cover grid: three columns at 390pt.
+    static let gridItemMinWidthCompact: CGFloat = 100
     static let gridItemMaxWidth: CGFloat = 180
+    /// Continue Reading shelf cover width.
+    static let shelfCoverWidthCompact: CGFloat = 112
+    static let shelfCoverWidthRegular: CGFloat = 140
     static let gridSpacing: CGFloat = Spacing.sm
     static let regularInlineActionMinWidth: CGFloat = 700
     static let regularReaderLayoutMinWidth: CGFloat = 700
@@ -244,6 +272,24 @@ extension View {
     func readContainerWidth(into width: Binding<CGFloat>) -> some View {
         modifier(ContainerWidthReaderModifier(width: width))
     }
+
+    /// Page side margins for custom (non-List) content: the system container
+    /// margins on iOS 27.1+, `space-md` / `space-lg` before that.
+    func containerHorizontalMargins() -> some View {
+        modifier(ContainerHorizontalMarginsModifier())
+    }
+}
+
+private struct ContainerHorizontalMarginsModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    func body(content: Content) -> some View {
+        if #available(iOS 27.1, *) {
+            content.contentMargins(for: .container, edges: .horizontal)
+        } else {
+            content.padding(.horizontal, horizontalSizeClass == .regular ? Spacing.lg : Spacing.md)
+        }
+    }
 }
 
 private struct AdaptiveSheetWidthModifier: ViewModifier {
@@ -336,7 +382,7 @@ private struct ContainerWidthReaderModifier: ViewModifier {
 }
 
 struct PersistentRowActionButtonLabel: View {
-    var systemImage = "ellipsis.circle"
+    var systemImage = "ellipsis"
 
     var body: some View {
         Image(systemName: systemImage)

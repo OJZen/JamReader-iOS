@@ -21,9 +21,9 @@ struct FilterChipBar<T: Hashable>: View {
                             .font(AppFont.subheadline(.semibold))
                             .padding(.horizontal, Spacing.sm)
                             .padding(.vertical, Spacing.xs)
-                            .foregroundStyle(isSelected ? Color.white : Color.textPrimary)
+                            .foregroundStyle(isSelected ? Color.appAccentOnSoft : Color.textPrimary)
                             .background(
-                                isSelected ? Color.appAccent : Color.surfaceSecondary,
+                                isSelected ? Color.appAccentSoft : Color.surfaceSecondary,
                                 in: RoundedRectangle(
                                     cornerRadius: CornerRadius.sm,
                                     style: .continuous

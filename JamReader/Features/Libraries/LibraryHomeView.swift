@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
 
+/// Library home: the list of local libraries (the sidebar on iPad).
+/// See docs/design-system/components/ScreenLibraryHome.
 struct LibraryHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
@@ -11,11 +12,6 @@ struct LibraryHomeView: View {
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
 
-    @State private var activeImportRoute: LibraryHomeImportRoute?
-    /// The picker binding clears `activeImportRoute` before the completion
-    /// handler runs on iOS 27, so the route is kept separately for it.
-    @State private var presentedImportRoute: LibraryHomeImportRoute?
-    @State private var pendingImportDestinationSelection: LibraryImportDestinationSelection = .importedComics
     @State private var selectedLibraryID: UUID?
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
@@ -24,51 +20,44 @@ struct LibraryHomeView: View {
     var body: some View {
         Group {
             if viewModel.items.isEmpty {
-                EmptyStateView(
-                    systemImage: "books.vertical",
-                    title: String(localized: "No Libraries Yet"),
-                    description: isPad ? nil : String(localized: "Add a library or import comics."),
-                    actionTitle: isPad ? nil : String(localized: "New Library"),
-                    action: isPad ? nil : { presentCreateLibrarySheet() }
-                )
-                .background(Color.surfaceGrouped)
+                // On iPad the detail column shows the empty state and its button.
+                if usesPersistentSelection {
+                    Color.surfaceGrouped
+                } else {
+                    LibraryEmptyStateView(onAddComics: presentAddComicsSheet)
+                        .background(Color.surfaceGrouped)
+                }
             } else {
                 content
             }
         }
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.large)
-        .safeAreaInset(edge: .bottom) {
+        .taskBanner {
             if viewModel.isImporting {
-                LibraryImportProgressView(
-                    progress: viewModel.importProgress,
-                    onCancel: viewModel.cancelComicImport
+                TaskBanner(
+                    content: viewModel.importProgress?.taskBannerContent(
+                        destinationName: viewModel.importDestinationName
+                    ) ?? TaskBannerContent(
+                        phase: .running(fraction: nil),
+                        title: String(localized: "Preparing Import"),
+                        detail: viewModel.importDestinationName.map { String(localized: "To \($0)") }
+                    ),
+                    onClose: viewModel.cancelComicImport
                 )
-                .padding(.horizontal, Spacing.sm)
-                .padding(.bottom, Spacing.xs)
             }
         }
         .toolbar {
-            addLibraryToolbarItem
+            if !viewModel.items.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: presentAddComicsSheet) {
+                        Label("Add Comics", systemImage: "plus")
+                    }
+                }
+            }
         }
         .refreshable {
             viewModel.reload()
-        }
-        .fileImporter(
-            isPresented: activeImportRouteBinding,
-            allowedContentTypes: activeImportContentTypes,
-            allowsMultipleSelection: true
-        ) { result in
-            let importRoute = presentedImportRoute
-            activeImportRoute = nil
-            presentedImportRoute = nil
-
-            switch result {
-            case .success(let urls):
-                handleImportSelection(urls, for: importRoute)
-            case .failure(let error):
-                viewModel.presentImportError(error)
-            }
         }
         .onAppear {
             viewModel.reload()
@@ -78,6 +67,13 @@ struct LibraryHomeView: View {
         .onChange(of: viewModel.items) { _, _ in
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
+        }
+        .onChange(of: viewModel.completedImport) { _, completedImport in
+            // Imports land in the library root, so open it there with the result bar.
+            if let completedImport {
+                selectedLibraryID = completedImport.libraryID
+                appNavigator?.navigate(.library(.openLibrary(completedImport.libraryID, folderID: 1)))
+            }
         }
         .onChange(of: selectedLibraryID) { _, newValue in
             storedSelectedLibraryID = newValue?.uuidString ?? ""
@@ -115,10 +111,6 @@ struct LibraryHomeView: View {
         }
     }
 
-    private var isPad: Bool {
-        usesPersistentSelection
-    }
-
     private var content: some View {
         List {
             librariesSection
@@ -126,57 +118,56 @@ struct LibraryHomeView: View {
         .adaptiveRootListStyle(usesSidebarStyle: usesPersistentSelection)
     }
 
-    @ToolbarContentBuilder
-    private var addLibraryToolbarItem: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
+    private var librariesSection: some View {
+        Section {
+            ForEach(viewModel.items) { item in
                 Button {
-                    presentCreateLibrarySheet()
+                    openLibrary(item.id)
                 } label: {
-                    Label("New Library", systemImage: "plus.rectangle.on.folder.fill")
+                    if usesPersistentSelection {
+                        LibrarySidebarRow(
+                            item: item,
+                            isSelected: selectedLibraryID == item.id
+                        )
+                    } else {
+                        LibraryRowView(item: item)
+                    }
                 }
-
-                Button {
-                    presentLibraryFolderImporter()
-                } label: {
-                    Label("Add Library Folder", systemImage: "folder.badge.plus")
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .persistentSidebarSelection(
+                    isSelected: selectedLibraryID == item.id,
+                    isEnabled: usesPersistentSelection
+                )
+                .contextMenu {
+                    libraryContextMenuActions(for: item)
                 }
-
-                Button {
-                    presentComicFileImporter()
-                } label: {
-                    Label("Import Comic Files", systemImage: "doc.badge.plus")
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        requestLibraryRemoval([item])
+                    } label: {
+                        Label(item.removalActionTitle, systemImage: "trash")
+                    }
+                    Button {
+                        presentRenameSheet(for: item)
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    .tint(.appJam)
                 }
-
-                Button {
-                    presentComicFolderImporter()
-                } label: {
-                    Label("Import Comic Folder", systemImage: "folder.badge.plus")
-                }
-            } label: {
-                Label("Add", systemImage: "plus")
             }
+        } header: {
+            Text("My Libraries")
+                .font(usesPersistentSelection ? nil : AppFont.title2(.bold))
+                .foregroundStyle(usesPersistentSelection ? Color.textSecondary : Color.textPrimary)
+                .textCase(nil)
         }
     }
 
-    private var selectedItem: LibraryListItem? {
-        guard let selectedLibraryID else {
-            return nil
-        }
-
-        return viewModel.items.first(where: { $0.id == selectedLibraryID })
-    }
-
-    private var resumeLibraryItem: LibraryListItem? {
-        if let selectedItem {
-            return selectedItem
-        }
-
-        if let storedLibraryID = UUID(uuidString: storedSelectedLibraryID) {
-            return viewModel.items.first(where: { $0.id == storedLibraryID })
-        }
-
-        return viewModel.items.first
+    private var usesPersistentSelection: Bool {
+        AppLayout.usesPersistentSplitSelection(
+            isPad: UIDevice.current.userInterfaceIdiom == .pad
+        )
     }
 
     private func synchronizeSelection(preferStoredSelection: Bool = false) {
@@ -219,187 +210,12 @@ struct LibraryHomeView: View {
         viewModel.items.first(where: { $0.id == libraryID })
     }
 
-    private func consumeFocusedOverride(for libraryID: UUID) {
-        guard focusedLibraryIDOverride == libraryID else {
-            return
-        }
-
-        focusedLibraryIDOverride = nil
-        focusedFolderIDOverride = nil
-    }
-
     private func preferredFolderID(for item: LibraryListItem) -> Int64 {
         if focusedLibraryIDOverride == item.id, let focusedFolderIDOverride {
             return focusedFolderIDOverride
         }
 
         return LibraryBrowserView.lastOpenedFolderID(for: item.id)
-    }
-
-    private func presentLibraryFolderImporter() {
-        queueImporterPresentation(for: .libraryFolder)
-    }
-
-    private func presentCreateLibrarySheet() {
-        appPresenter?.presentSheet(
-            .content(
-                id: "library.create",
-                content: AnyView(
-                    LibraryCreateSheet { proposedName in
-                        guard let libraryID = viewModel.createLibrary(named: proposedName) else {
-                            return false
-                        }
-
-                        appPresenter?.dismissSheet()
-                        focusLibrary(libraryID)
-                        return true
-                    }
-                )
-            )
-        )
-    }
-
-    private func presentComicFileImporter() {
-        presentImportDestinationSheet(for: .comicFiles)
-    }
-
-    private func presentComicFolderImporter() {
-        presentImportDestinationSheet(for: .comicFolder)
-    }
-
-    private var activeImportRouteBinding: Binding<Bool> {
-        Binding(
-            get: { activeImportRoute != nil },
-            set: { isPresented in
-                if !isPresented {
-                    activeImportRoute = nil
-                }
-            }
-        )
-    }
-
-    private var preferredImportDestinationSelection: LibraryImportDestinationSelection? {
-        if let selectedLibraryID {
-            return .library(selectedLibraryID)
-        }
-
-        if let resumeLibraryItem {
-            return .library(resumeLibraryItem.id)
-        }
-
-        return .importedComics
-    }
-
-    private var activeImportContentTypes: [UTType] {
-        switch presentedImportRoute {
-        case .libraryFolder:
-            return [.folder]
-        case .comicFolder:
-            return [.folder]
-        case .comicFiles, .none:
-            return [.data]
-        }
-    }
-
-    private func queueImporterPresentation(for route: LibraryHomeImportRoute) {
-        DispatchQueue.main.async {
-            presentedImportRoute = route
-            activeImportRoute = route
-        }
-    }
-
-    private func handleImportSelection(_ urls: [URL], for route: LibraryHomeImportRoute?) {
-        guard !urls.isEmpty else {
-            return
-        }
-
-        switch route {
-        case .libraryFolder:
-            viewModel.addLibraryFolders(from: urls)
-        case .comicFiles:
-            viewModel.importComicFiles(
-                from: urls,
-                destinationSelection: pendingImportDestinationSelection
-            )
-        case .comicFolder:
-            viewModel.importComicDirectories(
-                from: urls,
-                destinationSelection: pendingImportDestinationSelection
-            )
-        case .none:
-            viewModel.presentImportError(
-                NSError(
-                    domain: "LibraryHomeImportRoute",
-                    code: 0,
-                    userInfo: [
-                        NSLocalizedDescriptionKey: String(
-                            localized: "The selected import action could not be resolved."
-                        )
-                    ]
-                )
-            )
-        }
-    }
-
-    private var librariesSection: some View {
-        Section {
-            ForEach(viewModel.items) { item in
-                Button {
-                    openLibrary(item.id)
-                } label: {
-                    LibraryRowView(
-                        item: item,
-                        isSelected: usesPersistentSelection && selectedLibraryID == item.id,
-                        showsDisclosureIndicator: !usesPersistentSelection,
-                        trailingAccessoryReservedWidth: usesPersistentSelection
-                            ? AppLayout.persistentRowActionReservedWidth
-                            : 0
-                    )
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .persistentSidebarSelection(
-                    isSelected: selectedLibraryID == item.id,
-                    isEnabled: usesPersistentSelection
-                )
-                .overlay(alignment: .trailing) {
-                    if usesPersistentSelection {
-                        libraryManagementMenu(for: item)
-                            .padding(.trailing, Spacing.xs)
-                    }
-                }
-                .contextMenu {
-                    libraryContextMenuActions(for: item)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        requestLibraryRemoval([item])
-                    } label: {
-                        Label(item.removalActionTitle, systemImage: "trash")
-                    }
-                    Button {
-                        presentRenameSheet(for: item)
-                    } label: {
-                        Label("Rename", systemImage: "pencil")
-                    }
-                    .tint(.blue)
-                }
-            }
-            .onDelete { offsets in
-                let items = offsets.compactMap { index in
-                    viewModel.items.indices.contains(index) ? viewModel.items[index] : nil
-                }
-                requestLibraryRemoval(items)
-            }
-        } header: {
-            Text("Libraries")
-        }
-    }
-
-    private var usesPersistentSelection: Bool {
-        AppLayout.usesPersistentSplitSelection(
-            isPad: UIDevice.current.userInterfaceIdiom == .pad
-        )
     }
 
     private var pendingLibraryRemovalBinding: Binding<Bool> {
@@ -425,11 +241,14 @@ struct LibraryHomeView: View {
         pendingLibraryRemoval = nil
         AppHaptics.warning()
         let removedIDs = Set(request.items.map(\.id))
-        let removedCurrentSelection = selectedLibraryID.map(removedIDs.contains) ?? false
         guard viewModel.removeLibraries(ids: Array(removedIDs)) else {
             return
         }
+        handleRemovedLibraries(removedIDs)
+    }
 
+    private func handleRemovedLibraries(_ removedIDs: Set<UUID>) {
+        let removedCurrentSelection = selectedLibraryID.map(removedIDs.contains) ?? false
         guard usesPersistentSelection, removedCurrentSelection else {
             synchronizeSelection()
             return
@@ -444,18 +263,19 @@ struct LibraryHomeView: View {
         }
     }
 
+    /// The same actions as Library Info, reused by long press.
     @ViewBuilder
     private func libraryContextMenuActions(for item: LibraryListItem) -> some View {
         Button {
             presentRenameSheet(for: item)
         } label: {
-            Label("Rename", systemImage: "pencil")
+            Label("Rename…", systemImage: "pencil")
         }
 
         Button {
             presentInfoSheet(for: item)
         } label: {
-            Label("Info", systemImage: "info.circle")
+            Label("Library Info", systemImage: "info.circle")
         }
 
         Divider()
@@ -463,18 +283,8 @@ struct LibraryHomeView: View {
         Button(role: .destructive) {
             requestLibraryRemoval([item])
         } label: {
-            Label(item.removalActionTitle, systemImage: "trash")
+            Label(item.removalButtonTitle, systemImage: "trash")
         }
-    }
-
-    private func libraryManagementMenu(for item: LibraryListItem) -> some View {
-        Menu {
-            libraryContextMenuActions(for: item)
-        } label: {
-            PersistentRowActionButtonLabel()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Manage \(item.descriptor.displayName)")
     }
 
     private func openLibrary(_ libraryID: UUID) {
@@ -482,37 +292,66 @@ struct LibraryHomeView: View {
             return
         }
 
-        let libraryID = item.id
-        selectedLibraryID = libraryID
+        selectedLibraryID = item.id
         appNavigator?.navigate(
-            .library(.openLibrary(libraryID, folderID: preferredFolderID(for: item)))
+            .library(.openLibrary(item.id, folderID: preferredFolderID(for: item)))
         )
     }
 
-    private func focusLibrary(_ libraryID: UUID) {
-        selectedLibraryID = libraryID
-        storedSelectedLibraryID = libraryID.uuidString
-        appNavigator?.navigate(.library(.openLibrary(libraryID, folderID: nil)))
+    private func presentAddComicsSheet() {
+        appPresenter?.presentSheet(
+            Self.addComicsSheetRoute(
+                viewModel: viewModel,
+                dependencies: dependencies,
+                presenter: appPresenter,
+                navigator: appNavigator
+            )
+        )
     }
 
-    private func presentActionsSheet(for item: LibraryListItem) {
-        appPresenter?.presentSheet(
-            .content(
-                id: "library.actions.\(item.id.uuidString)",
-                content: AnyView(
-                    LibraryHomeLibraryActionsSheet(
-                        item: item,
-                        onDone: { appPresenter?.dismissSheet() },
-                        onRename: { presentRenameSheet(for: item) },
-                        onViewInfo: { presentInfoSheet(for: item) },
-                        onRemove: {
-                            appPresenter?.dismissSheet()
-                            DispatchQueue.main.async {
-                                requestLibraryRemoval([item])
-                            }
+    /// The Add Comics sheet, shared by the home [+], the empty state and the
+    /// iPad detail placeholder.
+    static func addComicsSheetRoute(
+        viewModel: LibraryListViewModel,
+        dependencies: AppDependencies,
+        presenter: UIKitPresentationCoordinator?,
+        navigator: AppNavigator?
+    ) -> AppSheetRoute {
+        .content(
+            id: "library.addComics",
+            content: AnyView(
+                LibraryAddComicsSheet(
+                    dependencies: dependencies,
+                    onImport: { urls, traverseDirectories, destination in
+                        presenter?.dismissSheet()
+                        if traverseDirectories {
+                            viewModel.importComicDirectories(from: urls, destinationSelection: destination)
+                        } else {
+                            viewModel.importComicFiles(from: urls, destinationSelection: destination)
                         }
-                    )
+                    },
+                    onLinkFolders: { urls in
+                        presenter?.dismissSheet()
+                        let addedIDs = viewModel.addLibraryFolders(from: urls)
+                        if addedIDs.count == 1, let libraryID = addedIDs.first {
+                            navigator?.navigate(.library(.openLibrary(libraryID, folderID: nil)))
+                        }
+                    },
+                    onCreateLibrary: { proposedName in
+                        guard let libraryID = viewModel.createLibrary(named: proposedName) else {
+                            return false
+                        }
+                        presenter?.dismissSheet()
+                        navigator?.navigate(.library(.openLibrary(libraryID, folderID: nil)))
+                        return true
+                    },
+                    onPickerError: { error in
+                        presenter?.dismissSheet()
+                        viewModel.presentImportError(error)
+                    }
                 )
+                .environment(\.appPresenter, presenter)
+                .environment(\.appNavigator, navigator)
             )
         )
     }
@@ -531,27 +370,13 @@ struct LibraryHomeView: View {
     }
 
     private func presentInfoSheet(for item: LibraryListItem) {
+        let libraryID = item.id
         appPresenter?.presentSheet(
             .content(
-                id: "library.info.\(item.id.uuidString)",
-                content: AnyView(LibraryInfoSheet(item: item))
-            )
-        )
-    }
-
-    private func presentImportDestinationSheet(for route: LibraryHomeImportRoute) {
-        appPresenter?.presentSheet(
-            .content(
-                id: "library.import.destination.\(route.id)",
+                id: "library.info.\(libraryID.uuidString)",
                 content: AnyView(
-                    LibraryImportDestinationSheet(
-                        title: route.destinationPickerTitle,
-                        dependencies: dependencies,
-                        preferredSelection: preferredImportDestinationSelection
-                    ) { selection in
-                        pendingImportDestinationSelection = selection
-                        appPresenter?.dismissSheet()
-                        queueImporterPresentation(for: route)
+                    LibraryInfoSheet(listViewModel: viewModel, libraryID: libraryID) {
+                        handleRemovedLibraries([libraryID])
                     }
                 )
             )
@@ -559,101 +384,102 @@ struct LibraryHomeView: View {
     }
 }
 
-private enum LibraryHomeImportRoute: Identifiable {
-    case libraryFolder
-    case comicFiles
-    case comicFolder
-
-    var id: String {
-        switch self {
-        case .libraryFolder:
-            return "libraryFolder"
-        case .comicFiles:
-            return "comicFiles"
-        case .comicFolder:
-            return "comicFolder"
-        }
-    }
-
-    var destinationPickerTitle: String {
-        switch self {
-        case .libraryFolder:
-            return String(localized: "Choose Import Destination")
-        case .comicFiles:
-            return String(localized: "Import Comic Files")
-        case .comicFolder:
-            return String(localized: "Import Comic Folder")
-        }
-    }
-
-}
-
+/// Library row: type tile, name, "count · storage", and a status badge when
+/// access is read-only or lost.
 private struct LibraryRowView: View {
     let item: LibraryListItem
-    var isSelected = false
     var showsDisclosureIndicator = true
-    var trailingAccessoryReservedWidth: CGFloat = 0
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            ListIconBadge(
-                systemImage: "books.vertical.fill",
-                tint: item.kindTint
+            SettingsIcon(
+                systemName: item.descriptor.kind.systemImageName,
+                color: item.descriptor.kind.tileColor
             )
 
             VStack(alignment: .leading, spacing: Spacing.xxxs) {
                 Text(item.descriptor.displayName)
-                    .font(AppFont.body(.semibold))
+                    .font(AppFont.body())
                     .foregroundStyle(Color.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
 
-                Text(item.rowSubtitle)
-                    .font(AppFont.subheadline())
+                Text(item.storageSummary)
+                    .font(AppFont.footnote().monospacedDigit())
                     .foregroundStyle(Color.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            Spacer()
+            if let status = item.accessStatus {
+                StatusBadge(status: status)
+            }
 
             if showsDisclosureIndicator {
-                Image(systemName: "chevron.right")
-                    .font(AppFont.caption(.semibold))
+                Image(systemName: "chevron.forward")
+                    .font(AppFont.footnote(.semibold))
                     .foregroundStyle(Color.textTertiary)
+                    .accessibilityHidden(true)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, Spacing.xxs)
-        .padding(.trailing, trailingAccessoryReservedWidth)
+        .padding(.vertical, Spacing.xxxs)
         .contentShape(Rectangle())
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct LibrarySidebarRowView: View {
+/// iPad sidebar row (44pt): type symbol, name, comic count; a status icon
+/// replaces the count when access is read-only or lost.
+private struct LibrarySidebarRow: View {
     let item: LibraryListItem
+    let isSelected: Bool
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            ListIconBadge(
-                systemImage: "books.vertical.fill",
-                tint: item.kindTint
-            )
+            Image(systemName: item.descriptor.kind.systemImageName)
+                .font(AppFont.body())
+                .foregroundStyle(Color.appAccent)
+                .frame(width: 24)
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(item.descriptor.displayName)
-                    .font(AppFont.headline())
+            // Large text moves the count under the name so whole words fit the sidebar.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                    name
+                    trailingInfo
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                name
                     .lineLimit(1)
-
-                Text(item.rowSubtitle)
-                    .font(AppFont.caption())
-                    .foregroundStyle(Color.textSecondary)
-                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                trailingInfo
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, Spacing.xxs)
+        .frame(minHeight: 32)
         .contentShape(Rectangle())
-        .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var name: some View {
+        Text(item.descriptor.displayName)
+            .font(AppFont.body(isSelected ? .semibold : .regular))
+            .foregroundStyle(Color.textPrimary)
+    }
+
+    @ViewBuilder
+    private var trailingInfo: some View {
+        if let status = item.accessStatus, let systemImage = status.systemImage {
+            Image(systemName: systemImage)
+                .foregroundStyle(status.foregroundColor)
+                .accessibilityLabel(status.title)
+        } else if item.accessSnapshot.database.exists {
+            Text("\(item.accessSnapshot.database.comicCount)")
+                .font(AppFont.subheadline().monospacedDigit())
+                .foregroundStyle(Color.textSecondary)
+        }
     }
 }
 
@@ -681,231 +507,55 @@ private func makeLibraryAlert(for alert: AppAlertState) -> Alert {
 
 struct LibraryHomeDetailPlaceholder: View {
     let itemCount: Int
-    let onAddLibrary: () -> Void
+    let onAddComics: () -> Void
 
     var body: some View {
-        ContentUnavailableView {
-            Label(
-                itemCount == 0
-                    ? String(localized: "Add a Library")
-                    : String(localized: "Select a Library"),
-                systemImage: "books.vertical"
-            )
-        } description: {
-            Text(descriptionText)
-        } actions: {
+        Group {
             if itemCount == 0 {
-                Button(action: onAddLibrary) {
-                    Label("New Library", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
+                LibraryEmptyStateView(onAddComics: onAddComics)
+            } else {
+                ContentUnavailableView(
+                    "Select a Library",
+                    systemImage: "books.vertical",
+                    description: Text("Choose a library from the sidebar.")
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
-    }
-
-    private var descriptionText: String {
-        if itemCount == 0 {
-            return String(localized: "Create a library, link a folder, or import comics.")
-        }
-
-        return String(localized: "Choose a library from the sidebar.")
+        .background(Color.surfaceGrouped)
     }
 }
 
-private struct LibraryStatusNote {
-    let text: String
-    let systemImage: String
-    let tint: Color
-}
+/// First-run empty state: one Add Comics button (the toolbar [+] is hidden
+/// meanwhile) and a link to connect a NAS server in Remote.
+struct LibraryEmptyStateView: View {
+    @Environment(\.appNavigator) private var appNavigator
+    @AppStorage(AppNavigationStorageKeys.pendingAddRemoteServer) private var pendingAddRemoteServer = false
 
-private struct LibraryRemovalRequest {
-    let items: [LibraryListItem]
+    let onAddComics: () -> Void
 
-    private var managedCount: Int {
-        items.count { $0.descriptor.kind.isManagedByApp }
-    }
-
-    var title: String {
-        if items.count == 1 {
-            return managedCount == 1
-                ? String(localized: "Delete Library from Device?")
-                : String(localized: "Remove Library from App?")
-        }
-
-        return managedCount == items.count
-            ? String(localized: "Delete Libraries from Device?")
-            : String(localized: "Remove Libraries?")
-    }
-
-    var actionTitle: String {
-        if items.count == 1 {
-            return managedCount == 1
-                ? String(localized: "Delete from Device")
-                : String(localized: "Remove from App")
-        }
-
-        return managedCount == items.count
-            ? String(localized: "Delete \(items.count) Libraries")
-            : String(localized: "Remove \(items.count) Libraries")
-    }
-
-    var message: String {
-        if items.count == 1, let item = items.first {
-            if item.descriptor.kind.isManagedByApp {
-                return String(
-                    localized: "This permanently deletes \(item.descriptor.displayName) and its files from this device."
-                )
+    var body: some View {
+        ContentUnavailableView {
+            Label("No Comics Yet", systemImage: "books.vertical")
+        } description: {
+            Text("Import comic files, or use a comics folder you already have in Files.")
+        } actions: {
+            Button(action: onAddComics) {
+                Label("Add Comics", systemImage: "plus")
+                    .font(AppFont.body(.semibold))
+                    .padding(.horizontal, Spacing.xs)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(.appJam)
+            .controlSize(.large)
 
-            return String(
-                localized: "This removes \(item.descriptor.displayName) from JamReader. Files remain in the original folder."
-            )
+            Button("Or Connect a NAS Server") {
+                pendingAddRemoteServer = true
+                appNavigator?.navigate(.selectTab(.browse))
+            }
+            .font(AppFont.subheadline(.semibold))
+            .foregroundStyle(Color.appAccent)
+            .buttonStyle(.borderless)
         }
-
-        if managedCount == items.count {
-            return String(localized: "This permanently deletes the selected libraries and their files from this device.")
-        }
-
-        if managedCount == 0 {
-            return String(localized: "This removes the selected libraries from JamReader. Files remain in their original folders.")
-        }
-
-        return String(localized: "App-managed library files will be deleted from this device. Files in linked folders will remain in place.")
-    }
-}
-
-private extension LibraryListItem {
-    var kindTint: Color {
-        switch descriptor.kind {
-        case .appManaged:
-            return .indigo
-        case .importedComics:
-            return .teal
-        case .linkedFolder:
-            return .blue
-        }
-    }
-
-    var removalActionTitle: String {
-        descriptor.kind.isManagedByApp
-            ? String(localized: "Delete")
-            : String(localized: "Remove")
-    }
-
-    var libraryScaleSummary: String {
-        let database = accessSnapshot.database
-
-        if database.exists {
-            let comicText = database.comicCount == 1
-                ? String(localized: "1 comic")
-                : String(localized: "\(database.comicCount) comics")
-            let folderText = database.folderCount == 1
-                ? String(localized: "1 folder")
-                : String(localized: "\(database.folderCount) folders")
-            return String(localized: "\(comicText) · \(folderText)")
-        }
-
-        if accessSnapshot.sourceExists {
-            return String(localized: "Local state has not been indexed yet.")
-        }
-
-        return String(localized: "Library is currently unavailable on this device.")
-    }
-
-    func homeMetadataItems() -> [InlineMetadataItem] {
-        var items = [availabilityMetadataItem]
-
-        if accessSnapshot.sourceReadable {
-            items.append(writeAccessMetadataItem)
-        }
-
-        items.append(storageMetadataItem)
-        return items
-    }
-
-    func sidebarMetadataItems() -> [InlineMetadataItem] {
-        homeMetadataItems()
-    }
-
-    private var availabilityMetadataItem: InlineMetadataItem {
-        if !accessSnapshot.sourceExists {
-            return InlineMetadataItem(
-                systemImage: "exclamationmark.triangle.fill",
-                text: String(localized: "Needs Access"),
-                tint: .orange
-            )
-        }
-
-        if accessSnapshot.sourceReadable {
-            return InlineMetadataItem(
-                systemImage: "checkmark.circle.fill",
-                text: String(localized: "Ready"),
-                tint: .green
-            )
-        }
-
-        return InlineMetadataItem(
-            systemImage: "lock.circle.fill",
-            text: String(localized: "Unavailable"),
-            tint: .orange
-        )
-    }
-
-    private var writeAccessMetadataItem: InlineMetadataItem {
-        InlineMetadataItem(
-            systemImage: accessSnapshot.sourceWritable ? "square.and.pencil" : "lock.fill",
-            text: accessSnapshot.writeStatus,
-            tint: accessSnapshot.sourceWritable ? .green : .orange
-        )
-    }
-
-    private var storageMetadataItem: InlineMetadataItem {
-        return InlineMetadataItem(
-            systemImage: "books.vertical.fill",
-            text: descriptor.kind.title,
-            tint: kindTint
-        )
-    }
-
-    func homeRowStatusNote() -> LibraryStatusNote? {
-        if let error = accessSnapshot.lastError ?? accessSnapshot.database.lastError {
-            return LibraryStatusNote(
-                text: error,
-                systemImage: "exclamationmark.triangle.fill",
-                tint: .orange
-            )
-        }
-
-        if let maintenanceRecord {
-            return LibraryStatusNote(
-                text: maintenanceRecord.summaryLine,
-                systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                tint: .secondary
-            )
-        }
-
-        return nil
-    }
-
-    func sidebarStatusNote() -> LibraryStatusNote? {
-        if let maintenanceRecord {
-            return LibraryStatusNote(
-                text: maintenanceRecord.summaryLine,
-                systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                tint: .secondary
-            )
-        }
-
-        if let error = accessSnapshot.lastError ?? accessSnapshot.database.lastError {
-            return LibraryStatusNote(
-                text: error,
-                systemImage: "exclamationmark.triangle.fill",
-                tint: .orange
-            )
-        }
-
-        return nil
     }
 }

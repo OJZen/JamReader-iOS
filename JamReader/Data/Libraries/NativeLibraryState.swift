@@ -112,7 +112,14 @@ final class LibraryStateRepository {
                 database: database
             )
 
-            return LibraryFolderContent(folder: folder, subfolders: subfolders, comics: comics)
+            let ancestors = loadAncestors(of: folder, libraryID: libraryID, database: database)
+
+            return LibraryFolderContent(
+                folder: folder,
+                subfolders: subfolders,
+                comics: comics,
+                ancestors: ancestors
+            )
         }
     }
 
@@ -1253,6 +1260,28 @@ final class LibraryStateRepository {
         }
 
         return folder(from: statement)
+    }
+
+    /// Walks parent links up to the root for the breadcrumb. A broken or
+    /// cyclic chain ends the breadcrumb early instead of failing the load.
+    private func loadAncestors(
+        of folder: LibraryFolder,
+        libraryID: UUID,
+        database: OpaquePointer
+    ) -> [LibraryFolder] {
+        var ancestors: [LibraryFolder] = []
+        var current = folder
+        var visitedIDs: Set<Int64> = [folder.id]
+
+        while !current.isRoot,
+              current.parentID > 0,
+              visitedIDs.insert(current.parentID).inserted,
+              let parent = try? loadFolder(id: current.parentID, libraryID: libraryID, database: database) {
+            ancestors.insert(parent, at: 0)
+            current = parent
+        }
+
+        return ancestors
     }
 
     private func loadSubfolders(

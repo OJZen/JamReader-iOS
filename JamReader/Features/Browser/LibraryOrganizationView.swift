@@ -1,53 +1,25 @@
 import SwiftUI
 
+/// Tags or reading lists of one library: the same page structure for both.
+/// Edit renames, recolors or deletes; long press and swipe are shortcuts.
+/// See docs/design-system/components/ScreenCollections.
 struct LibraryOrganizationView: View {
-    private enum LayoutMetrics {
-        static let horizontalInset: CGFloat = 12
-        static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
-        static let compactGridMinWidth: CGFloat = 165
-        static let compactGridMaxWidth: CGFloat = 220
-        static let regularGridMinWidth: CGFloat = 240
-        static let regularGridMaxWidth: CGFloat = 320
-        static let wideGridMinContainerWidth: CGFloat = 860
-    }
-
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
-    private let dependencies: AppDependencies
 
     @StateObject private var viewModel: LibraryOrganizationViewModel
-    @State private var sortMode: LibraryOrganizationSortMode
-    @State private var preferredDisplayMode: LibraryComicDisplayMode
-    @State private var displayMode: LibraryComicDisplayMode
-    @State private var hasConfiguredPreferredDisplayMode = false
     @State private var searchQuery = ""
+    @State private var editMode: EditMode = .inactive
     @State private var editingCollection: LibraryOrganizationCollection?
     @State private var deletingCollection: LibraryOrganizationCollection?
-    @State private var containerWidth: CGFloat = 0
-
-    private var adaptiveListColumnCount: Int {
-        AppLayout.adaptiveListColumnCount(
-            horizontalSizeClass: horizontalSizeClass,
-            containerWidth: containerWidth
-        )
-    }
-
-    private var adaptiveListColumnSpacing: CGFloat {
-        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
-    }
+    @AppStorage private var sortModeRawValue: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         descriptor: LibraryDescriptor,
         sectionKind: LibraryOrganizationSectionKind,
         dependencies: AppDependencies
     ) {
-        self.dependencies = dependencies
-        _sortMode = State(initialValue: Self.loadStoredSortMode(for: sectionKind))
-        let storedDisplayMode = Self.loadStoredDisplayMode(for: sectionKind)
-        _preferredDisplayMode = State(initialValue: storedDisplayMode)
-        _displayMode = State(initialValue: storedDisplayMode)
         _viewModel = StateObject(
             wrappedValue: LibraryOrganizationViewModel(
                 descriptor: descriptor,
@@ -57,57 +29,54 @@ struct LibraryOrganizationView: View {
                 storageManager: dependencies.libraryStorageManager
             )
         )
+        _sortModeRawValue = AppStorage(
+            wrappedValue: LibraryOrganizationSortMode.name.rawValue,
+            "libraryOrganizationOverviewSortMode.\(sectionKind.rawValue)"
+        )
     }
 
     var body: some View {
-        Group {
-            if viewModel.isLoading {
-                ProgressView("Loading \(viewModel.sectionKind.title)")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                contentBody
+        List {
+            Section {
+                if displayedCollections.isEmpty {
+                    emptyStateView
+                } else {
+                    ForEach(displayedCollections) { collection in
+                        row(for: collection)
+                    }
+                    .onDelete { offsets in
+                        deletingCollection = offsets.first.map { displayedCollections[$0] }
+                    }
+                }
+            } header: {
+                sectionHeader
             }
         }
-        .readContainerWidth(into: $containerWidth)
+        .listStyle(.insetGrouped)
+        .environment(\.editMode, $editMode)
         .navigationTitle(viewModel.navigationTitle)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    withAnimation {
+                        editMode = editMode.isEditing ? .inactive : .active
+                    }
+                } label: {
+                    Label(
+                        editMode.isEditing ? "Done" : "Edit",
+                        systemImage: editMode.isEditing ? "checkmark" : "pencil"
+                    )
+                }
+                .labelStyle(.titleOnly)
+                .disabled(viewModel.collections.isEmpty && !editMode.isEditing)
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     viewModel.presentCreateSheet()
                 } label: {
-                    Image(systemName: "plus")
-                }
-                .accessibilityLabel(viewModel.sectionKind.createActionTitle)
-            }
-
-            if usesCondensedTopBarActions {
-                if hasCondensedTopBarActions {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        condensedTopBarActionsMenu
-                    }
-                }
-            } else {
-                if supportsGridDisplay {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            displayModeMenuContent
-                        } label: {
-                            Image(systemName: displayMode.systemImageName)
-                        }
-                        .accessibilityLabel("Display Mode")
-                    }
-                }
-
-                if canSortCollections {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            sortModeMenuContent
-                        } label: {
-                            Image(systemName: "arrow.up.arrow.down.circle")
-                        }
-                        .accessibilityLabel("Sort")
-                    }
+                    Label(viewModel.sectionKind.createActionTitle, systemImage: "plus")
                 }
             }
         }
@@ -115,34 +84,45 @@ struct LibraryOrganizationView: View {
             viewModel.loadIfNeeded()
         }
         .onAppear {
-            configurePreferredDisplayModeIfNeeded()
             viewModel.load()
-        }
-        .onChange(of: supportsGridDisplay) { _, _ in
-            adaptDisplayModeForCurrentWidth()
         }
         .refreshable {
             viewModel.load()
         }
-        .searchable(text: $searchQuery, prompt: "Search \(viewModel.sectionKind.title)")
-        .background { presentationObservers }
+        .searchable(
+            text: $searchQuery,
+            prompt: Text("Search in “\(viewModel.navigationTitle)”")
+        )
+        .onChange(of: viewModel.isShowingCreateSheet) { _, isPresented in
+            if isPresented {
+                presentCreateSheetIfNeeded()
+            } else {
+                appPresenter?.dismissSheet()
+            }
+        }
+        .onChange(of: editingCollection?.id) { _, _ in
+            presentEditingCollectionSheetIfNeeded()
+        }
         .confirmationDialog(
-            deletingCollectionDialogTitle,
-            isPresented: deletingCollectionConfirmationBinding,
+            deletingCollection.map(LibraryCollectionDeletionCopy.title(for:)) ?? "",
+            isPresented: Binding(
+                get: { deletingCollection != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        deletingCollection = nil
+                    }
+                }
+            ),
             titleVisibility: .visible,
             presenting: deletingCollection
         ) { collection in
-            Button(deleteCollectionActionTitle(for: collection), role: .destructive) {
+            Button(LibraryCollectionDeletionCopy.actionTitle(for: collection.type), role: .destructive) {
                 if viewModel.deleteCollection(collection) {
                     deletingCollection = nil
                 }
             }
-
-            Button("Cancel", role: .cancel) {
-                deletingCollection = nil
-            }
         } message: { collection in
-            Text(deleteCollectionMessage(for: collection))
+            Text(LibraryCollectionDeletionCopy.message(for: collection.type))
         }
         .alert(item: $viewModel.alert) { alert in
             Alert(
@@ -153,215 +133,178 @@ struct LibraryOrganizationView: View {
         }
     }
 
-    @ViewBuilder
-    private var contentBody: some View {
-        if displayMode == .grid {
-            gridContent
-        } else {
-            listContent
-        }
-    }
-
-    private var listContent: some View {
-        List {
-            if displayedCollections.isEmpty {
-                Section {
-                    emptyStateView
-                }
+    private func row(for collection: LibraryOrganizationCollection) -> some View {
+        Button {
+            if editMode.isEditing {
+                editingCollection = collection
             } else {
-                Section(contentSectionTitle) {
-                    AdaptiveCardListRows(
-                        displayedCollections,
-                        columnCount: adaptiveListColumnCount,
-                        spacing: adaptiveListColumnSpacing,
-                        horizontalInset: LayoutMetrics.horizontalInset
-                    ) { collection in
-                        Button {
-                            openCollection(collection)
-                        } label: {
-                            InsetListRowCard {
-                                LibraryOrganizationCollectionRow(
-                                    collection: collection,
-                                    trailingAccessoryReservedWidth: LayoutMetrics.rowAccessoryReservedWidth
-                                )
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .overlay(alignment: .trailing) {
-                            collectionActionMenu(
-                                for: collection,
-                                style: .icon
-                            )
-                            .padding(.trailing, 8)
-                        }
-                    }
-                }
+                appNavigator?.navigate(.library(.organizationCollection(viewModel.descriptor, collection)))
             }
+        } label: {
+            HStack(spacing: Spacing.sm) {
+                collectionMark(for: collection)
+
+                Text(collection.displayTitle)
+                    .font(AppFont.body())
+                    .foregroundStyle(Color.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Text("\(collection.comicCount)")
+                    .font(AppFont.body().monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+
+                Image(systemName: editMode.isEditing ? "info.circle" : "chevron.forward")
+                    .font(AppFont.footnote(.semibold))
+                    .foregroundStyle(editMode.isEditing ? Color.appAccent : Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(editMode.isEditing ? Text("Edits the name and color") : Text("Opens the comics"))
+        .contextMenu {
+            collectionActions(for: collection)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                deletingCollection = collection
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+
+            Button {
+                editingCollection = collection
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(.appJam)
         }
     }
 
-    private var gridContent: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                if displayedCollections.isEmpty {
-                    emptyStateView
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 16)
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text(contentSectionTitle)
-                            .font(.headline)
-
-                        LazyVGrid(columns: collectionGridColumns, alignment: .leading, spacing: 16) {
-                            ForEach(displayedCollections) { collection in
-                                Button {
-                                    openCollection(collection)
-                                } label: {
-                                    LibraryOrganizationCollectionCard(collection: collection)
-                                }
-                                .buttonStyle(.plain)
-                                .overlay(alignment: .topTrailing) {
-                                    collectionActionMenu(for: collection, style: .elevatedIcon)
-                                        .padding(12)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 20)
-            .adaptiveContentWidth(1120)
+    /// Tag color only ever appears as a 10pt dot next to the name.
+    @ViewBuilder
+    private func collectionMark(for collection: LibraryOrganizationCollection) -> some View {
+        switch collection.type {
+        case .label:
+            Circle()
+                .fill((collection.labelColor ?? .blue).swiftUIColor)
+                .frame(width: 10, height: 10)
+                .frame(width: 20)
+                .accessibilityHidden(true)
+        case .readingList:
+            Image(systemName: "list.bullet")
+                .font(AppFont.subheadline(.semibold))
+                .foregroundStyle(Color.appSuccess)
+                .frame(width: 20)
+                .accessibilityHidden(true)
         }
     }
 
     @ViewBuilder
-    private var presentationObservers: some View {
-        Color.clear
-            .allowsHitTesting(false)
-            .onChange(of: viewModel.isShowingCreateSheet) { _, isPresented in
-                if isPresented {
-                    presentCreateSheetIfNeeded()
-                } else {
-                    appPresenter?.dismissSheet()
+    private func collectionActions(for collection: LibraryOrganizationCollection) -> some View {
+        Button {
+            editingCollection = collection
+        } label: {
+            Label(
+                collection.type == .label ? "Edit Tag" : "Edit Reading List",
+                systemImage: "square.and.pencil"
+            )
+        }
+
+        Button(role: .destructive) {
+            deletingCollection = collection
+        } label: {
+            // Title, subtitle and icon as direct children show the subtitle in menus.
+            Text(LibraryCollectionDeletionCopy.actionTitle(for: collection.type))
+            Text("Comics are not deleted")
+            Image(systemName: "trash")
+        }
+    }
+
+    /// Library and count on the left, the sort menu fixed on the right.
+    private var sectionHeader: some View {
+        // Large text puts the sort menu under the subtitle instead of breaking words.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.sm))
+        return layout {
+            Text(subtitle)
+                .font(AppFont.subheadline().monospacedDigit())
+                .foregroundStyle(Color.textSecondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if viewModel.collections.count > 1 {
+                Menu {
+                    Picker("Sort", selection: sortModeBinding) {
+                        ForEach(LibraryOrganizationSortMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                } label: {
+                    Label(sortMode.title, systemImage: "arrow.up.arrow.down")
+                        .font(AppFont.subheadline(.semibold))
+                        .foregroundStyle(Color.appAccent)
                 }
+                .accessibilityLabel(Text("Sort"))
+                .accessibilityValue(Text(sortMode.title))
             }
-            .onChange(of: editingCollection?.id) { _, _ in
-                presentEditingCollectionSheetIfNeeded()
-            }
+        }
+        .textCase(nil)
+    }
+
+    private var sortMode: LibraryOrganizationSortMode {
+        LibraryOrganizationSortMode(rawValue: sortModeRawValue) ?? .name
+    }
+
+    private var sortModeBinding: Binding<LibraryOrganizationSortMode> {
+        Binding(
+            get: { sortMode },
+            set: { sortModeRawValue = $0.rawValue }
+        )
     }
 
     private var emptyStateView: some View {
         ContentUnavailableView(
-            emptyStateTitle,
-            systemImage: emptyStateSystemImage,
-            description: Text(emptyStateDescription)
+            hasSearchQuery ? String(localized: "No Matches") : viewModel.sectionKind.emptyStateTitle,
+            systemImage: hasSearchQuery ? "magnifyingglass" : viewModel.sectionKind.collectionSystemImageName,
+            description: Text(
+                hasSearchQuery
+                    ? String(localized: "No matches for “\(trimmedSearchQuery)”.")
+                    : viewModel.sectionKind.emptyStateDescription
+            )
         )
-        .padding(.vertical, 24)
+        .listRowBackground(Color.clear)
     }
 
-    private var displayedCollections: [LibraryOrganizationCollection] {
-        let orderedCollections = sortedCollections(viewModel.collections)
-
-        guard hasSearchQuery else {
-            return orderedCollections
+    private var subtitle: String {
+        let count = viewModel.collections.count
+        let countText: String
+        switch viewModel.sectionKind {
+        case .labels:
+            countText = count == 1 ? String(localized: "1 tag") : String(localized: "\(count) tags")
+        case .readingLists:
+            countText = count == 1 ? String(localized: "1 list") : String(localized: "\(count) lists")
         }
-
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return orderedCollections.filter { collection in
-            collection.displayTitle.localizedCaseInsensitiveContains(query)
-        }
+        return "\(viewModel.descriptor.displayName) · \(countText)"
     }
 
-    private var contentSectionTitle: String {
-        hasSearchQuery
-            ? String(localized: "Results")
-            : viewModel.sectionKind.title
+    private var trimmedSearchQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var hasSearchQuery: Bool {
-        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !trimmedSearchQuery.isEmpty
     }
 
-    private var emptyStateTitle: String {
-        hasSearchQuery
-            ? String(localized: "No Matches")
-            : viewModel.sectionKind.emptyStateTitle
-    }
+    private var displayedCollections: [LibraryOrganizationCollection] {
+        let ordered = viewModel.collections.sorted(by: sortMode)
 
-    private var emptyStateDescription: String {
-        hasSearchQuery
-            ? String(
-                localized: "No matches for \"\(searchQuery.trimmingCharacters(in: .whitespacesAndNewlines))\"."
-            )
-            : viewModel.sectionKind.emptyStateDescription
-    }
-
-    private var emptyStateSystemImage: String {
-        hasSearchQuery ? "magnifyingglass" : viewModel.sectionKind.systemImageName
-    }
-
-    private var supportsGridDisplay: Bool {
-        horizontalSizeClass == .regular
-            && (containerWidth == 0 || containerWidth >= AppLayout.regularInlineActionMinWidth)
-    }
-
-    private var usesCondensedTopBarActions: Bool {
-        !supportsGridDisplay
-    }
-
-    private var hasCondensedTopBarActions: Bool {
-        canSortCollections
-    }
-
-    private var usesProminentCollectionActions: Bool {
-        false
-    }
-
-    private var canSortCollections: Bool {
-        !viewModel.collections.isEmpty
-    }
-
-    private var collectionGridColumns: [GridItem] {
-        let widthRange = usesWideCollectionGridMetrics
-            ? LayoutMetrics.regularGridMinWidth...LayoutMetrics.regularGridMaxWidth
-            : LayoutMetrics.compactGridMinWidth...LayoutMetrics.compactGridMaxWidth
-        return [GridItem(.adaptive(minimum: widthRange.lowerBound, maximum: widthRange.upperBound), spacing: 16)]
-    }
-
-    private var usesWideCollectionGridMetrics: Bool {
-        horizontalSizeClass == .regular
-            && (containerWidth == 0 || containerWidth >= LayoutMetrics.wideGridMinContainerWidth)
-    }
-
-    private func sortedCollections(_ collections: [LibraryOrganizationCollection]) -> [LibraryOrganizationCollection] {
-        collections.sorted { lhs, rhs in
-            switch sortMode {
-            case .name:
-                return lhs.displayTitle.localizedStandardCompare(rhs.displayTitle) == .orderedAscending
-            case .comicCountDescending:
-                if lhs.comicCount == rhs.comicCount {
-                    return lhs.displayTitle.localizedStandardCompare(rhs.displayTitle) == .orderedAscending
-                }
-
-                return lhs.comicCount > rhs.comicCount
-            case .comicCountAscending:
-                if lhs.comicCount == rhs.comicCount {
-                    return lhs.displayTitle.localizedStandardCompare(rhs.displayTitle) == .orderedAscending
-                }
-
-                return lhs.comicCount < rhs.comicCount
-            }
+        guard hasSearchQuery else {
+            return ordered
         }
-    }
 
-    private func applySortMode(_ mode: LibraryOrganizationSortMode) {
-        sortMode = mode
-        Self.persistSortMode(mode, for: viewModel.sectionKind)
-    }
-
-    private func openCollection(_ collection: LibraryOrganizationCollection) {
-        appNavigator?.navigate(.library(.organizationCollection(viewModel.descriptor, collection)))
+        return ordered.filter { $0.displayTitle.localizedCaseInsensitiveContains(trimmedSearchQuery) }
     }
 
     private func presentCreateSheetIfNeeded() {
@@ -403,227 +346,6 @@ struct LibraryOrganizationView: View {
             )
         )
     }
-
-    @ViewBuilder
-    private var condensedTopBarActionsMenu: some View {
-        Menu {
-            if canSortCollections {
-                Menu {
-                    sortModeMenuContent
-                } label: {
-                    Label("Sort Collections", systemImage: "arrow.up.arrow.down.circle")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-        }
-        .accessibilityLabel("More Collection Actions")
-    }
-
-    @ViewBuilder
-    private var displayModeMenuContent: some View {
-        ForEach(LibraryComicDisplayMode.allCases) { mode in
-            Button {
-                applyDisplayMode(mode)
-            } label: {
-                HStack {
-                    Text(mode.title)
-                    Spacer()
-                    if displayMode == mode {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var sortModeMenuContent: some View {
-        ForEach(LibraryOrganizationSortMode.allCases) { mode in
-            Button {
-                applySortMode(mode)
-            } label: {
-                HStack {
-                    Text(mode.title)
-                    Spacer()
-                    if sortMode == mode {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-        }
-    }
-
-    private func applyDisplayMode(_ mode: LibraryComicDisplayMode) {
-        preferredDisplayMode = mode
-        Self.persistDisplayMode(mode, for: viewModel.sectionKind)
-        displayMode = supportsGridDisplay ? mode : .list
-    }
-
-    private static func sortModeStorageKey(for sectionKind: LibraryOrganizationSectionKind) -> String {
-        "libraryOrganizationOverviewSortMode.\(sectionKind.rawValue)"
-    }
-
-    private static func loadStoredSortMode(
-        for sectionKind: LibraryOrganizationSectionKind
-    ) -> LibraryOrganizationSortMode {
-        let defaults = UserDefaults.standard
-        let storageKey = sortModeStorageKey(for: sectionKind)
-
-        if let rawValue = defaults.string(forKey: storageKey),
-           let mode = LibraryOrganizationSortMode(rawValue: rawValue) {
-            return mode
-        }
-
-        return .name
-    }
-
-    private static func persistSortMode(
-        _ mode: LibraryOrganizationSortMode,
-        for sectionKind: LibraryOrganizationSectionKind
-    ) {
-        UserDefaults.standard.set(
-            mode.rawValue,
-            forKey: sortModeStorageKey(for: sectionKind)
-        )
-    }
-
-    private static func displayModeStorageKey(for sectionKind: LibraryOrganizationSectionKind) -> String {
-        "libraryOrganizationOverviewDisplayMode.\(sectionKind.rawValue)"
-    }
-
-    private static func loadStoredDisplayMode(
-        for sectionKind: LibraryOrganizationSectionKind
-    ) -> LibraryComicDisplayMode {
-        let defaults = UserDefaults.standard
-        let storageKey = displayModeStorageKey(for: sectionKind)
-
-        if let rawValue = defaults.string(forKey: storageKey),
-           let mode = LibraryComicDisplayMode(rawValue: rawValue) {
-            return mode
-        }
-
-        return .grid
-    }
-
-    private static func persistDisplayMode(
-        _ mode: LibraryComicDisplayMode,
-        for sectionKind: LibraryOrganizationSectionKind
-    ) {
-        UserDefaults.standard.set(
-            mode.rawValue,
-            forKey: displayModeStorageKey(for: sectionKind)
-        )
-    }
-
-    private var deletingCollectionConfirmationBinding: Binding<Bool> {
-        Binding(
-            get: { deletingCollection != nil },
-            set: { isPresented in
-                if !isPresented {
-                    deletingCollection = nil
-                }
-            }
-        )
-    }
-
-    private var deletingCollectionDialogTitle: String {
-        guard let deletingCollection else {
-            return String(localized: "Delete Collection")
-        }
-
-        return deleteCollectionActionTitle(for: deletingCollection)
-    }
-
-    private func deleteCollectionActionTitle(for collection: LibraryOrganizationCollection) -> String {
-        switch collection.type {
-        case .label:
-            return String(localized: "Delete Tag")
-        case .readingList:
-            return String(localized: "Delete Reading List")
-        }
-    }
-
-    private func deleteCollectionMessage(for collection: LibraryOrganizationCollection) -> String {
-        switch collection.type {
-        case .label:
-            return String(localized: "This removes the tag and its assignments from the library database.")
-        case .readingList:
-            return String(localized: "This removes the reading list and its assigned comics from the library database.")
-        }
-    }
-
-    private func configurePreferredDisplayModeIfNeeded() {
-        guard !hasConfiguredPreferredDisplayMode else {
-            return
-        }
-
-        hasConfiguredPreferredDisplayMode = true
-        displayMode = supportsGridDisplay ? preferredDisplayMode : .list
-    }
-
-    private func adaptDisplayModeForCurrentWidth() {
-        if supportsGridDisplay {
-            displayMode = preferredDisplayMode
-        } else if displayMode == .grid {
-            displayMode = .list
-        }
-    }
-
-    @ViewBuilder
-    private func collectionActionMenu(
-        for collection: LibraryOrganizationCollection,
-        style: CollectionActionAffordanceStyle = .icon
-    ) -> some View {
-        Menu {
-            Button {
-                editingCollection = collection
-            } label: {
-                Label(
-                    collection.type == .label ? "Edit Tag" : "Edit Reading List",
-                    systemImage: "square.and.pencil"
-                )
-            }
-
-            Button(role: .destructive) {
-                deletingCollection = collection
-            } label: {
-                Label(
-                    deleteCollectionActionTitle(for: collection),
-                    systemImage: "trash"
-                )
-            }
-        } label: {
-            Group {
-                if style == .compactCapsule {
-                    Label("Manage", systemImage: "ellipsis.circle")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
-                } else if style == .elevatedIcon {
-                    Image(systemName: "ellipsis.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                        .background(.ultraThinMaterial, in: Circle())
-                } else {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Collection Actions")
-    }
-}
-
-private enum CollectionActionAffordanceStyle {
-    case icon
-    case compactCapsule
-    case elevatedIcon
 }
 
 private struct LibraryOrganizationCreateSheet: View {

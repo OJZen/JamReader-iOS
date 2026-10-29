@@ -68,6 +68,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.libraryListViewModel = libraryListViewModel
         self.memoryPressureCoordinator = memoryPressureCoordinator
         self.appRootCoordinator = appRootCoordinator
+
+        #if DEBUG
+        AcceptanceLaunchSupport.run(
+            dependencies: dependencies,
+            libraryListViewModel: libraryListViewModel,
+            rootViewController: appRootCoordinator.rootViewController
+        )
+        #endif
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {

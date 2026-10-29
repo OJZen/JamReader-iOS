@@ -1,9 +1,13 @@
 import Foundation
 
+/// Quick filters for the comics in one folder or collection: All, Unread,
+/// In Progress, Read and With Bookmarks. In Progress is the in-library
+/// continue reading.
 enum LibraryComicQuickFilter: String, CaseIterable, Identifiable {
     case all
     case unread
-    case favorites
+    case reading
+    case read
     case bookmarked
 
     var id: String {
@@ -16,23 +20,12 @@ enum LibraryComicQuickFilter: String, CaseIterable, Identifiable {
             return String(localized: "All")
         case .unread:
             return String(localized: "Unread")
-        case .favorites:
-            return String(localized: "Favorites")
+        case .reading:
+            return String(localized: "In Progress")
+        case .read:
+            return String(localized: "Read")
         case .bookmarked:
-            return String(localized: "Bookmarked")
-        }
-    }
-
-    var systemImageName: String {
-        switch self {
-        case .all:
-            return "square.grid.2x2"
-        case .unread:
-            return "book.closed"
-        case .favorites:
-            return "star"
-        case .bookmarked:
-            return "bookmark"
+            return String(localized: "With Bookmarks")
         }
     }
 
@@ -41,9 +34,11 @@ enum LibraryComicQuickFilter: String, CaseIterable, Identifiable {
         case .all:
             return true
         case .unread:
-            return !comic.read
-        case .favorites:
-            return comic.isFavorite
+            return !comic.read && !comic.isInProgress
+        case .reading:
+            return comic.isInProgress
+        case .read:
+            return comic.read
         case .bookmarked:
             return !comic.bookmarkPageIndices.isEmpty
         }
@@ -51,6 +46,11 @@ enum LibraryComicQuickFilter: String, CaseIterable, Identifiable {
 }
 
 extension LibraryComic {
+    /// Opened and not finished, the same rule as Continue Reading.
+    var isInProgress: Bool {
+        !read && hasBeenOpened
+    }
+
     func matchesSearchQuery(_ query: String) -> Bool {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedQuery.isEmpty else {

@@ -917,6 +917,7 @@ struct RemoteOfflineShelfView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
+            .tint(.appJam)
             .accessibilityIdentifier("remoteOfflineShelf.retry")
         }
     }

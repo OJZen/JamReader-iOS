@@ -177,7 +177,7 @@ struct ComicStatusMetaRow: View {
 
             Text(progressText)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(isRead ? Color.statusRead : .secondary)
+                .foregroundStyle(isRead ? Color.statusRead : Color.textSecondary)
 
             if isFavorite {
                 dot
@@ -193,7 +193,7 @@ struct ComicStatusMetaRow: View {
                     .foregroundStyle(Color.appAccent)
                 Text("\(bookmarkCount)")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.textSecondary)
             }
 
             Spacer(minLength: 0)
@@ -282,17 +282,14 @@ struct InlineMetadataLine: View {
 
 struct StatusBadgeItem: Identifiable {
     let id: String
-    let title: String
-    let tint: Color
+    let status: StatusBadge.Status
 
     init(
-        title: String,
-        tint: Color,
+        status: StatusBadge.Status,
         id: String? = nil
     ) {
-        self.id = id ?? title
-        self.title = title
-        self.tint = tint
+        self.id = id ?? status.title
+        self.status = status
     }
 }
 
@@ -319,23 +316,15 @@ struct AdaptiveStatusBadgeGroup: View {
     var verticalSpacing: CGFloat = 6
 
     private var visibleBadges: [StatusBadgeItem] {
-        badges.filter { !$0.title.isEmpty }
+        badges.filter { !$0.status.title.isEmpty }
     }
 
     @ViewBuilder
     var body: some View {
         if !visibleBadges.isEmpty {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: horizontalSpacing) {
-                    ForEach(visibleBadges) { badge in
-                        StatusBadge(title: badge.title, tint: badge.tint)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: verticalSpacing) {
-                    ForEach(visibleBadges) { badge in
-                        StatusBadge(title: badge.title, tint: badge.tint)
-                    }
+            WrappingHStack(horizontalSpacing: horizontalSpacing, verticalSpacing: verticalSpacing) {
+                ForEach(visibleBadges) { badge in
+                    StatusBadge(status: badge.status)
                 }
             }
         }

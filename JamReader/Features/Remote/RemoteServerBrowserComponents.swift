@@ -221,7 +221,7 @@ struct RemoteBrowserContextGlyph: View {
     let isRoot: Bool
 
     private var tint: Color {
-        isRoot ? .teal : .blue
+        .appAccent
     }
 
     private var systemImage: String {
@@ -243,7 +243,7 @@ struct RemoteBrowserContextGlyph: View {
 struct RemoteBrowserQuickActionLabel: View {
     let title: String
     let systemImage: String
-    var tint: Color = .blue
+    var tint: Color = .appAccent
 
     var body: some View {
         HStack(spacing: Spacing.xs) {
@@ -315,11 +315,11 @@ struct RemoteDirectoryItemListRow: View {
 
     private var titleTint: Color {
         if item.isDirectory {
-            return .blue
+            return .appAccent
         }
 
         if item.canOpenAsComic {
-            return .green
+            return .textSecondary
         }
 
         return .secondary
@@ -333,7 +333,7 @@ struct RemoteDirectoryItemListRow: View {
                 RemoteInlineMetadataItem(
                     systemImage: "folder",
                     text: String(localized: "Folder"),
-                    tint: .blue
+                    tint: .textSecondary
                 )
             )
 
@@ -370,14 +370,12 @@ struct RemoteDirectoryItemListRow: View {
             return items
         }
 
-        if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+        if let cacheStatus = cacheAvailability.statusBadgeStatus {
             items.append(
                 RemoteInlineMetadataItem(
-                    systemImage: cacheAvailability.kind == .current
-                        ? "arrow.down.circle.fill"
-                        : "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90",
-                    text: cacheBadgeTitle,
-                    tint: cacheAvailability.kind == .current ? .blue : .orange
+                    systemImage: cacheStatus.systemImage ?? "arrow.down.circle",
+                    text: cacheStatus.title,
+                    tint: cacheStatus.foregroundColor
                 )
             )
             return items
@@ -447,7 +445,7 @@ struct RemoteDirectoryItemListRow: View {
             } else {
                 RemoteDirectorySymbolTile(
                     systemImage: item.isDirectory ? "folder.fill" : "doc.richtext.fill",
-                    tint: item.isDirectory ? .blue : .green,
+                    tint: item.isDirectory ? .appAccent : .textTertiary,
                     width: 44,
                     height: 62
                 )
@@ -551,11 +549,11 @@ struct RemoteDirectoryGridCard: View {
 
     private var titleTint: Color {
         if item.isDirectory {
-            return .blue
+            return .appAccent
         }
 
         if item.canOpenAsComic {
-            return .green
+            return .textSecondary
         }
 
         return .secondary
@@ -616,16 +614,12 @@ struct RemoteDirectoryGridCard: View {
                         height: imageHeight
                     )
                 } else {
-                    LinearGradient(
-                        colors: [Color.blue.opacity(0.12), Color.blue.opacity(0.22)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+                    Color.surfaceSecondary
                     .frame(width: cardWidth, height: imageHeight)
                     .overlay {
                         Image(systemName: "folder.fill")
                             .font(.system(size: cardWidth * 0.22, weight: .semibold))
-                            .foregroundStyle(.blue.opacity(0.75))
+                            .foregroundStyle(Color.appAccent)
                     }
                 }
             }
@@ -640,7 +634,7 @@ struct RemoteDirectoryGridCard: View {
             GeometryReader { proxy in
                 let progress = CGFloat(session.currentPage) / CGFloat(pageCount)
                 Rectangle()
-                    .fill(Color.blue.opacity(0.8))
+                    .fill(Color.appJam)
                     .frame(width: proxy.size.width * progress, height: 3)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -713,19 +707,17 @@ private struct RemoteDirectoryItemPresentation {
                 RemoteInlineMetadataItem(
                     systemImage: "book.closed",
                     text: readingSession.progressText,
-                    tint: readingSession.read ? .green : .orange
+                    tint: readingSession.readingProgressTint
                 )
             )
         }
 
-        if let cacheBadgeTitle = cacheAvailability.badgeTitle {
+        if let cacheStatus = cacheAvailability.statusBadgeStatus {
             metadataItems.append(
                 RemoteInlineMetadataItem(
-                    systemImage: cacheAvailability.kind == .current
-                        ? "arrow.down.circle.fill"
-                        : "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90",
-                    text: cacheBadgeTitle,
-                    tint: cacheAvailability.kind == .current ? .blue : .orange
+                    systemImage: cacheStatus.systemImage ?? "arrow.down.circle",
+                    text: cacheStatus.title,
+                    tint: cacheStatus.foregroundColor
                 )
             )
         }
@@ -776,7 +768,7 @@ private struct RemoteDirectoryItemPresentation {
             supportingSystemImage = "doc.fill"
         }
         self.supportingSystemImage = supportingSystemImage
-        self.supportingTint = item.isDirectory ? .blue : .secondary
+        self.supportingTint = .textSecondary
     }
 }
 
@@ -848,7 +840,7 @@ private struct RemoteDirectoryPreviewThumbnailView: View {
             if previewItems.isEmpty {
                 Image(systemName: "folder.fill")
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appAccent)
             } else {
                 previewGrid(previewItems)
                     .padding(4)
@@ -943,7 +935,7 @@ struct RemoteBrowserImportProgressView: View {
 
                 if let fraction = progress.clampedFraction {
                     ProgressView(value: fraction)
-                        .tint(.accentColor)
+                        .tint(.appJam)
                 } else {
                     HStack(spacing: Spacing.sm) {
                         ProgressView()
@@ -1038,7 +1030,7 @@ struct RemoteBrowserCollapsibleImportProgressView: View {
 
                 if let fraction = progress.clampedFraction {
                     ProgressView(value: fraction)
-                        .tint(.accentColor)
+                        .tint(.appJam)
                 } else {
                     HStack(spacing: Spacing.sm) {
                         ProgressView()
@@ -1144,6 +1136,7 @@ struct RemoteBrowserFeedbackCard: View {
                        let primaryAction = feedback.primaryAction {
                         Button(primaryAction.title, action: onPrimaryAction)
                             .buttonStyle(.borderedProminent)
+                            .tint(.appJam)
                             .controlSize(.small)
                             .frame(minHeight: 44)
                     }
@@ -1176,9 +1169,9 @@ struct RemoteBrowserFeedbackCard: View {
     private var iconTint: Color {
         switch feedback.kind {
         case .success:
-            return .green
+            return .appSuccess
         case .info:
-            return .blue
+            return .appAccent
         }
     }
 }
@@ -1213,7 +1206,7 @@ private struct RemoteBrowserImportOrb: View {
                         AngularGradient(
                             colors: [
                                 Color.white.opacity(0.88),
-                                .accentColor,
+                                .appJam,
                                 Color.white.opacity(0.88)
                             ],
                             center: .center
@@ -1224,7 +1217,7 @@ private struct RemoteBrowserImportOrb: View {
             } else {
                 ProgressView()
                     .progressViewStyle(.circular)
-                    .tint(.accentColor)
+                    .tint(.appJam)
                     .scaleEffect(max(0.65, size / 72))
             }
 

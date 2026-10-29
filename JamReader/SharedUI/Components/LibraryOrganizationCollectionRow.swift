@@ -23,7 +23,7 @@ struct LibraryOrganizationCollectionRow: View {
 
             if showsAssignmentIndicator {
                 Image(systemName: collection.isAssigned ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(collection.isAssigned ? Color.green : Color.secondary)
+                    .foregroundStyle(collection.isAssigned ? Color.appJam : Color.secondary)
                     .accessibilityHidden(true)
             } else if let trailingLabel {
                 Text(trailingLabel)
@@ -56,7 +56,7 @@ struct LibraryOrganizationCollectionRow: View {
         case .readingList:
             Image(systemName: collection.systemImageName)
                 .font(.title3)
-                .foregroundStyle(.blue)
+                .foregroundStyle(Color.appSuccess)
                 .frame(width: 28, height: 28)
         }
     }

@@ -79,7 +79,7 @@ struct ReaderPageJumpOverlay: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous)
                             .stroke(
-                                isPageFieldFocused ? Color.accentColor.opacity(0.5) : Color.black.opacity(0.08),
+                                isPageFieldFocused ? Color.appReaderAccent.opacity(0.5) : Color.black.opacity(0.08),
                                 lineWidth: isPageFieldFocused ? 1.5 : 1
                             )
                     )
@@ -107,7 +107,7 @@ struct ReaderPageJumpOverlay: View {
                             isPageFieldFocused = false
                         }
                     }
-                    .tint(.accentColor)
+                    .tint(.appReaderAccent)
                     .onChange(of: sliderPageNumber) { _, newValue in
                         let pageNumber = min(max(Int(newValue.rounded()), 1), maximumPageCount)
                         let updatedText = "\(pageNumber)"
@@ -126,6 +126,7 @@ struct ReaderPageJumpOverlay: View {
 
                     Button("OK", action: onJump)
                         .buttonStyle(.borderedProminent)
+                        .tint(.appJam)
                         .controlSize(.large)
                         .disabled(!isValidPageNumber)
                 }

@@ -31,6 +31,7 @@ Use these requirements when changing UI. They do not imply that every manual acc
 - Lists and grids must remain responsive with large libraries and remote directories. Reuse UIKit-backed high-frequency surfaces and bound thumbnail/prefetch work.
 - Loading should preserve context when possible. Empty states offer one useful next action; error states preserve the real error and a recovery action.
 - Use semantic colors and materials so light/dark mode, contrast, and iPad selection remain coherent. Do not encode state with color alone.
+- Brand and status colors are asset colors exposed through `DesignTokens.swift`. `appAccent` (AccentColor) is for tappable text and icons only. Fills and marks—prominent buttons (always `.tint(.appJam)`), progress bars, selection checks—use `appJam` with `appOnJam` content. Reader-only accents use `appReaderAccent`; switches keep the system green. Status labels use `StatusBadge` (icon + text) or its `Status` icon and color.
 - Settings uses the General, Reading, Library, and Storage categories defined by `SettingsHomePane` on every size. iPhone starts from the category list; iPad presents that list as a persistent sidebar and restores its selected detail. Expose only enforceable global defaults; leave one-off or context-specific choices in their owning flow. Open Storage management directly, without duplicate overview, summary, or management layers.
 
 ## Change Checklist
