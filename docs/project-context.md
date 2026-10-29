@@ -10,6 +10,8 @@ JamReader is a native iPhone and iPad comic reader with three primary areas:
 - **Remote** (tab title; the code keeps `AppRootTab.browse` and the `Browse` / `Remote` feature folders) manages SMB/WebDAV servers, remote directories, saved folders, history, online reading, imports, and offline copies.
 - **Settings** owns app startup behavior, the shared reader default and display behavior, reusable import defaults, storage/cache policy, library maintenance, and app information.
 
+Designer-facing product requirements, user flows, and redesign boundaries live in [design requirements](design-requirements.md). Proposed UI changes there are not claims about current runtime behavior.
+
 The [root README](../README.md#highlights) lists supported formats. Extension policy is centralized in `JamReader/Core/Types/SupportedComicFormats.swift`; image directories are recognized by the scanner and opened through `DirectoryImageSequenceReader`. Engine selection and local MuPDF build inputs are documented in the [development workflow](development-workflow.md#build-and-static-checks).
 
 MOBI is intentionally unsupported. Adding a format requires coordinated importing, scanning, local opening, remote presentation, tests, localization, and product documentation; `SupportedComicFormats` remains the runtime policy owner.
@@ -69,7 +71,7 @@ Remote cover work uses the thumbnail pipeline and supported random/range readers
 - `ZoomableImagePageView` owns zoom/pan coordination for paged image readers.
 - `ReaderGestureCoordinator` and UIKit recognizers own reader gestures.
 - `ReaderChromeOverlay` and related controls are presentation layers; they must not change reader viewport geometry.
-- `ReaderLayoutPreferencesStore` owns one layout default shared by every image-sequence comic; library file types do not create separate reader profiles.
+- `ReaderLayoutPreferencesStore` owns one shared layout default for image comics; library file types do not create separate reader profiles. Rendered PDF/EPUB pages use `normalizedForRenderedDocument` (paged, single page, left-to-right, fit page, with current rotation); the EPUB web fallback has separate page interactions and location storage.
 
 Reader lifecycle, viewport synchronization, zoom preservation, gestures, transitions, and background restoration are high-risk. Read the reader sections of [`maintenance-pitfalls.md`](maintenance-pitfalls.md) and run focused tests before changing them.
 

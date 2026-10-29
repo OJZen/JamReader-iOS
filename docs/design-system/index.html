@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JamReader 设计系统预览</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg-grouped); color: var(--ink); font-family: var(--font-sans); }
+  .app { display: flex; height: 100%; }
+  nav { width: 260px; flex: none; overflow: auto; padding: 18px 10px 24px; border-right: .5px solid var(--separator); background: var(--bg-grouped); }
+  nav h1 { font-size: 20px; line-height: 25px; margin: 0 10px 2px; }
+  nav p.sub { margin: 0 10px 14px; font-size: 12px; color: var(--ink-2); }
+  nav h2 { font-size: 12px; font-weight: 600; color: var(--ink-2); margin: 16px 10px 4px; }
+  nav button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); font: inherit; font-size: 14px; padding: 7px 10px; border-radius: var(--radius-md); cursor: pointer; }
+  nav button:hover { background: var(--fill); }
+  nav button[aria-current="true"] { background: var(--fill); font-weight: 600; color: var(--accent); }
+  nav button:focus-visible, .seg button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: .5px solid var(--separator); }
+  header .ttl { flex: 1; min-width: 0; }
+  header b { font-size: 17px; }
+  header span { display: block; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header a { font-size: 13px; color: var(--accent); white-space: nowrap; }
+  .seg { display: flex; background: var(--fill); border-radius: 9px; padding: 2px; }
+  .seg button { border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--surface); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .stage { flex: 1; overflow: auto; padding: 20px; }
+  .frame { transform-origin: 0 0; border: 0; display: block; background: transparent; }
+  @media (max-width: 760px) { .app { flex-direction: column; } nav { width: auto; height: 34vh; border-right: 0; border-bottom: .5px solid var(--separator); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav id="nav" aria-label="卡片"><h1>JamReader</h1><p class="sub">设计系统 · 静态预览</p></nav>
+  <main>
+    <header>
+      <div class="ttl"><b id="t"></b><span id="s"></span></div>
+      <a id="readme" href="#" target="_blank" rel="noopener">说明</a>
+      <a id="open" href="#" target="_blank" rel="noopener">单独打开</a>
+      <div class="seg" role="group" aria-label="外观">
+        <button data-theme="light">浅色</button><button data-theme="dark">深色</button>
+      </div>
+    </header>
+    <div class="stage" id="stage"><iframe class="frame" id="f" title="预览"></iframe></div>
+  </main>
+</div>
+<script>
+const cards = [{"name": "Cover", "group": "封面", "w": 960, "h": 300, "summary": ""}, {"name": "InformationArchitecture", "group": "信息架构", "w": 1100, "h": 722, "summary": "信息架构总览：三个一级分区 + 全屏阅读器。只画现有功能；标“功能变化”的是本次确认要加的两项。"}, {"name": "ScreenAddComics", "group": "页面 · iPhone", "w": 1400, "h": 968, "summary": "“添加漫画”流程：书库首页 [+] 与空态按钮进入同一个 Sheet。"}, {"name": "ScreenCollections", "group": "页面 · iPhone", "w": 960, "h": 968, "summary": "集合页（复用 `LibrarySpecialCollectionView` / `LibraryOrganizationCollectionDetailView` 的同一布局）。"}, {"name": "ScreenComicActions", "group": "页面 · iPhone", "w": 960, "h": 968, "summary": "漫画管理：点封面阅读，长按或“更多”管理（同一组动作，见 MoreMenu）。"}, {"name": "ScreenLibraryContent", "group": "页面 · iPhone", "w": 1400, "h": 968, "summary": "书库内容页：文件夹逐级浏览 + 漫画网格（iPhone 默认 3 列网格，可切列表——**改版变化**）。"}, {"name": "ScreenLibraryHome", "group": "页面 · iPhone", "w": 960, "h": 968, "summary": "书库首页（iPhone）。"}, {"name": "ScreenOffline", "group": "页面 · iPhone", "w": 960, "h": 968, "summary": "离线书架与已保存文件夹（各一个页面，范围为全部服务器或当前服务器）。"}, {"name": "ScreenRemoteActions", "group": "页面 · iPhone", "w": 1400, "h": 968, "summary": "远程漫画的三种意图与准备阅读。"}, {"name": "ScreenRemoteHome", "group": "页面 · iPhone", "w": 1400, "h": 968, "summary": "远程首页（原“浏览”）。"}, {"name": "ScreenRemoteServer", "group": "页面 · iPhone", "w": 1400, "h": 968, "summary": "服务器详情与远程目录。"}, {"name": "ScreenSettings", "group": "页面 · iPhone", "w": 1400, "h": 968, "summary": "设置：通用 / 阅读 / 书库 / 存储（`SettingsHomePane`），iPhone 列表进入，iPad 侧栏常驻。"}, {"name": "ScreenReaderPaged", "group": "页面 · 阅读器", "w": 1400, "h": 968, "summary": "分页阅读器（iPhone）。只改顶栏与面板；画面、手势、底部导航列表不变。"}, {"name": "ScreenReaderVertical", "group": "页面 · 阅读器", "w": 960, "h": 968, "summary": "竖向连续阅读：整页宽度、上下滚动、画布缩放平移；向右滑关闭。"}, {"name": "ScreenIPad", "group": "页面 · iPad", "w": 1240, "h": 900, "summary": "iPad 书库：UIKit split view，侧栏常驻“来源 + 集合”，内容区宽网格（6 列）。"}, {"name": "ScreenDuoLibrary", "group": "页面 · iPhone Duo", "w": 1440, "h": 1572, "summary": "iPhone Duo 上的书库（远程、设置的外壳同理）。完整规则见“iPhone Duo”章节（仓库中为 `06-iphone-duo.md`）。设备框按比例示意，不是实际点数。"}, {"name": "ScreenDuoReader", "group": "页面 · iPhone Duo", "w": 1400, "h": 2200, "summary": "iPhone Duo 上的阅读器。完整规则见“iPhone Duo”章节（仓库中为 `06-iphone-duo.md`）与“阅读器”章节。设备框按比例示意。"}, {"name": "ComicCover", "group": "封面与条目", "w": 820, "h": 482, "summary": "封面条目：漫画在网格中的唯一表达，封面占主体，书名两行，副标题一行说明当前最重要的一个状态。"}, {"name": "ComicRow", "group": "封面与条目", "w": 430, "h": 352, "summary": "列表行：信息密度更高的条目，用于列表模式、搜索结果、阅读历史、离线书架。"}, {"name": "ContinueReading", "group": "封面与条目", "w": 430, "h": 439, "summary": "继续阅读：首页与书库根目录的第一块内容，让“接着看”成为最短路径。"}, {"name": "FolderAndCollection", "group": "封面与条目", "w": 780, "h": 294, "summary": "文件夹卡与集合入口。"}, {"name": "ConfirmDialog", "group": "状态与反馈", "w": 680, "h": 302, "summary": "破坏性确认：说清删什么、留什么。用系统 Alert / confirmationDialog，按钮文字是具体动词。"}, {"name": "EmptyState", "group": "状态与反馈", "w": 700, "h": 309, "summary": "空状态：说明这里能做什么，给一个主要下一步。基于系统 `ContentUnavailableView` 的结构。"}, {"name": "Notice", "group": "状态与反馈", "w": 430, "h": 396, "summary": "行内提示：错误、权限、只读、搜索范围等需要解释原因的状态，放在内容顶部，不弹窗打断。"}, {"name": "StatusBadge", "group": "状态与反馈", "w": 640, "h": 140, "summary": "状态标识：图标 + 文字的胶囊，颜色只做辅助，读屏读出文字。"}, {"name": "TaskBanner", "group": "状态与反馈", "w": 430, "h": 268, "summary": "长任务浮条：导入、远程导入、批量离线保存的唯一进度入口（复用现有 `LibraryImportProgressView` 位置，`safeAreaInset(.bottom)`）。"}, {"name": "Toast", "group": "状态与反馈", "w": 560, "h": 76, "summary": "轻提示：非阻断的成功反馈（沿用 `LightToast`），2.5 秒消失，可附一个“去看看”的目标动作。失败不要用 Toast，用 Notice 或 Alert。"}, {"name": "NavigationBar", "group": "导航", "w": 430, "h": 207, "summary": "页面头部：大标题 + 位置 + 范围明确的搜索。使用系统导航栏与 `.searchable`。"}, {"name": "Sidebar", "group": "导航", "w": 360, "h": 552, "summary": "iPad 侧栏：在一屏内同时看到“来源”与“集合”，用 UIKit split view（现有外壳）。"}, {"name": "TabBar", "group": "导航", "w": 430, "h": 152, "summary": "iPhone 一级导航：书库 · 远程 · 设置（原“浏览”改名“远程”，避免与“浏览书库”混淆）。"}, {"name": "Buttons", "group": "操作", "w": 720, "h": 142, "summary": "按钮：系统按钮样式，不自造形状。"}, {"name": "FilterChips", "group": "操作", "w": 460, "h": 108, "summary": "快捷筛选（`FilterChipBar` 重绘）：集合页与书库内容页顶部的单选筛选。"}, {"name": "MoreMenu", "group": "操作", "w": 600, "h": 356, "summary": "“更多”菜单：漫画、书库、服务器的管理动作集中在一处。行尾 `ellipsis` 按钮、长按、侧滑都打开同一组动作。"}, {"name": "SelectionBar", "group": "操作", "w": 430, "h": 152, "summary": "批量选择底栏：进入“选择”后替换标签栏位置。"}, {"name": "FormField", "group": "表单与设置", "w": 430, "h": 388, "summary": "表单行：服务器编辑、书库改名、资料编辑使用系统 `Form`（inset grouped）。"}, {"name": "SettingsRow", "group": "表单与设置", "w": 430, "h": 372, "summary": "设置行：系统 `Form` 行 + 30pt 圆角图标块（彩色只用于设置页的分类识别）。"}, {"name": "ProtectedNavigation", "group": "阅读器", "w": 700, "h": 472, "summary": "**受保护组件，不在本次改版范围。** 分页阅读底部缩略图导航列表（`ReaderBottomBar` + `ReaderThumbnailScrubber`，含其页码胶囊与浮动预览）和竖向阅读右侧缩略图导航列表（`ReaderVerticalThumbnailRail`）原样沿用。"}, {"name": "ReaderDisplayPanel", "group": "阅读器", "w": 850, "h": 578, "summary": "显示设置面板（`Aa`）：把原 `ReaderControlsSheet` 中的布局部分独立出来，所见即所得地调整。"}, {"name": "ReaderMoreMenu", "group": "阅读器", "w": 430, "h": 496, "summary": "阅读器“更多”菜单：替代现有一整屏的 `ReaderControlsSheet`，按“页面 / 这本漫画”分组。"}, {"name": "ReaderTopBar", "group": "阅读器", "w": 430, "h": 216, "summary": "阅读器顶栏（重设计，`ReaderTopBar`）。叠加在画面上，显示/隐藏不改变漫画尺寸。"}];
+const nav = document.getElementById('nav'), f = document.getElementById('f'), stage = document.getElementById('stage');
+let theme = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+let current = cards[0];
+let group = '';
+const labels = { 'Cover': '封面' };
+cards.forEach(c => {
+  if (c.group !== group) { group = c.group; const h = document.createElement('h2'); h.textContent = group; nav.appendChild(h); }
+  const b = document.createElement('button'); b.textContent = labels[c.name] || c.name; b.dataset.name = c.name;
+  b.onclick = () => { show(c); history.replaceState(null, '', '#' + c.name); };
+  nav.appendChild(b);
+});
+function fit() {
+  const avail = stage.clientWidth - 40, s = Math.min(1, avail / current.w);
+  f.style.width = current.w + 'px'; f.style.height = current.h + 'px';
+  f.style.transform = 'scale(' + s + ')';
+  f.parentElement.style.height = '';
+  f.style.marginBottom = (current.h * s - current.h) + 'px';
+}
+function show(c) {
+  current = c;
+  const src = 'components/' + c.name + '/preview.html?theme=' + theme;
+  f.src = src;
+  document.getElementById('open').href = src;
+  document.getElementById('readme').href = 'components/' + c.name + '/README.md';
+  document.getElementById('readme').style.display = c.name === 'Cover' ? 'none' : '';
+  document.getElementById('t').textContent = labels[c.name] || c.name;
+  document.getElementById('s').textContent = c.summary.replace(/[`*]/g, '');
+  nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-current', b.dataset.name === c.name));
+  fit();
+}
+function setTheme(t) {
+  theme = t; document.documentElement.setAttribute('data-theme', t);
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.theme === t));
+  show(current);
+}
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setTheme(b.dataset.theme));
+window.addEventListener('resize', fit);
+const start = cards.find(c => c.name === location.hash.slice(1)) || cards[0];
+current = start; setTheme(theme);
+</script>
+</body>
+</html>

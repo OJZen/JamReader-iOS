@@ -28,3 +28,8 @@ Open `JamReader.xcodeproj` in Xcode. Canonical build, test, validation, artifact
 
 - [Agent entry point](AGENTS.md)
 - [Documentation index](docs/README.md)
+
+## UI/UX Design
+
+- [设计需求与操作流程（面向设计师）](docs/design-requirements.md)
+- [设计系统与分批实施计划](docs/design-system/README.md)

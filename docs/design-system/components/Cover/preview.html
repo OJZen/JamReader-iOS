@@ -1,0 +1,50 @@
+<!-- @dsCard height=300 -->
+<!doctype html>
+<html lang="zh-CN">
+<head><link rel="stylesheet" href="../../tokens.css"><link rel="stylesheet" href="../bundle.css"><script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t);})();</script><meta charset="utf-8"><title>JamReader — cover</title>
+<style>
+  html, body { margin: 0; }
+  .cv { position: relative; width: 960px; height: 300px; background: var(--bg-grouped); overflow: hidden; font-family: var(--font-sans); }
+  .cv svg { position: absolute; left: 480px; top: 0; width: 480px; height: 300px; }
+  .jam { fill: var(--jam); } .deep { fill: var(--jam-deep); } .ink { fill: var(--ink); } .honey { fill: var(--favorite); } .soft { fill: var(--accent-soft); }
+  .page { fill: var(--ink-3); }
+  .tile { rx: var(--radius-cover); ry: var(--radius-cover); }
+  .pill { rx: 2px; ry: 2px; }
+  .txt { position: absolute; left: 48px; bottom: 44px; max-width: 440px; }
+  .name { color: var(--ink); font-size: 76px; line-height: .95; font-weight: 700; letter-spacing: -1.5px; margin: 0; }
+  .tag { color: var(--ink-2); font-size: 14px; line-height: 20px; margin: 14px 0 0; }
+</style></head>
+<body>
+<div class="cv">
+  <!--
+    blocks: jam 132x198, jam-deep 108x162, favorite (honey) 96x144, ink 84x126 — all 2:3 comic covers, corners radius-cover (6px)
+    arrangement: a staggered shelf of covers on a common baseline (y=252), tallest jam cover at left, jam-deep overlapping it like a second volume
+    pattern: "a literal motif" — the reading-progress bar plus a row of 9 small 2:3 page tiles (ink-3) above the shelf, one tile in jam marking "where you stopped". Chosen because the product is covers and reading position, and the name is Jam.
+    steps/radii: gaps 12 (space-sm) and 20 (space-lg), tiles 12x18 at pitch 16 (space-md), radius-cover 6, progress bar 4 high
+  -->
+  <svg viewBox="0 0 480 300" aria-hidden="true">
+    <rect class="jam tile" x="40" y="54" width="132" height="198"/>
+    <rect class="deep tile" x="152" y="90" width="108" height="162"/>
+    <rect class="honey tile" x="280" y="108" width="96" height="144"/>
+    <rect class="ink tile" x="388" y="126" width="84" height="126"/>
+    <rect class="jam pill" x="40" y="260" width="88" height="4"/>
+    <rect class="page pill" x="128" y="260" width="44" height="4"/>
+    <g>
+      <rect class="page pill" x="196" y="22" width="12" height="18"/>
+      <rect class="page pill" x="212" y="22" width="12" height="18"/>
+      <rect class="page pill" x="228" y="22" width="12" height="18"/>
+      <rect class="jam pill" x="244" y="18" width="16" height="24"/>
+      <rect class="page pill" x="264" y="22" width="12" height="18"/>
+      <rect class="page pill" x="280" y="22" width="12" height="18"/>
+      <rect class="page pill" x="296" y="22" width="12" height="18"/>
+      <rect class="page pill" x="312" y="22" width="12" height="18"/>
+      <rect class="page pill" x="328" y="22" width="12" height="18"/>
+    </g>
+  </svg>
+  <div class="txt">
+    <p class="name">JamReader</p>
+    <p class="tag">原生、安静、内容优先的 iPhone 与 iPad 漫画阅读器。</p>
+  </div>
+</div>
+</body>
+</html>

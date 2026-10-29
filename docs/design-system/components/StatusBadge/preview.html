@@ -1,0 +1,26 @@
+<!-- @dsCard group="状态与反馈" height=140 width=640 -->
+<!doctype html>
+<html lang="zh-CN">
+<head><link rel="stylesheet" href="../../tokens.css"><link rel="stylesheet" href="../bundle.css"><script>(function(){var q=new URLSearchParams(location.search).get("theme");var t=q||(window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t);})();</script><meta charset="utf-8"><title>StatusBadge — preview</title><style>html,body{margin:0;background:var(--bg-grouped)}</style></head>
+<body>
+<div class="jr">
+<div class="jr-canvas">
+<p class="jr-caption">远程副本（统一一套，五种状态）</p>
+<div class="jr-row-wrap">
+ <span class="jr-badge none"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg>未下载</span>
+ <span class="jr-badge busy"><i class="jr-ring" style="--p:62%"></i>下载中 62%</span>
+ <span class="jr-badge off"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 7v8.5M8.3 12.2l3.7 3.7 3.7-3.7" stroke="#fff" stroke-width="2.2"/></svg>已离线</span>
+ <span class="jr-badge stale"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="12" r="8"/><path d="M11 8v4l2.5 2"/><path d="M19.5 4v4M19.5 10.5v.01" stroke-width="2.4"/></svg>较旧副本</span>
+ <span class="jr-badge fail"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.2v.01" stroke-width="2.2"/></svg>下载失败</span>
+</div>
+<p class="jr-caption" style="margin-top:16px">阅读与书库状态</p>
+<div class="jr-row-wrap">
+ <span class="jr-badge ok"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>已读</span>
+ <span class="jr-badge busy">读到 42%</span>
+ <span class="jr-badge stale"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>只读</span>
+ <span class="jr-badge fail"><svg class="i xs" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.2v.01" stroke-width="2.2"/></svg>需要重新授权</span>
+ <span class="jr-badge proto">SMB</span><span class="jr-badge proto">WEBDAV</span>
+</div></div>
+</div>
+</body>
+</html>

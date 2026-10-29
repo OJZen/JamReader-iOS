@@ -2,6 +2,8 @@
 
 Use these requirements when changing UI. They do not imply that every manual accessibility or device scenario below has been verified.
 
+Product scope, user flows, and the current redesign brief live in [design requirements](design-requirements.md). The paged reader's bottom thumbnail navigation list and the vertical reader's right-side thumbnail navigation list are excluded from redesign: reuse them unchanged in appearance, layout, animation, visibility, touch, and navigation behavior. Shared-token or surrounding-chrome changes must not alter them indirectly. Other reader UI may be redesigned while preserving the interaction contract in the requirements. Apply the visual direction through the shared tokens and components below, respecting these protected components. The approved redesign values and component rules live in [design system](design-system/README.md): `tokens.json` is the value source to port into `DesignTokens.swift` and asset colors, and [05-batches.md](design-system/05-batches.md) is the implementation order.
+
 ## Product Character
 
 - Native, quiet, content-first, and predictable. Prefer system navigation, controls, materials, typography, and semantic colors.
@@ -14,13 +16,13 @@ Use these requirements when changing UI. They do not imply that every manual acc
 - iPhone uses compact navigation and one focused task per screen.
 - iPad uses the existing UIKit split-view shell, persistent sidebars, keyboard/pointer affordances, and wider content where it improves scanning—not a stretched iPhone layout.
 - Width decisions use the current container and traits, never a device model or `UIScreen.main.bounds`. Test split view, rotation, and multitasking.
-- Sidebar selection uses `JamReader/SharedUI/Components/SidebarSelectionStyle.swift`; preserve its inset rounded shape, breathing room, full-row hit target, and semantic fill.
+- Sidebar selection uses `JamReader/SharedUI/Components/SidebarSelectionStyle.swift`; update its appearance centrally when redesigning, while preserving clear selection, spacing, a full-row hit target, and semantic colors.
 - Sheets use system presentation through the existing coordinator/components. Every cancellable flow needs an obvious dismissal path, including loading, import, and error states.
 
 ## Interaction
 
 - Keep reader paging, zoom, pan, dismissal, and gesture arbitration in UIKit. UI polish must not alter reader viewport geometry or create a second reader path.
-- Keep primary actions easy to find and destructive actions explicit. Do not duplicate the same action across a card, toolbar, tab, and context menu.
+- Keep primary actions easy to find and destructive actions explicit. Follow the [entry-point consolidation requirements](design-requirements.md#入口合并与页面复用): one primary visible entry per action on a screen; context menus, swipe actions, and keyboard shortcuts may reuse the same operation. Count simultaneously visible iPad panes as one screen.
 - Use animation to explain a state change, not decorate it. Respect Reduce Motion and avoid animating large layout changes or high-frequency updates.
 - Preserve cancellation for network, import, indexing, and other long-running work. Transparent overlays must not block unrelated controls.
 - Minimum targets, VoiceOver labels/traits, Dynamic Type, keyboard focus, pointer hover, and selection state are part of the interaction—not follow-up polish.
