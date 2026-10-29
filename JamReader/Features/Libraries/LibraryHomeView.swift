@@ -12,6 +12,9 @@ struct LibraryHomeView: View {
     let dependencies: AppDependencies
 
     @State private var activeImportRoute: LibraryHomeImportRoute?
+    /// The picker binding clears `activeImportRoute` before the completion
+    /// handler runs on iOS 27, so the route is kept separately for it.
+    @State private var presentedImportRoute: LibraryHomeImportRoute?
     @State private var pendingImportDestinationSelection: LibraryImportDestinationSelection = .importedComics
     @State private var selectedLibraryID: UUID?
     @State private var focusedLibraryIDOverride: UUID?
@@ -56,8 +59,9 @@ struct LibraryHomeView: View {
             allowedContentTypes: activeImportContentTypes,
             allowsMultipleSelection: true
         ) { result in
-            let importRoute = activeImportRoute
+            let importRoute = presentedImportRoute
             activeImportRoute = nil
+            presentedImportRoute = nil
 
             switch result {
             case .success(let urls):
@@ -287,7 +291,7 @@ struct LibraryHomeView: View {
     }
 
     private var activeImportContentTypes: [UTType] {
-        switch activeImportRoute {
+        switch presentedImportRoute {
         case .libraryFolder:
             return [.folder]
         case .comicFolder:
@@ -299,6 +303,7 @@ struct LibraryHomeView: View {
 
     private func queueImporterPresentation(for route: LibraryHomeImportRoute) {
         DispatchQueue.main.async {
+            presentedImportRoute = route
             activeImportRoute = route
         }
     }
