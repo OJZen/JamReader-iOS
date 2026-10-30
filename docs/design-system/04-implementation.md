@@ -35,7 +35,7 @@
 | Notice / EmptyState | `ErrorStateView.swift`、`EmptyStateView.swift` |
 | FilterChips | `FilterChipBar.swift`、`LibraryComicFilterBar.swift` |
 | MoreMenu | `LibraryComicQuickActionsSheet.swift`、远程目录 `RemoteServerBrowserView` 中的菜单 |
-| ReaderTopBar / ReaderDisplayPanel / ReaderMoreMenu | `ReaderChromeOverlay.swift`（只改 `ReaderTopBar`）、`ReaderControlsSheet.swift`、`ReaderControlsSupport.swift` |
+| ReaderTopBar / ReaderDisplayPanel / ReaderMoreMenu | `ReaderChromeOverlay.swift`（只改 `ReaderTopBar`）、`Features/Reader/ReaderDisplayPanel.swift`、`ComicReaderView.swift`（更多菜单复用 `LibraryComicMenuContent`）；第 4 批已删除整屏 `ReaderControlsSheet.swift` |
 | 设置“继续阅读显示在” | `SettingsSections.swift` 书库分区 + 新偏好键；`LibraryHomeView` 与 `LibraryBrowserView` 读同一偏好决定是否显示卡带 |
 | **不改** | `ReaderBottomBar`、`ReaderThumbnailScrubber`、`ReaderVerticalThumbnailRail`、`ReaderPageThumbnailSupport` 中服务于两者的样式 |
 

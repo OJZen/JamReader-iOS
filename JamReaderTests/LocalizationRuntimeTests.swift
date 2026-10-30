@@ -10,7 +10,7 @@ final class LocalizationRuntimeTests: XCTestCase {
         LocaleExpectation(
             identifier: "en",
             translations: [
-                "Browse Pages": "Browse Pages",
+                "Browse Thumbnails": "Browse Thumbnails",
                 "Complete": "Complete",
                 "Current": "Current",
                 "Default Folder Import Scope": "Default Folder Import Scope",
@@ -26,7 +26,7 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Provider": "Provider",
                 "Remaining": "Remaining",
                 "Review": "Review",
-                "Save Page to Photos": "Save Page to Photos",
+                "Save to Photos": "Save to Photos",
                 "Settings": "Settings",
                 "Share": "Share",
                 "Strategy": "Strategy",
@@ -35,7 +35,7 @@ final class LocalizationRuntimeTests: XCTestCase {
         LocaleExpectation(
             identifier: "zh-Hans",
             translations: [
-                "Browse Pages": "浏览页面",
+                "Browse Thumbnails": "浏览缩略图",
                 "Complete": "已收齐",
                 "Current": "当前",
                 "Default Folder Import Scope": "默认文件夹导入范围",
@@ -51,7 +51,7 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Provider": "连接方式",
                 "Remaining": "剩余",
                 "Review": "评论",
-                "Save Page to Photos": "将页面保存到照片图库",
+                "Save to Photos": "存到相册",
                 "Settings": "设置",
                 "Share": "共享名称",
                 "Strategy": "导入方式",
@@ -60,7 +60,7 @@ final class LocalizationRuntimeTests: XCTestCase {
         LocaleExpectation(
             identifier: "zh-Hant-TW",
             translations: [
-                "Browse Pages": "瀏覽頁面",
+                "Browse Thumbnails": "瀏覽縮圖",
                 "Complete": "已收齊",
                 "Current": "目前",
                 "Default Folder Import Scope": "預設資料夾匯入範圍",
@@ -76,7 +76,7 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Provider": "連線方式",
                 "Remaining": "剩餘",
                 "Review": "評論",
-                "Save Page to Photos": "將頁面儲存到「照片」",
+                "Save to Photos": "存到「照片」",
                 "Settings": "設定",
                 "Share": "共享名稱",
                 "Strategy": "匯入方式",
@@ -85,7 +85,7 @@ final class LocalizationRuntimeTests: XCTestCase {
         LocaleExpectation(
             identifier: "ja",
             translations: [
-                "Browse Pages": "ページ一覧",
+                "Browse Thumbnails": "サムネイル一覧",
                 "Complete": "全巻揃い",
                 "Current": "現在",
                 "Default Folder Import Scope": "デフォルトのフォルダインポート範囲",
@@ -101,7 +101,7 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Provider": "接続方式",
                 "Remaining": "残り",
                 "Review": "レビュー",
-                "Save Page to Photos": "ページを「写真」に保存",
+                "Save to Photos": "「写真」に保存",
                 "Settings": "設定",
                 "Share": "共有名",
                 "Strategy": "インポート方法",

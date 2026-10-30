@@ -1522,6 +1522,28 @@
         }
       }
     },
+    "Everything except rotation becomes the default for comics you open later.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回転以外は、今後開くマンガのデフォルトになります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "除旋转外，都会作为之后打开的漫画的默认值。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "除旋轉外，都會作為之後打開的漫畫的預設值。"
+          }
+        }
+      }
+    },
     "Existing Fields": {
       "localizations": {
         "ja": {
@@ -1606,6 +1628,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "「檔案」中的資料夾"
+          }
+        }
+      }
+    },
+    "Height": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高さ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高度"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高度"
           }
         }
       }
@@ -2138,6 +2182,50 @@
         }
       }
     },
+    "Marked as read and moved to the last page": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "既読にして、最後のページに移動しました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已标为已读，并跳到最后一页"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已標為已讀，並跳到最後一頁"
+          }
+        }
+      }
+    },
+    "Marked as unread and moved to the first page": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未読にして、最初のページに戻りました"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已标为未读，并回到第一页"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已標為未讀，並回到第一頁"
+          }
+        }
+      }
+    },
     "Method": {
       "localizations": {
         "ja": {
@@ -2288,6 +2376,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "新增空書庫"
+          }
+        }
+      }
+    },
+    "No Bookmarks": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブックマークなし"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有书签"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有書籤"
           }
         }
       }
@@ -2820,6 +2930,28 @@
         }
       }
     },
+    "Original": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原寸"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始大小"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始大小"
+          }
+        }
+      }
+    },
     "Preparing to Read": {
       "localizations": {
         "ja": {
@@ -3128,6 +3260,50 @@
         }
       }
     },
+    "Remove a bookmark before adding this page.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このページを追加するには、ブックマークを1件削除してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除一个书签后，才能添加这一页。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除一個書籤後，才能加入這一頁。"
+          }
+        }
+      }
+    },
+    "Remove Bookmark on Page %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldページのブックマークを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除第 %lld 页的书签"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除第 %lld 頁的書籤"
+          }
+        }
+      }
+    },
     "Remove Library…": {
       "localizations": {
         "ja": {
@@ -3370,6 +3546,28 @@
         }
       }
     },
+    "Save to Photos": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「写真」に保存"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存到相册"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存到「照片」"
+          }
+        }
+      }
+    },
     "Search in “%@”": {
       "localizations": {
         "ja": {
@@ -3480,6 +3678,28 @@
         }
       }
     },
+    "Show First Page Alone": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最初のページを単独で表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首页单独显示"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首頁單獨顯示"
+          }
+        }
+      }
+    },
     "Show in Library": {
       "localizations": {
         "ja": {
@@ -3520,6 +3740,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "登入"
+          }
+        }
+      }
+    },
+    "Spread Order": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "見開きの並び"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双页排列"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雙頁排列"
           }
         }
       }
@@ -3876,6 +4118,50 @@
         }
       }
     },
+    "These settings become the default for comics you open later.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これらの設定は、今後開くマンガのデフォルトになります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些设置会作为之后打开的漫画的默认值。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些設定會作為之後打開的漫畫的預設值。"
+          }
+        }
+      }
+    },
+    "This Comic": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このマンガ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这本漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這本漫畫"
+          }
+        }
+      }
+    },
     "This comic downloads in full before it opens.": {
       "localizations": {
         "ja": {
@@ -3986,6 +4272,28 @@
         }
       }
     },
+    "This Reading Only": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今回のみ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅本次"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅本次"
+          }
+        }
+      }
+    },
     "This Server": {
       "localizations": {
         "ja": {
@@ -4092,6 +4400,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消儲存此資料夾"
+          }
+        }
+      }
+    },
+    "Up to 3 Bookmarks per Comic": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブックマークは1冊につき3件まで"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每本最多 3 个书签"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每本最多 3 個書籤"
           }
         }
       }
@@ -4224,6 +4554,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "卷 / 期"
+          }
+        }
+      }
+    },
+    "Whole Page": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ページ全体"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整页"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整頁"
+          }
+        }
+      }
+    },
+    "Width": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "幅"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽度"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "寬度"
           }
         }
       }
@@ -6247,28 +6621,6 @@
         }
       }
     },
-    "Add Favorite": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入最愛"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "お気に入りに追加"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入收藏"
-          }
-        }
-      }
-    },
     "Add Finished with Warnings": {
       "localizations": {
         "zh-Hant-TW": {
@@ -6903,29 +7255,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "浏览文件夹"
-          }
-        }
-      }
-    },
-    "Browse Pages": {
-      "comment": "Reader page rail accessibility label",
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "瀏覽頁面"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ページ一覧"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "浏览页面"
           }
         }
       }
@@ -8316,28 +8645,6 @@
         }
       }
     },
-    "Core": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基本資料"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基本情報"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基本信息"
-          }
-        }
-      }
-    },
     "Could not reach %@. Check that the server is online and reachable from this device.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -9060,28 +9367,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "详细信息"
-          }
-        }
-      }
-    },
-    "Direction": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "方向"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "方向"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "方向"
           }
         }
       }
@@ -13534,28 +13819,6 @@
         }
       }
     },
-    "Issue Number": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "期號"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "号数"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "期号"
-          }
-        }
-      }
-    },
     "JamReader does not have permission to add images to Photos.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -13926,50 +14189,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "上次使用的标签页"
-          }
-        }
-      }
-    },
-    "Layout": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "版面配置"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "レイアウト"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "布局"
-          }
-        }
-      }
-    },
-    "Left": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "左側"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "左"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "左"
           }
         }
       }
@@ -14806,50 +15025,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "日漫"
-          }
-        }
-      }
-    },
-    "Mark Read": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "標示為已讀"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "既読にする"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "标记已读"
-          }
-        }
-      }
-    },
-    "Mark Unread": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "標示為未讀"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未読にする"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "标记为未读"
           }
         }
       }
@@ -17629,50 +17804,6 @@
         }
       }
     },
-    "Page layout and rotation are unavailable in vertical scroll.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "垂直捲動時無法使用頁面配置與旋轉。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "縦スクロールでは、ページレイアウトと回転を利用できません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用垂直滚动时，无法调整页面布局和旋转。"
-          }
-        }
-      }
-    },
-    "Page Mode": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "翻頁模式"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ページモード"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "翻页模式"
-          }
-        }
-      }
-    },
     "Page Pairing": {
       "localizations": {
         "zh-Hant-TW": {
@@ -18323,28 +18454,6 @@
         }
       }
     },
-    "Quick Edit Metadata": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快速編輯中繼資料"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メタデータを簡易編集"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快速编辑元数据"
-          }
-        }
-      }
-    },
     "Quick Jump": {
       "localizations": {
         "zh-Hant-TW": {
@@ -18363,28 +18472,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "快速跳转"
-          }
-        }
-      }
-    },
-    "Quick Metadata": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快速編輯中繼資料"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メタデータの簡易編集"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快速元数据"
           }
         }
       }
@@ -18517,28 +18604,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "阅读器"
-          }
-        }
-      }
-    },
-    "Reader Action": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "閱讀器動作"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リーダーのアクション"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "阅读器操作"
           }
         }
       }
@@ -18737,28 +18802,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "阅读模式"
-          }
-        }
-      }
-    },
-    "Reading Status": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "閱讀狀態"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "読書状況"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "阅读状态"
           }
         }
       }
@@ -19363,28 +19406,6 @@
         }
       }
     },
-    "Remove Favorite": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除最愛"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "お気に入りから削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消收藏"
-          }
-        }
-      }
-    },
     "Remove from App": {
       "localizations": {
         "zh-Hant-TW": {
@@ -19919,28 +19940,6 @@
         }
       }
     },
-    "Reset": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重設"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リセット"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重置"
-          }
-        }
-      }
-    },
     "Reset Rotation": {
       "localizations": {
         "zh-Hant-TW": {
@@ -20047,28 +20046,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "评论"
-          }
-        }
-      }
-    },
-    "Right": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "右側"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "右"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "右"
           }
         }
       }
@@ -20245,50 +20222,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "保存此服务器中的漫画。"
-          }
-        }
-      }
-    },
-    "Save Page": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "儲存頁面"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ページを保存"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存页面"
-          }
-        }
-      }
-    },
-    "Save Page to Photos": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將頁面儲存到「照片」"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ページを「写真」に保存"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将页面保存到照片图库"
           }
         }
       }
@@ -21525,28 +21458,6 @@
         }
       }
     },
-    "Spread": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跨頁"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "見開き"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跨页"
-          }
-        }
-      }
-    },
     "SQLite3 is unavailable in this build.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -21807,28 +21718,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "标签"
-          }
-        }
-      }
-    },
-    "Tags and Reading Lists": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "標籤與閱讀清單"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タグとリーディングリスト"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "标签和阅读列表"
           }
         }
       }
@@ -25063,28 +24952,6 @@
         }
       }
     },
-    "View": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "檢視"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "查看"
-          }
-        }
-      }
-    },
     "Violet": {
       "localizations": {
         "zh-Hant-TW": {
@@ -25169,28 +25036,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "仅限可见漫画"
-          }
-        }
-      }
-    },
-    "Vol. %@": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "第 %@ 卷"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "第%@巻"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "第 %1$@ 卷"
           }
         }
       }

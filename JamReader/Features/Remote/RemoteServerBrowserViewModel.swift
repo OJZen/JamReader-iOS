@@ -438,14 +438,14 @@ final class RemoteServerBrowserViewModel: ObservableObject {
     /// A comic counts as stored on this device only when it was saved as an
     /// offline copy. A reading cache can be evicted by the download limit, so
     /// it gets no badge or local-copy actions (see components/StatusBadge).
-    nonisolated private static func offlineCopyAvailability(
+    nonisolated static func offlineCopyAvailability(
         _ availability: RemoteComicCachedAvailability,
         isOfflineCopy: Bool
     ) -> RemoteComicCachedAvailability {
         isOfflineCopy ? availability : .unavailable
     }
 
-    nonisolated private static func offlineCopyKeys(
+    nonisolated static func offlineCopyKeys(
         in store: RemoteOfflineCopyStore,
         profile: RemoteServerProfile
     ) -> Set<String> {

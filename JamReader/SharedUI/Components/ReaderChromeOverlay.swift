@@ -342,98 +342,99 @@ struct ReaderChromeOverlay<TopBar: View, BottomBar: View>: View {
 
 // MARK: - Top Bar
 
-struct ReaderTopBar: View {
+/// Back · title · [Bookmark · Aa · More]. The page number stays in the
+/// protected bottom bar's page chip (see components/ReaderTopBar).
+struct ReaderTopBar<DisplayPanel: View, MoreMenu: View>: View {
     let title: String
     let onBack: () -> Void
-    let secondarySystemImage: String?
-    let secondaryAccessibilityLabel: String?
-    let onSecondaryAction: (() -> Void)?
-    let isSecondaryDisabled: Bool
-    let savePageSystemImage: String?
-    let savePageAccessibilityLabel: String?
-    let onSavePage: (() -> Void)?
-    let isSavePageDisabled: Bool
-    let onMenu: () -> Void
-    let isMenuDisabled: Bool
-
-    init(
-        title: String,
-        onBack: @escaping () -> Void,
-        secondarySystemImage: String? = nil,
-        secondaryAccessibilityLabel: String? = nil,
-        onSecondaryAction: (() -> Void)? = nil,
-        isSecondaryDisabled: Bool = false,
-        savePageSystemImage: String? = nil,
-        savePageAccessibilityLabel: String? = nil,
-        onSavePage: (() -> Void)? = nil,
-        isSavePageDisabled: Bool = false,
-        onMenu: @escaping () -> Void,
-        isMenuDisabled: Bool = false
-    ) {
-        self.title = title
-        self.onBack = onBack
-        self.secondarySystemImage = secondarySystemImage
-        self.secondaryAccessibilityLabel = secondaryAccessibilityLabel
-        self.onSecondaryAction = onSecondaryAction
-        self.isSecondaryDisabled = isSecondaryDisabled
-        self.savePageSystemImage = savePageSystemImage
-        self.savePageAccessibilityLabel = savePageAccessibilityLabel
-        self.onSavePage = onSavePage
-        self.isSavePageDisabled = isSavePageDisabled
-        self.onMenu = onMenu
-        self.isMenuDisabled = isMenuDisabled
-    }
+    /// `nil` hides the bookmark button, for documents without pages.
+    let isBookmarked: Bool?
+    let onToggleBookmark: () -> Void
+    /// Hides Aa when no display setting applies to the document.
+    let showsDisplaySettings: Bool
+    @Binding var isDisplayPanelPresented: Bool
+    let isToolsDisabled: Bool
+    @ViewBuilder let displayPanel: () -> DisplayPanel
+    @ViewBuilder let moreMenu: () -> MoreMenu
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            chromeButton(systemImage: "chevron.left", action: onBack)
+            Button(action: onBack) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay {
+                        Circle()
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    }
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
 
+            // Plain text: a capsule would look tappable.
             Text(title)
                 .font(AppFont.headline())
-                .foregroundStyle(.white)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let secondarySystemImage, let onSecondaryAction {
-                chromeButton(systemImage: secondarySystemImage, action: onSecondaryAction)
-                    .disabled(isSecondaryDisabled)
-                    .opacity(isSecondaryDisabled ? 0.4 : 1)
-                    .accessibilityLabel(
-                        secondaryAccessibilityLabel ?? String(localized: "Reader Action")
-                    )
-            }
-
-            if let savePageSystemImage, let onSavePage {
-                chromeButton(systemImage: savePageSystemImage, action: onSavePage)
-                    .disabled(isSavePageDisabled)
-                    .opacity(isSavePageDisabled ? 0.4 : 1)
-                    .accessibilityLabel(
-                        savePageAccessibilityLabel ?? String(localized: "Save Page")
-                    )
-            }
-
-            chromeButton(systemImage: "ellipsis", action: onMenu)
-            .disabled(isMenuDisabled)
-            .opacity(isMenuDisabled ? 0.4 : 1)
+            toolGroup
         }
+        .foregroundStyle(.white)
         .padding(.vertical, ReaderChromeMetrics.barVerticalPadding)
     }
 
-    private func chromeButton(systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
-                .background(.ultraThinMaterial, in: Circle())
-                .overlay {
-                    Circle()
-                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+    private var toolGroup: some View {
+        HStack(spacing: 0) {
+            if let isBookmarked {
+                Button(action: onToggleBookmark) {
+                    toolIcon(
+                        isBookmarked ? "bookmark.fill" : "bookmark",
+                        color: isBookmarked ? .appReaderAccent : .white
+                    )
                 }
-                .contentShape(Circle())
+                .accessibilityLabel(Text(isBookmarked ? "Remove Bookmark" : "Add Bookmark"))
+            }
+
+            if showsDisplaySettings {
+                Button {
+                    isDisplayPanelPresented = true
+                } label: {
+                    // "Aa" in every language; the symbol is localized otherwise.
+                    toolIcon("textformat.size")
+                        .environment(\.locale, Locale(identifier: "en"))
+                }
+                .accessibilityLabel(Text("Display"))
+                .popover(isPresented: $isDisplayPanelPresented) {
+                    displayPanel()
+                }
+            }
+
+            Menu {
+                moreMenu()
+            } label: {
+                toolIcon("ellipsis")
+            }
+            .menuOrder(.fixed)
+            .accessibilityLabel(Text("More"))
         }
         .buttonStyle(.plain)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        }
+        .disabled(isToolsDisabled)
+        .opacity(isToolsDisabled ? 0.4 : 1)
+    }
+
+    private func toolIcon(_ systemImage: String, color: Color = .white) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: ReaderChromeMetrics.buttonSize, height: ReaderChromeMetrics.buttonSize)
+            .contentShape(Rectangle())
     }
 }
 

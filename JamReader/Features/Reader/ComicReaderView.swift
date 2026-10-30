@@ -11,14 +11,17 @@ struct ComicReaderView: View {
     private let openingPreviewImage: UIImage?
     /// The server a remote comic comes from, offered for editing when opening fails.
     private let remoteProfile: RemoteServerProfile?
+    private let remoteItem: RemoteDirectoryItem?
 
     @StateObject private var viewModel: ComicReaderViewModel
     @StateObject private var readerSession: ReaderSessionController
     @State private var isShowingMetadataSheet = false
-    @State private var isShowingQuickMetadataSheet = false
     @State private var isShowingOrganizationSheet = false
-    @State private var isShowingReaderControls = false
+    @State private var isShowingInfoSheet = false
+    @State private var isShowingDisplayPanel = false
     @State private var isShowingThumbnailBrowser = false
+    @State private var isShowingBookmarkLimitAlert = false
+    @State private var readStatusToastMessage: String?
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isPageNavigationInteracting = false
@@ -34,8 +37,10 @@ struct ComicReaderView: View {
         self.openingPreviewImage = openingPreviewImage
         if case .remote(let remoteRequest) = request {
             self.remoteProfile = remoteRequest.profile
+            self.remoteItem = remoteRequest.item
         } else {
             self.remoteProfile = nil
+            self.remoteItem = nil
         }
         _keepsScreenAwake = State(
             initialValue: dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake()
@@ -189,14 +194,28 @@ struct ComicReaderView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .overlay {
+            // The reader stays dark whatever the system appearance.
+            Color.clear
+                .allowsHitTesting(false)
+                .lightToast(
+                    isPresented: Binding(
+                        get: { readStatusToastMessage != nil },
+                        set: { isPresented in
+                            if !isPresented {
+                                readStatusToastMessage = nil
+                            }
+                        }
+                    ),
+                    message: readStatusToastMessage ?? "",
+                    systemImage: "checkmark.circle"
+                )
+                .environment(\.colorScheme, .dark)
+        }
     }
 
     private var supportsDoublePageSpread: Bool {
         horizontalSizeClass == .regular
-    }
-
-    private var showsThumbnailShortcut: Bool {
-        supportsDoublePageSpread && (viewModel.pageCount ?? 0) > 1
     }
 
     private var dismissGestureDirection: ReaderDismissGestureDirection {
@@ -248,119 +267,188 @@ struct ComicReaderView: View {
         unsupportedDocument.reason
     }
 
-    private var readerControlsSheet: some View {
-        PresentedReaderControlsSheet(
-            viewModel: viewModel,
-            actions: readerControlsActions
-        )
-    }
-
-    private var readerControlsActions: ReaderControlsActions {
-        var actions = ReaderControlsActions(
-            onDone: dismissReaderControls,
-            onOpenThumbnails: {
-                presentThumbnailBrowser()
-            },
-            onGoToBookmark: { pageIndex in
-                viewModel.goToBookmark(pageIndex: pageIndex)
-                readerSession.apply(.goToPage(pageIndex))
-                dismissReaderControls()
-            },
-            onGoToPageNumber: { pageNumber in
-                viewModel.goToPage(number: pageNumber)
-                readerSession.apply(.goToPage(pageNumber - 1))
-                dismissReaderControls()
-            },
-            onToggleBookmark: viewModel.toggleBookmarkForCurrentPage,
-            onSetFitMode: { fitMode in
-                viewModel.setFitMode(fitMode)
-                scheduleReaderSessionSynchronization()
-            },
-            onSetPagingMode: { pagingMode in
-                viewModel.setPagingMode(pagingMode)
-                scheduleReaderSessionSynchronization()
-            },
-            onSetSpreadMode: { spreadMode in
-                viewModel.setSpreadMode(spreadMode)
-                scheduleReaderSessionSynchronization()
-            },
-            onSetReadingDirection: { readingDirection in
-                viewModel.setReadingDirection(readingDirection)
-                scheduleReaderSessionSynchronization()
-            },
-            onSetCoverAsSinglePage: { coverAsSinglePage in
-                viewModel.setCoverAsSinglePage(coverAsSinglePage)
-                scheduleReaderSessionSynchronization()
-            },
-            onSetPageSpacingEnabled: { pageSpacingEnabled in
-                viewModel.setPageSpacingEnabled(pageSpacingEnabled)
-                scheduleReaderSessionSynchronization()
-            },
-            onRotateCounterClockwise: {
-                viewModel.rotateCounterClockwise()
-                scheduleReaderSessionSynchronization()
-            },
-            onRotateClockwise: {
-                viewModel.rotateClockwise()
-                scheduleReaderSessionSynchronization()
-            },
-            onResetRotation: {
-                viewModel.resetRotation()
-                scheduleReaderSessionSynchronization()
-            }
-        )
-
-        guard viewModel.isLibraryBacked else {
-            return actions
-        }
-
-        actions.onToggleFavorite = {
-            viewModel.toggleFavoriteStatus()
-        }
-        actions.onToggleReadStatus = {
-            viewModel.toggleReadStatus()
-        }
-        actions.onSetRating = { rating in
-            viewModel.setRating(rating)
-        }
-        actions.onOpenQuickMetadata = {
-            presentQuickMetadataSheet()
-        }
-        actions.onOpenMetadata = {
-            presentMetadataSheet()
-        }
-        actions.onOpenOrganization = {
-            presentOrganizationSheet()
-        }
-        return actions
-    }
-
     private var isAnySheetPresented: Bool {
-        isShowingReaderControls || isShowingMetadataSheet ||
-        isShowingQuickMetadataSheet || isShowingOrganizationSheet ||
+        isShowingDisplayPanel || isShowingMetadataSheet ||
+        isShowingOrganizationSheet || isShowingInfoSheet ||
         isShowingThumbnailBrowser
+    }
+
+    private var supportsBookmarks: Bool {
+        viewModel.pageCount != nil
+    }
+
+    private var displayPanelControls: ReaderDisplayPanelControls {
+        ReaderDisplayPanelControls(
+            layout: viewModel.effectiveReaderLayout,
+            supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
+            supportsDoublePageSpread: viewModel.allowsDoublePageSpread,
+            supportsRotation: viewModel.supportsRotationControls
+        )
     }
 
     private var readerTopBar: some View {
         ReaderTopBar(
             title: viewModel.navigationTitle,
             onBack: dismiss.callAsFunction,
-            secondarySystemImage: showsThumbnailShortcut ? "square.grid.3x2" : nil,
-            secondaryAccessibilityLabel: String(localized: "Browse Pages"),
-            onSecondaryAction: showsThumbnailShortcut ? {
-                readerSession.setChromeVisible(true)
-                presentThumbnailBrowser()
-            } : nil,
-            savePageSystemImage: viewModel.isSavingCurrentPageToPhotoLibrary ? "hourglass" : "square.and.arrow.down",
-            savePageAccessibilityLabel: String(localized: "Save Page to Photos"),
-            onSavePage: viewModel.supportsCurrentPagePhotoSave ? {
-                viewModel.saveCurrentPageToPhotoLibrary()
-            } : nil,
-            isSavePageDisabled: viewModel.isSavingCurrentPageToPhotoLibrary,
-            onMenu: {
-                presentReaderControls()
-            },
-            isMenuDisabled: viewModel.document == nil
+            isBookmarked: supportsBookmarks ? viewModel.currentPageIsBookmarked : nil,
+            onToggleBookmark: toggleBookmark,
+            showsDisplaySettings: !displayPanelControls.isEmpty,
+            isDisplayPanelPresented: $isShowingDisplayPanel,
+            isToolsDisabled: viewModel.document == nil
+        ) {
+            readerDisplayPanel
+        } moreMenu: {
+            readerMoreMenu
+        }
+        .alert("Up to 3 Bookmarks per Comic", isPresented: $isShowingBookmarkLimitAlert) {
+            // The alert itself manages them: SwiftUI cannot open a second
+            // dialog while an alert is closing.
+            ForEach(viewModel.bookmarkItems) { bookmark in
+                Button("Remove Bookmark on Page \(bookmark.pageNumber)", role: .destructive) {
+                    viewModel.removeBookmark(at: bookmark.pageIndex)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Remove a bookmark before adding this page.")
+        }
+    }
+
+    private var readerDisplayPanel: some View {
+        ReaderDisplayPanel(
+            layout: viewModel.effectiveReaderLayout,
+            controls: displayPanelControls,
+            presentsAsPopover: horizontalSizeClass == .regular,
+            actions: ReaderDisplayPanelActions(
+                setPagingMode: { pagingMode in
+                    viewModel.setPagingMode(pagingMode)
+                    scheduleReaderSessionSynchronization()
+                },
+                setSpreadMode: { spreadMode in
+                    viewModel.setSpreadMode(spreadMode)
+                    scheduleReaderSessionSynchronization()
+                },
+                setReadingDirection: { readingDirection in
+                    viewModel.setReadingDirection(readingDirection)
+                    scheduleReaderSessionSynchronization()
+                },
+                setCoverAsSinglePage: { coverAsSinglePage in
+                    viewModel.setCoverAsSinglePage(coverAsSinglePage)
+                    scheduleReaderSessionSynchronization()
+                },
+                setFitMode: { fitMode in
+                    viewModel.setFitMode(fitMode)
+                    scheduleReaderSessionSynchronization()
+                },
+                setPageSpacingEnabled: { pageSpacingEnabled in
+                    viewModel.setPageSpacingEnabled(pageSpacingEnabled)
+                    scheduleReaderSessionSynchronization()
+                },
+                rotateCounterClockwise: {
+                    viewModel.rotateCounterClockwise()
+                    scheduleReaderSessionSynchronization()
+                },
+                rotateClockwise: {
+                    viewModel.rotateClockwise()
+                    scheduleReaderSessionSynchronization()
+                },
+                resetRotation: {
+                    viewModel.resetRotation()
+                    scheduleReaderSessionSynchronization()
+                }
+            ),
+            onClose: {
+                isShowingDisplayPanel = false
+            }
+        )
+    }
+
+    /// Pages, then this comic (see components/ReaderMoreMenu). Jumping to a
+    /// page number stays on the page chip.
+    @ViewBuilder
+    private var readerMoreMenu: some View {
+        if supportsBookmarks || viewModel.supportsCurrentPagePhotoSave {
+            Section("Pages") {
+                if supportsBookmarks {
+                    Button(action: presentThumbnailBrowser) {
+                        Label("Browse Thumbnails", systemImage: "square.grid.3x2")
+                    }
+
+                    bookmarksMenu
+                }
+
+                if viewModel.supportsCurrentPagePhotoSave {
+                    Button(action: viewModel.saveCurrentPageToPhotoLibrary) {
+                        Label("Save to Photos", systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(viewModel.isSavingCurrentPageToPhotoLibrary)
+                }
+            }
+        }
+
+        if viewModel.isLibraryBacked, let comic = viewModel.currentLibraryComic {
+            Section("This Comic") {
+                LibraryComicMenuContent(comic: comic, actions: readerComicActions)
+            }
+        } else if remoteProfile != nil, remoteItem != nil {
+            Section("This Comic") {
+                Button(action: presentRemoteInfoSheet) {
+                    Label("Info", systemImage: "info.circle")
+                }
+            }
+        }
+    }
+
+    private var bookmarksMenu: some View {
+        Menu {
+            if viewModel.bookmarkItems.isEmpty {
+                Button("No Bookmarks") {}
+                    .disabled(true)
+            } else {
+                ForEach(viewModel.bookmarkItems) { bookmark in
+                    Button("Page \(bookmark.pageNumber)") {
+                        viewModel.goToBookmark(pageIndex: bookmark.pageIndex)
+                        readerSession.apply(.goToPage(bookmark.pageIndex))
+                    }
+                }
+
+                Section {
+                    Menu {
+                        ForEach(viewModel.bookmarkItems) { bookmark in
+                            Button("Page \(bookmark.pageNumber)", role: .destructive) {
+                                viewModel.removeBookmark(at: bookmark.pageIndex)
+                            }
+                        }
+                    } label: {
+                        Label("Remove Bookmark", systemImage: "bookmark.slash")
+                    }
+                }
+            }
+        } label: {
+            // Title, subtitle and icon as direct children show the subtitle in menus.
+            Text("Bookmarks")
+            Text(verbatim: bookmarkCountText)
+            Image(systemName: "bookmark")
+        }
+    }
+
+    private var bookmarkCountText: String {
+        let count = viewModel.bookmarkItems.count
+        guard let limit = viewModel.bookmarkLimit else {
+            return "\(count)"
+        }
+        return "\(count) / \(limit)"
+    }
+
+    /// The same comic actions as the library's More menu, without delete.
+    private var readerComicActions: LibraryComicActions {
+        LibraryComicActions(
+            toggleFavorite: { _ in viewModel.toggleFavoriteStatus() },
+            toggleRead: { _ in toggleReadStatus() },
+            organize: { _ in presentOrganizationSheet() },
+            setRating: { rating, _ in viewModel.setRating(rating) },
+            editMetadata: { _ in presentMetadataSheet() },
+            showInfo: { _ in presentLocalInfoSheet() }
         )
     }
 
@@ -478,47 +566,96 @@ struct ComicReaderView: View {
         )
     }
 
-    private func presentReaderControls() {
-        isShowingReaderControls = true
-        readerSession.apply(.setChromeVisible(true))
-        appPresenter?.presentSheet(
-            .content(
-                id: "reader.local.controls",
-                content: AnyView(readerControlsSheet),
-                onDismiss: {
-                    isShowingReaderControls = false
-                }
-            )
-        )
+    private func toggleBookmark() {
+        guard viewModel.canToggleBookmarkForCurrentPage else {
+            isShowingBookmarkLimitAlert = true
+            return
+        }
+        viewModel.toggleBookmarkForCurrentPage()
     }
 
-    private func dismissReaderControls() {
-        isShowingReaderControls = false
-        appPresenter?.dismissSheet()
+    /// Marking read or unread also moves the reading position; say so.
+    private func toggleReadStatus() {
+        guard let wasRead = viewModel.currentLibraryComic?.read else {
+            return
+        }
+        viewModel.toggleReadStatus()
+        guard viewModel.currentLibraryComic?.read == !wasRead,
+              (viewModel.pageCount ?? 0) > 0 else {
+            return
+        }
+        readStatusToastMessage = wasRead
+            ? String(localized: "Marked as unread and moved to the first page")
+            : String(localized: "Marked as read and moved to the last page")
     }
 
-    private func presentQuickMetadataSheet() {
+    private func presentLocalInfoSheet() {
         guard let descriptor = viewModel.libraryDescriptor,
               let comic = viewModel.currentLibraryComic else {
             return
         }
 
-        isShowingReaderControls = false
-        isShowingQuickMetadataSheet = true
+        let coverLocator = dependencies.libraryCoverLocator
+        let metadataRootURL = dependencies.libraryStorageManager.metadataRootURL(for: descriptor)
+        isShowingInfoSheet = true
         appPresenter?.presentSheet(
             .content(
-                id: "reader.local.quickMetadata",
+                id: "reader.local.info",
                 content: AnyView(
-                    ReaderQuickMetadataSheet(
-                        descriptor: descriptor,
+                    LibraryComicInfoSheet(
                         comic: comic,
-                        dependencies: dependencies
-                    ) { updatedComic in
-                        viewModel.applyUpdatedComic(updatedComic)
-                    }
+                        libraryName: descriptor.displayName,
+                        coverURL: coverLocator.coverURL(for: comic, metadataRootURL: metadataRootURL),
+                        coverSource: viewModel.document.map { document in
+                            LocalComicCoverSource(
+                                fileURL: document.fileURL,
+                                cacheURL: coverLocator.plannedCoverURL(for: comic, metadataRootURL: metadataRootURL)
+                            )
+                        }
+                    )
                 ),
                 onDismiss: {
-                    isShowingQuickMetadataSheet = false
+                    isShowingInfoSheet = false
+                }
+            )
+        )
+    }
+
+    private func presentRemoteInfoSheet() {
+        guard let profile = remoteProfile, let item = remoteItem else {
+            return
+        }
+
+        let browsingService = dependencies.remoteServerBrowsingService
+        let reference = try? browsingService.makeComicFileReference(from: item)
+        let readingSession = reference.flatMap { reference in
+            try? dependencies.remoteReadingProgressStore.loadProgress(for: reference)
+        }
+        let cacheAvailability = reference.map { reference in
+            RemoteServerBrowserViewModel.offlineCopyAvailability(
+                browsingService.cachedAvailability(for: reference),
+                isOfflineCopy: RemoteServerBrowserViewModel.offlineCopyKeys(
+                    in: dependencies.remoteOfflineCopyStore,
+                    profile: profile
+                ).contains(RemoteOfflineCopyStore.contentKey(for: reference))
+            )
+        } ?? .unavailable
+
+        isShowingInfoSheet = true
+        appPresenter?.presentSheet(
+            .content(
+                id: "reader.remote.info",
+                content: AnyView(
+                    RemoteComicInfoSheet(
+                        profile: profile,
+                        item: item,
+                        readingSession: readingSession,
+                        cacheAvailability: cacheAvailability,
+                        browsingService: browsingService
+                    )
+                ),
+                onDismiss: {
+                    isShowingInfoSheet = false
                 }
             )
         )
@@ -530,7 +667,6 @@ struct ComicReaderView: View {
             return
         }
 
-        isShowingReaderControls = false
         isShowingMetadataSheet = true
         appPresenter?.presentSheet(
             .content(
@@ -557,7 +693,6 @@ struct ComicReaderView: View {
             return
         }
 
-        isShowingReaderControls = false
         isShowingOrganizationSheet = true
         appPresenter?.presentSheet(
             .content(
@@ -701,69 +836,6 @@ struct ComicReaderView: View {
             isSceneActive: scenePhase == .active,
             hasDocument: viewModel.document != nil,
             keepsScreenAwake: keepsScreenAwake
-        )
-    }
-}
-
-/// UIKit presents reader controls in a separate hosting tree, so the sheet must
-/// observe the reader model instead of retaining values captured when it opened.
-private struct PresentedReaderControlsSheet: View {
-    @ObservedObject var viewModel: ComicReaderViewModel
-    let actions: ReaderControlsActions
-
-    var body: some View {
-        ReaderControlsSheet(
-            pageState: ReaderControlsPageState(
-                pageIndicatorText: viewModel.pageIndicatorText,
-                currentPageNumber: viewModel.currentPageNumber,
-                pageCount: viewModel.pageCount,
-                currentPageIsBookmarked: viewModel.currentPageIsBookmarked,
-                bookmarkItems: viewModel.bookmarkItems
-            ),
-            displayState: ReaderControlsDisplayState(
-                fitMode: viewModel.effectiveReaderLayout.fitMode,
-                pagingMode: viewModel.effectiveReaderLayout.pagingMode,
-                spreadMode: viewModel.effectiveReaderLayout.spreadMode,
-                readingDirection: viewModel.effectiveReaderLayout.readingDirection,
-                coverAsSinglePage: viewModel.effectiveReaderLayout.coverAsSinglePage,
-                pageSpacingEnabled: viewModel.effectiveReaderLayout.pageSpacingEnabled,
-                rotation: viewModel.effectiveReaderLayout.rotation
-            ),
-            capabilities: ReaderControlsCapabilities(
-                supportsImageLayoutControls: viewModel.supportsImageLayoutControls,
-                supportsDoublePageSpread: viewModel.allowsDoublePageSpread,
-                supportsRotationControls: viewModel.supportsRotationControls,
-                supportsPageNavigation: viewModel.pageCount != nil,
-                supportsBookmarks: viewModel.pageCount != nil
-            ),
-            actions: actions,
-            metadata: metadata,
-            fileInfo: fileInfo
-        )
-    }
-
-    private var metadata: ReaderControlsMetadata? {
-        guard viewModel.isLibraryBacked else {
-            return nil
-        }
-        return ReaderControlsMetadata(
-            isFavorite: viewModel.isFavorite,
-            isRead: viewModel.currentLibraryComic?.read,
-            rating: viewModel.rating
-        )
-    }
-
-    private var fileInfo: ReaderControlsFileInfo {
-        ReaderControlsFileInfo(
-            fileName: viewModel.fileName,
-            fileExtension: viewModel.document?.fileURL.pathExtension,
-            pageCount: viewModel.pageCount,
-            series: viewModel.fileSeries,
-            volume: viewModel.fileVolume,
-            addedAt: viewModel.fileAddedAt,
-            lastOpenedAt: viewModel.fileLastOpenedAt,
-            fileURL: viewModel.document?.fileURL,
-            coverDocument: viewModel.document
         )
     }
 }

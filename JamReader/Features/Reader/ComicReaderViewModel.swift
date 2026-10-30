@@ -36,6 +36,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
     private var lastPersistedProgressSnapshot: ReaderProgressPersistenceSnapshot?
     private var pendingProgressPersistenceTask: Task<Void, Never>?
     private let logger = AppLog.reader
+    private static let localBookmarkLimit = 3
 
     init(
         request: ComicOpenRequest,
@@ -204,6 +205,19 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
 
     var bookmarkItems: [ReaderBookmarkItem] {
         ReaderBookmarkSupport.items(from: bookmarkPageIndices)
+    }
+
+    /// Local comics keep at most three bookmarks; remote comics have no limit.
+    var bookmarkLimit: Int? {
+        isLibraryBacked ? Self.localBookmarkLimit : nil
+    }
+
+    var canToggleBookmarkForCurrentPage: Bool {
+        ReaderBookmarkSupport.canToggle(
+            bookmarkPageIndices,
+            at: currentPageIndex,
+            maximumCount: bookmarkLimit
+        )
     }
 
     var pageCount: Int? {
@@ -421,9 +435,17 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
                 bookmarkPageIndices,
                 at: currentPageIndex,
                 pageCount: document?.pageCount,
-                maximumCount: isLibraryBacked ? 3 : nil
+                maximumCount: bookmarkLimit
             )
         )
+    }
+
+    func removeBookmark(at pageIndex: Int) {
+        guard bookmarkPageIndices.contains(pageIndex) else {
+            return
+        }
+        AppHaptics.light()
+        applyBookmarks(bookmarkPageIndices.filter { $0 != pageIndex })
     }
 
     func toggleFavoriteStatus() {
@@ -1018,7 +1040,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         let bookmarkArray = ReaderBookmarkNormalizer.normalized(
             pageIndices,
             pageCount: document?.pageCount,
-            maximumCount: isLibraryBacked ? 3 : nil
+            maximumCount: bookmarkLimit
         )
         bookmarkPageIndices = bookmarkArray
 
@@ -1049,7 +1071,7 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         let normalizedBookmarks = ReaderBookmarkNormalizer.normalized(
             bookmarkPageIndices,
             pageCount: pageCount,
-            maximumCount: isLibraryBacked ? 3 : nil
+            maximumCount: bookmarkLimit
         )
         if normalizedBookmarks != bookmarkPageIndices {
             applyBookmarks(normalizedBookmarks)
