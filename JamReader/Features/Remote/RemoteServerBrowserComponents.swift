@@ -1311,7 +1311,7 @@ struct RemoteBrowserLocationBar: View {
                 .font(AppFont.footnote())
             }
         }
-        .padding(.horizontal, Spacing.md)
+        .containerHorizontalMargins()
         .padding(.top, Spacing.xxs)
         .padding(.bottom, Spacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)

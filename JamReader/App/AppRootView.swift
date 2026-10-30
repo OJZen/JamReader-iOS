@@ -8,6 +8,7 @@ struct AppRootOverlayView: View {
         RootImportOverlayHost(controller: controller)
             .padding(.horizontal, Spacing.sm)
             .frame(maxWidth: .infinity, alignment: .bottom)
+            .staysClearOfActiveVerticalFold()
     }
 }
 

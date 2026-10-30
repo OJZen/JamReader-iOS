@@ -54,6 +54,8 @@ enum AppLaunchDestination: String, CaseIterable, Identifiable, Hashable {
 enum AppNavigationStorageKeys {
     static let selectedTab = "appRoot.selectedTab"
     static let libraryHomeSelectedLibraryID = "libraryHome.selectedLibraryID"
+    /// The selected library sidebar row (`LibrarySidebarSelection.storageValue`).
+    static let librarySidebarSelection = "libraryHome.sidebarSelection"
     static let pendingFocusedLibraryID = "libraryHome.pendingFocusedLibraryID"
     static let pendingFocusedFolderID = "libraryHome.pendingFocusedFolderID"
     static let browseHomeSelection = "browseHome.selection"
@@ -82,6 +84,89 @@ enum LibraryNavigationRoute {
     case specialCollection(LibraryDescriptor, LibrarySpecialCollectionKind)
     case organization(LibraryDescriptor, LibraryOrganizationSectionKind)
     case organizationCollection(LibraryDescriptor, LibraryOrganizationCollection)
+    /// A collection row in the sidebar: the page replaces the content column.
+    case sidebarCollection(UUID, LibrarySidebarCollection)
+}
+
+/// The library sidebar's collection rows, in sidebar order.
+enum LibrarySidebarCollection: String, CaseIterable, Identifiable, Hashable {
+    case favorites
+    case recent
+    case labels
+    case readingLists
+
+    var id: String { rawValue }
+
+    var specialKind: LibrarySpecialCollectionKind? {
+        switch self {
+        case .favorites:
+            return .favorites
+        case .recent:
+            return .recent
+        case .labels, .readingLists:
+            return nil
+        }
+    }
+
+    var organizationKind: LibraryOrganizationSectionKind? {
+        switch self {
+        case .labels:
+            return .labels
+        case .readingLists:
+            return .readingLists
+        case .favorites, .recent:
+            return nil
+        }
+    }
+}
+
+/// The selected row of the library sidebar. Kept across relaunches and when the
+/// split view opens or closes.
+enum LibrarySidebarSelection: Hashable {
+    case continueReading
+    case library(UUID)
+    case collection(UUID, LibrarySidebarCollection)
+
+    init?(storageValue: String) {
+        let parts = storageValue.split(separator: ":").map(String.init)
+        switch parts.first {
+        case "continueReading" where parts.count == 1:
+            self = .continueReading
+        case "library" where parts.count == 2:
+            guard let libraryID = UUID(uuidString: parts[1]) else {
+                return nil
+            }
+            self = .library(libraryID)
+        case "collection" where parts.count == 3:
+            guard let libraryID = UUID(uuidString: parts[1]),
+                  let collection = LibrarySidebarCollection(rawValue: parts[2]) else {
+                return nil
+            }
+            self = .collection(libraryID, collection)
+        default:
+            return nil
+        }
+    }
+
+    var storageValue: String {
+        switch self {
+        case .continueReading:
+            return "continueReading"
+        case .library(let libraryID):
+            return "library:\(libraryID.uuidString)"
+        case .collection(let libraryID, let collection):
+            return "collection:\(libraryID.uuidString):\(collection.rawValue)"
+        }
+    }
+
+    var libraryID: UUID? {
+        switch self {
+        case .continueReading:
+            return nil
+        case .library(let libraryID), .collection(let libraryID, _):
+            return libraryID
+        }
+    }
 }
 
 enum BrowseNavigationRoute {

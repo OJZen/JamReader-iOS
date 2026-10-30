@@ -644,7 +644,7 @@ private struct StorageItemRow: View {
                 .buttonStyle(.borderless)
                 .disabled(bytes <= 0)
                 .opacity(bytes > 0 ? 1 : 0.45)
-                .accessibilityLabel(Text("\(actionTitle) \(title)"))
+                .accessibilityLabel(Text(actionTitle + " " + title))
             }
         }
     }

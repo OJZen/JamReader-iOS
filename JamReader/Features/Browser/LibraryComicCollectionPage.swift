@@ -101,6 +101,7 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
             }
         }
         .systemTabBarHidden(isSelectionMode)
+        .prefersToolbarItemsWhenCompressed(isSelectionMode)
         .searchable(
             text: $searchQuery,
             prompt: Text("Search in “\(title)”")
@@ -371,12 +372,11 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
                 } label: {
                     Label("Select", systemImage: "checkmark.circle")
                 }
-                .labelStyle(.titleOnly)
+                .barButtonTextBeforeSideBars()
             }
         }
 
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
+        PageOverflowMenu {
                 pageMenuContent()
 
                 Section {
@@ -406,9 +406,6 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
                     }
                     .disabled(displayedComics.isEmpty)
                 }
-            } label: {
-                Label("More", systemImage: "ellipsis")
-            }
         }
     }
 
@@ -425,6 +422,7 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
             }
             .labelStyle(.titleOnly)
         }
+        .staysInHorizontalBar()
 
         ToolbarItem(placement: .confirmationAction) {
             Button {
@@ -432,10 +430,11 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
             } label: {
                 Label("Done", systemImage: "checkmark")
             }
-            .labelStyle(.titleOnly)
+            .barButtonTextBeforeSideBars()
             // The bar fills this button; fills use jam, not the brighter dark-mode accent.
             .tint(.appJam)
         }
+        .keepsVisibleLongest()
 
         // One centered group of actions, as in components/SelectionBar.
         ToolbarItemGroup(placement: .bottomBar) {
@@ -471,31 +470,18 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
             .tint(.appAccent)
             .disabled(selectedComicIDs.isEmpty)
 
-            Menu {
-                Button {
-                    presentBatchMetadataSheet()
+            // From iOS 27.1 these join the system overflow menu (below).
+            if #available(iOS 27.1, *) {
+                EmptyView()
+            } else {
+                Menu {
+                    selectionMoreMenuItems
                 } label: {
-                    Label("Edit Metadata", systemImage: "square.and.pencil")
+                    Label("More", systemImage: "ellipsis.circle")
                 }
-
-                Button {
-                    presentComicInfoImportSheet()
-                } label: {
-                    Label("Import Comic Info…", systemImage: "doc.text.magnifyingglass")
-                }
-
-                if let membershipRemoval {
-                    Button {
-                        performBatchAction(membershipRemoval.removeMany)
-                    } label: {
-                        Label(membershipRemoval.title, systemImage: "minus.circle")
-                    }
-                }
-            } label: {
-                Label("More", systemImage: "ellipsis.circle")
+                .tint(.appAccent)
+                .disabled(selectedComicIDs.isEmpty)
             }
-            .tint(.appAccent)
-            .disabled(selectedComicIDs.isEmpty)
 
             if model.canRemoveComics {
                 Button(role: .destructive) {
@@ -508,6 +494,36 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
             }
 
             Spacer()
+        }
+
+        if #available(iOS 27.1, *) {
+            ToolbarOverflowMenu {
+                selectionMoreMenuItems
+                    .disabled(selectedComicIDs.isEmpty)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var selectionMoreMenuItems: some View {
+        Button {
+            presentBatchMetadataSheet()
+        } label: {
+            Label("Edit Metadata", systemImage: "square.and.pencil")
+        }
+
+        Button {
+            presentComicInfoImportSheet()
+        } label: {
+            Label("Import Comic Info…", systemImage: "doc.text.magnifyingglass")
+        }
+
+        if let membershipRemoval {
+            Button {
+                performBatchAction(membershipRemoval.removeMany)
+            } label: {
+                Label(membershipRemoval.title, systemImage: "minus.circle")
+            }
         }
     }
 

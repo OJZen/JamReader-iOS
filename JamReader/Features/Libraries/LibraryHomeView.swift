@@ -1,29 +1,36 @@
+import Combine
 import SwiftUI
 import UIKit
 
-/// Library home: the list of local libraries (the sidebar on iPad).
-/// See docs/design-system/components/ScreenLibraryHome.
+/// Library home: the list of local libraries. Built twice by the tab's split
+/// view: as the iPhone list, and as the sidebar beside the content, which also
+/// lists the current library's collections.
+/// See docs/design-system/components/ScreenLibraryHome and Sidebar.
 struct LibraryHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
+    @Environment(SplitLayoutState.self) private var splitLayout: SplitLayoutState?
     @AppStorage(AppNavigationStorageKeys.libraryHomeSelectedLibraryID) private var storedSelectedLibraryID = ""
+    @AppStorage(AppNavigationStorageKeys.librarySidebarSelection) private var storedSidebarSelection = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedLibraryID) private var pendingFocusedLibraryID = ""
     @AppStorage(AppNavigationStorageKeys.pendingFocusedFolderID) private var pendingFocusedFolderID = ""
     @AppStorage(LibraryPreferencesStore.continueReadingPlacementStorageKey)
     private var continueReadingPlacementRawValue = ContinueReadingPlacement.defaultValue.rawValue
     @ObservedObject var viewModel: LibraryListViewModel
     let dependencies: AppDependencies
+    let isSidebar: Bool
 
     @StateObject private var continueReading: LibraryContinueReadingViewModel
-    @State private var isContinueReadingSelected = false
+    @StateObject private var sidebarCollections = LibrarySidebarCollectionsModel()
     @State private var selectedLibraryID: UUID?
     @State private var focusedLibraryIDOverride: UUID?
     @State private var focusedFolderIDOverride: Int64?
     @State private var pendingLibraryRemoval: LibraryRemovalRequest?
 
-    init(viewModel: LibraryListViewModel, dependencies: AppDependencies) {
+    init(viewModel: LibraryListViewModel, dependencies: AppDependencies, isSidebar: Bool = false) {
         self.viewModel = viewModel
         self.dependencies = dependencies
+        self.isSidebar = isSidebar
         _continueReading = StateObject(wrappedValue: LibraryContinueReadingViewModel(dependencies: dependencies))
     }
 
@@ -64,6 +71,7 @@ struct LibraryHomeView: View {
                         Label("Add Comics", systemImage: "plus")
                     }
                 }
+                .keepsVisibleLongest()
             }
         }
         .refreshable {
@@ -74,11 +82,13 @@ struct LibraryHomeView: View {
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
             reloadContinueReading()
+            reloadSidebarCollections()
         }
         .onChange(of: viewModel.items) { _, _ in
             synchronizeSelection()
             handlePendingLibraryFocusIfNeeded()
             reloadContinueReading()
+            reloadSidebarCollections()
         }
         .onChange(of: continueReadingPlacementRawValue) { _, _ in
             reloadContinueReading()
@@ -86,16 +96,18 @@ struct LibraryHomeView: View {
         // Progress saved from a library page reaches the iPad sidebar count.
         .onReceive(NotificationCenter.default.publisher(for: .localReaderDidClose)) { _ in
             reloadContinueReading()
+            reloadSidebarCollections()
         }
         .onChange(of: viewModel.completedImport) { _, completedImport in
             // Imports land in the library root, so open it there with the result bar.
-            if let completedImport {
+            if let completedImport, isOnScreenHome {
                 selectedLibraryID = completedImport.libraryID
                 appNavigator?.navigate(.library(.openLibrary(completedImport.libraryID, folderID: 1)))
             }
         }
         .onChange(of: selectedLibraryID) { _, newValue in
             storedSelectedLibraryID = newValue?.uuidString ?? ""
+            reloadSidebarCollections()
         }
         .onChange(of: storedSelectedLibraryID) { _, _ in
             synchronizeSelection(preferStoredSelection: true)
@@ -140,6 +152,9 @@ struct LibraryHomeView: View {
                 }
             }
             librariesSection
+            if usesPersistentSelection, let currentLibrary {
+                collectionsSidebarSection(for: currentLibrary)
+            }
         }
         .adaptiveRootListStyle(usesSidebarStyle: usesPersistentSelection)
     }
@@ -169,7 +184,7 @@ struct LibraryHomeView: View {
                 LibrarySidebarLabel(
                     systemImage: "book",
                     title: String(localized: "Continue Reading"),
-                    isSelected: isContinueReadingSelected
+                    isSelected: sidebarSelection == .continueReading
                 ) {
                     Text("\(continueReading.entries.count)")
                         .font(AppFont.subheadline().monospacedDigit())
@@ -177,8 +192,70 @@ struct LibraryHomeView: View {
                 }
             }
             .buttonStyle(.plain)
-            .persistentSidebarSelection(isSelected: isContinueReadingSelected)
+            .persistentSidebarSelection(isSelected: sidebarSelection == .continueReading)
         }
+    }
+
+    /// The current library's collections, replacing the 2×2 cards on its root
+    /// page while the sidebar is visible.
+    private func collectionsSidebarSection(for item: LibraryListItem) -> some View {
+        Section {
+            ForEach(LibrarySidebarCollection.allCases) { collection in
+                let isSelected = sidebarSelection == .collection(item.id, collection)
+                Button {
+                    appNavigator?.navigate(.library(.sidebarCollection(item.id, collection)))
+                } label: {
+                    LibrarySidebarLabel(
+                        systemImage: collection.systemImageName,
+                        title: collection.title,
+                        isSelected: isSelected,
+                        tint: collection.tint
+                    ) {
+                        if let count = sidebarCollections.counts[collection] {
+                            Text("\(count)")
+                                .font(AppFont.subheadline().monospacedDigit())
+                                .foregroundStyle(Color.textSecondary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .persistentSidebarSelection(isSelected: isSelected)
+            }
+        } header: {
+            Text(item.descriptor.displayName)
+                .foregroundStyle(Color.textSecondary)
+                .textCase(nil)
+        }
+    }
+
+    private var sidebarSelection: LibrarySidebarSelection? {
+        LibrarySidebarSelection(storageValue: storedSidebarSelection)
+    }
+
+    private var currentLibrary: LibraryListItem? {
+        selectedLibraryID.flatMap(libraryItem(for:))
+    }
+
+    private func isLibrarySelected(_ libraryID: UUID) -> Bool {
+        guard let sidebarSelection else {
+            return selectedLibraryID == libraryID
+        }
+        return sidebarSelection == .library(libraryID)
+    }
+
+    /// Both home instances observe the same state; only the one on screen acts.
+    private var isOnScreenHome: Bool {
+        guard let splitLayout else {
+            return true
+        }
+        return splitLayout.isSidebarVisible == isSidebar
+    }
+
+    private func reloadSidebarCollections() {
+        guard isSidebar else {
+            return
+        }
+        sidebarCollections.reload(item: currentLibrary, dependencies: dependencies)
     }
 
     private func reloadContinueReading() {
@@ -200,9 +277,6 @@ struct LibraryHomeView: View {
     }
 
     private func showAllContinueReading() {
-        if usesPersistentSelection {
-            isContinueReadingSelected = true
-        }
         appNavigator?.navigate(.library(.continueReading))
     }
 
@@ -215,7 +289,7 @@ struct LibraryHomeView: View {
                     if usesPersistentSelection {
                         LibrarySidebarRow(
                             item: item,
-                            isSelected: selectedLibraryID == item.id && !isContinueReadingSelected
+                            isSelected: isLibrarySelected(item.id)
                         )
                     } else {
                         LibraryRowView(item: item)
@@ -224,7 +298,7 @@ struct LibraryHomeView: View {
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
                 .persistentSidebarSelection(
-                    isSelected: selectedLibraryID == item.id && !isContinueReadingSelected,
+                    isSelected: isLibrarySelected(item.id),
                     isEnabled: usesPersistentSelection
                 )
                 .contextMenu {
@@ -253,9 +327,7 @@ struct LibraryHomeView: View {
     }
 
     private var usesPersistentSelection: Bool {
-        AppLayout.usesPersistentSplitSelection(
-            isPad: UIDevice.current.userInterfaceIdiom == .pad
-        )
+        isSidebar
     }
 
     private func synchronizeSelection(preferStoredSelection: Bool = false) {
@@ -277,7 +349,8 @@ struct LibraryHomeView: View {
     }
 
     private func handlePendingLibraryFocusIfNeeded() {
-        guard let libraryID = UUID(uuidString: pendingFocusedLibraryID),
+        guard isOnScreenHome,
+              let libraryID = UUID(uuidString: pendingFocusedLibraryID),
               let item = libraryItem(for: libraryID) else {
             return
         }
@@ -337,7 +410,7 @@ struct LibraryHomeView: View {
 
     private func handleRemovedLibraries(_ removedIDs: Set<UUID>) {
         let removedCurrentSelection = selectedLibraryID.map(removedIDs.contains) ?? false
-        guard usesPersistentSelection, removedCurrentSelection else {
+        guard usesPersistentSelection, isOnScreenHome, removedCurrentSelection else {
             synchronizeSelection()
             return
         }
@@ -381,7 +454,6 @@ struct LibraryHomeView: View {
         }
 
         selectedLibraryID = item.id
-        isContinueReadingSelected = false
         appNavigator?.navigate(
             .library(.openLibrary(item.id, folderID: preferredFolderID(for: item)))
         )
@@ -546,6 +618,7 @@ private struct LibrarySidebarLabel<Trailing: View>: View {
     let systemImage: String
     let title: String
     let isSelected: Bool
+    var tint: Color = .appAccent
     @ViewBuilder let trailing: () -> Trailing
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -554,7 +627,7 @@ private struct LibrarySidebarLabel<Trailing: View>: View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: systemImage)
                 .font(AppFont.body())
-                .foregroundStyle(Color.appAccent)
+                .foregroundStyle(tint)
                 .frame(width: 24)
                 // The sidebar is narrow: larger text keeps its width for the name.
                 .dynamicTypeSize(...DynamicTypeSize.large)
@@ -660,6 +733,67 @@ struct LibraryEmptyStateView: View {
             .font(AppFont.subheadline(.semibold))
             .foregroundStyle(Color.appAccent)
             .buttonStyle(.borderless)
+        }
+    }
+}
+
+extension LibrarySidebarCollection {
+    var title: String {
+        specialKind?.title ?? organizationKind?.title ?? ""
+    }
+
+    var systemImageName: String {
+        if let specialKind {
+            return specialKind == .favorites ? "star" : specialKind.collectionSystemImageName
+        }
+        return organizationKind?.collectionSystemImageName ?? "folder"
+    }
+
+    var tint: Color {
+        specialKind == .favorites ? .appFavorite : .appAccent
+    }
+}
+
+/// Counts beside the sidebar's collection rows, read off the main thread.
+@MainActor
+final class LibrarySidebarCollectionsModel: ObservableObject {
+    @Published private(set) var counts: [LibrarySidebarCollection: Int] = [:]
+
+    private var loadedLibraryID: UUID?
+    private var generation = 0
+
+    func reload(item: LibraryListItem?, dependencies: AppDependencies) {
+        guard let item, item.accessSnapshot.database.exists else {
+            loadedLibraryID = nil
+            counts = [:]
+            return
+        }
+
+        if loadedLibraryID != item.id {
+            counts = [:]
+        }
+        loadedLibraryID = item.id
+        generation += 1
+        let generation = generation
+        let reader = dependencies.libraryDatabaseReader
+        let databaseURL = dependencies.libraryStorageManager.databaseURL(for: item.descriptor)
+        let recentDays = dependencies.libraryPreferencesStore.loadRecentWindow().rawValue
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let specialCounts = (try? reader.loadSpecialListCounts(databaseURL: databaseURL, recentDays: recentDays)) ?? [:]
+            let organization = (try? reader.loadOrganizationSnapshot(databaseURL: databaseURL)) ?? .empty
+            let counts: [LibrarySidebarCollection: Int] = [
+                .favorites: specialCounts[.favorites] ?? 0,
+                .recent: specialCounts[.recent] ?? 0,
+                .labels: organization.labels.count,
+                .readingLists: organization.readingLists.count
+            ]
+            DispatchQueue.main.async {
+                guard let self, self.generation == generation else {
+                    return
+                }
+                self.counts = counts
+            }
         }
     }
 }

@@ -19,6 +19,7 @@ struct LibraryBrowserView: View {
         }
     }
 
+    @Environment(SplitLayoutState.self) private var splitLayout: SplitLayoutState?
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -34,6 +35,7 @@ struct LibraryBrowserView: View {
     @State private var comicSortMode: LibraryComicSortMode
     @State private var displayMode: LibraryBrowserDisplayMode
     @State private var quickFilter: LibraryComicQuickFilter = .all
+    @State private var foldGridMetrics: FoldSplitGridMetrics?
     @State private var editingComic: LibraryComic?
     @State private var organizingComic: LibraryComic?
     @State private var deletingComic: LibraryComic?
@@ -87,6 +89,7 @@ struct LibraryBrowserView: View {
                 }
             }
             .systemTabBarHidden(isSelectionMode)
+            .prefersToolbarItemsWhenCompressed(isSelectionMode)
             .searchable(
                 text: $viewModel.searchQuery,
                     prompt: Text("Search in “\(viewModel.descriptor.displayName)”")
@@ -249,7 +252,9 @@ struct LibraryBrowserView: View {
                 locationHeader(content)
 
                 if content.folder.isRoot, !isSelectionMode {
-                    collectionsGrid
+                    if showsCollectionsGrid {
+                        collectionsGrid
+                    }
                     continueReadingSection
                 }
 
@@ -275,6 +280,7 @@ struct LibraryBrowserView: View {
                                     .disabled(isSelectionMode)
                                 }
                             }
+                            .padding(.leading, foldGridLeadingOffset)
                         }
                     }
 
@@ -296,14 +302,56 @@ struct LibraryBrowserView: View {
                                         )
                                     }
                                 }
+                                .padding(.leading, foldGridLeadingOffset)
                             }
                         }
                     }
                 }
             }
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { updateFoldGridMetrics(proxy) }
+                        .onChange(of: proxy.size) { _, _ in updateFoldGridMetrics(proxy) }
+                }
+            }
             .padding(.vertical, Spacing.xs)
             .containerHorizontalMargins()
             .adaptiveContentWidth(1180)
+        }
+    }
+
+    private var foldGridLeadingOffset: CGFloat {
+        dynamicTypeSize.isAccessibilitySize ? 0 : (foldGridMetrics?.columnOrigins.first ?? 0)
+    }
+
+    /// iPhone Duo: a vertical fold across the grid (sidebar hidden) gets even
+    /// columns with the middle gutter on the fold.
+    private func updateFoldGridMetrics(_ proxy: GeometryProxy) {
+        guard #available(iOS 27.1, *) else {
+            return
+        }
+
+        let fold = proxy.reservedRegions(kind: .division, options: .includeInactive)
+            .map(\.frame)
+            .first { $0.height > $0.width }
+        let minimumWidth = horizontalSizeClass == .regular
+            ? AppLayout.gridItemMinWidth
+            : AppLayout.gridItemMinWidthCompact
+        let metrics = fold.flatMap { fold in
+            FoldSplitGridMetrics.make(
+                containerWidth: proxy.size.width,
+                leadingInset: 0,
+                trailingInset: 0,
+                foldMinX: fold.minX,
+                foldMaxX: fold.maxX,
+                minimumItemWidth: minimumWidth,
+                maximumItemWidth: AppLayout.gridItemMaxWidth,
+                spacing: Spacing.sm
+            )
+        }
+        if metrics != foldGridMetrics {
+            foldGridMetrics = metrics
         }
     }
 
@@ -316,8 +364,10 @@ struct LibraryBrowserView: View {
                     .listRowSeparator(.hidden)
 
                 if content.folder.isRoot, !isSelectionMode {
-                    collectionsGrid
-                        .listRowSeparator(.hidden)
+                    if showsCollectionsGrid {
+                        collectionsGrid
+                            .listRowSeparator(.hidden)
+                    }
                     continueReadingSection
                         .listRowSeparator(.hidden)
                 }
@@ -483,6 +533,17 @@ struct LibraryBrowserView: View {
     }
 
     private var coverGridColumns: [GridItem] {
+        if let foldGridMetrics, !dynamicTypeSize.isAccessibilitySize {
+            let middle = foldGridMetrics.columns / 2 - 1
+            return (0..<foldGridMetrics.columns).map { index in
+                GridItem(
+                    .fixed(foldGridMetrics.itemWidth),
+                    spacing: index == middle ? foldGridMetrics.centerGutter : Spacing.sm,
+                    alignment: .top
+                )
+            }
+        }
+
         if dynamicTypeSize.isAccessibilitySize {
             return Array(
                 repeating: GridItem(.flexible(), spacing: Spacing.sm, alignment: .top),
@@ -511,6 +572,11 @@ struct LibraryBrowserView: View {
             organizationItem(for: .labels),
             organizationItem(for: .readingLists)
         ]
+    }
+
+    /// The sidebar lists the collections while it is on screen.
+    private var showsCollectionsGrid: Bool {
+        !(splitLayout?.isSidebarVisible ?? false)
     }
 
     /// 2×2 collection entries on the library root.
@@ -784,12 +850,11 @@ struct LibraryBrowserView: View {
                 } label: {
                     Label("Select", systemImage: "checkmark.circle")
                 }
-                .labelStyle(.titleOnly)
+                .barButtonTextBeforeSideBars()
             }
         }
 
-        ToolbarItem(placement: .topBarTrailing) {
-            Menu {
+        PageOverflowMenu {
                 Section {
                     importHereMenu
                 }
@@ -840,9 +905,6 @@ struct LibraryBrowserView: View {
                         }
                     }
                 }
-            } label: {
-                Label("More", systemImage: "ellipsis")
-            }
         }
     }
 
@@ -899,6 +961,7 @@ struct LibraryBrowserView: View {
             }
             .labelStyle(.titleOnly)
         }
+        .staysInHorizontalBar()
 
         ToolbarItem(placement: .confirmationAction) {
             Button {
@@ -906,10 +969,11 @@ struct LibraryBrowserView: View {
             } label: {
                 Label("Done", systemImage: "checkmark")
             }
-            .labelStyle(.titleOnly)
+            .barButtonTextBeforeSideBars()
             // The bar fills this button; fills use jam, not the brighter dark-mode accent.
             .tint(.appJam)
         }
+        .keepsVisibleLongest()
 
         // One centered group of actions, as in components/SelectionBar.
         ToolbarItemGroup(placement: .bottomBar) {
@@ -945,23 +1009,18 @@ struct LibraryBrowserView: View {
             .tint(.appAccent)
             .disabled(selectedComicIDs.isEmpty)
 
-            Menu {
-                Button {
-                    presentBatchMetadataSheet()
+            // From iOS 27.1 these join the system overflow menu (below).
+            if #available(iOS 27.1, *) {
+                EmptyView()
+            } else {
+                Menu {
+                    selectionMoreMenuItems
                 } label: {
-                    Label("Edit Metadata", systemImage: "square.and.pencil")
+                    Label("More", systemImage: "ellipsis.circle")
                 }
-
-                Button {
-                    presentComicInfoImportSheet()
-                } label: {
-                    Label("Import Comic Info…", systemImage: "doc.text.magnifyingglass")
-                }
-            } label: {
-                Label("More", systemImage: "ellipsis.circle")
+                .tint(.appAccent)
+                .disabled(selectedComicIDs.isEmpty)
             }
-            .tint(.appAccent)
-            .disabled(selectedComicIDs.isEmpty)
 
             if viewModel.canRemoveComics {
                 Button(role: .destructive) {
@@ -974,6 +1033,28 @@ struct LibraryBrowserView: View {
             }
 
             Spacer()
+        }
+
+        if #available(iOS 27.1, *) {
+            ToolbarOverflowMenu {
+                selectionMoreMenuItems
+                    .disabled(selectedComicIDs.isEmpty)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var selectionMoreMenuItems: some View {
+        Button {
+            presentBatchMetadataSheet()
+        } label: {
+            Label("Edit Metadata", systemImage: "square.and.pencil")
+        }
+
+        Button {
+            presentComicInfoImportSheet()
+        } label: {
+            Label("Import Comic Info…", systemImage: "doc.text.magnifyingglass")
         }
     }
 

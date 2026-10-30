@@ -151,22 +151,22 @@
 
 **顺序**：外壳与列表部分可以随时做；阅读器部分在第 4 批之后做（第 4 批会改顶栏与显示面板）。
 
-- [ ] **先保护**：改动前在 iPhone 与 iPad 各截一组底部导航列表、右侧轨道、页码胶囊、浮动预览的图（分页 / 竖向、工具显示），作为逐像素对照。
-- [ ] **工程**：用 Xcode 27.1 SDK 构建；最低系统仍为 iOS 17.6，Duo 专用 API 放进 `if #available(iOS 27.0, *)`。不加 `UIRequiresFullScreen`。
-- [ ] **外壳**（`AppRootTabBarControllerView.swift` 287 / 613 / 1041 行的 `usesSplitLayout = userInterfaceIdiom == .pad`）：三个分区的 split view 始终创建，由系统按宽度折叠 / 展开；折叠时等于现在的 iPhone 导航栈，展开时等于现在的 iPad 侧栏。展开 / 折叠时保留选中项与导航层级。294 / 620 行 `preferredPrimaryColumnWidth = 320` 改为系统默认或比例 + 最小 / 最大值（iPad 上看起来不变）。
-- [ ] **iPad / 内屏侧栏列出集合**：按 `Sidebar` 与 `ScreenIPad`，侧栏在当前书库下列出收藏 / 最近加入 / 标签 / 阅读列表，内容区去掉 2×2 集合卡；重启与开合后恢复侧栏选中项。（第 A 轮决定：第 2 批保留 2×2 集合卡，第 B 轮做。）
-- [ ] **侧栏常驻判断**：`DesignTokens.usesPersistentSplitSelection(isPad:)` 与 `LibraryHomeView` 的 `isPad`（空状态按钮的显示）改为看 split view 是否展开，不看设备。
-- [ ] **根标签栏**：79 行 iOS 18 起设 `mode = .tabBar`；在 Device Hub 确认系统仍能把标签栏放到侧边，若不能，iOS 27 起不再设置。不自绘侧边栏。
-- [ ] **页面边距**：把书库、远程、设置及各 Sheet 中写死的左右边距（`.padding(.horizontal, …)`、`scenePadding`、collection view `contentInsets` 左右值）改为系统容器边距；宽度计算按每一侧单独取安全区（`bounds.inset(by: safeAreaInsets)`），不写 `width - inset * 2`。外屏靠侧边列一侧应贴到控件列。受保护组件内部间距不改。
-- [ ] **只用系统栏**：工具栏动作都放进系统管理的栏（`UINavigationController` / `UITabBarController`，SwiftUI `.toolbar`）。查找自建的 `UIToolbar` / `UINavigationBar` / `UITabBar` 与自绘的底部按钮条，改为系统栏项——它们不会进侧边列。阅读器自绘顶栏除外。
-- [ ] **工具栏项**：所有导航栏 / 工具栏按钮同时提供标题与 SF Symbol；“选择”加 `checkmark.circle`（标题不变）；“全选 / 全不选”设 `axisBehavior = .horizontalOnly`。自定义返回 / 关闭用 `.cancellationAction`（或前导项），主要动作用 `.topBarPinnedTrailing` / `pinnedTrailingGroup`。需要数量的符号按钮用系统徽标。iOS 27 起把页面自己的 ⋯ 内容并入系统溢出菜单（`additionalOverflowItems` / `ToolbarOverflowMenu`），同一屏只有一个 ⋯。用 `visibilityPriority` 让书库首页 [+]、远程目录图钉、选择模式“完成”和“标为已读”最后收起。
-- [ ] **选择模式**：底部动作改用系统底部工具栏项；“完成”钉在最上；“更多”的内容并入系统溢出菜单；压缩方式设为优先保留工具栏项（`verticalBarCompressionBehavior = .prefersBarItems`）。对照 `ScreenDuoLibrary`。
-- [ ] **标签栏**：不开启标签栏的侧栏放置（`sidebar.preferredPlacement = .sidebar`），避免与分区自己的侧栏重复。
+- [x] **先保护**：改动前在 iPhone 与 iPad 各截一组底部导航列表、右侧轨道、页码胶囊、浮动预览的图（分页 / 竖向、工具显示），作为逐像素对照。
+- [x] **工程**：用 Xcode 27.1 SDK 构建；最低系统仍为 iOS 17.6，Duo 专用 API 放进 `if #available(iOS 27.0, *)`。不加 `UIRequiresFullScreen`。
+- [x] **外壳**（`AppRootTabBarControllerView.swift` 287 / 613 / 1041 行的 `usesSplitLayout = userInterfaceIdiom == .pad`）：三个分区的 split view 始终创建，由系统按宽度折叠 / 展开；折叠时等于现在的 iPhone 导航栈，展开时等于现在的 iPad 侧栏。展开 / 折叠时保留选中项与导航层级。294 / 620 行 `preferredPrimaryColumnWidth = 320` 改为系统默认或比例 + 最小 / 最大值（iPad 上看起来不变）。
+- [x] **iPad / 内屏侧栏列出集合**：按 `Sidebar` 与 `ScreenIPad`，侧栏在当前书库下列出收藏 / 最近加入 / 标签 / 阅读列表，内容区去掉 2×2 集合卡；重启与开合后恢复侧栏选中项。（第 A 轮决定：第 2 批保留 2×2 集合卡，第 B 轮做。）
+- [x] **侧栏常驻判断**：`DesignTokens.usesPersistentSplitSelection(isPad:)` 与 `LibraryHomeView` 的 `isPad`（空状态按钮的显示）改为看 split view 是否展开，不看设备。
+- [x] **根标签栏**：79 行 iOS 18 起设 `mode = .tabBar`；在 Device Hub 确认系统仍能把标签栏放到侧边，若不能，iOS 27 起不再设置。不自绘侧边栏。
+- [x] **页面边距**：把书库、远程、设置及各 Sheet 中写死的左右边距（`.padding(.horizontal, …)`、`scenePadding`、collection view `contentInsets` 左右值）改为系统容器边距；宽度计算按每一侧单独取安全区（`bounds.inset(by: safeAreaInsets)`），不写 `width - inset * 2`。外屏靠侧边列一侧应贴到控件列。受保护组件内部间距不改。
+- [x] **只用系统栏**：工具栏动作都放进系统管理的栏（`UINavigationController` / `UITabBarController`，SwiftUI `.toolbar`）。查找自建的 `UIToolbar` / `UINavigationBar` / `UITabBar` 与自绘的底部按钮条，改为系统栏项——它们不会进侧边列。阅读器自绘顶栏除外。
+- [x] **工具栏项**：所有导航栏 / 工具栏按钮同时提供标题与 SF Symbol；“选择”加 `checkmark.circle`（标题不变）；“全选 / 全不选”设 `axisBehavior = .horizontalOnly`。自定义返回 / 关闭用 `.cancellationAction`（或前导项），主要动作用 `.topBarPinnedTrailing` / `pinnedTrailingGroup`。需要数量的符号按钮用系统徽标。iOS 27 起把页面自己的 ⋯ 内容并入系统溢出菜单（`additionalOverflowItems` / `ToolbarOverflowMenu`），同一屏只有一个 ⋯。用 `visibilityPriority` 让书库首页 [+]、远程目录图钉、选择模式“完成”和“标为已读”最后收起。
+- [x] **选择模式**：底部动作改用系统底部工具栏项；“完成”钉在最上；“更多”的内容并入系统溢出菜单；压缩方式设为优先保留工具栏项（`verticalBarCompressionBehavior = .prefersBarItems`）。对照 `ScreenDuoLibrary`。
+- [x] **标签栏**：不开启标签栏的侧栏放置（`sidebar.preferredPlacement = .sidebar`），避免与分区自己的侧栏重复。
 - [ ] **Sheet**：在 Device Hub 外屏对比“添加漫画”Sheet 的竖排与关闭竖排（`preferredVerticalBarBehavior = .disabled`）两种效果，选内容空间更大的一种并写进实施说明；表单类 Sheet 保持竖排。
-- [ ] **方向与圆角**：查找用于布局的设备方向判断（`UIDevice.current.orientation`、`interfaceOrientation`）改为尺寸类别；确认没有锁定竖屏（外屏横放要可用）。靠近屏幕圆角的浮动容器（`TaskBanner`、`Toast`）用 `UICornerConfiguration` / `ConcentricRectangle`。
-- [ ] **远程列表与网格**：`RemoteServerBrowserView` 785 行 `UIScreen.main.bounds.width`、`RemoteServerBrowserGridUIKitView` 482 / 573 行按 idiom 的列数，改为按容器宽度与尺寸类别；`RemoteServerBrowserList/GridUIKitView` 中的 `UIScreen.main.scale` 改为 `traitCollection.displayScale`。
-- [ ] **跨折痕网格**：自定义全宽网格（侧栏收起时的书库网格、远程目录网格、缩略图总览）只要存在折叠区（`.division` 查询带 `.includeInactive`）就用偶数列、左右各一半；外侧边距不变，加大折痕两侧间距让中缝对准折痕，列宽相同；开合时只改中缝，不重排。
-- [ ] **浮动元素**：`TaskBanner`、`Toast`、选择底栏、空状态按钮在安全区内；竖向折叠区启用时，原本居中的元素放进后缘一侧区域。Sheet、Alert、菜单、popover 交给系统。
+- [x] **方向与圆角**：查找用于布局的设备方向判断（`UIDevice.current.orientation`、`interfaceOrientation`）改为尺寸类别；确认没有锁定竖屏（外屏横放要可用）。靠近屏幕圆角的浮动容器（`TaskBanner`、`Toast`）用 `UICornerConfiguration` / `ConcentricRectangle`。
+- [x] **远程列表与网格**：`RemoteServerBrowserView` 785 行 `UIScreen.main.bounds.width`、`RemoteServerBrowserGridUIKitView` 482 / 573 行按 idiom 的列数，改为按容器宽度与尺寸类别；`RemoteServerBrowserList/GridUIKitView` 中的 `UIScreen.main.scale` 改为 `traitCollection.displayScale`。
+- [x] **跨折痕网格**：自定义全宽网格（侧栏收起时的书库网格、远程目录网格、缩略图总览）只要存在折叠区（`.division` 查询带 `.includeInactive`）就用偶数列、左右各一半；外侧边距不变，加大折痕两侧间距让中缝对准折痕，列宽相同；开合时只改中缝，不重排。
+- [x] **浮动元素**：`TaskBanner`、`Toast`、选择底栏、空状态按钮在安全区内；竖向折叠区启用时，原本居中的元素放进后缘一侧区域。Sheet、Alert、菜单、popover 交给系统。
 - [ ] **阅读器视口**：`ReaderChromeOverlay` 283 行回退 `UIScreen.main.bounds` 改为窗口 bounds；外屏用常驻的 `.occlusion` 保留区避开摄像头，工具显隐时画面几何不变。
 - [ ] **双页**：保持 `supportsDoublePageSpread = 常规宽度`。确认外屏 / 紧凑窗口只关闭 `allowsDoublePageSpread`、不改写已保存的布局偏好，回到内屏恢复，并停在同一阅读页。内屏横放不自动切换双页。跨页中心对准折痕（`.division` 中线，含未启用区域）；半折时两页分居折叠区两侧，各自适应一侧；平放时按现有方式相接。
 - [ ] **顶栏与面板**：顶栏整体在安全区内；半折时返回 + 书名在前缘一侧、三键在后缘一侧，书名在折痕前截断。`Aa` 按尺寸类别选底部面板 / popover。`ReaderPageJumpOverlay` 181 行 `UIScreen.main.bounds.height` 改为窗口高度，浮层不横跨折叠区。跨本导航胶囊若与折叠区重叠，放进后缘一侧。
@@ -176,6 +176,23 @@
 - [ ] 文档：在 `03-reader.md`、`docs/design-requirements.md` 记录 Duo 上的实际行为；能力不足而保留现状的地方写进本批实施说明。
 
 **验收**：iPhone 与 iPad 的所有页面和受保护组件截图与改动前一致；Device Hub 中合上 / 内屏竖放 / 内屏横放 / 书本半折 / 桌面姿势 / 分屏在左与在右都能完成四个代表场景（书库内容、远程目录、阅读器工具、导入流程）；开合时不丢导航层级、滚动位置与阅读页码；没有按钮或浮层落在折叠区；外屏内容贴到侧边列、没有多余留白；所有工具栏动作都进了侧边列（阅读器顶栏除外）；外屏横放可用；开启“减少透明度”时侧边列与内容都清晰；外屏导航列表用 iPhone 档、内屏用 iPad 档；浅色 / 深色、AX5、四种语言无截断错误。
+
+第 6 批（上）实施说明（2026-10-30，外壳与列表；阅读器各项留到第 C 轮）：
+
+- 外壳：新增 `AdaptiveSplitShell`，三个分区都始终创建 `UISplitViewController`（主栏 + 内容栏 + `.compact` 栏）。紧凑宽度显示 compact 栏里的 iPhone 导航栈，常规宽度显示侧栏 + 内容；判断来自窗口宽度（启动时读 window scene 的尺寸类别，之后由 `splitViewControllerDidCollapse / DidExpand` 驱动），不看设备。折叠时把内容栏里的页面（不含占位页）原样接到 compact 栈的首页之后，展开时再移回内容栏；移的是同一批视图控制器，所以层级、滚动位置、搜索词、选择状态都在。展开时如果 compact 栈只有首页，按保存的侧栏选中项重开内容（书库 / 远程），设置则显示当前分区。首页各建两份（iPhone 列表与侧栏），只有屏幕上的那一份处理导入完成、待聚焦书库、“添加服务器”这类一次性事件。侧栏宽度未写死，用系统默认。
+- iPad / 内屏侧栏列出集合：书库侧栏在“我的书库”下面以当前书库名为分区标题，列出收藏 / 最近加入 / 标签 / 阅读列表（数量在后台读取，切换书库、出现、关闭阅读器时刷新）；点集合用新路由 `sidebarCollection` 替换内容栏。侧栏选中项（继续阅读 / 书库 / 集合）存为一个值 `libraryHome.sidebarSelection`，重启后由协调器恢复内容并高亮，第 5 批记录的“重启后不恢复继续阅读行”一并解决；折叠状态下恢复集合时，集合页放在该书库根目录之上。侧栏可见时书库根目录不显示 2×2 集合卡（`SplitLayoutState.isSidebarVisible`），折叠后自动出现。
+- 侧栏常驻判断：删除 `AppLayout.usesPersistentSplitSelection(isPad:)`；书库与远程首页由构造参数 `isSidebar` 决定样式，页面用 `SplitLayoutState` 判断侧栏是否同屏。
+- 根标签栏：保留 iOS 18 起的 `mode = .tabBar`；在 iPhone Duo（iOS 27.1）外屏上，系统仍把标签栏放进侧边列底部，所以不改。没有开启标签栏的侧栏放置。
+- 工具栏项：书库首页 [+]、远程目录图钉、选择模式“完成”设 `visibilityPriority(.high)`（iOS 27）；“全选 / 全不选”设 `axisBehavior(.horizontalOnly)`（iOS 27.1）；页面 ⋯（书库内容、集合页、远程目录、服务器详情）改为 `PageOverflowMenu`：iOS 27.1 起并入系统溢出菜单，更早系统保留原 ⋯。“选择 / 完成”在 iOS 27.1 起保留符号（`checkmark.circle` / `checkmark`），否则只有文字的项会被系统留在水平栏；iOS 27.0 及以下仍只显示文字。远程目录的图钉与 ⋯ 拆成两个工具栏项。自定义的“取消”统一为 `.cancellationAction`。
+- 选择模式：底部仍是系统底部工具栏（第 2 批已是）；iOS 27.1 起“更多”的两三项并入系统溢出菜单，底栏不再放“更多”；选择模式开启时设 `toolbarVerticalCompressionBehavior(.prefersToolbarItems)`，浏览时用默认。
+- 页面边距：自定义滚动内容统一用已有的 `containerHorizontalMargins()`（iOS 27.1 起为系统容器边距，之前为 16 / 20）：新增用于远程目录位置栏与离线书架多列视图。List / Form 本来跟随系统。
+- 远程列表与网格：`UIScreen.main.bounds` 回退去掉（宽度未知时不预热缩略图，首个布局会再触发）；AX 字号下最多两列改为按尺寸类别；缩略图像素尺寸用视图自身的 `displayScale`。
+- 跨折痕网格：新增纯函数 `FoldSplitGridMetrics`（偶数列、等宽、中缝对准折痕；窄的一侧保留外边距，另一侧多出的宽度放到外缘；查询包含未启用的折叠区，所以开合只改中缝）。书库封面网格（SwiftUI，固定列 + 中缝间距）与远程目录封面网格（UIKit 自定义 group）在 iOS 27.1 上检测到竖向折叠区时使用；其余情况与原来相同。
+- 浮动元素与圆角：`TaskBanner`、`LightToast`、远程目录底部任务卡、全局导入浮层加 `staysClearOfActiveVerticalFold()`：竖向折叠区启用时放到后缘一侧。`TaskBanner` 背景在 iOS 27.1 起用 `ConcentricRectangle`（最小圆角仍为 `radius-xl`）。没有找到用于布局的设备方向判断；iPhone 支持横屏，未锁竖屏。
+- Sheet：“添加漫画”Sheet 只有“取消”和一列大行，设 `toolbarVerticalBehavior(.disabled)` 保持水平栏；表单类 Sheet 不改。**未完成 Device Hub 对比**（见下），所以该项没有勾选。
+- 为了让 iPhone / iPad（模拟器为 iOS 27.0）截图与改动前一致，凡是会改变水平栏外观的新行为（溢出菜单、选择 / 完成符号、同心圆角、容器边距）都只在 iOS 27.1 起启用；iOS 27.1 的普通 iPhone 也会采用这些行为，这与 `06-iphone-duo.md`“iOS 27 起”的方向一致。
+- 测试：新增 `AdaptiveSplitShellTests`（折叠 / 展开移交同一批页面、占位页不移、无页面时请求恢复、重复通知不重复移动）、`FoldSplitGridMetricsTests`（偶数列与中缝、偏心折痕、开合不重排、无折叠区）、侧栏选中项存取测试；删除已不存在 API 的旧测试。
+- 无法验证 / 未做：本机有 Xcode 27.1 与 iPhone Duo 模拟器（iOS 27.1）和 DeviceHub.app，但没有可用的桌面控制工具，`simctl` 也没有姿态命令，只能截到合上时的外屏；本轮结束时模拟器面板对 iPhone Duo 的访问请求也未获准，外屏上的点按（选择模式、横放）无法操作。内屏竖放 / 横放、书本半折、分屏在左 / 在右、外屏横放，以及开合时的实际移交与“添加漫画”Sheet 竖排对比都没有在设备上看到；移交逻辑由单元测试覆盖，重启恢复在 iPad 上手动确认。
 
 ---
 

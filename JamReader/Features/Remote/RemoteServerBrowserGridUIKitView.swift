@@ -460,7 +460,8 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
         fileprivate func layoutSection(
             at sectionIndex: Int,
-            environment: NSCollectionLayoutEnvironment
+            environment: NSCollectionLayoutEnvironment,
+            foldRange: ClosedRange<CGFloat>? = nil
         ) -> NSCollectionLayoutSection {
             let sectionModel = sectionIndex < sections.count ? sections[sectionIndex] : nil
             let usesNoticeLayout = sectionModel?.kind == .notice
@@ -479,7 +480,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
             }
 
             if !usesNoticeLayout, contentSizeCategory.isAccessibilityCategory {
-                let maximumColumns = environment.traitCollection.userInterfaceIdiom == .pad ? 2 : 1
+                let maximumColumns = environment.traitCollection.horizontalSizeClass == .regular ? 2 : 1
                 let columns = min(max(resolvedItemMetrics.columns, 1), maximumColumns)
                 let availableWidth = max(
                     effectiveWidth
@@ -503,19 +504,57 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
                 )
             }
 
-            let group = RemoteBrowserGridLayoutFactory.makeHorizontalGroup(
-                itemWidth: itemWidth,
-                itemHeight: itemHeight,
-                columns: columns,
-                interItemSpacing: interItemSpacing
-            )
+            // iPhone Duo: a vertical fold across the cover grid gets even
+            // columns with the middle gutter on the fold.
+            let foldMetrics: FoldSplitGridMetrics?
+            if presentationStyle == .grid,
+               !usesNoticeLayout,
+               !contentSizeCategory.isAccessibilityCategory,
+               let foldRange {
+                foldMetrics = FoldSplitGridMetrics.make(
+                    containerWidth: effectiveWidth,
+                    leadingInset: contentInsets.left,
+                    trailingInset: contentInsets.right,
+                    foldMinX: foldRange.lowerBound,
+                    foldMaxX: foldRange.upperBound,
+                    minimumItemWidth: layoutContext.minimumGridItemWidth,
+                    spacing: interItemSpacing
+                )
+            } else {
+                foldMetrics = nil
+            }
+
+            let group: NSCollectionLayoutGroup
+            if let foldMetrics {
+                let width = foldMetrics.itemWidth
+                let height = width / AppLayout.coverAspectRatio + gridLabelHeight(for: contentSizeCategory)
+                group = NSCollectionLayoutGroup.custom(
+                    layoutSize: NSCollectionLayoutSize(
+                        widthDimension: .fractionalWidth(1.0),
+                        heightDimension: .absolute(height)
+                    )
+                ) { _ in
+                    foldMetrics.columnOrigins.map { originX in
+                        NSCollectionLayoutGroupCustomItem(
+                            frame: CGRect(x: originX, y: 0, width: width, height: height)
+                        )
+                    }
+                }
+            } else {
+                group = RemoteBrowserGridLayoutFactory.makeHorizontalGroup(
+                    itemWidth: itemWidth,
+                    itemHeight: itemHeight,
+                    columns: columns,
+                    interItemSpacing: interItemSpacing
+                )
+            }
 
             let section = NSCollectionLayoutSection(group: group)
             section.contentInsets = NSDirectionalEdgeInsets(
                 top: contentInsets.top,
-                leading: contentInsets.left,
+                leading: foldMetrics == nil ? contentInsets.left : 0,
                 bottom: contentInsets.bottom,
-                trailing: contentInsets.right
+                trailing: foldMetrics == nil ? contentInsets.right : 0
             )
             section.interGroupSpacing = lineSpacing(for: sectionIndex)
 
@@ -570,7 +609,7 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
 
             let columns = min(
                 max(metrics.columns, 1),
-                collectionView.traitCollection.userInterfaceIdiom == .pad ? 2 : 1
+                collectionView.traitCollection.horizontalSizeClass == .regular ? 2 : 1
             )
             let sectionInsets = standardSectionInsets
             let availableWidth = max(
@@ -992,9 +1031,26 @@ final class RemoteBrowserGridViewController: UIViewController {
         refreshLayout()
     }
 
+    /// A vertical fold, inactive ones included, in the sections' coordinates
+    /// (sections are laid out inside the safe area).
+    private var verticalFoldRange: ClosedRange<CGFloat>? {
+        guard #available(iOS 27.1, *),
+              let fold = collectionView.reservedRegions(kind: .division, options: .includeInactive)
+                .map(\.frame)
+                .first(where: { $0.height > $0.width }) else {
+            return nil
+        }
+        let leading = collectionView.safeAreaInsets.left
+        return (fold.minX - leading)...(fold.maxX - leading)
+    }
+
     private func makeCollectionLayout() -> UICollectionViewLayout {
         UICollectionViewCompositionalLayout { [weak self] sectionIndex, environment in
-            self?.coordinator?.layoutSection(at: sectionIndex, environment: environment)
+            self?.coordinator?.layoutSection(
+                at: sectionIndex,
+                environment: environment,
+                foldRange: self?.verticalFoldRange
+            )
         }
     }
 
@@ -1228,7 +1284,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         symbolView.isHidden = false
         configureSymbolView(for: item)
 
-        let pixelSize = Int(max(itemWidth, itemWidth / AppLayout.coverAspectRatio) * UIScreen.main.scale)
+        let pixelSize = Int(max(itemWidth, itemWidth / AppLayout.coverAspectRatio) * thumbnailDisplayScale)
         let itemID = item.id
 
         if let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
@@ -1290,7 +1346,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             for: item,
             browsingService: browsingService,
             targetSize: targetSize,
-            scale: UIScreen.main.scale
+            scale: thumbnailDisplayScale
         )
         if representedItemID == itemID {
             thumbnailImageView.image = seeded
@@ -1304,7 +1360,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
                 profile: profile,
                 browsingService: browsingService,
                 targetSize: targetSize,
-                scale: UIScreen.main.scale,
+                scale: thumbnailDisplayScale,
                 allowsRemoteFetch: allowsRemoteFetch
             )
             guard !Task.isCancelled, self.representedItemID == itemID else {
@@ -1480,7 +1536,7 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
         symbolView.isHidden = true
         thumbnailTask?.cancel()
 
-        let pixelSize = Int(max(itemWidth, itemWidth / AppLayout.coverAspectRatio) * UIScreen.main.scale)
+        let pixelSize = Int(max(itemWidth, itemWidth / AppLayout.coverAspectRatio) * thumbnailDisplayScale)
         let itemID = item.id
 
         let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(

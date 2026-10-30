@@ -257,6 +257,7 @@ struct RemoteServerBrowserView: View {
                 }
             }
             .padding(.bottom, Spacing.xs)
+            .staysClearOfActiveVerticalFold()
         }
     }
 
@@ -276,7 +277,7 @@ struct RemoteServerBrowserView: View {
 
     @ToolbarContentBuilder
     private var browserToolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailing) {
             Button {
                 viewModel.toggleCurrentFolderShortcut()
             } label: {
@@ -287,8 +288,10 @@ struct RemoteServerBrowserView: View {
                     systemImage: viewModel.isCurrentFolderSaved ? "pin.fill" : "pin"
                 )
             }
+        }
+        .keepsVisibleLongest()
 
-            Menu {
+        PageOverflowMenu("Folder Actions") {
                 Section {
                     Picker("View As", selection: displayModeBinding) {
                         ForEach(LibraryComicDisplayMode.allCases) { mode in
@@ -323,9 +326,6 @@ struct RemoteServerBrowserView: View {
                     }
                     .disabled(visibleOfflineComicFiles.isEmpty)
                 }
-            } label: {
-                Label("Folder Actions", systemImage: "ellipsis")
-            }
         }
     }
 
@@ -775,14 +775,16 @@ struct RemoteServerBrowserView: View {
             return
         }
 
+        // The width arrives with the first layout, which schedules this again.
+        guard browserContainerWidth > 0 else {
+            return
+        }
         let visibleIDs = visibilityTracker.visibleIDs
         let plan = thumbnailPreheatPlan(
             visibleIDs: visibleIDs,
             items: items
         )
-        let effectiveContainerWidth = browserContainerWidth > 0
-            ? browserContainerWidth
-            : UIScreen.main.bounds.width
+        let effectiveContainerWidth = browserContainerWidth
         let estimatedItemWidth = browserLayoutContext(
             for: effectiveContainerWidth
         ).estimatedGridItemWidth

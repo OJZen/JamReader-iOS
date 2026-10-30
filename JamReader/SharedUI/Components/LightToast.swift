@@ -43,6 +43,7 @@ private struct LightToastModifier: ViewModifier {
                 if isPresented {
                     LightToast(message: message, systemImage: systemImage)
                         .padding(.bottom, Spacing.xxl)
+                        .staysClearOfActiveVerticalFold()
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .onAppear {
                             dismissTask?.cancel()

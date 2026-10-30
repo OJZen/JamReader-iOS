@@ -4,17 +4,22 @@ import XCTest
 @testable import JamReader
 
 final class SettingsNavigationStateTests: XCTestCase {
-    func testPersistentSplitSelectionFollowsUIKitIPadSplitArchitecture() {
-        XCTAssertTrue(
-            AppLayout.usesPersistentSplitSelection(
-                isPad: true
-            )
-        )
-        XCTAssertFalse(
-            AppLayout.usesPersistentSplitSelection(
-                isPad: false
-            )
-        )
+    func testLibrarySidebarSelectionSurvivesStorage() {
+        let libraryID = UUID()
+        let selections: [LibrarySidebarSelection] = [.continueReading, .library(libraryID)]
+            + LibrarySidebarCollection.allCases.map { .collection(libraryID, $0) }
+
+        for selection in selections {
+            XCTAssertEqual(LibrarySidebarSelection(storageValue: selection.storageValue), selection)
+        }
+        XCTAssertEqual(LibrarySidebarSelection.collection(libraryID, .labels).libraryID, libraryID)
+        XCTAssertNil(LibrarySidebarSelection.continueReading.libraryID)
+    }
+
+    func testLibrarySidebarSelectionRejectsDamagedValues() {
+        for value in ["", "library", "library:not-a-uuid", "collection:\(UUID().uuidString):shelves", "continueReading:extra"] {
+            XCTAssertNil(LibrarySidebarSelection(storageValue: value), value)
+        }
     }
 
     func testLeafRoutesMapToTheirOwningPane() {

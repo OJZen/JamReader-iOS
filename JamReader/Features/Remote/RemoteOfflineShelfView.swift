@@ -594,7 +594,7 @@ struct RemoteOfflineShelfView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .containerHorizontalMargins()
                 .padding(.vertical, 12)
             }
         } else {

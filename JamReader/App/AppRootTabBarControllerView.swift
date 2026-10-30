@@ -47,10 +47,12 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
 
         super.init()
 
+        let startsCollapsed = adaptiveSplitStartsCollapsed(in: windowScene)
         libraryCoordinator = LibraryTabCoordinator(
             dependencies: dependencies,
             viewModel: libraryListViewModel,
             presenter: presentationCoordinator,
+            startsCollapsed: startsCollapsed,
             rootNavigate: { [weak self] route in self?.handle(route) },
             selectTab: { [weak self] tab in self?.select(tab) }
         )
@@ -58,6 +60,7 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
             dependencies: dependencies,
             viewModel: browseRemoteServerViewModel,
             presenter: presentationCoordinator,
+            startsCollapsed: startsCollapsed,
             rootNavigate: { [weak self] route in self?.handle(route) },
             selectTab: { [weak self] tab in self?.select(tab) }
         )
@@ -65,6 +68,7 @@ final class AppRootCoordinator: NSObject, UITabBarControllerDelegate {
             dependencies: dependencies,
             viewModel: libraryListViewModel,
             presenter: presentationCoordinator,
+            startsCollapsed: startsCollapsed,
             rootNavigate: { [weak self] route in self?.handle(route) },
             selectTab: { [weak self] tab in self?.select(tab) }
         )
@@ -245,47 +249,25 @@ private protocol RootTabChildCoordinator: AnyObject {
 
 @MainActor
 private final class LibraryTabCoordinator: RootTabChildCoordinator {
-    let rootViewController: UIViewController
-
     private let dependencies: AppDependencies
     private let viewModel: LibraryListViewModel
     private let presenter: UIKitPresentationCoordinator
     private let navigator = AppNavigator()
-    private let usesSplitLayout: Bool
-    private let compactNavigationController: UINavigationController?
-    private let primaryNavigationController: UINavigationController?
-    private let detailNavigationController: UINavigationController?
+    private let shell: AdaptiveSplitShell
     private var selectedLibraryID: UUID?
 
     init(
         dependencies: AppDependencies,
         viewModel: LibraryListViewModel,
         presenter: UIKitPresentationCoordinator,
+        startsCollapsed: Bool,
         rootNavigate: @escaping (AppNavigationRoute) -> Void,
         selectTab: @escaping (AppRootTab) -> Void
     ) {
         self.dependencies = dependencies
         self.viewModel = viewModel
         self.presenter = presenter
-        self.usesSplitLayout = UIDevice.current.userInterfaceIdiom == .pad
-
-        if usesSplitLayout {
-            let primary = UINavigationController()
-            let detail = UINavigationController()
-            let split = UISplitViewController(style: .doubleColumn)
-            split.preferredDisplayMode = .oneBesideSecondary
-            split.viewControllers = [primary, detail]
-            self.primaryNavigationController = primary
-            self.detailNavigationController = detail
-            self.compactNavigationController = nil
-            self.rootViewController = split
-        } else {
-            let navigation = UINavigationController()
-            self.compactNavigationController = navigation
-            self.primaryNavigationController = nil
-            self.detailNavigationController = nil
-            self.rootViewController = navigation
-        }
+        self.shell = AdaptiveSplitShell(initiallyCollapsed: startsCollapsed)
 
         configureRoot(tab: .library)
         navigator.update(
@@ -293,8 +275,32 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             selectTab: selectTab,
             pop: { [weak self] in self?.pop() }
         )
+        shell.onExpandWithoutDetail = { [weak self] in
+            guard let self, !self.restoreStoredDetailIfNeeded() else {
+                return
+            }
+            self.showPlaceholder()
+        }
         installRoot()
         restoreStoredDetailIfNeeded()
+    }
+
+    var rootViewController: UIViewController {
+        shell.splitViewController
+    }
+
+    /// The iPhone stack while the split view is collapsed, otherwise `nil`.
+    private var compactNavigationController: UINavigationController? {
+        shell.isCollapsed ? shell.compactNavigationController : nil
+    }
+
+    private var primaryNavigationController: UINavigationController? {
+        shell.primaryNavigationController
+    }
+
+    /// The content column while the sidebar is visible, otherwise `nil`.
+    private var detailNavigationController: UINavigationController? {
+        shell.isCollapsed ? nil : shell.detailNavigationController
     }
 
     func navigate(_ route: LibraryNavigationRoute) {
@@ -336,6 +342,8 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
                 ),
                 title: collection.displayTitle
             )
+        case .sidebarCollection(let libraryID, let collection):
+            showSidebarCollection(libraryID, collection: collection)
         }
     }
 
@@ -347,23 +355,26 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         compactNavigationController ?? detailNavigationController
     }
 
+    /// The home is built twice: as the iPhone list in the compact stack and as
+    /// the sidebar beside the content.
     private func installRoot() {
-        let root = makeHostingController(
-            LibraryHomeView(
-                viewModel: viewModel,
-                dependencies: dependencies
+        for isSidebar in [false, true] {
+            let root = makeHostingController(
+                LibraryHomeView(
+                    viewModel: viewModel,
+                    dependencies: dependencies,
+                    isSidebar: isSidebar
+                )
+                .background(Color.surfaceGrouped.ignoresSafeArea()),
+                title: AppRootTab.library.title
             )
-            .background(Color.surfaceGrouped.ignoresSafeArea()),
-            title: AppRootTab.library.title
-        )
-        root.navigationItem.largeTitleDisplayMode = .always
-
-        if let compactNavigationController {
-            compactNavigationController.setViewControllers([root], animated: false)
-        } else {
-            primaryNavigationController?.setViewControllers([root], animated: false)
-            showPlaceholder()
+            root.navigationItem.largeTitleDisplayMode = .always
+            let navigationController = isSidebar
+                ? shell.primaryNavigationController
+                : shell.compactNavigationController
+            navigationController.setViewControllers([root], animated: false)
         }
+        showPlaceholder()
     }
 
     private func openLibrary(_ libraryID: UUID, folderID: Int64?, animated: Bool = true) {
@@ -381,6 +392,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             item.id.uuidString,
             forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
         )
+        persistSidebarSelection(.library(item.id))
         let resolvedFolderID = folderID ?? LibraryBrowserView.lastOpenedFolderID(for: item.id)
         let controller = makeLibraryBrowser(descriptor: item.descriptor, folderID: resolvedFolderID)
 
@@ -394,16 +406,90 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         }
     }
 
-    private func restoreStoredDetailIfNeeded() {
-        let storedLibraryID = UserDefaults.standard.string(
-            forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
-        )
+    /// Reopens the stored sidebar selection, falling back to the last library.
+    @discardableResult
+    private func restoreStoredDetailIfNeeded() -> Bool {
+        let defaults = UserDefaults.standard
+        let storedSelection = defaults.string(forKey: AppNavigationStorageKeys.librarySidebarSelection)
+            .flatMap(LibrarySidebarSelection.init(storageValue:))
+        switch storedSelection {
+        case .continueReading:
+            showContinueReading(animated: false)
+            return true
+        case .collection(let libraryID, let collection)
+            where viewModel.items.contains(where: { $0.id == libraryID }):
+            showSidebarCollection(libraryID, collection: collection, animated: false)
+            return true
+        default:
+            break
+        }
+
+        let storedLibraryID = defaults.string(forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID)
         guard let libraryID = storedLibraryID.flatMap(UUID.init(uuidString:)),
               viewModel.items.contains(where: { $0.id == libraryID }) else {
-            return
+            return false
         }
 
         openLibrary(libraryID, folderID: nil, animated: false)
+        return true
+    }
+
+    private func persistSidebarSelection(_ selection: LibrarySidebarSelection) {
+        UserDefaults.standard.set(
+            selection.storageValue,
+            forKey: AppNavigationStorageKeys.librarySidebarSelection
+        )
+    }
+
+    /// A sidebar collection row replaces the content column. Restored into the
+    /// compact stack, the page sits above the library it belongs to.
+    private func showSidebarCollection(
+        _ libraryID: UUID,
+        collection: LibrarySidebarCollection,
+        animated: Bool = true
+    ) {
+        guard let item = viewModel.items.first(where: { $0.id == libraryID }) else {
+            return
+        }
+
+        selectedLibraryID = item.id
+        UserDefaults.standard.set(
+            item.id.uuidString,
+            forKey: AppNavigationStorageKeys.libraryHomeSelectedLibraryID
+        )
+        persistSidebarSelection(.collection(item.id, collection))
+        let page = makeCollectionPage(descriptor: item.descriptor, collection: collection)
+        if let compactNavigationController {
+            let libraryRoot = makeLibraryBrowser(descriptor: item.descriptor, folderID: 1)
+            compactNavigationController.setViewControllers(
+                [compactNavigationController.viewControllers.first, libraryRoot, page].compactMap { $0 },
+                animated: animated
+            )
+        } else {
+            detailNavigationController?.setViewControllers([page], animated: false)
+        }
+    }
+
+    private func makeCollectionPage(
+        descriptor: LibraryDescriptor,
+        collection: LibrarySidebarCollection
+    ) -> UIViewController {
+        let controller: UIViewController
+        if let kind = collection.specialKind {
+            controller = makeHostingController(
+                LibrarySpecialCollectionView(descriptor: descriptor, kind: kind, dependencies: dependencies),
+                title: kind.title
+            )
+        } else if let sectionKind = collection.organizationKind {
+            controller = makeHostingController(
+                LibraryOrganizationView(descriptor: descriptor, sectionKind: sectionKind, dependencies: dependencies),
+                title: sectionKind.title
+            )
+        } else {
+            controller = UIViewController()
+        }
+        controller.navigationItem.largeTitleDisplayMode = .always
+        return controller
     }
 
     private func openFolder(
@@ -444,16 +530,18 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
         navigationController.pushViewController(controller, animated: true)
     }
 
-    /// iPhone pushes the page; iPad shows it as the detail of its sidebar row.
-    private func showContinueReading() {
+    /// The compact stack pushes the page; beside the sidebar it is the content
+    /// of its sidebar row.
+    private func showContinueReading(animated: Bool = true) {
         let controller = makeHostingController(
             LibraryContinueReadingAllView(dependencies: dependencies),
             title: String(localized: "Continue Reading")
         )
         controller.navigationItem.largeTitleDisplayMode = .always
         if let compactNavigationController {
-            compactNavigationController.pushViewController(controller, animated: true)
+            compactNavigationController.pushViewController(controller, animated: animated)
         } else {
+            persistSidebarSelection(.continueReading)
             detailNavigationController?.setViewControllers([controller], animated: false)
         }
     }
@@ -519,6 +607,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             ),
             title: AppRootTab.library.title
         )
+        placeholder.restorationIdentifier = AdaptiveSplitShell.placeholderIdentifier
         detailNavigationController?.setViewControllers([placeholder], animated: false)
     }
 
@@ -544,6 +633,7 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
                     .environment(\.appPresenter, presenter)
                     .environment(\.appNavigator, navigator)
                     .environment(\.libraryListViewModel, viewModel)
+                    .environment(shell.layoutState)
             )
         )
         controller.title = title
@@ -558,55 +648,30 @@ private final class LibraryTabCoordinator: RootTabChildCoordinator {
             selectedImage: UIImage(systemName: tab.selectedSystemImage)
         )
         rootViewController.view.backgroundColor = .systemGroupedBackground
-        activeNavigationController?.navigationBar.prefersLargeTitles = true
-        primaryNavigationController?.navigationBar.prefersLargeTitles = true
-        detailNavigationController?.navigationBar.prefersLargeTitles = true
     }
 }
 
 @MainActor
 private final class BrowseTabCoordinator: RootTabChildCoordinator {
-    let rootViewController: UIViewController
-
     private let dependencies: AppDependencies
     private let viewModel: RemoteServerListViewModel
     private let presenter: UIKitPresentationCoordinator
     private let navigator = AppNavigator()
-    private let usesSplitLayout: Bool
-    private let compactNavigationController: UINavigationController?
-    private let primaryNavigationController: UINavigationController?
-    private let detailNavigationController: UINavigationController?
+    private let shell: AdaptiveSplitShell
     private var editorDraft: RemoteServerEditorDraft?
 
     init(
         dependencies: AppDependencies,
         viewModel: RemoteServerListViewModel,
         presenter: UIKitPresentationCoordinator,
+        startsCollapsed: Bool,
         rootNavigate: @escaping (AppNavigationRoute) -> Void,
         selectTab: @escaping (AppRootTab) -> Void
     ) {
         self.dependencies = dependencies
         self.viewModel = viewModel
         self.presenter = presenter
-        self.usesSplitLayout = UIDevice.current.userInterfaceIdiom == .pad
-
-        if usesSplitLayout {
-            let primary = UINavigationController()
-            let detail = UINavigationController()
-            let split = UISplitViewController(style: .doubleColumn)
-            split.preferredDisplayMode = .oneBesideSecondary
-            split.viewControllers = [primary, detail]
-            self.primaryNavigationController = primary
-            self.detailNavigationController = detail
-            self.compactNavigationController = nil
-            self.rootViewController = split
-        } else {
-            let navigation = UINavigationController()
-            self.compactNavigationController = navigation
-            self.primaryNavigationController = nil
-            self.detailNavigationController = nil
-            self.rootViewController = navigation
-        }
+        self.shell = AdaptiveSplitShell(initiallyCollapsed: startsCollapsed)
 
         configureRoot(tab: .browse)
         navigator.update(
@@ -614,8 +679,30 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             selectTab: selectTab,
             pop: { [weak self] in self?.pop() }
         )
+        shell.onExpandWithoutDetail = { [weak self] in
+            guard let self, !self.restoreStoredDetailIfNeeded() else {
+                return
+            }
+            self.showPlaceholder()
+        }
         installRoot()
         restoreStoredDetailIfNeeded()
+    }
+
+    var rootViewController: UIViewController {
+        shell.splitViewController
+    }
+
+    private var compactNavigationController: UINavigationController? {
+        shell.isCollapsed ? shell.compactNavigationController : nil
+    }
+
+    private var primaryNavigationController: UINavigationController? {
+        shell.primaryNavigationController
+    }
+
+    private var detailNavigationController: UINavigationController? {
+        shell.isCollapsed ? nil : shell.detailNavigationController
     }
 
     func navigate(_ route: BrowseNavigationRoute) {
@@ -653,24 +740,26 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         )
     }
 
+    /// The home is built twice: the iPhone list and the sidebar.
     private func installRoot() {
-        let root = makeHostingController(
-            BrowseHomeView(
-                dependencies: dependencies,
-                viewModel: viewModel,
-                editorDraft: editorDraftBinding
+        for isSidebar in [false, true] {
+            let root = makeHostingController(
+                BrowseHomeView(
+                    dependencies: dependencies,
+                    viewModel: viewModel,
+                    editorDraft: editorDraftBinding,
+                    isSidebar: isSidebar
+                )
+                .background(Color.surfaceGrouped.ignoresSafeArea()),
+                title: AppRootTab.browse.title
             )
-            .background(Color.surfaceGrouped.ignoresSafeArea()),
-            title: AppRootTab.browse.title
-        )
-        root.navigationItem.largeTitleDisplayMode = .always
-
-        if let compactNavigationController {
-            compactNavigationController.setViewControllers([root], animated: false)
-        } else {
-            primaryNavigationController?.setViewControllers([root], animated: false)
-            showPlaceholder()
+            root.navigationItem.largeTitleDisplayMode = .always
+            let navigationController = isSidebar
+                ? shell.primaryNavigationController
+                : shell.compactNavigationController
+            navigationController.setViewControllers([root], animated: false)
         }
+        showPlaceholder()
     }
 
     private func setEditorDraft(_ draft: RemoteServerEditorDraft?) {
@@ -874,17 +963,18 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         }
     }
 
-    private func restoreStoredDetailIfNeeded() {
+    @discardableResult
+    private func restoreStoredDetailIfNeeded() -> Bool {
         viewModel.load()
         let defaults = UserDefaults.standard
         let storedSelection = defaults.string(forKey: AppNavigationStorageKeys.browseDetailSelection)
             ?? defaults.string(forKey: AppNavigationStorageKeys.browseHomeSelection)
         guard let storedSelection, !storedSelection.isEmpty else {
-            return
+            return false
         }
 
         guard let storedRoute = BrowseStoredNavigationSelection(storageValue: storedSelection) else {
-            return
+            return false
         }
 
         switch storedRoute {
@@ -902,6 +992,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         case .serverDetail(let profileID):
             showServerDetail(profileID, animated: false)
         }
+        return true
     }
 
     private func popToRoot() {
@@ -923,6 +1014,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             ),
             title: AppRootTab.browse.title
         )
+        placeholder.restorationIdentifier = AdaptiveSplitShell.placeholderIdentifier
         detailNavigationController?.setViewControllers([placeholder], animated: false)
     }
 
@@ -955,6 +1047,7 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
                 view
                     .environment(\.appPresenter, presenter)
                     .environment(\.appNavigator, navigator)
+                    .environment(shell.layoutState)
             )
         )
         controller.title = title
@@ -969,9 +1062,6 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             selectedImage: UIImage(systemName: tab.selectedSystemImage)
         )
         rootViewController.view.backgroundColor = .systemGroupedBackground
-        activeNavigationController?.navigationBar.prefersLargeTitles = true
-        primaryNavigationController?.navigationBar.prefersLargeTitles = true
-        detailNavigationController?.navigationBar.prefersLargeTitles = true
     }
 
 }
@@ -996,24 +1086,19 @@ final class SettingsPaneControllerCache {
 
 @MainActor
 private final class SettingsTabCoordinator: RootTabChildCoordinator {
-    let rootViewController: UIViewController
-
     private let dependencies: AppDependencies
     private let viewModel: LibraryListViewModel
     private let presenter: UIKitPresentationCoordinator
     private let navigator = AppNavigator()
     private let selectionState: SettingsSelectionState
     private let paneControllerCache = SettingsPaneControllerCache()
-    private let usesSplitLayout: Bool
-    private let splitViewController: UISplitViewController?
-    private let compactNavigationController: UINavigationController?
-    private let primaryNavigationController: UINavigationController?
-    private let detailNavigationController: UINavigationController?
+    private let shell: AdaptiveSplitShell
 
     init(
         dependencies: AppDependencies,
         viewModel: LibraryListViewModel,
         presenter: UIKitPresentationCoordinator,
+        startsCollapsed: Bool,
         rootNavigate: @escaping (AppNavigationRoute) -> Void,
         selectTab: @escaping (AppRootTab) -> Void
     ) {
@@ -1021,28 +1106,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         self.viewModel = viewModel
         self.presenter = presenter
         self.selectionState = SettingsSelectionState()
-        self.usesSplitLayout = UIDevice.current.userInterfaceIdiom == .pad
-
-        if usesSplitLayout {
-            let primary = UINavigationController()
-            let detail = UINavigationController()
-            let split = UISplitViewController(style: .doubleColumn)
-            split.preferredDisplayMode = .oneBesideSecondary
-            split.setViewController(primary, for: .primary)
-            split.setViewController(detail, for: .secondary)
-            self.splitViewController = split
-            self.primaryNavigationController = primary
-            self.detailNavigationController = detail
-            self.compactNavigationController = nil
-            self.rootViewController = split
-        } else {
-            let navigation = UINavigationController()
-            self.splitViewController = nil
-            self.compactNavigationController = navigation
-            self.primaryNavigationController = nil
-            self.detailNavigationController = nil
-            self.rootViewController = navigation
-        }
+        self.shell = AdaptiveSplitShell(initiallyCollapsed: startsCollapsed)
 
         configureRoot(tab: .settings)
         navigator.update(
@@ -1050,7 +1114,33 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
             selectTab: selectTab,
             pop: { [weak self] in self?.pop() }
         )
+        shell.onExpandWithoutDetail = { [weak self] in
+            guard let self else {
+                return
+            }
+            self.showPane(self.selectionState.selectedPane, animated: false)
+        }
         installRoot()
+    }
+
+    var rootViewController: UIViewController {
+        shell.splitViewController
+    }
+
+    private var splitViewController: UISplitViewController? {
+        shell.isCollapsed ? nil : shell.splitViewController
+    }
+
+    private var compactNavigationController: UINavigationController? {
+        shell.isCollapsed ? shell.compactNavigationController : nil
+    }
+
+    private var primaryNavigationController: UINavigationController? {
+        shell.primaryNavigationController
+    }
+
+    private var detailNavigationController: UINavigationController? {
+        shell.isCollapsed ? nil : shell.detailNavigationController
     }
 
     func navigate(_ route: SettingsNavigationRoute) {
@@ -1086,28 +1176,29 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
         compactNavigationController ?? detailNavigationController
     }
 
+    /// The settings list for the compact stack, the sidebar beside the panes.
     private func installRoot() {
-        if let compactNavigationController {
-            let root = makeHostingController(
-                SettingsHomeView(
-                    viewModel: viewModel,
-                    dependencies: dependencies
-                ),
-                title: AppRootTab.settings.title
-            )
-            root.navigationItem.largeTitleDisplayMode = .always
-            compactNavigationController.setViewControllers([root], animated: false)
-        } else {
-            let root = makeHostingController(
-                SettingsSidebarView(
-                    selectionState: selectionState,
-                    viewModel: viewModel,
-                    dependencies: dependencies
-                ),
-                title: AppRootTab.settings.title
-            )
-            root.navigationItem.largeTitleDisplayMode = .never
-            primaryNavigationController?.setViewControllers([root], animated: false)
+        let home = makeHostingController(
+            SettingsHomeView(
+                viewModel: viewModel,
+                dependencies: dependencies
+            ),
+            title: AppRootTab.settings.title
+        )
+        home.navigationItem.largeTitleDisplayMode = .always
+        shell.compactNavigationController.setViewControllers([home], animated: false)
+
+        let sidebar = makeHostingController(
+            SettingsSidebarView(
+                selectionState: selectionState,
+                viewModel: viewModel,
+                dependencies: dependencies
+            ),
+            title: AppRootTab.settings.title
+        )
+        sidebar.navigationItem.largeTitleDisplayMode = .never
+        shell.primaryNavigationController.setViewControllers([sidebar], animated: false)
+        if !shell.isCollapsed {
             showPane(selectionState.selectedPane, animated: false)
         }
     }
@@ -1174,6 +1265,7 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
                 view
                     .environment(\.appPresenter, presenter)
                     .environment(\.appNavigator, navigator)
+                    .environment(shell.layoutState)
             )
         )
         controller.title = title
@@ -1188,9 +1280,6 @@ private final class SettingsTabCoordinator: RootTabChildCoordinator {
             selectedImage: UIImage(systemName: tab.selectedSystemImage)
         )
         rootViewController.view.backgroundColor = .systemGroupedBackground
-        activeNavigationController?.navigationBar.prefersLargeTitles = true
-        primaryNavigationController?.navigationBar.prefersLargeTitles = true
-        detailNavigationController?.navigationBar.prefersLargeTitles = true
     }
 }
 

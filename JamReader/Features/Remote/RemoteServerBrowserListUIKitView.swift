@@ -315,7 +315,7 @@ struct RemoteServerBrowserLayoutContext: Equatable {
         }
     }
 
-    private var minimumGridItemWidth: CGFloat {
+    var minimumGridItemWidth: CGFloat {
         switch gridDensity {
         case .wide:
             return 170
@@ -1291,7 +1291,7 @@ final class RemoteBrowserListItemCardView: UIView {
         symbolTileView.isHidden = false
         configureSymbolTile(for: item)
 
-        let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * UIScreen.main.scale)
+        let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * thumbnailDisplayScale)
         let itemID = item.id
 
         if let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
@@ -1507,7 +1507,7 @@ final class RemoteBrowserListItemCardView: UIView {
             for: item,
             browsingService: browsingService,
             targetSize: targetSize,
-            scale: UIScreen.main.scale
+            scale: thumbnailDisplayScale
         )
         if representedItemID == itemID {
             thumbnailImageView.image = seeded
@@ -1521,7 +1521,7 @@ final class RemoteBrowserListItemCardView: UIView {
                 profile: profile,
                 browsingService: browsingService,
                 targetSize: targetSize,
-                scale: UIScreen.main.scale,
+                scale: thumbnailDisplayScale,
                 allowsRemoteFetch: allowsRemoteFetch
             )
 
@@ -1548,7 +1548,7 @@ final class RemoteBrowserListItemCardView: UIView {
         thumbnailPlaceholderImageView.tintColor = .tertiaryLabel
         thumbnailTask?.cancel()
 
-        let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * UIScreen.main.scale)
+        let pixelSize = Int(max(Metrics.coverWidth, Metrics.coverHeight) * thumbnailDisplayScale)
         let itemID = item.id
 
         let seeded = RemoteComicThumbnailPipeline.shared.cachedImage(
@@ -1767,5 +1767,14 @@ private extension UIFont {
     func bold() -> UIFont {
         let descriptor = fontDescriptor.withSymbolicTraits(.traitBold) ?? fontDescriptor
         return UIFont(descriptor: descriptor, size: pointSize)
+    }
+}
+
+extension UIView {
+    /// The scale of the screen showing this view, for sizing thumbnails;
+    /// before the view has traits, the scale of its window's screen.
+    var thumbnailDisplayScale: CGFloat {
+        let scale = traitCollection.displayScale
+        return scale > 0 ? scale : (window?.windowScene?.screen.scale ?? 2)
     }
 }

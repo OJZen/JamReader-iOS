@@ -1,12 +1,16 @@
 import SwiftUI
 import UIKit
 
+/// Remote home, built twice by the tab's split view: the iPhone list and the
+/// sidebar beside the content.
 struct BrowseHomeView: View {
     @Environment(\.appNavigator) private var appNavigator
+    @Environment(SplitLayoutState.self) private var splitLayout: SplitLayoutState?
     @AppStorage(AppNavigationStorageKeys.browseHomeSelection) private var storedSelectionRawValue = ""
     @AppStorage(AppNavigationStorageKeys.pendingAddRemoteServer) private var pendingAddServer = false
 
     let dependencies: AppDependencies
+    let isSidebar: Bool
 
     @ObservedObject private var viewModel: RemoteServerListViewModel
     @Binding private var editorDraft: RemoteServerEditorDraft?
@@ -16,9 +20,11 @@ struct BrowseHomeView: View {
     init(
         dependencies: AppDependencies,
         viewModel: RemoteServerListViewModel,
-        editorDraft: Binding<RemoteServerEditorDraft?>
+        editorDraft: Binding<RemoteServerEditorDraft?>,
+        isSidebar: Bool = false
     ) {
         self.dependencies = dependencies
+        self.isSidebar = isSidebar
         _viewModel = ObservedObject(wrappedValue: viewModel)
         _editorDraft = editorDraft
     }
@@ -227,9 +233,7 @@ struct BrowseHomeView: View {
     }
 
     private var usesPersistentSelection: Bool {
-        AppLayout.usesPersistentSplitSelection(
-            isPad: UIDevice.current.userInterfaceIdiom == .pad
-        )
+        isSidebar
     }
 
     @ViewBuilder
@@ -297,7 +301,9 @@ struct BrowseHomeView: View {
     }
 
     private func presentPendingAddServerIfNeeded() {
-        guard pendingAddServer else {
+        // Both home instances see the flag; only the one on screen opens the sheet.
+        guard pendingAddServer,
+              splitLayout.map({ $0.isSidebarVisible == isSidebar }) ?? true else {
             return
         }
         pendingAddServer = false

@@ -204,6 +204,8 @@ flowchart LR
 
 导航按空间适配，重要入口保持稳定；这与 Apple 对[标签栏](https://developer.apple.com/design/human-interface-guidelines/tab-bars)和[分栏视图](https://developer.apple.com/design/human-interface-guidelines/split-views)的设计建议一致。当前最低支持 iOS/iPadOS 17.6，新系统视觉效果需要准备旧系统可用的表现。
 
+现状（第 6 批起）：书库、远程、设置三个分区的分栏视图始终创建，按窗口宽度而不是设备决定：紧凑宽度显示 iPhone 的导航栈，常规宽度显示侧栏 + 内容。宽度变化（iPhone Duo 开合、分屏、iPhone 大屏横放）时，同一组页面在两个栈之间移交，导航层级、滚动位置与页面状态保留。书库侧栏在“我的书库”下列出当前书库的收藏 / 最近加入 / 标签 / 阅读列表（带数量），侧栏可见时书库根目录不再显示 2×2 集合卡；侧栏选中项（继续阅读 / 书库 / 集合）重启后恢复。iOS 27.1 起页面自己的 ⋯ 并入系统溢出菜单，iOS 27.0 及以下保持原来的 ⋯ 按钮。
+
 文字放大、浅色/深色、屏幕朗读、减少动态效果都进入首轮设计，不能只靠颜色表达状态。参考 Apple 的[无障碍设计指南](https://developer.apple.com/design/human-interface-guidelines/accessibility)。同时考虑英文、简体中文、繁体中文与日文的文本长度。
 
 ## 7. 必须画出的状态与操作说明

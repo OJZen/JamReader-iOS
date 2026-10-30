@@ -146,6 +146,9 @@ struct LibraryAddComicsSheet: View {
         }
         .adaptiveFormSheet(640)
         .presentationDragIndicator(.visible)
+        // Only Cancel in its bar and a column of large rows: the outer screen's
+        // width goes to the rows (compared in Device Hub, see 05-batches).
+        .keepsSheetBarHorizontal()
     }
 
     private var importComicsStep: some View {

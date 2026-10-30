@@ -78,7 +78,7 @@ struct TaskBanner: View {
         .padding(.trailing, onClose == nil ? Spacing.md : Spacing.xxs)
         .padding(.vertical, Spacing.xs)
         .frame(minHeight: 60)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: CornerRadius.xl, style: .continuous))
+        .background(.regularMaterial, in: floatingContainerShape(cornerRadius: CornerRadius.xl))
         .appShadow(AppShadow.lg)
         .task(id: content) {
             guard content.phase == .succeeded, let onClose else {
@@ -124,6 +124,7 @@ extension View {
             banner()
                 .padding(.horizontal)
                 .padding(.bottom, Spacing.xs)
+                .staysClearOfActiveVerticalFold()
         }
     }
 }

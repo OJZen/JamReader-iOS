@@ -48,12 +48,8 @@ struct RemoteServerDetailView: View {
         .navigationTitle(profile.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    remoteServerActionMenuContent
-                } label: {
-                    Label("Server Actions", systemImage: "ellipsis")
-                }
+            PageOverflowMenu("Server Actions") {
+                remoteServerActionMenuContent
             }
         }
         .task {
