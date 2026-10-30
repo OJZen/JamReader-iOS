@@ -414,11 +414,17 @@ extension RemoteOfflineCopyStore {
     /// Content keys of the offline copies saved from this server. A reading
     /// cache is not in this set: only saved copies count as offline.
     func offlineCopyKeys(for profile: RemoteServerProfile) throws -> Set<String> {
-        Set(
-            try loadRecords()
-                .filter { $0.matches(profile: profile) }
-                .map { Self.contentKey(kind: $0.contentKind, path: $0.path) }
-        )
+        Set(try offlineCopyReferences(for: profile).keys)
+    }
+
+    /// The saved copy's own reference for each content key, so its status is
+    /// judged as the offline shelf judges it.
+    func offlineCopyReferences(for profile: RemoteServerProfile) throws -> [String: RemoteComicFileReference] {
+        var references: [String: RemoteComicFileReference] = [:]
+        for record in try loadRecords() where record.matches(profile: profile) {
+            references[Self.contentKey(kind: record.contentKind, path: record.path)] = record.resolvedReference(for: profile)
+        }
+        return references
     }
 
     static func contentKey(for reference: RemoteComicFileReference) -> String {

@@ -3964,6 +3964,28 @@
         }
       }
     },
+    "This folder now appears in Saved Folders on the Remote tab.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダは「リモート」タブの「保存済みフォルダ」に表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件夹现在出现在“远程”中的“已保存文件夹”里。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此資料夾現在會出現在「遠端」中的「已儲存的資料夾」裡。"
+          }
+        }
+      }
+    },
     "This Server": {
       "localizations": {
         "ja": {
@@ -23623,28 +23645,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法打开此远程文件夹。"
-          }
-        }
-      }
-    },
-    "This remote folder now appears in Browse > Saved Folders.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此遠端資料夾現在會顯示在「瀏覽」>「已儲存的資料夾」。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このリモートフォルダは「ブラウズ」＞「保存済みフォルダ」に表示されます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此远程文件夹现已显示在“浏览”>“已保存文件夹”中。"
           }
         }
       }

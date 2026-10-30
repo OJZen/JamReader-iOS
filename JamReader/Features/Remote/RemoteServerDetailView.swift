@@ -4,6 +4,7 @@ import UIKit
 struct RemoteServerDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appNavigator) private var appNavigator
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -15,7 +16,7 @@ struct RemoteServerDetailView: View {
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var profile: RemoteServerProfile
     @State private var recentSessions: [RemoteComicReadingSession] = []
-    @State private var offlineCopyKeys: Set<String> = []
+    @State private var offlineCopyReferences: [String: RemoteComicFileReference] = [:]
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
     @State private var pendingDestructiveAction: RemoteServerDestructiveAction?
@@ -134,7 +135,12 @@ struct RemoteServerDetailView: View {
     private var headerSection: some View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.md) {
-                HStack(spacing: Spacing.sm) {
+                // Large text stacks the icon, name and address so whole words fit.
+                let isLarge = dynamicTypeSize.isAccessibilitySize
+                let headerLayout = isLarge
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.sm))
+                    : AnyLayout(HStackLayout(spacing: Spacing.sm))
+                headerLayout {
                     ListIconBadge(
                         systemImage: profile.providerKind.systemImage,
                         tint: profile.providerKind.tintColor,
@@ -148,12 +154,15 @@ struct RemoteServerDetailView: View {
                             .foregroundStyle(Color.textPrimary)
                             .accessibilityAddTraits(.isHeader)
 
-                        HStack(spacing: Spacing.xs) {
+                        let addressLayout = isLarge
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+                            : AnyLayout(HStackLayout(spacing: Spacing.xs))
+                        addressLayout {
                             RemoteProtocolTag(kind: profile.providerKind)
                             Text(profile.addressSummary)
                                 .font(AppFont.subheadline())
                                 .foregroundStyle(Color.textSecondary)
-                                .lineLimit(1)
+                                .lineLimit(isLarge ? 3 : 1)
                                 .textSelection(.enabled)
                         }
                     }
@@ -174,6 +183,7 @@ struct RemoteServerDetailView: View {
                         .font(AppFont.footnote())
                         .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -453,16 +463,16 @@ struct RemoteServerDetailView: View {
         }
 
         recentSessions = viewModel.recentSessions(for: profile)
-        offlineCopyKeys = (try? dependencies.remoteOfflineCopyStore.offlineCopyKeys(for: profile)) ?? []
+        offlineCopyReferences = (try? dependencies.remoteOfflineCopyStore.offlineCopyReferences(for: profile)) ?? [:]
     }
 
     /// A reading cache is not an offline copy, so it shows no offline status.
     private func offlineAvailability(for session: RemoteComicReadingSession) -> RemoteComicCachedAvailability {
-        let reference = session.resolvedComicFileReference(for: profile)
-        guard offlineCopyKeys.contains(RemoteOfflineCopyStore.contentKey(for: reference)) else {
+        let key = RemoteOfflineCopyStore.contentKey(for: session.resolvedComicFileReference(for: profile))
+        guard let copyReference = offlineCopyReferences[key] else {
             return .unavailable
         }
-        return dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
+        return dependencies.remoteServerBrowsingService.cachedAvailability(for: copyReference)
     }
 
     private func presentEditor(for draft: RemoteServerEditorDraft) {

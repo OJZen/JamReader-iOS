@@ -529,7 +529,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     : String(localized: "Folder Saved"),
                 message: wasSaved
                     ? String(localized: "This remote folder was removed from Saved Folders.")
-                    : String(localized: "This remote folder now appears in Browse > Saved Folders."),
+                    : String(localized: "This folder now appears in Saved Folders on the Remote tab."),
                 kind: .success,
                 autoDismissAfter: 2.6
             )

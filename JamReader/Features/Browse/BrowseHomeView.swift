@@ -430,7 +430,11 @@ private struct BrowseHomeServerRow: View {
     var showsDisclosureIndicator = true
     var trailingAccessoryReservedWidth: CGFloat = 0
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
+        // Large text moves the protocol tag under the address so the name keeps the width.
+        let isLarge = dynamicTypeSize.isAccessibilitySize
         HStack(spacing: Spacing.sm) {
             ListIconBadge(
                 systemImage: profile.providerKind.systemImage,
@@ -441,17 +445,23 @@ private struct BrowseHomeServerRow: View {
                 Text(profile.displayTitle)
                     .font(AppFont.body())
                     .foregroundStyle(Color.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(isLarge ? 3 : 1)
 
                 Text(profile.addressSummary)
                     .font(AppFont.footnote())
                     .foregroundStyle(Color.textSecondary)
-                    .lineLimit(1)
+                    .lineLimit(isLarge ? 2 : 1)
+
+                if isLarge {
+                    RemoteProtocolTag(kind: profile.providerKind)
+                }
             }
 
             Spacer(minLength: Spacing.xs)
 
-            RemoteProtocolTag(kind: profile.providerKind)
+            if !isLarge {
+                RemoteProtocolTag(kind: profile.providerKind)
+            }
 
             if showsDisclosureIndicator {
                 Image(systemName: "chevron.right")
