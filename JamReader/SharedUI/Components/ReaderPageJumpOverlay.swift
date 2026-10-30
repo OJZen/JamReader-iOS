@@ -170,16 +170,15 @@ struct ReaderPageJumpOverlay: View {
             return
         }
 
-        // Use window height for iPad multitasking (UIScreen.main.bounds is full screen)
-        let windowHeight: CGFloat = {
-            if let windowScene = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .first(where: { $0.activationState == .foregroundActive }),
-               let window = windowScene.windows.first(where: \.isKeyWindow) {
-                return window.bounds.height
-            }
-            return UIScreen.main.bounds.height
-        }()
+        // The window, not the screen: iPad multitasking and iPhone Duo windows
+        // are smaller than the screen. Without a window there is nothing to lift.
+        guard let windowHeight = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: \.isKeyWindow)?
+            .bounds.height else {
+            return
+        }
         let overlap = max(0, windowHeight - endFrame.minY)
         // Re-center the dialog in the available space above the keyboard.
         let targetLift = overlap > 0 ? overlap * 0.5 : 0

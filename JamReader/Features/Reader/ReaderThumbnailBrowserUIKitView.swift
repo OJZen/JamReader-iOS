@@ -56,7 +56,7 @@ final class ReaderThumbnailBrowserViewController: UIViewController, UICollection
     private var focusCurrentRequestID = 0
     private var hasPerformedInitialScroll = false
     private var isEditingJumpField = false
-    private var currentMetrics = ReaderThumbnailBrowserMetrics(containerWidth: 0, isPadLayout: UIDevice.current.userInterfaceIdiom == .pad)
+    private var currentMetrics = ReaderThumbnailBrowserMetrics(containerWidth: 0, isPadLayout: false, displayScale: 2)
     private var onSelectPage: ((Int) -> Void)?
 
     private var pageCount: Int {
@@ -665,13 +665,15 @@ final class ReaderThumbnailBrowserViewController: UIViewController, UICollection
     private func makeMetrics(containerWidth: CGFloat) -> ReaderThumbnailBrowserMetrics {
         ReaderThumbnailBrowserMetrics(
             containerWidth: containerWidth,
-            isPadLayout: usesPadGridLayout(for: containerWidth)
+            isPadLayout: usesPadGridLayout(for: containerWidth),
+            displayScale: traitCollection.displayScale
         )
     }
 
+    /// Three columns in a regular-width window (iPad, iPhone Duo's inner
+    /// screen) or a wide container; the sheet itself may report compact.
     private func usesPadGridLayout(for containerWidth: CGFloat) -> Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-            || traitCollection.userInterfaceIdiom == .pad
+        view.window?.traitCollection.horizontalSizeClass == .regular
             || containerWidth >= 700
     }
 
@@ -711,7 +713,7 @@ private struct ReaderThumbnailBrowserMetrics: Equatable {
     let headerThumbnailMaxPixelSize: Int
     let bottomInset: CGFloat
 
-    init(containerWidth: CGFloat, isPadLayout: Bool) {
+    init(containerWidth: CGFloat, isPadLayout: Bool, displayScale: CGFloat) {
         let safeWidth = max(containerWidth, 320)
         usesSplitCards = safeWidth >= 900
         columns = isPadLayout ? 3 : 2
@@ -725,7 +727,7 @@ private struct ReaderThumbnailBrowserMetrics: Equatable {
         let thumbnailHeight = floor(itemWidth * (3.0 / 2.0))
         pageCellHeight = thumbnailHeight
 
-        let scale = UIScreen.main.scale
+        let scale = max(displayScale, 1)
         thumbnailMaxPixelSize = max(300, Int(max(itemWidth, thumbnailHeight) * scale))
         headerThumbnailMaxPixelSize = max(320, Int(140 * scale))
         bottomInset = 28

@@ -273,14 +273,14 @@ private enum ReaderViewportResolver {
                 }),
             let window = windowScene.windows.first(where: \.isKeyWindow) ?? windowScene.windows.first
         else {
-            // Fallback: prefer key window bounds over UIScreen for iPad multitasking
-            if let keyWindow = UIApplication.shared.connectedScenes
+            // Fallback: any key window. Never the screen, which is larger than
+            // the window in iPad multitasking and on iPhone Duo; with no window
+            // the callers use their default sizes.
+            return UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .flatMap(\.windows)
-                .first(where: \.isKeyWindow) {
-                return keyWindow.bounds
-            }
-            return UIScreen.main.bounds
+                .first(where: \.isKeyWindow)?
+                .bounds ?? .zero
         }
 
         return window.bounds

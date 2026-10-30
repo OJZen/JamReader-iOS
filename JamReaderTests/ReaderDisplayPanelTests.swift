@@ -85,6 +85,31 @@ final class ReaderDisplayPanelTests: XCTestCase {
         XCTAssertTrue(controls.isEmpty)
     }
 
+    /// A compact window (iPhone, iPhone Duo's outer screen) shows single pages
+    /// without rewriting the saved double-page layout; a regular window gets it back.
+    func testCompactWindowKeepsSavedDoublePageLayout() {
+        let saved = ReaderDisplayLayout(
+            spreadMode: .doublePage,
+            readingDirection: .leftToRight,
+            coverAsSinglePage: false
+        )
+
+        let compact = saved.normalized(allowingDoublePageSpread: false)
+        XCTAssertEqual(compact.spreadMode, .singlePage)
+        XCTAssertEqual(compact.readingDirection, .leftToRight)
+        XCTAssertFalse(compact.coverAsSinglePage)
+        XCTAssertEqual(saved.normalized(allowingDoublePageSpread: true), saved)
+
+        let controls = ReaderDisplayPanelControls(
+            layout: compact,
+            supportsImageLayoutControls: true,
+            supportsDoublePageSpread: false,
+            supportsRotation: true
+        )
+        XCTAssertFalse(controls.showsSpreadMode)
+        XCTAssertFalse(controls.showsSpreadOptions)
+    }
+
     func testBookmarkLimitBlocksOnlyNewPages() {
         let bookmarks = [1, 4, 9]
 

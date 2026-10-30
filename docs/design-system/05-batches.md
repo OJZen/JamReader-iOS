@@ -178,10 +178,10 @@
 - [ ] **阅读器视口**：`ReaderChromeOverlay` 283 行回退 `UIScreen.main.bounds` 改为窗口 bounds；外屏用常驻的 `.occlusion` 保留区避开摄像头，工具显隐时画面几何不变。
 - [ ] **双页**：保持 `supportsDoublePageSpread = 常规宽度`。确认外屏 / 紧凑窗口只关闭 `allowsDoublePageSpread`、不改写已保存的布局偏好，回到内屏恢复，并停在同一阅读页。内屏横放不自动切换双页。跨页中心对准折痕（`.division` 中线，含未启用区域）；半折时两页分居折叠区两侧，各自适应一侧；平放时按现有方式相接。
 - [ ] **顶栏与面板**：顶栏整体在安全区内；半折时返回 + 书名在前缘一侧、三键在后缘一侧，书名在折痕前截断。`Aa` 按尺寸类别选底部面板 / popover。`ReaderPageJumpOverlay` 181 行 `UIScreen.main.bounds.height` 改为窗口高度，浮层不横跨折叠区。跨本导航胶囊若与折叠区重叠，放进后缘一侧。
-- [ ] **缩略图总览**：`ReaderThumbnailBrowserUIKitView` 59 / 673 行按 idiom 的 3 / 2 列改为按容器宽度；728 行 `UIScreen.main.scale` 改为 `traitCollection.displayScale`。
+- [x] **缩略图总览**：`ReaderThumbnailBrowserUIKitView` 59 / 673 行按 idiom 的 3 / 2 列改为按容器宽度；728 行 `UIScreen.main.scale` 改为 `traitCollection.displayScale`。
 - [ ] **受保护导航列表 · 只做环境适配**：`ReaderChromeOverlay` 58–60 行（`ReaderScrubberLayout.adaptive`）、618–621 行（浮动预览）与 `ReaderVerticalThumbnailRail` 780–851 行的 `isPad`，改为“iPad 或窗口宽度类别为常规”；保留现有“视口宽度 ≥ `regularReaderLayoutMinWidth`”判断。容器在安全区内；半折时底部列表在竖向折叠时放后缘一侧，右侧轨道在横向折叠时限制在下半区。**两档内的数值、动效、手势、跳页、显隐一律不改**；档位由窗口决定，不由半折后变窄的容器决定。
 - [ ] 为“档位判断”“偶数列与中缝”“双页偏好不被改写”补 XCTest（纯函数即可，不依赖真机）。
-- [ ] 文档：在 `03-reader.md`、`docs/design-requirements.md` 记录 Duo 上的实际行为；能力不足而保留现状的地方写进本批实施说明。
+- [x] 文档：在 `03-reader.md`、`docs/design-requirements.md` 记录 Duo 上的实际行为；能力不足而保留现状的地方写进本批实施说明。
 
 **验收**：iPhone 与 iPad 的所有页面和受保护组件截图与改动前一致；Device Hub 中合上 / 内屏竖放 / 内屏横放 / 书本半折 / 桌面姿势 / 分屏在左与在右都能完成四个代表场景（书库内容、远程目录、阅读器工具、导入流程）；开合时不丢导航层级、滚动位置与阅读页码；没有按钮或浮层落在折叠区；外屏内容贴到侧边列、没有多余留白；所有工具栏动作都进了侧边列（阅读器顶栏除外）；外屏横放可用；开启“减少透明度”时侧边列与内容都清晰；外屏导航列表用 iPhone 档、内屏用 iPad 档；浅色 / 深色、AX5、四种语言无截断错误。
 
@@ -202,6 +202,13 @@
 - 测试：新增 `AdaptiveSplitShellTests`（折叠 / 展开移交同一批页面、占位页不移、无页面时请求恢复、重复通知不重复移动）、`FoldSplitGridMetricsTests`（偶数列与中缝、偏心折痕、开合不重排、无折叠区）、侧栏选中项存取测试；删除已不存在 API 的旧测试。
 - 无法验证 / 未做：本机有 Xcode 27.1 与 iPhone Duo 模拟器（iOS 27.1）和 DeviceHub.app，但没有可用的桌面控制工具，`simctl` 也没有姿态命令，只能截到合上时的外屏；本轮结束时模拟器面板对 iPhone Duo 的访问请求也未获准，外屏上的点按（选择模式、横放）无法操作。内屏竖放 / 横放、书本半折、分屏在左 / 在右、外屏横放，以及开合时的实际移交与“添加漫画”Sheet 竖排对比都没有在设备上看到；移交逻辑由单元测试覆盖，重启恢复在 iPad 上手动确认。
 - 验证（第 B 轮）：iPhone 18 Pro 与 iPad Pro 11 英寸（iOS 27.0）上书库、远程、设置各页与改动前布局相同（iPhone 仍是单栏导航，2×2 集合卡在；iPad 侧栏列出集合、内容区无集合卡、重启恢复“最近加入”选中项）；浅色 / 深色 / AX5 / 简体中文截图在 `.acceptance/round-B/iphone`、`.acceptance/round-B/ipad`。iPhone Duo 外屏（合上，竖放）的书库首页、书库内容、远程首页、远程目录、设置在浅色 / 深色 / AX5 / 减少透明度下各一张，在 `.acceptance/round-B/duo`：返回、选择（`checkmark.circle`）、⋯、[+]、图钉都在侧边列，标签栏在侧边列底部，内容贴到侧边列，减少透明度时侧边列有底色、内容清晰。受保护组件（分页 / 竖向，工具隐藏 / 显示；iPhone 浅 + 深，iPad 浅）与 `.acceptance/baseline/*-warm` 逐像素对比，结果在 `.acceptance/round-B/protected/`：工具隐藏全部一致；iPhone 竖向工具显示只差右侧轨道一张缩略图位图，深色分页工具显示只差底部列表一张缩略图位图；iPad 去掉日期不同的状态栏后竖向一致、分页只差底部缩略图位图，边框、页码胶囊、位置都相同（与第 1 批记录的缓存噪声一致）。阅读器受保护组件的代码本轮未改动。
+
+第 6 批（下）实施说明（2026-10-30，第 C 轮，阅读器）：
+
+- 范围：按“Duo 不用过多在意”的决定，本轮只做同时适用于 iPhone / iPad 窗口的环境适配，不做只在折痕或 Duo 外屏上起作用的几何，那些项保持未勾选。
+- 做了什么：① 视口：`ReaderViewportResolver` 找不到前台窗口时改为取任一 key window，再没有就返回零尺寸（调用方用各自的默认值），不再回退到 `UIScreen.main.bounds`。② 跳页浮层：键盘抬升按 key window 高度计算，没有窗口就不抬升，去掉 `UIScreen.main.bounds.height` 回退。③ 缩略图总览：三列改为看窗口宽度类别是否为常规（iPad、Duo 内屏）或容器宽度 ≥ 700，不再看设备；缩略图像素尺寸用视图自身的 `displayScale`，不再用 `UIScreen.main.scale`。④ 双页：`supportsDoublePageSpread` 仍为常规宽度；核对代码，紧凑窗口只把 `allowsDoublePageSpread` 关掉、显示用 `effectiveReaderLayout`，保存的偏好只在用户在面板里改动时写入，回到常规宽度自动恢复双页；补了测试。⑤ `Aa` 按尺寸类别选底部面板 / popover（第 4 批已做）。
+- 未做（保持未勾选）：外屏 `.occlusion` 保留区；跨页中心对准折痕与半折时两页分居两侧；半折时顶栏拆到折痕两侧、浮层避开折叠区；受保护导航列表的档位与半折限制区域；缩略图总览的跨折痕偶数列；“档位判断”测试。另外，档位规则“iPad 或常规宽度窗口用 iPad 档”在 iPhone Plus / Max 横放时也成立（横放是常规宽度），会让这两款 iPhone 横放的底部列表与右侧轨道换成 iPad 档，与“iPhone 受保护组件不变”冲突；改之前需要你决定是否把 iPhone 横放排除在外。
+- 验证：完整 XCTest 330 项通过（1 项跳过），新增“紧凑窗口不改写双页偏好”测试；静态检查、`git diff --check` 通过。iPad 上缩略图总览仍为 3 列（`.acceptance/round-C/ipad/light-en-thumbnail-browser.png`）；受保护组件代码本轮未改动（只改了窗口缺失时的回退）。
 
 ---
 
