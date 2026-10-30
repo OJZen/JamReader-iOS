@@ -3,12 +3,6 @@ import SwiftUI
 import UIKit
 import os
 
-private enum RemoteOfflineShelfLayoutMetrics {
-    static let horizontalInset: CGFloat = 12
-    static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
-    static let gridVerticalPadding: CGFloat = 6
-}
-
 private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
     case recent
     case title
@@ -74,7 +68,6 @@ private enum RemoteOfflineShelfSortMode: String, CaseIterable, Identifiable {
 
 private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
     case all
-    case current
     case stale
 
     var id: String { rawValue }
@@ -83,10 +76,17 @@ private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return String(localized: "All")
-        case .current:
-            return String(localized: "Latest")
         case .stale:
-            return String(localized: "Older")
+            return String(localized: "Needs Update")
+        }
+    }
+
+    var systemImage: String? {
+        switch self {
+        case .all:
+            return nil
+        case .stale:
+            return "clock.badge.exclamationmark"
         }
     }
 
@@ -94,8 +94,6 @@ private enum RemoteOfflineShelfFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return true
-        case .current:
-            return entry.availability.kind == .current
         case .stale:
             return entry.availability.kind == .stale
         }
@@ -457,8 +455,7 @@ struct RemoteOfflineShelfView: View {
     @State private var sortMode: RemoteOfflineShelfSortMode = .recent
     @State private var filterMode: RemoteOfflineShelfFilter = .all
     @State private var feedbackDismissTask: Task<Void, Never>?
-    @State private var pendingServerClearProfile: RemoteServerProfile?
-    @State private var pendingServerClearCount = 0
+    @ObservedObject private var networkStatus = NetworkStatusMonitor.shared
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
     @State private var containerWidth: CGFloat = 0
@@ -491,39 +488,15 @@ struct RemoteOfflineShelfView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Section("Filter") {
-                        ForEach(RemoteOfflineShelfFilter.allCases) { mode in
-                            Button {
-                                filterMode = mode
-                            } label: {
-                                selectionMenuLabel(
-                                    title: mode.title,
-                                    systemImage: mode == .all
-                                        ? "line.3.horizontal.decrease.circle"
-                                        : "line.3.horizontal.decrease.circle.fill",
-                                    isSelected: filterMode == mode
-                                )
-                            }
-                        }
-                    }
-
-                    Section("Sort") {
+                    Picker("Sort", selection: $sortMode) {
                         ForEach(RemoteOfflineShelfSortMode.allCases) { mode in
-                            Button {
-                                sortMode = mode
-                            } label: {
-                                selectionMenuLabel(
-                                    title: mode.title,
-                                    systemImage: mode.systemImageName,
-                                    isSelected: sortMode == mode
-                                )
-                            }
+                            Label(mode.title, systemImage: mode.systemImageName)
+                                .tag(mode)
                         }
                     }
                 } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
-                .accessibilityLabel("Options")
             }
         }
         .searchable(
@@ -562,39 +535,6 @@ struct RemoteOfflineShelfView: View {
             feedbackDismissTask?.cancel()
             feedbackDismissTask = nil
         }
-        .confirmationDialog(
-            "Clear downloads for this server?",
-            isPresented: Binding(
-                get: { pendingServerClearProfile != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        pendingServerClearProfile = nil
-                        pendingServerClearCount = 0
-                    }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            if let profile = pendingServerClearProfile {
-                Button("Clear Downloads", role: .destructive) {
-                    viewModel.clearDownloadedCopies(
-                        for: profile,
-                        removedCount: pendingServerClearCount
-                    )
-                    pendingServerClearProfile = nil
-                    pendingServerClearCount = 0
-                }
-            }
-
-            Button("Cancel", role: .cancel) {
-                pendingServerClearProfile = nil
-                pendingServerClearCount = 0
-            }
-        } message: {
-            if let profile = pendingServerClearProfile {
-                Text("Deletes \(pendingServerClearCount) downloads from \(profile.name) only.")
-            }
-        }
     }
 
     private func updateContainerWidth(_ newWidth: CGFloat) {
@@ -627,12 +567,16 @@ struct RemoteOfflineShelfView: View {
                                 : String(localized: "Save comics from this server.")
                         )
                     } else if displayedEntries.isEmpty {
+                        shelfHeader
+
                         emptyCard(
                             systemImage: "magnifyingglass",
                             title: emptyResultsTitle,
                             description: emptyResultsDescription
                         )
                     } else {
+                        shelfHeader
+
                         ForEach(displayedSections) { section in
                             VStack(alignment: .leading, spacing: 10) {
                                 sectionHeader(for: section)
@@ -680,6 +624,8 @@ struct RemoteOfflineShelfView: View {
                         .padding(.vertical, 28)
                     }
                 } else if displayedEntries.isEmpty {
+                    shelfHeaderSection
+
                     Section {
                         EmptyStateView(
                             systemImage: "magnifyingglass",
@@ -689,15 +635,12 @@ struct RemoteOfflineShelfView: View {
                         .padding(.vertical, 28)
                     }
                 } else {
+                    shelfHeaderSection
+
                     ForEach(displayedSections) { section in
                         Section {
                             ForEach(section.entries) { entry in
                                 offlineShelfEntryRow(for: entry)
-                                    .insetCardListRow(
-                                        horizontalInset: RemoteOfflineShelfLayoutMetrics.horizontalInset,
-                                        top: RemoteOfflineShelfLayoutMetrics.gridVerticalPadding,
-                                        bottom: RemoteOfflineShelfLayoutMetrics.gridVerticalPadding
-                                    )
                             }
                         } header: {
                             sectionHeader(for: section)
@@ -705,7 +648,7 @@ struct RemoteOfflineShelfView: View {
                     }
                 }
             }
-            .scrollContentBackground(.hidden)
+            .listStyle(.insetGrouped)
         }
     }
 
@@ -778,12 +721,9 @@ struct RemoteOfflineShelfView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// One name for both scopes; the section headers name the server.
     private var navigationTitleText: String {
-        if let focusedProfile {
-            return String(localized: "\(focusedProfile.displayTitle) Downloads")
-        }
-
-        return String(localized: "Offline Shelf")
+        String(localized: "Offline Shelf")
     }
 
     private var searchPrompt: String {
@@ -810,8 +750,6 @@ struct RemoteOfflineShelfView: View {
         switch filterMode {
         case .all:
             return String(localized: "No Downloads")
-        case .current:
-            return String(localized: "No Current Copies")
         case .stale:
             return String(localized: "No Older Copies")
         }
@@ -832,11 +770,6 @@ struct RemoteOfflineShelfView: View {
                 return String(localized: "No downloads from \(focusedProfile.displayTitle) on this device.")
             }
             return String(localized: "No downloads on this device.")
-        case .current:
-            if let focusedProfile {
-                return String(localized: "No current local copies from \(focusedProfile.displayTitle).")
-            }
-            return String(localized: "No current local copies.")
         case .stale:
             if let focusedProfile {
                 return String(localized: "No older local copies from \(focusedProfile.displayTitle).")
@@ -845,18 +778,35 @@ struct RemoteOfflineShelfView: View {
         }
     }
 
-    @ViewBuilder
-    private func selectionMenuLabel(
-        title: String,
-        systemImage: String,
-        isSelected: Bool
-    ) -> some View {
-        HStack {
-            Label(title, systemImage: systemImage)
-            if isSelected {
-                Spacer()
-                Image(systemName: "checkmark")
+    /// The offline notice and the filter chips above the sections.
+    private var shelfHeader: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            if !networkStatus.isOnline {
+                NoticeView(
+                    systemImage: "wifi.slash",
+                    tint: .appOffline,
+                    title: String(localized: "No Network Connection"),
+                    message: String(localized: "Every comic here opens without a connection.")
+                )
             }
+
+            FilterChipBar(
+                items: RemoteOfflineShelfFilter.allCases,
+                selection: filterMode,
+                title: { filter in
+                    "\(filter.title) \(scopedEntries.filter(filter.includes).count)"
+                },
+                systemImage: \.systemImage,
+                action: { filterMode = $0 }
+            )
+        }
+    }
+
+    private var shelfHeaderSection: some View {
+        Section {
+            shelfHeader
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 0, leading: Spacing.md, bottom: 0, trailing: Spacing.md))
         }
     }
 
@@ -922,67 +872,11 @@ struct RemoteOfflineShelfView: View {
         }
     }
 
-    @ViewBuilder
     private func sectionHeader(for section: RemoteOfflineShelfSection) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(section.profile.name)
-                    .font(.subheadline.weight(.semibold))
-
-                Text(sectionHeaderDetailText(for: section))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 10)
-
-            Menu {
-                Button(role: .destructive) {
-                    pendingServerClearProfile = section.profile
-                    pendingServerClearCount = viewModel.downloadedCopyCount(for: section.profile)
-                } label: {
-                    Label(
-                        section.entries.count == 1
-                            ? String(localized: "Clear Download")
-                            : String(localized: "Clear Downloads"),
-                        systemImage: "trash"
-                    )
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Manage \(section.profile.name)")
-        }
-        .textCase(nil)
-    }
-
-    private func sectionHeaderDetailText(
-        for section: RemoteOfflineShelfSection
-    ) -> String {
-        if section.readyCount > 0, section.olderCount > 0 {
-            return String(localized: "\(section.entries.count) downloads · \(section.readyCount) current · \(section.olderCount) older")
-        }
-
-        if section.readyCount > 0 {
-            return String(localized: "\(section.entries.count) downloads · \(section.readyCount) current")
-        }
-
-        if section.olderCount > 0 {
-            return String(localized: "\(section.entries.count) downloads · \(section.olderCount) older")
-        }
-
-        return section.entries.count == 1
-            ? String(localized: "1 download")
-            : String(localized: "\(section.entries.count) downloads")
-    }
-
-    private var showsPersistentItemActions: Bool {
-        adaptiveListColumnCount > 1
+        Text("\(section.profile.name) · \(section.entries.count) comics")
+            .font(AppFont.footnote())
+            .foregroundStyle(Color.textSecondary)
+            .textCase(nil)
     }
 
     private var adaptiveListColumnCount: Int {
@@ -1003,10 +897,6 @@ struct RemoteOfflineShelfView: View {
         )
     }
 
-    private var itemAccessoryReservedWidth: CGFloat {
-        showsPersistentItemActions ? RemoteOfflineShelfLayoutMetrics.rowAccessoryReservedWidth : 0
-    }
-
     private var background: some View {
         Color(.systemGroupedBackground)
             .ignoresSafeArea()
@@ -1016,34 +906,37 @@ struct RemoteOfflineShelfView: View {
     private func offlineShelfEntryRow(
         for entry: RemoteOfflineComicEntry
     ) -> some View {
-        let row = HeroTapButton { frame in
-            prepareHeroTransition(for: entry, fallbackFrame: frame)
-            presentOfflineEntry(entry)
-        } label: {
-            RemoteInsetListRowCard(contentPadding: 12) {
-                RemoteOfflineComicCard(
-                    session: entry.session,
-                    profile: entry.profile,
-                    availability: entry.availability,
+        let row = HStack(spacing: Spacing.xs) {
+            HeroTapButton { frame in
+                prepareHeroTransition(for: entry, fallbackFrame: frame)
+                presentOfflineEntry(entry)
+            } label: {
+                RemoteOfflineShelfRow(
+                    entry: entry,
                     browsingService: dependencies.remoteServerBrowsingService,
-                    heroSourceID: entry.session.directoryItem.id,
-                    showsNavigationIndicator: false,
-                    showsServerName: false,
-                    trailingAccessoryReservedWidth: itemAccessoryReservedWidth
+                    isOnline: networkStatus.isOnline
                 )
             }
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .trailing) {
-            if showsPersistentItemActions {
-                offlineShelfItemActionMenu(for: entry)
-                    .padding(.trailing, 8)
+            .buttonStyle(.plain)
+
+            if entry.availability.kind == .stale, networkStatus.isOnline {
+                Button("Update") {
+                    Task<Void, Never> {
+                        await viewModel.refreshDownloadedCopy(for: entry)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+                .tint(.appAccent)
             }
+
+            offlineShelfItemActionMenu(for: entry)
         }
 
-        if adaptiveListColumnCount == 1 {
-            row.contextMenu {
-                offlineShelfItemActionMenuContent(for: entry)
+        if adaptiveListColumnCount > 1 {
+            RemoteInsetListRowCard(contentPadding: 12) {
+                row
             }
         } else {
             row
@@ -1076,35 +969,40 @@ struct RemoteOfflineShelfView: View {
         }
     }
 
+    /// Actions that need the server only appear while online.
     @ViewBuilder
     private func offlineShelfItemActionMenuContent(
         for entry: RemoteOfflineComicEntry
     ) -> some View {
-        Button {
-            appNavigator?.navigate(
-                .browse(
-                    .serverBrowser(
-                        entry.profile.id,
-                        path: entry.session.parentDirectoryPath
+        if networkStatus.isOnline {
+            Button {
+                appNavigator?.navigate(
+                    .browse(
+                        .serverBrowser(
+                            entry.profile.id,
+                            path: entry.session.parentDirectoryPath
+                        )
                     )
                 )
-            )
-        } label: {
-            Label("Browse Folder", systemImage: "folder")
-        }
-
-        Button {
-            Task<Void, Never> {
-                await viewModel.refreshDownloadedCopy(for: entry)
+            } label: {
+                Label("Browse Folder", systemImage: "folder")
             }
-        } label: {
-            Label("Refresh Copy", systemImage: "arrow.clockwise.circle")
+
+            if entry.availability.kind == .stale {
+                Button {
+                    Task<Void, Never> {
+                        await viewModel.refreshDownloadedCopy(for: entry)
+                    }
+                } label: {
+                    Label("Update Copy", systemImage: "arrow.clockwise")
+                }
+            }
         }
 
         Button(role: .destructive) {
             presentRemovalConfirmation(for: entry)
         } label: {
-            Label("Delete Copy", systemImage: "trash")
+            Label("Remove Local Copy", systemImage: "trash")
         }
     }
 
@@ -1127,15 +1025,15 @@ struct RemoteOfflineShelfView: View {
     private func presentDeleteAlert(for entry: RemoteOfflineComicEntry) {
         let viewModel = self.viewModel
         let alertController = UIAlertController(
-            title: String(localized: "Delete this download?"),
-            message: String(localized: "Deletes the downloaded copy of \"\(entry.session.displayName)\" only."),
+            title: String(localized: "Remove this local copy?"),
+            message: String(localized: "“\(entry.session.displayName)” stays on the server, and its reading progress stays."),
             preferredStyle: .alert
         )
         alertController.addAction(
             UIAlertAction(title: String(localized: "Cancel"), style: .cancel)
         )
         alertController.addAction(
-            UIAlertAction(title: String(localized: "Delete Copy"), style: .destructive) { _ in
+            UIAlertAction(title: String(localized: "Remove Local Copy"), style: .destructive) { _ in
                 viewModel.removeDownloadedCopy(for: entry)
             }
         )
@@ -1212,12 +1110,78 @@ private struct RemoteOfflineShelfSection: Identifiable {
     var id: UUID {
         profile.id
     }
+}
 
-    var readyCount: Int {
-        entries.filter { $0.availability.kind == .current }.count
+/// Cover, title, then the copy's status badge with its size and folder. An
+/// older copy says it can be updated once online instead of showing a button
+/// that would fail.
+private struct RemoteOfflineShelfRow: View {
+    let entry: RemoteOfflineComicEntry
+    let browsingService: RemoteServerBrowsingService
+    let isOnline: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            RemoteComicThumbnailView(
+                profile: entry.profile,
+                item: entry.session.directoryItem,
+                browsingService: browsingService,
+                prefersLocalCache: true,
+                heroSourceID: entry.session.directoryItem.id,
+                width: 44,
+                height: 62
+            )
+
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(entry.session.displayName)
+                    .font(AppFont.body())
+                    .foregroundStyle(Color.textPrimary)
+                    .lineLimit(2)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Spacing.xs) {
+                        statusBadge
+                        detailText
+                    }
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        statusBadge
+                        detailText
+                    }
+                }
+
+                if entry.session.hasBeenOpened, let fraction = entry.session.readingProgressFraction {
+                    ProgressView(value: fraction)
+                        .tint(.appJam)
+                        .frame(maxWidth: 120)
+                        .accessibilityLabel(Text(entry.session.progressText))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, Spacing.xxs)
+        .contentShape(Rectangle())
     }
 
-    var olderCount: Int {
-        entries.filter { $0.availability.kind == .stale }.count
+    private var statusBadge: some View {
+        StatusBadge(status: entry.availability.kind == .stale ? .staleCopy : .offline)
+            .fixedSize()
+    }
+
+    private var detailText: some View {
+        Text(detail)
+            .font(AppFont.footnote())
+            .foregroundStyle(Color.textSecondary)
+            .lineLimit(1)
+    }
+
+    private var detail: String {
+        if entry.availability.kind == .stale, !isOnline {
+            return String(localized: "Can update when online")
+        }
+        let folder = entry.session.parentDirectoryDisplayText
+        guard let fileSize = entry.session.fileSize else {
+            return folder
+        }
+        return ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file) + " · " + folder
     }
 }

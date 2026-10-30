@@ -60,6 +60,13 @@ struct RemoteBrowserProgressState: Equatable {
     }
 }
 
+struct RemoteBrowserPathLevel: Identifiable, Equatable {
+    let path: String
+    let title: String
+
+    var id: String { path }
+}
+
 @MainActor
 final class RemoteServerBrowserViewModel: ObservableObject {
     private static let lastBrowsedPathKeyPrefix = "remoteServerBrowser.lastPath."
@@ -159,6 +166,27 @@ final class RemoteServerBrowserViewModel: ObservableObject {
 
     var currentPathDisplayText: String {
         currentPath.isEmpty ? "/" : currentPath
+    }
+
+    /// The server's start folder, then each folder down to the current one.
+    var pathLevels: [RemoteBrowserPathLevel] {
+        let rootComponents = Self.pathComponents(for: rootPath)
+        let currentComponents = Self.pathComponents(for: currentPath)
+        var levels = [RemoteBrowserPathLevel(path: rootPath, title: profile.name)]
+        guard currentComponents.count > rootComponents.count,
+              Array(currentComponents.prefix(rootComponents.count)) == rootComponents else {
+            return levels
+        }
+
+        for index in rootComponents.count..<currentComponents.count {
+            levels.append(
+                RemoteBrowserPathLevel(
+                    path: "/" + currentComponents[...index].joined(separator: "/"),
+                    title: currentComponents[index]
+                )
+            )
+        }
+        return levels
     }
 
     var directories: [RemoteDirectoryItem] {
@@ -288,7 +316,8 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                 items: itemsSnapshot,
                 profile: profileSnapshot,
                 browsingService: self.browsingService,
-                readingProgressStore: self.readingProgressStore
+                readingProgressStore: self.readingProgressStore,
+                remoteOfflineCopyStore: self.remoteOfflineCopyStore
             )
             guard !Task.isCancelled else {
                 return
@@ -324,7 +353,13 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             progressByItemID.removeValue(forKey: item.id)
         }
 
-        cacheAvailabilityByItemID[item.id] = browsingService.cachedAvailability(for: reference)
+        cacheAvailabilityByItemID[item.id] = Self.offlineCopyAvailability(
+            browsingService.cachedAvailability(for: reference),
+            isOfflineCopy: Self.offlineCopyKeys(
+                in: remoteOfflineCopyStore,
+                profile: profile
+            ).contains(RemoteOfflineCopyStore.contentKey(for: reference))
+        )
     }
 
     private func scheduleProgressStateRefresh() {
@@ -343,10 +378,12 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         items: [RemoteDirectoryItem],
         profile: RemoteServerProfile,
         browsingService: RemoteServerBrowsingService,
-        readingProgressStore: RemoteReadingProgressStore
+        readingProgressStore: RemoteReadingProgressStore,
+        remoteOfflineCopyStore: RemoteOfflineCopyStore
     ) async -> ProgressStateSnapshot {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .utility).async {
+                let offlineCopyKeys = offlineCopyKeys(in: remoteOfflineCopyStore, profile: profile)
                 let sessions: [RemoteComicReadingSession]
                 do {
                     sessions = try readingProgressStore.loadSessions()
@@ -381,7 +418,10 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                         progressByItemID[item.id] = session
                     }
 
-                    cacheAvailabilityByItemID[item.id] = browsingService.cachedAvailability(for: reference)
+                    cacheAvailabilityByItemID[item.id] = offlineCopyAvailability(
+                        browsingService.cachedAvailability(for: reference),
+                        isOfflineCopy: offlineCopyKeys.contains(RemoteOfflineCopyStore.contentKey(for: reference))
+                    )
                 }
 
                 continuation.resume(
@@ -392,6 +432,30 @@ final class RemoteServerBrowserViewModel: ObservableObject {
                     )
                 )
             }
+        }
+    }
+
+    /// A comic counts as stored on this device only when it was saved as an
+    /// offline copy. A reading cache can be evicted by the download limit, so
+    /// it gets no badge or local-copy actions (see components/StatusBadge).
+    nonisolated private static func offlineCopyAvailability(
+        _ availability: RemoteComicCachedAvailability,
+        isOfflineCopy: Bool
+    ) -> RemoteComicCachedAvailability {
+        isOfflineCopy ? availability : .unavailable
+    }
+
+    nonisolated private static func offlineCopyKeys(
+        in store: RemoteOfflineCopyStore,
+        profile: RemoteServerProfile
+    ) -> Set<String> {
+        do {
+            return try store.offlineCopyKeys(for: profile)
+        } catch {
+            AppLog.remote.warning(
+                "Remote browser offline copy lookup fallback serverID=\(profile.id.uuidString, privacy: .public) result=empty error=\(AppLogSanitizer.errorDescription(error), privacy: .public)"
+            )
+            return []
         }
     }
 

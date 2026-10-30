@@ -9,6 +9,8 @@ struct ComicReaderView: View {
 
     private let dependencies: AppDependencies
     private let openingPreviewImage: UIImage?
+    /// The server a remote comic comes from, offered for editing when opening fails.
+    private let remoteProfile: RemoteServerProfile?
 
     @StateObject private var viewModel: ComicReaderViewModel
     @StateObject private var readerSession: ReaderSessionController
@@ -30,6 +32,11 @@ struct ComicReaderView: View {
     ) {
         self.dependencies = dependencies
         self.openingPreviewImage = openingPreviewImage
+        if case .remote(let remoteRequest) = request {
+            self.remoteProfile = remoteRequest.profile
+        } else {
+            self.remoteProfile = nil
+        }
         _keepsScreenAwake = State(
             initialValue: dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake()
         )
@@ -63,16 +70,21 @@ struct ComicReaderView: View {
                 } else if viewModel.isLoading || !viewModel.hasAttemptedInitialLoad {
                     ReaderOpeningStateView(
                         previewImage: openingPreviewImage,
-                        title: viewModel.loadingMessage,
+                        title: viewModel.navigationTitle,
+                        detail: viewModel.loadingMessage,
                         progress: viewModel.loadingProgress,
                         onCancel: cancelOpeningAndDismiss
                     )
                 } else {
-                    ReaderFallbackStateView(
-                        title: String(localized: "Comic Unavailable"),
-                        systemImage: "book.closed",
+                    ReaderOpenFailureView(
+                        title: viewModel.navigationTitle,
                         message: viewModel.failureMessage
-                            ?? String(localized: "The selected comic could not be opened.")
+                            ?? String(localized: "The selected comic could not be opened."),
+                        onClose: dismiss.callAsFunction,
+                        onRetry: viewModel.load,
+                        onEditServer: remoteProfile.map { profile in
+                            { presentServerEditor(for: profile) }
+                        }
                     )
                 }
             }
@@ -629,6 +641,41 @@ struct ComicReaderView: View {
         dismiss()
     }
 
+    /// Saving closes the reader: the open request holds the old server settings,
+    /// and the folder it came from reloads with the new ones.
+    private func presentServerEditor(for profile: RemoteServerProfile) {
+        let serverModel = RemoteServerListViewModel(
+            profileStore: dependencies.remoteServerProfileStore,
+            folderShortcutStore: dependencies.remoteFolderShortcutStore,
+            credentialStore: dependencies.remoteServerCredentialStore,
+            browsingService: dependencies.remoteServerBrowsingService,
+            readingProgressStore: dependencies.remoteReadingProgressStore,
+            remoteOfflineCopyStore: dependencies.remoteOfflineCopyStore,
+            remoteOfflineLibrarySnapshotStore: dependencies.remoteOfflineLibrarySnapshotStore,
+            remoteBackgroundImportController: dependencies.remoteBackgroundImportController
+        )
+        let draft = serverModel.makeEditDraft(for: profile)
+        appPresenter?.presentSheet(
+            .content(
+                id: draft.id,
+                content: AnyView(
+                    RemoteServerEditorSheet(
+                        draft: draft,
+                        appliesSwiftUIPresentationModifiers: false
+                    ) { updatedDraft in
+                        let alertState = serverModel.save(draft: updatedDraft)
+                        if alertState == nil {
+                            appPresenter?.dismissSheet()
+                            dismiss()
+                        }
+                        return alertState
+                    }
+                    .id(draft.id)
+                )
+            )
+        )
+    }
+
     private func synchronizeReaderSession() {
         readerSession.synchronize(
             document: viewModel.document,
@@ -721,38 +768,66 @@ private struct PresentedReaderControlsSheet: View {
     }
 }
 
+/// Shown while a comic opens. A remote comic that has to download first
+/// keeps its cover, says why and how far along it is; × is the only cancel.
 private struct ReaderOpeningStateView: View {
     let previewImage: UIImage?
     let title: String
+    let detail: String
     let progress: Double?
     let onCancel: () -> Void
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack {
-                Color.black
-
+            VStack(spacing: Spacing.lg) {
                 if let previewImage {
                     Image(uiImage: previewImage)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                        .clipped()
-                        .overlay {
-                            LinearGradient(
-                                colors: [.black.opacity(0.22), .clear, .black.opacity(0.36)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                            .allowsHitTesting(false)
-                        }
+                        .frame(
+                            maxWidth: min(proxy.size.width * 0.55, 260),
+                            maxHeight: proxy.size.height * 0.45
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous))
+                        .accessibilityHidden(true)
                 }
 
-                loadingPanel
+                VStack(spacing: Spacing.sm) {
+                    Text("Preparing to Read")
+                        .font(AppFont.headline(.semibold))
+                        .foregroundStyle(.white)
+
+                    if let normalizedProgress {
+                        ProgressView(value: normalizedProgress)
+                            .progressViewStyle(.linear)
+                            .tint(.appJam)
+                            .frame(maxWidth: 220)
+                    } else {
+                        ProgressView()
+                            .tint(.white)
+                    }
+
+                    VStack(spacing: Spacing.xxs) {
+                        if let progressText {
+                            Text(progressText)
+                                .monospacedDigit()
+                        }
+                        Text(detail)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .font(AppFont.footnote())
+                    .foregroundStyle(.white.opacity(0.72))
+                }
+                .accessibilityElement(children: .combine)
             }
+            .padding(.horizontal, Spacing.xl)
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .background(Color.black.ignoresSafeArea())
+        .overlay(alignment: .topLeading) {
+            ReaderStateTopBar(title: title, onClose: onCancel)
+        }
     }
 
     private var normalizedProgress: Double? {
@@ -768,52 +843,102 @@ private struct ReaderOpeningStateView: View {
         }
         return "\(Int((normalizedProgress * 100).rounded()))%"
     }
+}
 
-    private var loadingPanel: some View {
-        VStack(spacing: Spacing.sm) {
-            if let normalizedProgress {
-                ProgressView(value: normalizedProgress)
-                    .progressViewStyle(.linear)
-                    .tint(.white)
-                    .frame(width: 160)
-            } else {
-                ProgressView()
-                    .tint(.white)
-                    .controlSize(.regular)
-            }
+/// Opening failed: say why, then offer Try Again and, for a remote comic,
+/// Edit Server. × closes the reader.
+private struct ReaderOpenFailureView: View {
+    let title: String
+    let message: String
+    let onClose: () -> Void
+    let onRetry: () -> Void
+    let onEditServer: (() -> Void)?
 
-            Text(title)
+    var body: some View {
+        VStack(spacing: Spacing.md) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 28, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.86))
+                .accessibilityHidden(true)
+
+            Text("Comic Unavailable")
                 .font(AppFont.headline(.semibold))
                 .foregroundStyle(.white)
 
-            if let progressText {
-                Text(progressText)
-                    .font(AppFont.caption(.medium))
-                    .foregroundStyle(.white.opacity(0.72))
-            }
+            Text(message)
+                .font(AppFont.callout())
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Button(role: .cancel, action: onCancel) {
-                Text("Cancel")
-                    .font(AppFont.callout(.semibold))
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.vertical, Spacing.xs)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.white)
-            .background(.white.opacity(0.14), in: Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(.white.opacity(0.18), lineWidth: 1)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.sm) {
+                    actions
+                }
+                VStack(spacing: Spacing.sm) {
+                    actions
+                }
             }
             .padding(.top, Spacing.xs)
         }
         .padding(.horizontal, Spacing.xl)
-        .padding(.vertical, Spacing.lg)
-        .background(.black.opacity(0.48), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(.white.opacity(0.10), lineWidth: 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.ignoresSafeArea())
+        .overlay(alignment: .topLeading) {
+            ReaderStateTopBar(title: title, onClose: onClose)
         }
-        .accessibilityElement(children: .contain)
+        .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        Button(action: onRetry) {
+            Label("Try Again", systemImage: "arrow.clockwise")
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.appJam)
+
+        if let onEditServer {
+            Button(action: onEditServer) {
+                Label("Edit Server", systemImage: "square.and.pencil")
+            }
+            .buttonStyle(.bordered)
+            .tint(.white)
+        }
+    }
+}
+
+/// × and the comic's name above the opening and failure states, before the
+/// reader's own bars exist.
+private struct ReaderStateTopBar: View {
+    let title: String
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            // Same look as the reader's own top bar buttons.
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay {
+                        Circle()
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    }
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Close"))
+
+            Text(title)
+                .font(AppFont.headline())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.top, Spacing.xs)
+        .environment(\.colorScheme, .dark)
     }
 }

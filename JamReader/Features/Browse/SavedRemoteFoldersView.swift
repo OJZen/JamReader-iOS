@@ -2,23 +2,17 @@ import Combine
 import SwiftUI
 import os
 
-private enum SavedRemoteFoldersLayoutMetrics {
-    static let horizontalInset: CGFloat = 12
-    static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
-}
-
 struct SavedRemoteFoldersView: View {
     let dependencies: AppDependencies
     let focusedProfile: RemoteServerProfile?
 
     @Environment(\.appNavigator) private var appNavigator
     @Environment(\.appPresenter) private var appPresenter
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @StateObject private var viewModel: SavedRemoteFoldersViewModel
     @State private var searchText = ""
     @State private var pendingRemovalEntry: SavedRemoteFoldersViewModel.ShortcutEntry?
-    @State private var containerWidth: CGFloat = 0
+    @State private var editMode: EditMode = .inactive
 
     init(
         dependencies: AppDependencies,
@@ -38,23 +32,32 @@ struct SavedRemoteFoldersView: View {
             } else {
                 ForEach(displayedSections) { section in
                     Section {
-                        AdaptiveCardListRows(
-                            section.entries,
-                            columnCount: adaptiveListColumnCount,
-                            spacing: adaptiveListColumnSpacing,
-                            horizontalInset: SavedRemoteFoldersLayoutMetrics.horizontalInset
-                        ) { entry in
+                        ForEach(section.entries) { entry in
                             savedFolderRow(for: entry)
                         }
+                        .onDelete { offsets in
+                            pendingRemovalEntry = offsets.first.map { section.entries[$0] }
+                        }
                     } header: {
-                        sectionHeader(for: section)
+                        Text(section.profile.name)
                     }
                 }
             }
         }
-        .scrollContentBackground(.hidden)
-        .readContainerWidth(into: $containerWidth)
-        .background(background)
+        .listStyle(.insetGrouped)
+        .environment(\.editMode, $editMode)
+        .toolbar {
+            if focusedEntryCount > 0 {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(editMode.isEditing ? "Done" : "Edit") {
+                        withAnimation {
+                            editMode = editMode.isEditing ? .inactive : .active
+                        }
+                    }
+                    .fontWeight(editMode.isEditing ? .semibold : .regular)
+                }
+            }
+        }
         .overlay {
             if viewModel.isLoading && viewModel.entries.isEmpty {
                 ProgressView()
@@ -82,7 +85,7 @@ struct SavedRemoteFoldersView: View {
             titleVisibility: .visible
         ) {
             if let entry = pendingRemovalEntry {
-                Button("Remove Shortcut", role: .destructive) {
+                Button("Remove", role: .destructive) {
                     viewModel.removeShortcut(entry)
                     pendingRemovalEntry = nil
                 }
@@ -93,7 +96,7 @@ struct SavedRemoteFoldersView: View {
             }
         } message: {
             if let entry = pendingRemovalEntry {
-                Text("Removes the shortcut for \"\(entry.shortcut.title)\" only.")
+                Text("Removes “\(entry.shortcut.title)” from Saved Folders. Files on the server are not affected.")
             }
         }
         .alert(item: $viewModel.alert) { alert in
@@ -105,54 +108,48 @@ struct SavedRemoteFoldersView: View {
         }
     }
 
-    private var showsPersistentItemActions: Bool {
-        horizontalSizeClass == .regular
-            && containerWidth >= AppLayout.regularInlineActionMinWidth
-    }
-
-    private var adaptiveListColumnCount: Int {
-        AppLayout.adaptiveListColumnCount(
-            horizontalSizeClass: horizontalSizeClass,
-            containerWidth: containerWidth
-        )
-    }
-
-    private var adaptiveListColumnSpacing: CGFloat {
-        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
-    }
-
-    private var itemAccessoryReservedWidth: CGFloat {
-        showsPersistentItemActions ? SavedRemoteFoldersLayoutMetrics.rowAccessoryReservedWidth : 0
-    }
-
+    /// Tapping opens the folder; while editing it renames instead.
     private func savedFolderRow(
         for entry: SavedRemoteFoldersViewModel.ShortcutEntry
     ) -> some View {
         Button {
-            appNavigator?.navigate(
-                .browse(
-                    .serverBrowser(
-                        entry.profile.id,
-                        path: entry.shortcut.path
+            if editMode.isEditing {
+                presentRenameSheet(for: entry)
+            } else {
+                appNavigator?.navigate(
+                    .browse(
+                        .serverBrowser(
+                            entry.profile.id,
+                            path: entry.shortcut.path
+                        )
                     )
                 )
-            )
+            }
         } label: {
-            RemoteSavedFolderCard(
-                shortcut: entry.shortcut,
-                profile: entry.profile,
-                showsNavigationIndicator: false,
-                showsServerName: false,
-                trailingAccessoryReservedWidth: itemAccessoryReservedWidth
-            )
+            HStack(spacing: Spacing.sm) {
+                Image(systemName: "folder.fill")
+                    .foregroundStyle(Color.appAccent)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                    Text(entry.shortcut.title)
+                        .foregroundStyle(Color.textPrimary)
+                    Text(entry.shortcut.path.isEmpty ? "/" : entry.shortcut.path)
+                        .font(AppFont.footnote())
+                        .foregroundStyle(Color.textSecondary)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Image(systemName: editMode.isEditing ? "pencil" : "chevron.forward")
+                    .font(AppFont.footnote(.semibold))
+                    .foregroundStyle(editMode.isEditing ? Color.appAccent : Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .overlay(alignment: .trailing) {
-            if showsPersistentItemActions {
-                savedFolderActionMenu(for: entry)
-                    .padding(.trailing, 8)
-            }
-        }
+        .accessibilityHint(editMode.isEditing ? Text("Rename") : Text(""))
         .contextMenu {
             savedFolderActionMenuContent(for: entry)
         }
@@ -213,12 +210,8 @@ struct SavedRemoteFoldersView: View {
             if focusedEntryCount == 0 {
                 ContentUnavailableView(
                     String(localized: "No Saved Folders"),
-                    systemImage: "star",
-                    description: Text(
-                        focusedProfile == nil
-                            ? String(localized: "Save folders in Browse.")
-                            : String(localized: "Save folders from this server in Browse.")
-                    )
+                    systemImage: "pin",
+                    description: Text("Tap the pin in a remote folder to save it here.")
                 )
                 .padding(.vertical, 18)
             } else {
@@ -226,40 +219,6 @@ struct SavedRemoteFoldersView: View {
                     .padding(.vertical, 18)
             }
         }
-    }
-
-    @ViewBuilder
-    private func sectionHeader(for section: SavedRemoteFolderSection) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(section.profile.name)
-                    .font(.subheadline.weight(.semibold))
-
-                Text(savedFolderCountText(for: section))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 10)
-        }
-        .textCase(nil)
-    }
-
-    private func savedFolderCountText(
-        for section: SavedRemoteFolderSection
-    ) -> String {
-        section.entries.count == 1
-            ? String(localized: "1 saved")
-            : String(localized: "\(section.entries.count) saved")
-    }
-
-    private var trimmedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var background: some View {
-        Color(.systemGroupedBackground)
-            .ignoresSafeArea()
     }
 
     @ViewBuilder
@@ -277,18 +236,6 @@ struct SavedRemoteFoldersView: View {
         } label: {
             Label("Remove", systemImage: "trash")
         }
-    }
-
-    private func savedFolderActionMenu(
-        for entry: SavedRemoteFoldersViewModel.ShortcutEntry
-    ) -> some View {
-        Menu {
-            savedFolderActionMenuContent(for: entry)
-        } label: {
-            PersistentRowActionButtonLabel()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Manage \(entry.shortcut.title)")
     }
 
     private func presentRenameSheet(for entry: SavedRemoteFoldersViewModel.ShortcutEntry) {

@@ -20,9 +20,11 @@ struct RemoteServerEditorSheet: View {
     private let initialDraft: RemoteServerEditorDraft
 
     @State private var draft: RemoteServerEditorDraft
-    @State private var alert: AppAlertState?
     @State private var containerWidth: CGFloat = 0
     @State private var isShowingDiscardConfirmation = false
+    @State private var isShowingScopeChangeConfirmation = false
+    /// Shown in the footer of the section with the field to fix; input stays.
+    @State private var saveError: AppAlertState?
     @FocusState private var focusedField: Field?
 
     init(
@@ -44,9 +46,6 @@ struct RemoteServerEditorSheet: View {
                 .toolbar { sheetToolbar }
         }
         .readContainerWidth(into: $containerWidth)
-        .alert(item: $alert) { alert in
-            makeRemoteAlert(for: alert)
-        }
         .task {
             guard !Task.isCancelled else {
                 return
@@ -85,6 +84,19 @@ struct RemoteServerEditorSheet: View {
         } message: {
             Text("Your changes to this server have not been saved.")
         }
+        .confirmationDialog(
+            "Save New Location?",
+            isPresented: $isShowingScopeChangeConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Save and Clear", role: .destructive) {
+                save()
+            }
+
+            Button("Keep Editing", role: .cancel) {}
+        } message: {
+            Text("Changing the address, share, start folder or sign-in clears this server's reading history, saved folders and downloaded comics on this device. Files on the server are not affected.")
+        }
         .interactiveDismissDisabled(hasUnsavedChanges)
 
         if appliesSwiftUIPresentationModifiers {
@@ -110,82 +122,89 @@ struct RemoteServerEditorSheet: View {
 
     private var editorForm: some View {
         Form {
-            Section("Provider") {
+            Section {
                 providerPicker
             }
 
             Section {
-                TextField("Display Name", text: $draft.name)
-                    .focused($focusedField, equals: .name)
+                RemoteServerFormField("Name", isInvalid: false) {
+                    TextField("Name", text: $draft.name, prompt: Text("e.g. Home NAS"))
+                        .focused($focusedField, equals: .name)
+                }
 
-                TextField("Host", text: $draft.host, prompt: Text("nas.local"))
+                RemoteServerFormField("Address", isInvalid: invalidFields.contains(.host)) {
+                    TextField(
+                        "Address",
+                        text: $draft.host,
+                        prompt: draft.providerKind == .smb
+                            ? Text("192.168.1.20 or nas.local")
+                            : Text(verbatim: "https://nas.local")
+                    )
                     .focused($focusedField, equals: .host)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
+                }
 
-                TextField("Port", text: $draft.portText)
-                    .focused($focusedField, equals: .port)
-                    .keyboardType(.numberPad)
-            } header: {
-                Text("Connection")
-            } footer: {
-                Text(
-                    draft.providerKind == .smb
-                        ? (draft.usesDefaultPort
-                            ? String(localized: "SMB uses 445.")
-                            : String(localized: "Use a custom port only if needed."))
-                        : (draft.usesDefaultPort
-                            ? String(localized: "WebDAV uses 443 for HTTPS or 80 for HTTP.")
-                            : String(localized: "Use a custom port only if needed."))
-                )
-            }
+                RemoteServerFormField("Port", isInvalid: invalidFields.contains(.port)) {
+                    TextField("Port", text: $draft.portText, prompt: Text(verbatim: String(draft.providerKind.defaultPort)))
+                        .focused($focusedField, equals: .port)
+                        .keyboardType(.numberPad)
+                }
 
-            Section {
-                TextField(
-                    draft.providerKind == .smb
-                        ? String(localized: "Share")
-                        : String(localized: "Server Path"),
-                    text: $draft.shareName,
-                    prompt: Text(draft.providerKind == .smb ? "Comics" : "/remote.php/dav/files/you/Comics")
-                )
+                RemoteServerFormField(
+                    draft.providerKind == .smb ? "Share" : "Server Path",
+                    isInvalid: invalidFields.contains(.share)
+                ) {
+                    TextField(
+                        draft.providerKind == .smb
+                            ? String(localized: "Share")
+                            : String(localized: "Server Path"),
+                        text: $draft.shareName,
+                        prompt: draft.providerKind == .smb
+                            ? Text("e.g. Comics")
+                            : Text(verbatim: "/remote.php/dav/files/you")
+                    )
                     .focused($focusedField, equals: .share)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                }
 
-                TextField(
-                    "Base Directory",
-                    text: $draft.baseDirectoryPath,
-                    prompt: Text(draft.providerKind == .smb ? "/Manga/Weekly" : "/Weekly")
-                )
-                    .focused($focusedField, equals: .baseDirectory)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            } header: {
-                Text("Location")
-            } footer: {
-                Text(
-                    draft.providerKind == .smb
-                        ? String(localized: "Leave Base Directory empty to start at the root.")
-                        : String(localized: "Leave Base Directory empty to start at Server Path.")
-                )
-            }
-
-            Section {
-                authenticationPicker
-
-                if draft.authenticationMode.requiresUsername {
-                    TextField("Username", text: $draft.username)
-                        .focused($focusedField, equals: .username)
-                        .textContentType(.username)
+                RemoteServerFormField("Start Folder", isInvalid: false) {
+                    TextField("Start Folder", text: $draft.baseDirectoryPath, prompt: Text("e.g. /Comics (optional)"))
+                        .focused($focusedField, equals: .baseDirectory)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
+            } header: {
+                Text("Server")
+            } footer: {
+                if let saveError, !errorBelongsToSignIn {
+                    saveErrorText(saveError)
+                }
+            }
+
+            Section {
+                RemoteServerFormField("Method", isInvalid: false) {
+                    authenticationPicker
+                }
+
+                if draft.authenticationMode.requiresUsername {
+                    RemoteServerFormField("Username", isInvalid: invalidFields.contains(.username)) {
+                        TextField("Username", text: $draft.username)
+                            .focused($focusedField, equals: .username)
+                            .textContentType(.username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
 
                 if draft.authenticationMode.requiresPassword {
-                    SecureField("Password", text: $draft.password)
-                        .focused($focusedField, equals: .password)
-                        .textContentType(.password)
+                    RemoteServerFormField("Password", isInvalid: invalidFields.contains(.password)) {
+                        SecureField("Password", text: $draft.password)
+                            .focused($focusedField, equals: .password)
+                            .textContentType(.password)
+                    }
 
                     if draft.hasStoredPassword {
                         LabeledContent("Saved Password") {
@@ -195,15 +214,60 @@ struct RemoteServerEditorSheet: View {
                     }
                 }
             } header: {
-                Text("Access")
+                Text("Sign In")
             } footer: {
-                if draft.authenticationMode.requiresPassword, draft.hasStoredPassword {
-                    Text("Keeps the current password.")
-                } else if draft.authenticationMode.requiresPassword {
-                    Text("Saved in Keychain.")
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    if let saveError, errorBelongsToSignIn {
+                        saveErrorText(saveError)
+                    }
+                    // Saving does not connect; say so instead of implying a check.
+                    Text("Servers connect when you open them after saving.")
                 }
             }
         }
+    }
+
+    private func saveErrorText(_ error: AppAlertState) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xxxs) {
+            Text(error.title)
+                .bold()
+            Text(error.message)
+        }
+        .foregroundStyle(Color.appDanger)
+    }
+
+    /// Fields to mark after a rejected save, worked out from the draft.
+    private var invalidFields: Set<Field> {
+        guard saveError != nil else {
+            return []
+        }
+
+        var fields = Set<Field>()
+        if draft.normalizedHost.isEmpty {
+            fields.insert(.host)
+        }
+        if draft.resolvedPort == nil {
+            fields.insert(.port)
+        }
+        if draft.providerKind == .smb,
+           draft.shareName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fields.insert(.share)
+        }
+        if draft.authenticationMode.requiresUsername,
+           draft.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fields.insert(.username)
+        }
+        if draft.authenticationMode.requiresPassword,
+           draft.password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !draft.hasStoredPassword {
+            fields.insert(.password)
+        }
+        return fields
+    }
+
+    private var errorBelongsToSignIn: Bool {
+        let fields = invalidFields
+        return !fields.isEmpty && fields.isSubset(of: [.username, .password])
     }
 
     @ViewBuilder
@@ -224,7 +288,7 @@ struct RemoteServerEditorSheet: View {
 
     @ViewBuilder
     private var authenticationPicker: some View {
-        let picker = Picker("Authentication", selection: $draft.authenticationMode) {
+        let picker = Picker("Method", selection: $draft.authenticationMode) {
             ForEach(RemoteServerAuthenticationMode.allCases) { mode in
                 Text(mode.title)
                     .tag(mode)
@@ -234,7 +298,9 @@ struct RemoteServerEditorSheet: View {
         if dynamicTypeSize.isAccessibilitySize {
             picker.pickerStyle(.menu)
         } else {
-            picker.pickerStyle(.segmented)
+            picker
+                .pickerStyle(.segmented)
+                .labelsHidden()
         }
     }
 
@@ -274,8 +340,65 @@ struct RemoteServerEditorSheet: View {
     }
 
     private func handleSave() {
-        if let alertState = onSave(draft) {
-            alert = alertState
+        if changesServerScope {
+            isShowingScopeChangeConfirmation = true
+        } else {
+            save()
+        }
+    }
+
+    private func save() {
+        saveError = onSave(draft)
+    }
+
+    /// Location or sign-in changes clear the server's local history, saved
+    /// folders and downloads when saved (`02-architecture` deletion table).
+    private var changesServerScope: Bool {
+        guard initialDraft.existingProfileID != nil else {
+            return false
+        }
+
+        func trimmed(_ value: String) -> String {
+            value.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return draft.providerKind != initialDraft.providerKind
+            || trimmed(draft.host) != trimmed(initialDraft.host)
+            || trimmed(draft.portText) != trimmed(initialDraft.portText)
+            || trimmed(draft.shareName) != trimmed(initialDraft.shareName)
+            || trimmed(draft.baseDirectoryPath) != trimmed(initialDraft.baseDirectoryPath)
+            || draft.authenticationMode != initialDraft.authenticationMode
+            || trimmed(draft.username) != trimmed(initialDraft.username)
+    }
+}
+
+/// Label column on the left, input on the right (`FormField`); stacked at
+/// accessibility sizes. The input keeps the label for VoiceOver.
+private struct RemoteServerFormField<Input: View>: View {
+    let title: LocalizedStringKey
+    let isInvalid: Bool
+    @ViewBuilder let input: () -> Input
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var labelWidth: CGFloat = 92
+
+    init(_ title: LocalizedStringKey, isInvalid: Bool, @ViewBuilder input: @escaping () -> Input) {
+        self.title = title
+        self.isInvalid = isInvalid
+        self.input = input
+    }
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+            : AnyLayout(HStackLayout(spacing: Spacing.sm))
+        layout {
+            Text(title)
+                .foregroundStyle(isInvalid ? Color.appDanger : Color.textPrimary)
+                .frame(width: dynamicTypeSize.isAccessibilitySize ? nil : labelWidth, alignment: .leading)
+                .accessibilityHidden(true)
+            input()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

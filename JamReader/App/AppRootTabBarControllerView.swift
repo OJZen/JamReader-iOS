@@ -627,6 +627,8 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             showServerDetail(profileID)
         case .serverBrowser(let profileID, let path):
             showServerBrowser(profileID, path: path)
+        case .serverBrowserAncestor(let profileID, let path):
+            showServerBrowserAncestor(profileID, path: path)
         case .savedFolders(let profileID):
             showSavedFolders(profileID: profileID)
         case .offlineShelf(let profileID):
@@ -757,6 +759,15 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
         }
 
         persistDetailSelection(BrowseStoredNavigationSelection.serverBrowser(profileID).storageValue)
+        let controller = makeServerBrowser(profile, path: path)
+        if replacesDetailStack {
+            setPrimaryDestination(controller, animated: animated)
+        } else {
+            pushOrSetDetail(controller, animated: animated)
+        }
+    }
+
+    private func makeServerBrowser(_ profile: RemoteServerProfile, path: String?) -> UIViewController {
         let controller = makeHostingController(
             RemoteServerBrowserView(
                 profile: profile,
@@ -766,10 +777,41 @@ private final class BrowseTabCoordinator: RootTabChildCoordinator {
             title: profile.displayTitle
         )
         controller.navigationItem.largeTitleDisplayMode = .never
-        if replacesDetailStack {
-            setPrimaryDestination(controller, animated: animated)
+        let resolvedPath = path ?? RemoteServerBrowserViewModel.lastBrowsedPath(for: profile)
+        controller.restorationIdentifier = Self.serverBrowserIdentifier(profile.id, path: resolvedPath)
+        return controller
+    }
+
+    private static func serverBrowserIdentifier(_ profileID: UUID, path: String) -> String {
+        "remote.browser.\(profileID.uuidString)|/" + path.split(separator: "/").joined(separator: "/")
+    }
+
+    /// Breadcrumb taps return to a level already on the stack; otherwise the
+    /// new level replaces this server's folder pages, so Back still leaves the folders.
+    private func showServerBrowserAncestor(_ profileID: UUID, path: String) {
+        guard let navigationController = activeNavigationController else {
+            return
+        }
+
+        let identifier = Self.serverBrowserIdentifier(profileID, path: path)
+        if let existing = navigationController.viewControllers.last(where: { $0.restorationIdentifier == identifier }) {
+            navigationController.popToViewController(existing, animated: true)
+            return
+        }
+
+        guard let profile = profile(for: profileID) else {
+            return
+        }
+
+        let controller = makeServerBrowser(profile, path: path)
+        let browserPrefix = "remote.browser.\(profileID.uuidString)|"
+        if let firstLevel = navigationController.viewControllers.firstIndex(where: {
+            $0.restorationIdentifier?.hasPrefix(browserPrefix) == true
+        }) {
+            let kept = Array(navigationController.viewControllers[..<firstLevel])
+            navigationController.setViewControllers(kept + [controller], animated: true)
         } else {
-            pushOrSetDetail(controller, animated: animated)
+            navigationController.pushViewController(controller, animated: true)
         }
     }
 

@@ -25,6 +25,110 @@ struct RemoteBrowserListRowModel: Equatable, Identifiable {
     var id: String { item.id }
 }
 
+/// Long-press actions for a remote item. Tapping the cover reads, so there is
+/// no "Read": local copy actions follow the copy's state, then the library
+/// import, then Info.
+enum RemoteBrowserItemAction {
+    case saveOffline
+    case updateCopy
+    case openOlderCopy
+    case removeLocalCopy
+    case importToLibrary
+    case info
+
+    static func groups(for row: RemoteBrowserListRowModel) -> [(title: String?, actions: [RemoteBrowserItemAction])] {
+        if row.item.isDirectory {
+            return [(nil, [.importToLibrary])]
+        }
+        guard row.item.canOpenAsComic else {
+            return []
+        }
+
+        let localCopyActions: [RemoteBrowserItemAction]
+        switch row.cacheAvailability.kind {
+        case .unavailable:
+            localCopyActions = [.saveOffline]
+        case .current:
+            localCopyActions = [.removeLocalCopy]
+        case .stale:
+            localCopyActions = [.updateCopy, .openOlderCopy, .removeLocalCopy]
+        }
+        return [
+            (String(localized: "On This Device"), localCopyActions),
+            (String(localized: "Library"), [.importToLibrary]),
+            (nil, [.info])
+        ]
+    }
+
+    func title(isDirectory: Bool) -> String {
+        switch self {
+        case .saveOffline:
+            return String(localized: "Save Offline Copy")
+        case .updateCopy:
+            return String(localized: "Update Copy")
+        case .openOlderCopy:
+            return String(localized: "Open Older Local Copy")
+        case .removeLocalCopy:
+            return String(localized: "Remove Local Copy")
+        case .importToLibrary:
+            return isDirectory
+                ? String(localized: "Import Folder to Library…")
+                : String(localized: "Import to Library…")
+        case .info:
+            return String(localized: "Info")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .saveOffline:
+            return "arrow.down.circle"
+        case .updateCopy:
+            return "arrow.clockwise"
+        case .openOlderCopy:
+            return "clock.badge.exclamationmark"
+        case .removeLocalCopy:
+            return "trash"
+        case .importToLibrary:
+            return "square.and.arrow.down"
+        case .info:
+            return "info.circle"
+        }
+    }
+
+    static func menuElements(
+        for row: RemoteBrowserListRowModel,
+        handler: @escaping (RemoteBrowserItemAction) -> Void
+    ) -> [UIMenuElement] {
+        groups(for: row).map { group in
+            UIMenu(
+                title: group.title ?? "",
+                options: .displayInline,
+                children: group.actions.map { action in
+                    UIAction(
+                        title: action.title(isDirectory: row.item.isDirectory),
+                        image: UIImage(systemName: action.systemImage),
+                        attributes: action == .removeLocalCopy ? .destructive : []
+                    ) { _ in
+                        handler(action)
+                    }
+                }
+            )
+        }
+    }
+
+    static func accessibilityActions(
+        for row: RemoteBrowserListRowModel,
+        handler: @escaping (RemoteBrowserItemAction) -> Bool
+    ) -> [UIAccessibilityCustomAction] {
+        groups(for: row).flatMap(\.actions).map { action in
+            UIAccessibilityCustomAction(name: action.title(isDirectory: row.item.isDirectory)) { _ in
+                handler(action)
+            }
+        }
+    }
+}
+
 enum RemoteBrowserDynamicTypeLayoutMetrics {
     private static let textSpacing: CGFloat = 4
 
@@ -627,88 +731,26 @@ struct RemoteServerBrowserListUIKitView: UIViewControllerRepresentable {
         }
 
         private func menuElements(for row: RemoteBrowserListRowModel) -> [UIMenuElement] {
-            var actions: [UIMenuElement] = []
-
-            if row.item.canOpenAsComic {
-                actions.append(
-                    UIAction(
-                        title: String(localized: "Info"),
-                        image: UIImage(systemName: "info.circle")
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onShowInfo(row.item)
-                        }
-                    }
-                )
-
-                actions.append(
-                    UIAction(
-                        title: String(localized: "Import"),
-                        image: UIImage(systemName: "square.and.arrow.down")
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onImport(row.item)
-                        }
-                    }
-                )
-
-                if row.cacheAvailability.hasLocalCopy {
-                    actions.append(
-                        UIAction(
-                            title: String(localized: "Open Offline"),
-                            image: UIImage(systemName: "arrow.down.circle")
-                        ) { [weak self] _ in
-                            self?.pendingContextMenuAction = { [weak self] in
-                                self?.onOpenOffline(row.item)
-                            }
-                        }
-                    )
+            RemoteBrowserItemAction.menuElements(for: row) { [weak self] action in
+                self?.pendingContextMenuAction = { [weak self] in
+                    self?.perform(action, on: row.item)
                 }
-
-                actions.append(
-                    UIAction(
-                        title: row.cacheAvailability.kind == .unavailable
-                            ? String(localized: "Save Offline")
-                            : String(localized: "Refresh Offline Copy"),
-                        image: UIImage(
-                            systemName: row.cacheAvailability.kind == .unavailable
-                                ? "icloud.and.arrow.down"
-                                : "arrow.clockwise.icloud"
-                        )
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onSaveOffline(row.item)
-                        }
-                    }
-                )
-
-                if row.cacheAvailability.hasLocalCopy {
-                    actions.append(
-                        UIAction(
-                            title: String(localized: "Remove Download"),
-                            image: UIImage(systemName: "trash"),
-                            attributes: .destructive
-                        ) { [weak self] _ in
-                            self?.pendingContextMenuAction = { [weak self] in
-                                self?.onRemoveOffline(row.item)
-                            }
-                        }
-                    )
-                }
-            } else if row.item.isDirectory {
-                actions.append(
-                    UIAction(
-                        title: String(localized: "Import"),
-                        image: UIImage(systemName: "square.and.arrow.down")
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onImport(row.item)
-                        }
-                    }
-                )
             }
+        }
 
-            return actions
+        private func perform(_ action: RemoteBrowserItemAction, on item: RemoteDirectoryItem) {
+            switch action {
+            case .saveOffline, .updateCopy:
+                onSaveOffline(item)
+            case .openOlderCopy:
+                onOpenOffline(item)
+            case .removeLocalCopy:
+                onRemoveOffline(item)
+            case .importToLibrary:
+                onImport(item)
+            case .info:
+                onShowInfo(item)
+            }
         }
 
         fileprivate func configureVisibleCell(_ cell: RemoteBrowserListCell, at indexPath: IndexPath) {

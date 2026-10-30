@@ -416,6 +416,18 @@ final class ComicOpenCoordinator {
         self.remoteReadingProgressStore = remoteReadingProgressStore
     }
 
+    /// Why a remote comic has to download in full before it opens.
+    static func fullDownloadReason(fileName: String, isStreamableFormat: Bool) -> String {
+        if isStreamableFormat {
+            return String(localized: "This server can’t send part of a file, so the whole comic downloads before it opens.")
+        }
+        let fileExtension = URL(fileURLWithPath: fileName).pathExtension.uppercased()
+        guard !fileExtension.isEmpty else {
+            return String(localized: "This comic downloads in full before it opens.")
+        }
+        return String(localized: "\(fileExtension) comics download in full before they open.")
+    }
+
     func openEvents(for request: ComicOpenRequest) -> AsyncThrowingStream<ComicOpenEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -611,7 +623,11 @@ final class ComicOpenCoordinator {
             }
         }
 
-        progress(String(localized: "Downloading"), 0)
+        let downloadReason = Self.fullDownloadReason(
+            fileName: reference.fileName,
+            isStreamableFormat: ComicDocumentLoader().supportsRemoteStreaming(for: reference.fileName)
+        )
+        progress(downloadReason, 0)
         logger.info(
             "Reader pipeline remote download fallback requested provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(remotePath, privacy: .public)"
         )
@@ -620,7 +636,7 @@ final class ComicOpenCoordinator {
                 for: request.profile,
                 reference: reference,
                 progressHandler: { fraction in
-                    progress(String(localized: "Downloading"), fraction)
+                    progress(downloadReason, fraction)
                 }
             )
             let session = makeRemoteSession(

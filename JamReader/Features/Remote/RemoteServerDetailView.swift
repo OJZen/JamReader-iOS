@@ -1,13 +1,6 @@
 import SwiftUI
 import UIKit
 
-private enum RemoteServerDetailLayoutMetrics {
-    static let horizontalInset: CGFloat = 12
-    static let rowAccessoryReservedWidth = AppLayout.persistentRowActionReservedWidth
-    static let persistentActionMinWidth: CGFloat = 560
-    static let gridVerticalPadding: CGFloat = 6
-}
-
 struct RemoteServerDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appNavigator) private var appNavigator
@@ -22,9 +15,9 @@ struct RemoteServerDetailView: View {
     @StateObject private var viewModel: RemoteServerListViewModel
     @State private var profile: RemoteServerProfile
     @State private var recentSessions: [RemoteComicReadingSession] = []
+    @State private var offlineCopyKeys: Set<String> = []
     @State private var heroSourceFrame: CGRect = .zero
     @State private var heroPreviewImage: UIImage?
-    @State private var containerWidth: CGFloat = 0
     @State private var pendingDestructiveAction: RemoteServerDestructiveAction?
 
     init(
@@ -51,15 +44,7 @@ struct RemoteServerDetailView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            content
-                .onAppear {
-                    updateContainerWidth(geometry.size.width)
-                }
-                .onChange(of: geometry.size.width) { _, newWidth in
-                    updateContainerWidth(newWidth)
-                }
-        }
+        content
         .navigationTitle(profile.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -67,9 +52,8 @@ struct RemoteServerDetailView: View {
                 Menu {
                     remoteServerActionMenuContent
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Label("Server Actions", systemImage: "ellipsis")
                 }
-                .accessibilityLabel("Server Actions")
             }
         }
         .task {
@@ -113,13 +97,20 @@ struct RemoteServerDetailView: View {
         .background(readerPresenter)
     }
 
+    /// `ScreenRemoteServer`: header with one Browse Files button, this
+    /// server's reading history, then its saved folders and offline shelf.
     @ViewBuilder
     private var content: some View {
         List {
-            connectionSection
-            quickAccessSection
-            recentComicsSection
+            headerSection
+
+            if !recentSessions.isEmpty {
+                continueReadingSection
+            }
+
+            thisServerSection
         }
+        .listStyle(.insetGrouped)
     }
 
     @ViewBuilder
@@ -144,99 +135,135 @@ struct RemoteServerDetailView: View {
         .id(draft.id)
     }
 
-    private func updateContainerWidth(_ newWidth: CGFloat) {
-        let normalizedWidth = max(newWidth, 0)
-        guard Int(containerWidth.rounded(.toNearestOrAwayFromZero))
-            != Int(normalizedWidth.rounded(.toNearestOrAwayFromZero))
-        else {
-            return
-        }
+    private var headerSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: Spacing.md) {
+                HStack(spacing: Spacing.sm) {
+                    ListIconBadge(
+                        systemImage: profile.providerKind.systemImage,
+                        tint: profile.providerKind.tintColor,
+                        size: 52
+                    )
+                    .accessibilityHidden(true)
 
-        containerWidth = normalizedWidth
-    }
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        Text(profile.displayTitle)
+                            .font(AppFont.title2(.bold))
+                            .foregroundStyle(Color.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
 
-    private var connectionSection: some View {
-        Section("Server") {
-            LabeledContent("Type") {
-                Text(profile.providerDisplayTitle)
-                    .foregroundStyle(profile.providerKind.tintColor)
-            }
-
-            LabeledContent("Server") {
-                Text(profile.endpointDisplaySummary)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            LabeledContent("Path") {
-                Text(profile.shareDisplaySummary)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.trailing)
-                    .textSelection(.enabled)
-            }
-
-            if !profile.username.isEmpty, profile.authenticationMode.requiresUsername {
-                LabeledContent("Username") {
-                    Text(profile.username)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-            }
-        }
-    }
-
-    private var quickAccessSection: some View {
-        Section("Shortcuts") {
-            ForEach(quickAccessItems) { item in
-                Button {
-                    navigate(item.route)
-                } label: {
-                    RemoteServerDetailShortcutRow(item: item)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private var recentComicsSection: some View {
-        Section("Recent") {
-            if recentSessions.isEmpty {
-                ContentUnavailableView(
-                    "No Recent Comics",
-                    systemImage: "clock.arrow.circlepath",
-                    description: Text("Open a comic on this server to keep it here.")
-                )
-                .padding(.vertical, 24)
-            } else {
-                if adaptiveListColumnCount == 1 {
-                    ForEach(recentSessions) { session in
-                        recentSessionRow(for: session)
-                            .insetCardListRow(
-                                horizontalInset: RemoteServerDetailLayoutMetrics.horizontalInset,
-                                top: RemoteServerDetailLayoutMetrics.gridVerticalPadding,
-                                bottom: RemoteServerDetailLayoutMetrics.gridVerticalPadding
-                            )
-                    }
-                } else {
-                    LazyVGrid(
-                        columns: recentSessionGridColumns,
-                        alignment: .leading,
-                        spacing: adaptiveListColumnSpacing
-                    ) {
-                        ForEach(recentSessions) { session in
-                            recentSessionRow(for: session)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: Spacing.xs) {
+                            RemoteProtocolTag(kind: profile.providerKind)
+                            Text(profile.addressSummary)
+                                .font(AppFont.subheadline())
+                                .foregroundStyle(Color.textSecondary)
+                                .lineLimit(1)
+                                .textSelection(.enabled)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, RemoteServerDetailLayoutMetrics.horizontalInset)
-                    .padding(.vertical, RemoteServerDetailLayoutMetrics.gridVerticalPadding)
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                }
+
+                VStack(spacing: Spacing.xs) {
+                    Button {
+                        navigate(.serverBrowser(profile.id, path: browserEntryRawPath))
+                    } label: {
+                        Label("Browse Files", systemImage: "folder")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(.appJam)
+
+                    Text(browserEntryCaption)
+                        .font(AppFont.footnote())
+                        .foregroundStyle(Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
             }
+            .listRowInsets(EdgeInsets(top: Spacing.xs, leading: 0, bottom: Spacing.xs, trailing: 0))
+            .listRowBackground(Color.clear)
         }
+    }
+
+    /// This server's reading history as a shelf (`ContinueReading`); long
+    /// press removes one entry.
+    private var continueReadingSection: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: Spacing.sm) {
+                    ForEach(recentSessions) { session in
+                        HeroTapButton { frame in
+                            prepareHeroTransition(for: session, fallbackFrame: frame)
+                            presentRecentSession(session)
+                        } label: {
+                            RemoteContinueReadingShelfCard(
+                                session: session,
+                                profile: profile,
+                                availability: offlineAvailability(for: session),
+                                browsingService: dependencies.remoteServerBrowsingService,
+                                width: shelfCoverWidth
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            recentSessionActionMenuContent(for: session)
+                        }
+                    }
+                }
+            }
+            .listRowInsets(EdgeInsets(top: Spacing.xxs, leading: 0, bottom: Spacing.sm, trailing: 0))
+            .listRowBackground(Color.clear)
+        } header: {
+            sectionTitle("Continue Reading")
+        }
+    }
+
+    /// Both sections use the same title style, as in components/ScreenRemoteServer.
+    private func sectionTitle(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(AppFont.title2(.bold))
+            .foregroundStyle(Color.textPrimary)
+            .textCase(nil)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var thisServerSection: some View {
+        Section {
+            Button {
+                navigate(.savedFolders(profile.id))
+            } label: {
+                RemoteServerDetailShortcutRow(
+                    title: String(localized: "Saved Folders"),
+                    systemImage: "pin.fill",
+                    tint: .appAccent,
+                    countText: savedFolderCount > 0 ? "\(savedFolderCount)" : nil
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                navigate(.offlineShelf(profile.id))
+            } label: {
+                RemoteServerDetailShortcutRow(
+                    title: String(localized: "Offline Shelf"),
+                    systemImage: "arrow.down.circle.fill",
+                    tint: .appOffline,
+                    countText: offlineCopyCount > 0
+                        ? (offlineCopyCount == 1
+                            ? String(localized: "1 comic")
+                            : String(localized: "\(offlineCopyCount) comics"))
+                        : nil
+                )
+            }
+            .buttonStyle(.plain)
+        } header: {
+            sectionTitle("This Server")
+        }
+    }
+
+    private var shelfCoverWidth: CGFloat {
+        horizontalSizeClass == .regular ? AppLayout.shelfCoverWidthRegular : AppLayout.shelfCoverWidthCompact
     }
 
     @MainActor
@@ -270,84 +297,12 @@ struct RemoteServerDetailView: View {
         )
     }
 
-    private var recentHistoryCount: Int {
-        recentSessions.count
-    }
-
-    private var showsPersistentRecentSessionActions: Bool {
-        adaptiveListColumnCount > 1
-    }
-
-    private var adaptiveListColumnCount: Int {
-        AppLayout.adaptiveListColumnCount(
-            horizontalSizeClass: horizontalSizeClass,
-            containerWidth: containerWidth
-        )
-    }
-
-    private var adaptiveListColumnSpacing: CGFloat {
-        AppLayout.adaptiveListColumnSpacing(for: adaptiveListColumnCount)
-    }
-
-    private var recentSessionGridColumns: [GridItem] {
-        Array(
-            repeating: GridItem(.flexible(), spacing: adaptiveListColumnSpacing, alignment: .top),
-            count: adaptiveListColumnCount
-        )
-    }
-
-    private var recentSessionAccessoryReservedWidth: CGFloat {
-        showsPersistentRecentSessionActions ? RemoteServerDetailLayoutMetrics.rowAccessoryReservedWidth : 0
-    }
-
     private var savedFolderCount: Int {
         viewModel.shortcutCount(for: profile)
     }
 
     private var offlineCopyCount: Int {
         viewModel.offlineCopyCount(for: profile)
-    }
-
-    @ViewBuilder
-    private func recentSessionRow(for session: RemoteComicReadingSession) -> some View {
-        let baseRow = HeroTapButton { frame in
-            prepareHeroTransition(for: session, fallbackFrame: frame)
-            presentRecentSession(session)
-        } label: {
-            RemoteInsetListRowCard {
-                RemoteOfflineComicCard(
-                    session: session,
-                    profile: profile,
-                    availability: dependencies.remoteServerBrowsingService.cachedAvailability(
-                        for: session.resolvedComicFileReference(for: profile)
-                    ),
-                    browsingService: dependencies.remoteServerBrowsingService,
-                    heroSourceID: session.directoryItem.id,
-                    showsNavigationIndicator: false,
-                    showsServerName: false,
-                    trailingAccessoryReservedWidth: recentSessionAccessoryReservedWidth
-                )
-            }
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .trailing) {
-            if showsPersistentRecentSessionActions {
-                recentSessionActionMenu(for: session)
-                    .padding(.trailing, 8)
-            }
-        }
-
-        if adaptiveListColumnCount == 1 {
-            baseRow
-                .contextMenu {
-                    recentSessionActionMenuContent(for: session)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    recentSessionSwipeActions(for: session)
-                }
-        } else {
-            baseRow
-        }
     }
 
     private var browserEntryRawPath: String {
@@ -358,61 +313,13 @@ struct RemoteServerDetailView: View {
         browserEntryRawPath == profile.normalizedBaseDirectoryPath
     }
 
-    private var browserEntryTitle: String {
+    private var browserEntryCaption: String {
         browserEntryIsRoot
-            ? String(localized: "Browse")
-            : String(localized: "Continue")
+            ? String(localized: "Opens at the start folder")
+            : String(localized: "Opens where you left off: \(browserEntryRawPath)")
     }
 
-    private var browserEntryDisplayText: String {
-        browserEntryRawPath.isEmpty ? "/" : browserEntryRawPath
-    }
-
-    private var quickAccessItems: [RemoteServerDetailShortcutItem] {
-        var items = [
-            RemoteServerDetailShortcutItem(
-                id: "browse",
-                title: browserEntryTitle,
-                subtitle: browserEntryDisplayText,
-                systemImage: browserEntryIsRoot ? "square.grid.2x2.fill" : "folder.fill",
-                tint: .appAccent,
-                route: .serverBrowser(profile.id, path: browserEntryRawPath)
-            )
-        ]
-
-        if savedFolderCount > 0 {
-            items.append(
-                RemoteServerDetailShortcutItem(
-                    id: "saved-folders",
-                    title: String(localized: "Saved Folders"),
-                    subtitle: savedFolderCount == 1
-                        ? String(localized: "1 saved")
-                        : String(localized: "\(savedFolderCount) saved"),
-                    systemImage: "star.fill",
-                    tint: .appAccent,
-                    route: .savedFolders(profile.id)
-                )
-            )
-        }
-
-        if offlineCopyCount > 0 {
-            items.append(
-                RemoteServerDetailShortcutItem(
-                    id: "offline-shelf",
-                    title: String(localized: "Downloaded Comics"),
-                    subtitle: offlineCopyCount == 1
-                        ? String(localized: "1 downloaded on this server")
-                        : String(localized: "\(offlineCopyCount) downloaded on this server"),
-                    systemImage: "arrow.down.circle.fill",
-                    tint: .appOffline,
-                    route: .offlineShelf(profile.id)
-                )
-            )
-        }
-
-        return items
-    }
-
+    /// Server management; the This Server rows are not repeated here.
     @ViewBuilder
     private var remoteServerActionMenuContent: some View {
         Button {
@@ -426,66 +333,37 @@ struct RemoteServerDetailView: View {
             Label("Edit Server", systemImage: "square.and.pencil")
         }
 
-        if savedFolderCount > 0 {
+        Section {
             Button {
-                navigate(.savedFolders(profile.id))
+                pendingDestructiveAction = .clearHistory(profile, count: recentSessions.count)
             } label: {
-                Label(
-                    savedFolderCount == 1
-                        ? String(localized: "Saved Folder")
-                        : String(localized: "Saved Folders"),
-                    systemImage: "star"
-                )
+                Text("Clear Reading History")
+                Text("Offline copies stay")
+                Image(systemName: "clock.arrow.circlepath")
             }
-        }
+            .disabled(recentSessions.isEmpty)
 
-        if offlineCopyCount > 0 {
             Button {
-                navigate(.offlineShelf(profile.id))
-            } label: {
-                Label(
-                    offlineCopyCount == 1
-                        ? String(localized: "Offline Copy")
-                        : String(localized: "Offline Shelf"),
-                    systemImage: "arrow.down.circle"
-                )
-            }
-        }
-
-        if recentHistoryCount > 0 {
-            Button(role: .destructive) {
-                pendingDestructiveAction = .clearHistory(
-                    profile,
-                    count: recentHistoryCount
-                )
-            } label: {
-                Label("Clear History", systemImage: "clock.arrow.circlepath")
-            }
-        }
-
-        if viewModel.cacheSummary(for: profile).hasCachedComics {
-            Button(role: .destructive) {
                 pendingDestructiveAction = .clearDownloads(
                     profile,
                     count: viewModel.cacheSummary(for: profile).fileCount
                 )
             } label: {
-                Label("Clear Downloads", systemImage: "trash")
+                Text("Clear Downloads on This Device")
+                Text("History and progress stay")
+                Image(systemName: "trash")
             }
+            .disabled(!viewModel.cacheSummary(for: profile).hasCachedComics)
         }
 
-        if viewModel.cacheSummary(for: profile).hasOtherCacheData {
+        Section {
             Button(role: .destructive) {
-                pendingDestructiveAction = .clearTemporaryCache(profile)
+                pendingDestructiveAction = .deleteServer(profile)
             } label: {
-                Label("Clear Other Cache Data", systemImage: "trash.slash")
+                Text("Delete Server")
+                Text("Files on the server stay")
+                Image(systemName: "trash")
             }
-        }
-
-        Button(role: .destructive) {
-            pendingDestructiveAction = .deleteServer(profile)
-        } label: {
-            Label("Delete Server", systemImage: "trash")
         }
     }
 
@@ -503,29 +381,6 @@ struct RemoteServerDetailView: View {
             deleteRecentSession(session)
         } label: {
             Label("Delete History Entry", systemImage: "trash")
-        }
-    }
-
-    private func recentSessionActionMenu(
-        for session: RemoteComicReadingSession
-    ) -> some View {
-        Menu {
-            recentSessionActionMenuContent(for: session)
-        } label: {
-            PersistentRowActionButtonLabel()
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Manage \(session.displayName)")
-    }
-
-    @ViewBuilder
-    private func recentSessionSwipeActions(
-        for session: RemoteComicReadingSession
-    ) -> some View {
-        Button(role: .destructive) {
-            deleteRecentSession(session)
-        } label: {
-            Label("Delete", systemImage: "trash")
         }
     }
 
@@ -582,9 +437,7 @@ struct RemoteServerDetailView: View {
             profile: profile,
             item: session.directoryItem,
             readingSession: session,
-            cacheAvailability: dependencies.remoteServerBrowsingService.cachedAvailability(
-                for: session.resolvedComicFileReference(for: profile)
-            ),
+            cacheAvailability: offlineAvailability(for: session),
             browsingService: dependencies.remoteServerBrowsingService
         )
     }
@@ -604,6 +457,16 @@ struct RemoteServerDetailView: View {
         }
 
         recentSessions = viewModel.recentSessions(for: profile)
+        offlineCopyKeys = (try? dependencies.remoteOfflineCopyStore.offlineCopyKeys(for: profile)) ?? []
+    }
+
+    /// A reading cache is not an offline copy, so it shows no offline status.
+    private func offlineAvailability(for session: RemoteComicReadingSession) -> RemoteComicCachedAvailability {
+        let reference = session.resolvedComicFileReference(for: profile)
+        guard offlineCopyKeys.contains(RemoteOfflineCopyStore.contentKey(for: reference)) else {
+            return .unavailable
+        }
+        return dependencies.remoteServerBrowsingService.cachedAvailability(for: reference)
     }
 
     private func presentEditor(for draft: RemoteServerEditorDraft) {
@@ -620,44 +483,96 @@ struct RemoteServerDetailView: View {
     }
 }
 
-private struct RemoteServerDetailShortcutItem: Identifiable {
-    let id: String
+private struct RemoteServerDetailShortcutRow: View {
     let title: String
-    let subtitle: String
     let systemImage: String
     let tint: Color
-    let route: BrowseNavigationRoute
-}
-
-private struct RemoteServerDetailShortcutRow: View {
-    let item: RemoteServerDetailShortcutItem
+    let countText: String?
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            ListIconBadge(
-                systemImage: item.systemImage,
-                tint: item.tint
-            )
+            Image(systemName: systemImage)
+                .font(AppFont.body())
+                .foregroundStyle(tint)
+                .frame(width: 28)
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(item.title)
-                    .font(AppFont.body())
-                    .foregroundStyle(Color.textPrimary)
-
-                Text(item.subtitle)
-                    .font(AppFont.footnote())
-                    .foregroundStyle(Color.textSecondary)
-                    .lineLimit(1)
-            }
+            Text(title)
+                .font(AppFont.body())
+                .foregroundStyle(Color.textPrimary)
 
             Spacer(minLength: Spacing.xs)
 
-            Image(systemName: "chevron.right")
+            if let countText {
+                Text(countText)
+                    .font(AppFont.body().monospacedDigit())
+                    .foregroundStyle(Color.textSecondary)
+            }
+
+            Image(systemName: "chevron.forward")
                 .font(AppFont.caption2(.semibold))
                 .foregroundStyle(Color.textTertiary)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, Spacing.xxs)
         .contentShape(Rectangle())
         .hoverEffect(.highlight)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Shelf card for a remote history entry: cover with progress and copy
+/// status, title, "Read to 55% · Offline".
+private struct RemoteContinueReadingShelfCard: View {
+    let session: RemoteComicReadingSession
+    let profile: RemoteServerProfile
+    let availability: RemoteComicCachedAvailability
+    let browsingService: RemoteServerBrowsingService
+    let width: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            RemoteComicThumbnailView(
+                profile: profile,
+                item: session.directoryItem,
+                browsingService: browsingService,
+                prefersLocalCache: availability.hasLocalCopy,
+                heroSourceID: session.directoryItem.id,
+                width: width,
+                height: width / AppLayout.coverAspectRatio
+            )
+            .overlay(alignment: .bottom) {
+                if let fraction = session.readingProgressFraction, !session.read {
+                    LibraryCoverProgressBar(fraction: fraction)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.thumbnail, style: .continuous))
+
+            Text(session.displayName)
+                .font(AppFont.footnote(.medium))
+                .foregroundStyle(Color.textPrimary)
+                .lineLimit(1)
+
+            Text(statusLine)
+                .font(AppFont.caption())
+                .foregroundStyle(Color.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(width: width, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusLine: String {
+        var parts: [String] = []
+        if session.read {
+            parts.append(String(localized: "Read"))
+        } else if let fraction = session.readingProgressFraction {
+            let percent = Int((fraction * 100).rounded())
+            parts.append(String(localized: "Read to \(percent)%"))
+        }
+        if let status = availability.statusBadgeStatus {
+            parts.append(status.title)
+        }
+        return parts.joined(separator: " · ")
     }
 }

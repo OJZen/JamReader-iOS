@@ -1,12 +1,22 @@
 import SwiftUI
 
+/// What a remote import copies, as shown at the top of the import sheet.
+struct RemoteImportSource {
+    let title: String
+    /// "Server › Folder › …", ending with the source itself.
+    let location: String
+    let isFolder: Bool
+    /// Comics directly in the source when known. Subfolders are only listed
+    /// once the import starts, so their count is never shown up front.
+    let directComicCount: Int?
+}
+
+/// "Import to Library": the source, whether subfolders come along, the target
+/// library, where the comics end up, and a button that names the count.
 struct RemoteImportOptionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    let title: String
-    let message: String
-    let supplementaryNotice: String?
-    let confirmLabel: String
+    let source: RemoteImportSource
     let availableScopes: [RemoteDirectoryImportScope]
     let onConfirm: (LibraryImportDestinationSelection, RemoteDirectoryImportScope) -> Void
 
@@ -16,28 +26,21 @@ struct RemoteImportOptionsSheet: View {
     @State private var hasAppliedSuggestedDestination = false
 
     init(
-        title: String,
-        message: String,
-        supplementaryNotice: String? = nil,
-        confirmLabel: String = String(localized: "Import"),
-        availableScopes: [RemoteDirectoryImportScope] = RemoteDirectoryImportScope.allCases,
-        defaultScope: RemoteDirectoryImportScope = .includeSubfolders,
+        source: RemoteImportSource,
+        availableScopes: [RemoteDirectoryImportScope],
+        defaultScope: RemoteDirectoryImportScope,
         dependencies: AppDependencies,
         preferredSelection: LibraryImportDestinationSelection? = nil,
         onConfirm: @escaping (LibraryImportDestinationSelection, RemoteDirectoryImportScope) -> Void
     ) {
-        self.title = title
-        self.message = message
-        self.supplementaryNotice = supplementaryNotice
-        self.confirmLabel = confirmLabel
+        self.source = source
         self.availableScopes = availableScopes
+        self.onConfirm = onConfirm
         let resolvedDefaultScope = availableScopes.contains(defaultScope)
             ? defaultScope
-            : (availableScopes.first ?? .includeSubfolders)
-        self.onConfirm = onConfirm
-        let initialDestination = preferredSelection ?? .importedComics
+            : (availableScopes.first ?? .currentFolderOnly)
         _selectedScope = State(initialValue: resolvedDefaultScope)
-        _selectedDestination = State(initialValue: initialDestination)
+        _selectedDestination = State(initialValue: preferredSelection ?? .importedComics)
         _destinationViewModel = StateObject(
             wrappedValue: LibraryImportDestinationSheetViewModel(
                 dependencies: dependencies,
@@ -48,26 +51,14 @@ struct RemoteImportOptionsSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.xl) {
-                    if !message.isEmpty {
-                        Text(message)
-                            .font(AppFont.subheadline())
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    scopeSection
-                    destinationSection
-                }
-                .padding(Spacing.lg)
+            Form {
+                sourceSection
+                destinationSection
             }
-            .background(Color.surfaceGrouped)
-            .navigationTitle(title)
+            .navigationTitle("Import to Library")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
@@ -88,82 +79,129 @@ struct RemoteImportOptionsSheet: View {
                 )
             }
             .safeAreaInset(edge: .bottom) {
-                VStack(spacing: Spacing.sm) {
-                    Button {
-                        destinationViewModel.rememberSelection(selectedDestination)
-                        let selectedScope = selectedScope
-                        let selectedDestination = selectedDestination
-                        dismiss()
-                        onConfirm(selectedDestination, selectedScope)
-                    } label: {
-                        Text(confirmLabel)
-                            .font(AppFont.body(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, Spacing.sm)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.appJam)
-                    .disabled(!isSelectedDestinationSelectable)
-                }
-                .padding(.horizontal, Spacing.lg)
-                .padding(.top, Spacing.sm)
-                .padding(.bottom, Spacing.md)
-                .background(.regularMaterial)
+                confirmButton
             }
         }
         .adaptiveFormSheet(720)
-        .presentationBackground(Color.surfaceGrouped)
         .presentationDragIndicator(.visible)
     }
 
-    private var scopeSection: some View {
-        ImportSection(title: String(localized: "Scope")) {
-            ForEach(availableScopes) { scope in
-                Button {
-                    selectedScope = scope
-                } label: {
-                    RemoteImportScopeRow(
-                        scope: scope,
-                        isSelected: selectedScope == scope
-                    )
+    private var sourceSection: some View {
+        Section("Source") {
+            Label {
+                VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                    Text(source.title)
+                        .foregroundStyle(Color.textPrimary)
+                    Text(source.location)
+                        .font(AppFont.footnote())
+                        .foregroundStyle(Color.textSecondary)
                 }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+            } icon: {
+                Image(systemName: source.isFolder ? "folder.fill" : "doc.fill")
+                    .foregroundStyle(Color.appAccent)
+            }
+            .accessibilityElement(children: .combine)
+
+            if offersSubfolderChoice {
+                Toggle(isOn: includesSubfoldersBinding) {
+                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                        Text("Include Subfolders")
+                        Text(scopeSummary)
+                            .font(AppFont.footnote())
+                            .foregroundStyle(Color.textSecondary)
+                    }
+                }
             }
         }
     }
 
     private var destinationSection: some View {
-        ImportSection(
-            title: String(localized: "Destination"),
-            footer: supplementaryNotice ?? ImportDestinationSheetCopy.destinationFooter
-        ) {
-            ForEach(destinationViewModel.options) { option in
-                Button {
-                    guard option.isSelectable else {
-                        return
-                    }
-                    selectedDestination = option.selection
-                } label: {
-                    LibraryImportDestinationOptionRow(
-                        option: option,
-                        isSelected: selectedDestination == option.selection,
-                        showsSelectionIndicator: true
-                    )
+        Section {
+            Picker(selection: $selectedDestination) {
+                ForEach(selectableOptions) { option in
+                    Text(option.title)
+                        .tag(option.selection)
                 }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .disabled(!option.isSelectable)
+            } label: {
+                Label("Library", systemImage: "books.vertical")
             }
+            .pickerStyle(.menu)
+        } header: {
+            Text("Destination")
+        } footer: {
+            Text(destinationFooter)
         }
     }
 
-    private var isSelectedDestinationSelectable: Bool {
-        destinationViewModel.options.contains {
-            $0.selection == selectedDestination && $0.isSelectable
+    private var confirmButton: some View {
+        Button {
+            destinationViewModel.rememberSelection(selectedDestination)
+            let selectedScope = selectedScope
+            let selectedDestination = selectedDestination
+            dismiss()
+            onConfirm(selectedDestination, selectedScope)
+        } label: {
+            Text(confirmTitle)
+                .font(AppFont.body(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.xs)
         }
+        .buttonStyle(.borderedProminent)
+        .buttonBorderShape(.capsule)
+        .controlSize(.large)
+        .tint(.appJam)
+        .disabled(!isSelectedDestinationSelectable)
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, Spacing.sm)
+    }
+
+    private var offersSubfolderChoice: Bool {
+        availableScopes.contains(.currentFolderOnly) && availableScopes.contains(.includeSubfolders)
+    }
+
+    private var includesSubfoldersBinding: Binding<Bool> {
+        Binding(
+            get: { selectedScope == .includeSubfolders },
+            set: { selectedScope = $0 ? .includeSubfolders : .currentFolderOnly }
+        )
+    }
+
+    private var scopeSummary: String {
+        if selectedScope == .includeSubfolders {
+            return String(localized: "Comics in this folder and all of its subfolders")
+        }
+        if let count = source.directComicCount {
+            return String(localized: "Only the \(count) comics directly in this folder")
+        }
+        return String(localized: "Only comics directly in this folder")
+    }
+
+    /// Subfolders are listed when the import starts, so only a known direct
+    /// count is written on the button.
+    private var confirmTitle: String {
+        guard source.isFolder else {
+            return String(localized: "Import Comic")
+        }
+        guard selectedScope != .includeSubfolders, let count = source.directComicCount, count > 0 else {
+            return String(localized: "Start Import")
+        }
+        return String(localized: "Import \(count) Comics")
+    }
+
+    private var destinationFooter: String {
+        let libraryName = selectableOptions.first { $0.selection == selectedDestination }?.title
+            ?? String(localized: "Imported Comics")
+        return String(
+            localized: "Comics download first, then are added to “\(libraryName)”. Offline copies and remote reading progress don’t move with them."
+        )
+    }
+
+    private var selectableOptions: [LibraryImportDestinationOption] {
+        destinationViewModel.options.filter(\.isSelectable)
+    }
+
+    private var isSelectedDestinationSelectable: Bool {
+        selectableOptions.contains { $0.selection == selectedDestination }
     }
 
     private func applySuggestedDestinationIfNeeded() {
@@ -173,73 +211,5 @@ struct RemoteImportOptionsSheet: View {
 
         hasAppliedSuggestedDestination = true
         selectedDestination = destinationViewModel.suggestedSelection
-    }
-}
-
-private struct RemoteImportScopeRow: View {
-    let scope: RemoteDirectoryImportScope
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: CornerRadius.md, style: .continuous)
-                    .fill(Color.appAccent.opacity(isSelected ? 0.18 : 0.10))
-
-                Image(systemName: iconName)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color.appAccent)
-            }
-            .frame(width: 42, height: 42)
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(scope.title)
-                    .font(AppFont.body(.semibold))
-                    .foregroundStyle(Color.textPrimary)
-                    .lineLimit(2)
-
-                Text(scope.summaryText)
-                    .font(AppFont.caption())
-                    .foregroundStyle(Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 12)
-
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(isSelected ? Color.appJam : Color.textTertiary)
-                .accessibilityHidden(true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
-                .fill(isSelected ? Color.appAccent.opacity(0.10) : Color.surfaceSecondary)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous)
-                .strokeBorder(isSelected ? Color.appAccent.opacity(0.55) : Color.black.opacity(0.06), lineWidth: isSelected ? 1.5 : 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.card, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(
-            isSelected
-                ? String(localized: "Selected")
-                : String(localized: "Not Selected")
-        )
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var iconName: String {
-        switch scope {
-        case .visibleResults:
-            return "eye.fill"
-        case .currentFolderOnly:
-            return "folder.fill"
-        case .includeSubfolders:
-            return "square.stack.3d.up.fill"
-        }
     }
 }

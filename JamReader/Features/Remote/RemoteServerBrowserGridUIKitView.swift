@@ -696,146 +696,35 @@ struct RemoteServerBrowserGridUIKitView: UIViewControllerRepresentable {
         }
 
         private func menuElements(for row: RemoteBrowserListRowModel) -> [UIMenuElement] {
-            var actions: [UIMenuElement] = []
-
-            if row.item.canOpenAsComic {
-                actions.append(
-                    UIAction(
-                        title: String(localized: "Info"),
-                        image: UIImage(systemName: "info.circle")
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onShowInfo(row.item)
-                        }
-                    }
-                )
-
-                actions.append(
-                    UIAction(
-                        title: String(localized: "Import"),
-                        image: UIImage(systemName: "square.and.arrow.down")
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onImport(row.item)
-                        }
-                    }
-                )
-
-                if row.cacheAvailability.hasLocalCopy {
-                    actions.append(
-                        UIAction(
-                            title: String(localized: "Open Offline"),
-                            image: UIImage(systemName: "arrow.down.circle")
-                        ) { [weak self] _ in
-                            self?.pendingContextMenuAction = { [weak self] in
-                                self?.onOpenOffline(row.item)
-                            }
-                        }
-                    )
+            RemoteBrowserItemAction.menuElements(for: row) { [weak self] action in
+                self?.pendingContextMenuAction = { [weak self] in
+                    self?.perform(action, on: row.item)
                 }
-
-                actions.append(
-                    UIAction(
-                        title: row.cacheAvailability.kind == .unavailable
-                            ? String(localized: "Save Offline")
-                            : String(localized: "Refresh Offline Copy"),
-                        image: UIImage(
-                            systemName: row.cacheAvailability.kind == .unavailable
-                                ? "icloud.and.arrow.down"
-                                : "arrow.clockwise.icloud"
-                        )
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onSaveOffline(row.item)
-                        }
-                    }
-                )
-
-                if row.cacheAvailability.hasLocalCopy {
-                    actions.append(
-                        UIAction(
-                            title: String(localized: "Remove Download"),
-                            image: UIImage(systemName: "trash"),
-                            attributes: .destructive
-                        ) { [weak self] _ in
-                            self?.pendingContextMenuAction = { [weak self] in
-                                self?.onRemoveOffline(row.item)
-                            }
-                        }
-                    )
-                }
-            } else if row.item.isDirectory {
-                actions.append(
-                    UIAction(
-                        title: String(localized: "Import"),
-                        image: UIImage(systemName: "square.and.arrow.down")
-                    ) { [weak self] _ in
-                        self?.pendingContextMenuAction = { [weak self] in
-                            self?.onImport(row.item)
-                        }
-                    }
-                )
             }
+        }
 
-            return actions
+        private func perform(_ action: RemoteBrowserItemAction, on item: RemoteDirectoryItem) {
+            switch action {
+            case .saveOffline, .updateCopy:
+                onSaveOffline(item)
+            case .openOlderCopy:
+                onOpenOffline(item)
+            case .removeLocalCopy:
+                onRemoveOffline(item)
+            case .importToLibrary:
+                onImport(item)
+            case .info:
+                onShowInfo(item)
+            }
         }
 
         private func accessibilityCustomActions(
             for row: RemoteBrowserListRowModel
         ) -> [UIAccessibilityCustomAction] {
-            var actions: [UIAccessibilityCustomAction] = []
-
-            if row.item.canOpenAsComic {
-                actions.append(
-                    UIAccessibilityCustomAction(name: String(localized: "Info")) { [weak self] _ in
-                        self?.onShowInfo(row.item)
-                        return self != nil
-                    }
-                )
-                actions.append(
-                    UIAccessibilityCustomAction(name: String(localized: "Import")) { [weak self] _ in
-                        self?.onImport(row.item)
-                        return self != nil
-                    }
-                )
-
-                if row.cacheAvailability.hasLocalCopy {
-                    actions.append(
-                        UIAccessibilityCustomAction(name: String(localized: "Open Offline")) { [weak self] _ in
-                            self?.onOpenOffline(row.item)
-                            return self != nil
-                        }
-                    )
-                }
-
-                let saveActionName = row.cacheAvailability.kind == .unavailable
-                    ? String(localized: "Save Offline")
-                    : String(localized: "Refresh Offline Copy")
-                actions.append(
-                    UIAccessibilityCustomAction(name: saveActionName) { [weak self] _ in
-                        self?.onSaveOffline(row.item)
-                        return self != nil
-                    }
-                )
-
-                if row.cacheAvailability.hasLocalCopy {
-                    actions.append(
-                        UIAccessibilityCustomAction(name: String(localized: "Remove Download")) { [weak self] _ in
-                            self?.onRemoveOffline(row.item)
-                            return self != nil
-                        }
-                    )
-                }
-            } else if row.item.isDirectory {
-                actions.append(
-                    UIAccessibilityCustomAction(name: String(localized: "Import")) { [weak self] _ in
-                        self?.onImport(row.item)
-                        return self != nil
-                    }
-                )
+            RemoteBrowserItemAction.accessibilityActions(for: row) { [weak self] action in
+                self?.perform(action, on: row.item)
+                return self != nil
             }
-
-            return actions
         }
 
         fileprivate func configureVisibleCell(_ cell: RemoteBrowserGridCell, at indexPath: IndexPath, collectionView: UICollectionView) {

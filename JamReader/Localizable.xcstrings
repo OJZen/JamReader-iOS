@@ -4,6 +4,72 @@
     "": {
       "shouldTranslate": false
     },
+    "%@ comics download in full before they open.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ は開く前にファイル全体をダウンロードします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 需要先下载完整文件才能打开。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 需要先下載完整檔案才能開啟。"
+          }
+        }
+      }
+    },
+    "%@ · %lld comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@・%2$lld冊"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld 本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · %2$lld 本"
+          }
+        }
+      }
+    },
+    "%lld comics · Readable offline": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld冊・オフラインで読めます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 本 · 可离线阅读"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 本 · 可離線閱讀"
+          }
+        }
+      }
+    },
     "%lld libraries": {
       "localizations": {
         "ja": {
@@ -48,6 +114,28 @@
         }
       }
     },
+    "%lld offline": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld冊オフライン保存済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 本已离线"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 本已離線"
+          }
+        }
+      }
+    },
     "%lld Selected": {
       "localizations": {
         "ja": {
@@ -66,6 +154,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已選擇 %lld 本"
+          }
+        }
+      }
+    },
+    "%lld shortcuts": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個"
           }
         }
       }
@@ -110,6 +220,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld 個項目不支援"
+          }
+        }
+      }
+    },
+    "1 comic · Readable offline": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1冊・オフラインで読めます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 本 · 可离线阅读"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 本 · 可離線閱讀"
           }
         }
       }
@@ -202,6 +334,28 @@
         }
       }
     },
+    "1 shortcut": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1件"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 个"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 個"
+          }
+        }
+      }
+    },
     "1 tag": {
       "localizations": {
         "ja": {
@@ -224,6 +378,28 @@
         }
       }
     },
+    "192.168.1.20 or nas.local": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "192.168.1.20 または nas.local"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "192.168.1.20 或 nas.local"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "192.168.1.20 或 nas.local"
+          }
+        }
+      }
+    },
     "A new in-app library is created on this device. Import comics into it afterwards.": {
       "localizations": {
         "ja": {
@@ -242,6 +418,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "會在這台裝置上新增一個 App 內書庫，之後再匯入漫畫。"
+          }
+        }
+      }
+    },
+    "Add an SMB or WebDAV server to read online or save comics to this device.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SMB または WebDAV サーバーを追加すると、オンラインで読んだり、このデバイスにコミックを保存したりできます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加 SMB 或 WebDAV 服务器，在线阅读或把漫画保存到本机。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增 SMB 或 WebDAV 伺服器，即可線上閱讀或將漫畫儲存到本機。"
           }
         }
       }
@@ -308,6 +506,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "已离线"
+          }
+        }
+      }
+    },
+    "Browse Files": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ファイルを見る"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览文件"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瀏覽檔案"
+          }
+        }
+      }
+    },
+    "Can update when online": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンライン時に更新できます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "联网后可更新"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連網後可更新"
+          }
+        }
+      }
+    },
+    "Changing the address, share, start folder or sign-in clears this server's reading history, saved folders and downloaded comics on this device. Files on the server are not affected.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アドレス、共有名、開始フォルダ、またはサインイン情報を変更すると、このデバイス上のこのサーバーの閲覧履歴、保存済みフォルダ、ダウンロード済みコミックが消去されます。サーバー上のファイルには影響しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改地址、共享名称、起始目录或登录信息会清除此服务器在本机的阅读历史、已保存文件夹和已下载的漫画。服务器上的文件不受影响。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改位址、共享名稱、起始目錄或登入資訊會清除此伺服器在本機的閱讀記錄、已儲存的資料夾和已下載的漫畫。伺服器上的檔案不受影響。"
           }
         }
       }
@@ -400,6 +664,50 @@
         }
       }
     },
+    "Clean Up": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリーンアップ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理"
+          }
+        }
+      }
+    },
+    "Clear Downloads on This Device": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのダウンロードを消去"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理本机下载"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理本機下載"
+          }
+        }
+      }
+    },
     "Clear Rating": {
       "localizations": {
         "ja": {
@@ -418,6 +726,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消評分"
+          }
+        }
+      }
+    },
+    "Clear Reading History": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閲覧履歴を消去"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除阅读历史"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除閱讀記錄"
           }
         }
       }
@@ -466,6 +796,50 @@
         }
       }
     },
+    "Comics download first, then are added to “%@”. Offline copies and remote reading progress don’t move with them.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コミックはダウンロード後に「%@」に追加されます。オフラインコピーとリモートの読書進捗は移りません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会先下载再整理入库，完成后在“%@”中。离线副本和远程阅读进度不会随之转移。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "會先下載再整理入庫，完成後在「%@」中。離線副本和遠端閱讀進度不會隨之轉移。"
+          }
+        }
+      }
+    },
+    "Comics in this folder and all of its subfolders": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダとすべてのサブフォルダ内のコミック"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件夹及其所有子文件夹中的漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此資料夾及其所有子資料夾中的漫畫"
+          }
+        }
+      }
+    },
     "Comics in this folder can be read, but JamReader can’t import into it or delete from it.": {
       "localizations": {
         "ja": {
@@ -506,6 +880,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "常用"
+          }
+        }
+      }
+    },
+    "Connect Your NAS": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NAS に接続"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接你的 NAS"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連接你的 NAS"
           }
         }
       }
@@ -884,6 +1280,50 @@
         }
       }
     },
+    "Downloaded": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已下载"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已下載"
+          }
+        }
+      }
+    },
+    "Downloaded includes offline copies. The limit and full-copy setting apply to comics streamed while reading; offline copies you save are unchanged.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「ダウンロード済み」にはオフラインコピーも含まれます。上限と「閲覧中に完全なコピーをダウンロード」は読みながら取得するコミックにのみ適用され、保存したオフラインコピーには影響しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“已下载”包括离线副本。下载限制和“阅读时下载完整副本”只影响边读边取的漫画，不影响你保存的离线副本。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「已下載」包括離線副本。下載上限和「閱讀時下載完整副本」只影響邊讀邊取的漫畫，不影響你儲存的離線副本。"
+          }
+        }
+      }
+    },
     "Downloading %lld%%": {
       "localizations": {
         "zh-Hant-TW": {
@@ -902,6 +1342,72 @@
           "stringUnit": {
             "state": "translated",
             "value": "下载中 %lld%%"
+          }
+        }
+      }
+    },
+    "e.g. /Comics (optional)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例：/Comics（省略可）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 /Comics（可选）"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 /Comics（選填）"
+          }
+        }
+      }
+    },
+    "e.g. Comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例：Comics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 Comics"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 Comics"
+          }
+        }
+      }
+    },
+    "e.g. Home NAS": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例：自宅の NAS"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 家里的 NAS"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 家裡的 NAS"
           }
         }
       }
@@ -928,6 +1434,28 @@
         }
       }
     },
+    "Empty Library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空にする"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空"
+          }
+        }
+      }
+    },
     "Entire Library": {
       "localizations": {
         "ja": {
@@ -950,6 +1478,50 @@
         }
       }
     },
+    "Every comic here opens without a connection.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここにあるコミックはオフラインで読めます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里的漫画都可以直接阅读。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這裡的漫畫都可以直接閱讀。"
+          }
+        }
+      }
+    },
+    "Every downloaded copy, including offline copies, is removed from this device. Servers, reading history, and progress stay.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフラインコピーを含む、このデバイス上のダウンロード済みコピーがすべて削除されます。サーバー、閲覧履歴、進捗は残ります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机上的所有已下载副本（包括离线副本）都会被删除。服务器、阅读历史和进度会保留。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機上的所有已下載副本（包括離線副本）都會被刪除。伺服器、閱讀記錄和進度會保留。"
+          }
+        }
+      }
+    },
     "Existing Fields": {
       "localizations": {
         "ja": {
@@ -968,6 +1540,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "已有欄位"
+          }
+        }
+      }
+    },
+    "Files on the server stay": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバー上のファイルは残ります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器上的文件保留"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伺服器上的檔案保留"
           }
         }
       }
@@ -1012,6 +1606,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "「檔案」中的資料夾"
+          }
+        }
+      }
+    },
+    "History and progress stay": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "履歴と進捗は残ります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史与进度保留"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "記錄與進度保留"
+          }
+        }
+      }
+    },
+    "Import %lld Comics": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld冊をインポート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始导入 %lld 本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始匯入 %lld 本"
           }
         }
       }
@@ -1126,6 +1764,28 @@
         }
       }
     },
+    "Import Folder to Library…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォルダをライブラリにインポート…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入文件夹到书库…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入資料夾到書庫…"
+          }
+        }
+      }
+    },
     "Import Here": {
       "localizations": {
         "ja": {
@@ -1192,6 +1852,28 @@
         }
       }
     },
+    "Import This Folder to Library…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダをライブラリにインポート…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入此文件夹到书库…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入此資料夾到書庫…"
+          }
+        }
+      }
+    },
     "Import To": {
       "localizations": {
         "ja": {
@@ -1210,6 +1892,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "匯入到"
+          }
+        }
+      }
+    },
+    "Import to Library…": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリにインポート…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入到书库…"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入書庫…"
           }
         }
       }
@@ -1434,6 +2138,28 @@
         }
       }
     },
+    "Method": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方法"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方式"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方式"
+          }
+        }
+      }
+    },
     "More": {
       "localizations": {
         "ja": {
@@ -1518,6 +2244,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要重新授权"
+          }
+        }
+      }
+    },
+    "Needs Update": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新が必要"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要更新"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要更新"
           }
         }
       }
@@ -1654,6 +2402,72 @@
         }
       }
     },
+    "No Network Connection": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワークに接続されていません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在没有网络"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前沒有網路"
+          }
+        }
+      }
+    },
+    "No offline copies yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフラインコピーはまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有离线副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有離線副本"
+          }
+        }
+      }
+    },
+    "No saved folders yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済みフォルダはまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有已保存文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有已儲存的資料夾"
+          }
+        }
+      }
+    },
     "No “%@” comics in “%@” match “%@”.": {
       "localizations": {
         "ja": {
@@ -1742,6 +2556,28 @@
         }
       }
     },
+    "Offline copies stay": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフラインコピーは残ります"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机副本保留"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機副本保留"
+          }
+        }
+      }
+    },
     "Older Copy": {
       "localizations": {
         "zh-Hant-TW": {
@@ -1760,6 +2596,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "较旧副本"
+          }
+        }
+      }
+    },
+    "On This Device": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのコピー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機副本"
           }
         }
       }
@@ -1786,6 +2644,50 @@
         }
       }
     },
+    "Only comics directly in this folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダ直下のコミックのみ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅此文件夹中的漫画"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅此資料夾中的漫畫"
+          }
+        }
+      }
+    },
+    "Only the %lld comics directly in this folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダ直下の %lld 冊のみ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅此文件夹中的 %lld 本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅此資料夾中的 %lld 本"
+          }
+        }
+      }
+    },
     "Only this comic is updated. Review the result before saving.": {
       "localizations": {
         "ja": {
@@ -1804,6 +2706,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "只作用於這一本。儲存前可以先檢查結果。"
+          }
+        }
+      }
+    },
+    "Open Older Local Copy": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスの古いコピーを開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开本机的较旧副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟本機的較舊副本"
+          }
+        }
+      }
+    },
+    "Opens at the start folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始フォルダから開きます"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从起始目录打开"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從起始目錄開啟"
           }
         }
       }
@@ -1830,6 +2776,28 @@
         }
       }
     },
+    "Opens where you left off: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前回の場所から開きます：%@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从上次位置 %@ 打开"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從上次位置 %@ 開啟"
+          }
+        }
+      }
+    },
     "Or Connect a NAS Server": {
       "localizations": {
         "ja": {
@@ -1848,6 +2816,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "或連接 NAS 伺服器"
+          }
+        }
+      }
+    },
+    "Preparing to Read": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "読む準備をしています"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备阅读"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在準備閱讀"
           }
         }
       }
@@ -2006,6 +2996,28 @@
         }
       }
     },
+    "Rebuildable Data": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再作成できるデータ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可重建的数据"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可重建的資料"
+          }
+        }
+      }
+    },
     "Recently Added Period": {
       "localizations": {
         "ja": {
@@ -2050,6 +3062,72 @@
         }
       }
     },
+    "Remote Cover Thumbnails": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートの表紙サムネイル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远程封面缩略图"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端封面縮圖"
+          }
+        }
+      }
+    },
+    "Remote Covers": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートの表紙"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远程封面"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端封面"
+          }
+        }
+      }
+    },
+    "Remote Downloads": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートのダウンロード"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远程下载"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端下載"
+          }
+        }
+      }
+    },
     "Remove Library…": {
       "localizations": {
         "ja": {
@@ -2072,6 +3150,94 @@
         }
       }
     },
+    "Remove Local Copies on This Page": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このページのデバイス上のコピーを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除本页的本机副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除本頁的本機副本"
+          }
+        }
+      }
+    },
+    "Remove Local Copy": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのコピーを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除本机副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除本機副本"
+          }
+        }
+      }
+    },
+    "Remove this local copy?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このデバイスのコピーを削除しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除本机副本？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除本機副本？"
+          }
+        }
+      }
+    },
+    "Removes “%@” from Saved Folders. Files on the server are not affected.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」を保存済みフォルダから外します。サーバー上のファイルには影響しません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从已保存文件夹中移除“%@”。服务器上的文件不受影响。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從已儲存的資料夾中移除「%@」。伺服器上的檔案不受影響。"
+          }
+        }
+      }
+    },
     "Rename…": {
       "localizations": {
         "ja": {
@@ -2090,6 +3256,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新命名⋯"
+          }
+        }
+      }
+    },
+    "Save and Clear": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存して消去"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存并清理"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存並清理"
+          }
+        }
+      }
+    },
+    "Save Folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダを保存"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存此文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存此資料夾"
+          }
+        }
+      }
+    },
+    "Save New Location?": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しい場所を保存しますか？"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存新的位置？"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存新的位置？"
+          }
+        }
+      }
+    },
+    "Save Offline Copy": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフラインコピーを保存"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存离线副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存離線副本"
+          }
+        }
+      }
+    },
+    "Save Page Comics as Offline Copies": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このページのコミックをオフラインコピーとして保存"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将本页漫画保存为离线副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將本頁漫畫儲存為離線副本"
           }
         }
       }
@@ -2134,6 +3410,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "所選漫畫"
+          }
+        }
+      }
+    },
+    "Servers connect when you open them after saving.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存後、サーバーを開いたときに接続します。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存后进入服务器时才会连接。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存後進入伺服器時才會連線。"
           }
         }
       }
@@ -2204,6 +3502,72 @@
         }
       }
     },
+    "Sign In": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サインイン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入"
+          }
+        }
+      }
+    },
+    "Start Folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始フォルダ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始目录"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始目錄"
+          }
+        }
+      }
+    },
+    "Start Import": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インポートを開始"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始导入"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開始匯入"
+          }
+        }
+      }
+    },
     "Summary & Notes": {
       "localizations": {
         "ja": {
@@ -2244,6 +3608,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "標籤與列表"
+          }
+        }
+      }
+    },
+    "Tap the pin in a remote folder to save it here.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートフォルダでピンをタップすると、ここに保存されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在远程文件夹中点按图钉，即可保存到这里。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在遠端資料夾中點一下圖釘，即可儲存到這裡。"
+          }
+        }
+      }
+    },
+    "Temporary Data": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一時データ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临时数据"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫存資料"
           }
         }
       }
@@ -2468,6 +3876,28 @@
         }
       }
     },
+    "This comic downloads in full before it opens.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコミックは開く前にファイル全体をダウンロードします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这本漫画需要先下载完整文件才能打开。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這本漫畫需要先下載完整檔案才能開啟。"
+          }
+        }
+      }
+    },
     "This Folder": {
       "localizations": {
         "ja": {
@@ -2534,6 +3964,50 @@
         }
       }
     },
+    "This Server": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このサーバー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本服务器"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本伺服器"
+          }
+        }
+      }
+    },
+    "This server can’t send part of a file, so the whole comic downloads before it opens.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このサーバーはファイルの一部だけを送信できないため、開く前にコミック全体をダウンロードします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此服务器不能只传送文件的一部分，需要先下载完整文件才能打开。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此伺服器無法只傳送檔案的一部分，需要先下載完整檔案才能開啟。"
+          }
+        }
+      }
+    },
     "Time Range": {
       "localizations": {
         "ja": {
@@ -2578,6 +4052,72 @@
         }
       }
     },
+    "Unsave Folder": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このフォルダの保存を解除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消保存此文件夹"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消儲存此資料夾"
+          }
+        }
+      }
+    },
+    "Update": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        }
+      }
+    },
+    "Update Copy": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コピーを更新"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新副本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新副本"
+          }
+        }
+      }
+    },
     "Use Existing Folder": {
       "localizations": {
         "ja": {
@@ -2596,6 +4136,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用現有資料夾"
+          }
+        }
+      }
+    },
+    "Used by JamReader": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JamReader の使用量"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JamReader 占用"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JamReader 使用量"
           }
         }
       }
@@ -2688,6 +4250,28 @@
         }
       }
     },
+    "Your Files": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "あなたのファイル"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的文件"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的檔案"
+          }
+        }
+      }
+    },
     "·": {
       "shouldTranslate": false
     },
@@ -2714,15 +4298,6 @@
       }
     },
     "(%lld)": {
-      "shouldTranslate": false
-    },
-    "/Manga/Weekly": {
-      "shouldTranslate": false
-    },
-    "/remote.php/dav/files/you/Comics": {
-      "shouldTranslate": false
-    },
-    "/Weekly": {
       "shouldTranslate": false
     },
     "%@ · %@": {
@@ -2815,28 +4390,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "MuPDF 无法打开 %1$@。"
-          }
-        }
-      }
-    },
-    "%@ Downloads": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ 下載項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@のダウンロード"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ 下载内容"
           }
         }
       }
@@ -3415,134 +4968,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld 个已下载副本"
-          }
-        }
-      }
-    },
-    "%lld downloaded on this server": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此伺服器已下載 %lld 本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このサーバーから%lld件ダウンロード済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此服务器有 %1$lld 项下载"
-          }
-        }
-      }
-    },
-    "%lld downloads": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 個下載項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld件のダウンロード"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 项下载"
-          }
-        }
-      }
-    },
-    "%lld downloads · %lld current": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld downloads · %2$lld current"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 個下載項目 · %lld 個最新版本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld件のダウンロード・%lld件が最新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 项下载 · %2$lld 个最新副本"
-          }
-        }
-      }
-    },
-    "%lld downloads · %lld current · %lld older": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld downloads · %2$lld current · %3$lld older"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 個下載項目 · %lld 個最新版本 · %lld 個舊版"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld件のダウンロード・%lld件が最新・%lld件が旧版"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 项下载 · %2$lld 个最新副本 · %3$lld 个较旧副本"
-          }
-        }
-      }
-    },
-    "%lld downloads · %lld older": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$lld downloads · %2$lld older"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 個下載項目 · %lld 個舊版"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld件のダウンロード・%lld件が旧版"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$lld 项下载 · %2$lld 个较旧副本"
           }
         }
       }
@@ -4140,50 +5565,6 @@
         }
       }
     },
-    "1 download": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 個下載項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1件のダウンロード"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 项下载"
-          }
-        }
-      }
-    },
-    "1 downloaded": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已下載 1 本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1件ダウンロード済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已下载 1 项"
-          }
-        }
-      }
-    },
     "1 downloaded copy": {
       "localizations": {
         "zh-Hant-TW": {
@@ -4202,28 +5583,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 个已下载副本"
-          }
-        }
-      }
-    },
-    "1 downloaded on this server": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此伺服器已下載 1 本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このサーバーから1件ダウンロード済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此服务器有 1 项下载"
           }
         }
       }
@@ -4334,28 +5693,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "最近 1 项"
-          }
-        }
-      }
-    },
-    "1 saved": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已儲存 1 個"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1件保存済み"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已保存 1 项"
           }
         }
       }
@@ -4954,28 +6291,6 @@
         }
       }
     },
-    "Add Remote Server": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入遠端伺服器"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リモートサーバーを追加"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加远程服务器"
-          }
-        }
-      }
-    },
     "Add Server": {
       "localizations": {
         "zh-Hant-TW": {
@@ -4994,28 +6309,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "添加服务器"
-          }
-        }
-      }
-    },
-    "Add to Favorites": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "加入最愛"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "お気に入りに追加"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加到收藏"
           }
         }
       }
@@ -5416,28 +6709,6 @@
         }
       }
     },
-    "Authentication": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "驗證方式"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "認証"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "身份验证"
-          }
-        }
-      }
-    },
     "Automatic indexing failed: %@": {
       "localizations": {
         "zh-Hant-TW": {
@@ -5478,28 +6749,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "后台下载正在进行中"
-          }
-        }
-      }
-    },
-    "Base Directory": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基礎目錄"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ベースディレクトリ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基础目录"
           }
         }
       }
@@ -5588,28 +6837,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "书签"
-          }
-        }
-      }
-    },
-    "Browse": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "浏览"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "瀏覽"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ブラウズ"
           }
         }
       }
@@ -6143,28 +7370,6 @@
         }
       }
     },
-    "Clear Download": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清除下載項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロードを消去"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清除下载内容"
-          }
-        }
-      }
-    },
     "Clear Downloaded Comics?": {
       "localizations": {
         "zh-Hant-TW": {
@@ -6271,28 +7476,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除下载内容"
-          }
-        }
-      }
-    },
-    "Clear downloads for this server?": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要清除此伺服器的下載項目嗎？"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このサーバーのダウンロードを消去しますか？"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清除此服务器的下载内容？"
           }
         }
       }
@@ -7067,28 +8250,6 @@
         }
       }
     },
-    "Connection": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "連線"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接続"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "连接"
-          }
-        }
-      }
-    },
     "Continue": {
       "localizations": {
         "zh-Hant-TW": {
@@ -7217,28 +8378,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "封面画师"
-          }
-        }
-      }
-    },
-    "Cover Thumbnails": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面縮圖"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表紙サムネイル"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "封面缩略图"
           }
         }
       }
@@ -7639,28 +8778,6 @@
         }
       }
     },
-    "Delete Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刪除副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コピーを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除副本"
-          }
-        }
-      }
-    },
     "Delete from Device": {
       "localizations": {
         "zh-Hant-TW": {
@@ -7837,28 +8954,6 @@
         }
       }
     },
-    "Delete this download?": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要刪除此下載項目嗎？"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このダウンロードを削除しますか？"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除此下载吗？"
-          }
-        }
-      }
-    },
     "Deletes \"%@\" from this library and removes the local file.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -7877,34 +8972,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "从此书库移除“%1$@”并删除本地文件。"
-          }
-        }
-      }
-    },
-    "Deletes %lld downloads from %@ only.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Deletes %1$lld downloads from %2$@ only."
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "只刪除 %lld 個來自 %@ 的下載項目。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%2$@のダウンロードだけを%1$lld件削除します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅删除 %2$@ 中的 %1$lld 项下载。"
           }
         }
       }
@@ -8245,50 +9312,6 @@
         }
       }
     },
-    "Downloaded Comics": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已下載的漫畫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコミック"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已下载漫画"
-          }
-        }
-      }
-    },
-    "Downloaded Copies": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコピー"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已下载副本"
-          }
-        }
-      }
-    },
     "Downloaded copies cleared.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -8399,28 +9422,6 @@
         }
       }
     },
-    "Downloaded remote files are removed. Servers and reading progress stay intact.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "會移除已下載的遠端檔案。伺服器與閱讀進度不受影響。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みのリモートファイルを削除します。サーバーと読書の進捗は保持されます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将移除已下载的远程文件。服务器和阅读进度不受影响。"
-          }
-        }
-      }
-    },
     "Downloaded the latest copy of %@ to this device.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -8483,28 +9484,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在下载漫画"
-          }
-        }
-      }
-    },
-    "Downloads": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下載項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下载内容"
           }
         }
       }
@@ -10633,28 +11612,6 @@
         }
       }
     },
-    "Filter": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "篩選"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フィルタ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "筛选"
-          }
-        }
-      }
-    },
     "Finalizing Library": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11095,28 +12052,6 @@
         }
       }
     },
-    "For streamed remote comics. Required downloads and explicit offline saves are unchanged.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "僅套用於串流開啟的遠端漫畫。必要下載和手動離線儲存不受影響。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ストリーミングで開いたリモート漫画に適用されます。閲覧に必要なダウンロードと明示的なオフライン保存は変更されません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅适用于以流式方式打开的远程漫画。必须完成的下载和手动离线保存不受影响。"
-          }
-        }
-      }
-    },
     "Format": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11277,28 +12212,6 @@
         }
       }
     },
-    "Go to Root": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "前往根目錄"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ルートへ移動"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "前往根目录"
-          }
-        }
-      }
-    },
     "Good for monthly catch-up.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11405,28 +12318,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "访客"
-          }
-        }
-      }
-    },
-    "Host": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "主機"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ホスト"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "主机"
           }
         }
       }
@@ -11717,28 +12608,6 @@
         }
       }
     },
-    "Import Folder to Library": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將資料夾匯入書庫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フォルダをライブラリにインポート"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将文件夹导入到书库"
-          }
-        }
-      }
-    },
     "Import in Progress": {
       "localizations": {
         "zh-Hant-TW": {
@@ -11801,28 +12670,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "导入结果"
-          }
-        }
-      }
-    },
-    "Import This Folder": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "匯入此資料夾"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このフォルダをインポート"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导入此文件夹"
           }
         }
       }
@@ -12797,28 +13644,6 @@
         }
       }
     },
-    "Keeps the current password.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保留目前的密碼。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在のパスワードを保持します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保留当前密码。"
-          }
-        }
-      }
-    },
     "Kept %lld existing downloaded copies ready offline.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -13083,28 +13908,6 @@
         }
       }
     },
-    "Latest": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最新"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最新"
-          }
-        }
-      }
-    },
     "Layout": {
       "localizations": {
         "zh-Hant-TW": {
@@ -13123,50 +13926,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "布局"
-          }
-        }
-      }
-    },
-    "Leave Base Directory empty to start at Server Path.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將「基礎目錄」留白，即可從「伺服器路徑」開始。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "サーバーパスから開始するには、ベースディレクトリを空のままにしてください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将“基础目录”留空即可从“服务器路径”开始。"
-          }
-        }
-      }
-    },
-    "Leave Base Directory empty to start at the root.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將「基礎目錄」留白，即可從根目錄開始。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ルートから開始するには、ベースディレクトリを空のままにしてください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将“基础目录”留空即可从根目录开始。"
           }
         }
       }
@@ -13783,28 +14542,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在加载整理信息"
-          }
-        }
-      }
-    },
-    "Local copy may be older": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本機副本可能較舊"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ローカルコピーが古い可能性があります"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本地副本可能较旧"
           }
         }
       }
@@ -14447,31 +15184,6 @@
         }
       }
     },
-    "nas.local": {
-      "shouldTranslate": false
-    },
-    "Navigate": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "導覽"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移動"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导航"
-          }
-        }
-      }
-    },
     "New %@ Server": {
       "localizations": {
         "zh-Hant-TW": {
@@ -14672,72 +15384,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "内容没有变化"
-          }
-        }
-      }
-    },
-    "No Current Copies": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "沒有最新副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最新のコピーはありません"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有最新副本"
-          }
-        }
-      }
-    },
-    "No current local copies from %@.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "沒有來自 %@ 的最新本機副本。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@の最新ローカルコピーはありません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有来自 %1$@ 的最新本地副本。"
-          }
-        }
-      }
-    },
-    "No current local copies.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "沒有最新的本機副本。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "最新のローカルコピーはありません。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有最新本地副本。"
           }
         }
       }
@@ -15294,28 +15940,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚无已保存文件夹"
-          }
-        }
-      }
-    },
-    "No Servers": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "沒有伺服器"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "サーバーはありません"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无服务器"
           }
         }
       }
@@ -15980,50 +16604,6 @@
         }
       }
     },
-    "Older": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "舊版"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "旧版"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "较旧"
-          }
-        }
-      }
-    },
-    "On Device": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此裝置上"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デバイス上"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已在设备上"
-          }
-        }
-      }
-    },
     "One or more comics could not be found in the active library.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -16288,28 +16868,6 @@
         }
       }
     },
-    "Open a comic on this server to keep it here.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "開啟此伺服器上的漫畫，即會顯示在這裡。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このサーバー上のコミックを開くと、ここに表示されます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开此服务器上的漫画，即可将它留在这里。"
-          }
-        }
-      }
-    },
     "Open at Launch": {
       "localizations": {
         "zh-Hant-TW": {
@@ -16354,28 +16912,6 @@
         }
       }
     },
-    "Open Downloaded Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "開啟已下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコピーを開く"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开已下载副本"
-          }
-        }
-      }
-    },
     "Open Last Comic": {
       "localizations": {
         "zh-Hant-TW": {
@@ -16416,50 +16952,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开书库"
-          }
-        }
-      }
-    },
-    "Open Offline": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "離線開啟"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフラインで開く"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "离线打开"
-          }
-        }
-      }
-    },
-    "Open Older Downloaded Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "開啟舊版下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "古いダウンロード済みコピーを開く"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开较旧的已下载副本"
           }
         }
       }
@@ -16790,28 +17282,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "打开阅读默认设置"
-          }
-        }
-      }
-    },
-    "Options": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "選項"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オプション"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "选项"
           }
         }
       }
@@ -18293,28 +18763,6 @@
         }
       }
     },
-    "Ready on device": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已在裝置上就緒"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デバイスで利用可能"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已在设备上就绪"
-          }
-        }
-      }
-    },
     "Ready to jump to page %lld of %lld.": {
       "localizations": {
         "en": {
@@ -18497,50 +18945,6 @@
         }
       }
     },
-    "Refresh Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新整理副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コピーを更新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新副本"
-          }
-        }
-      }
-    },
-    "Refresh Downloaded Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新整理已下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコピーを更新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新已下载副本"
-          }
-        }
-      }
-    },
     "Refresh Library": {
       "localizations": {
         "zh-Hant-TW": {
@@ -18559,28 +18963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "刷新书库"
-          }
-        }
-      }
-    },
-    "Refresh Offline Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新整理離線副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフラインコピーを更新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新离线副本"
           }
         }
       }
@@ -18717,28 +19099,6 @@
         }
       }
     },
-    "Remote Files": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "遠端檔案"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リモートファイル"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "远程文件"
-          }
-        }
-      }
-    },
     "Remote files download to the selected library on this device.": {
       "localizations": {
         "zh-Hant-TW": {
@@ -18801,28 +19161,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "远程导入"
-          }
-        }
-      }
-    },
-    "Remote only": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "僅限遠端"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リモートのみ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅远程"
           }
         }
       }
@@ -18937,50 +19275,6 @@
         }
       }
     },
-    "Remove Download": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除下載項目"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロードを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除下载内容"
-          }
-        }
-      }
-    },
-    "Remove Downloaded Copies": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除已下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコピーを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除已下载副本"
-          }
-        }
-      }
-    },
     "Remove Downloaded Copies Failed": {
       "localizations": {
         "zh-Hant-TW": {
@@ -19021,28 +19315,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "移除已下载副本？"
-          }
-        }
-      }
-    },
-    "Remove Downloaded Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除已下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコピーを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除已下载副本"
           }
         }
       }
@@ -19109,28 +19381,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "从 App 移除"
-          }
-        }
-      }
-    },
-    "Remove from Favorites": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "從最愛移除"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "お気に入りから削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消收藏"
           }
         }
       }
@@ -19285,28 +19535,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "移除已保存文件夹？"
-          }
-        }
-      }
-    },
-    "Remove Shortcut": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除捷徑"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ショートカットを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除快捷方式"
           }
         }
       }
@@ -19999,94 +20227,6 @@
         }
       }
     },
-    "Save folders from this server in Browse.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在「瀏覽」中儲存此伺服器的資料夾。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このサーバーのフォルダを「ブラウズ」に保存します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在“浏览”中保存此服务器上的文件夹。"
-          }
-        }
-      }
-    },
-    "Save folders in Browse.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在「瀏覽」中儲存資料夾。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フォルダを「ブラウズ」に保存します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在“浏览”中保存文件夹。"
-          }
-        }
-      }
-    },
-    "Save for Offline": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "儲存供離線使用"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフライン用に保存"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存供离线阅读"
-          }
-        }
-      }
-    },
-    "Save Offline": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "離線儲存"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オフライン保存"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存供离线阅读"
-          }
-        }
-      }
-    },
     "Save Page": {
       "localizations": {
         "zh-Hant-TW": {
@@ -20127,28 +20267,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "将页面保存到照片图库"
-          }
-        }
-      }
-    },
-    "Save Visible Comics": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "儲存顯示中的漫畫"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示中のコミックを保存"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存可见漫画"
           }
         }
       }
@@ -20325,28 +20443,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已保存供离线阅读"
-          }
-        }
-      }
-    },
-    "Saved in Keychain.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已儲存在「鑰匙圈」。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キーチェーンに保存済みです。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已存储在钥匙串中。"
           }
         }
       }
@@ -21121,72 +21217,6 @@
         }
       }
     },
-    "Show File Info": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示檔案資訊"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ファイル情報を表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示文件信息"
-          }
-        }
-      }
-    },
-    "Show Grid": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示格狀檢視"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "グリッドで表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示网格"
-          }
-        }
-      }
-    },
-    "Show List": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示列表"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リストで表示"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示列表"
-          }
-        }
-      }
-    },
     "Show page 1 alone, then pair pages 2 and 3, 4 and 5": {
       "localizations": {
         "zh-Hant-TW": {
@@ -21359,28 +21389,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已跳过 1 个不支持的项目。"
-          }
-        }
-      }
-    },
-    "SMB uses 445.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SMB 使用連接埠 445。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SMBはポート445を使用します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SMB 使用端口 445。"
           }
         }
       }
@@ -21821,28 +21829,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "团队"
-          }
-        }
-      }
-    },
-    "Temporary Cache": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暫存快取"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一時キャッシュ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "临时缓存"
           }
         }
       }
@@ -24835,50 +24821,6 @@
         }
       }
     },
-    "Up One Level": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上一層"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1つ上の階層へ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上一级"
-          }
-        }
-      }
-    },
-    "Update Downloaded Copy": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更新已下載副本"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード済みコピーを更新"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "更新已下载副本"
-          }
-        }
-      }
-    },
     "Updated": {
       "localizations": {
         "zh-Hant-TW": {
@@ -24963,28 +24905,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "扩大待读内容的时间范围。"
-          }
-        }
-      }
-    },
-    "Use a custom port only if needed.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "僅在需要時使用自訂連接埠。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "必要な場合だけカスタムポートを使用してください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅在需要时使用自定义端口。"
           }
         }
       }
@@ -25341,28 +25261,6 @@
         }
       }
     },
-    "WebDAV uses 443 for HTTPS or 80 for HTTP.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WebDAV 的 HTTPS 使用連接埠 443，HTTP 則使用 80。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WebDAVではHTTPSに443、HTTPに80を使用します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WebDAV 的 HTTPS 默认使用端口 443，HTTP 默认使用端口 80。"
-          }
-        }
-      }
-    },
     "Weekend Reads": {
       "localizations": {
         "zh-Hant-TW": {
@@ -25623,6 +25521,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "暂不支持 ZIP64 压缩包。"
+          }
+        }
+      }
+    },
+    "“%@” stays on the server, and its reading progress stays.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバー上の「%@」はそのまま残り、読書進捗も保持されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器上的“%@”不受影响，阅读进度也会保留。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伺服器上的「%@」不受影響，閱讀進度也會保留。"
+          }
+        }
+      }
+    },
+    "“Imported Comics” Library": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「インポート済みコミック」ライブラリ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“已导入漫画”书库"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「已匯入的漫畫」書庫"
           }
         }
       }

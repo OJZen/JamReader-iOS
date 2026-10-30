@@ -1274,3 +1274,122 @@ private struct RemoteBrowserOverlaySurface<Content: View>: View {
         .padding(.bottom, Spacing.xxs)
     }
 }
+
+/// Pinned above a remote folder: "Server › … › Folder", then the folder's
+/// counts with the sort menu on the right. Every level but the current one
+/// is a button, replacing the old Up One Level / Go to Root menu items.
+struct RemoteBrowserLocationBar: View {
+    let levels: [RemoteBrowserPathLevel]
+    let status: String?
+    let sortMode: RemoteDirectorySortMode
+    let showsSort: Bool
+    let onSelectLevel: (RemoteBrowserPathLevel) -> Void
+    let onSelectSortMode: (RemoteDirectorySortMode) -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            breadcrumb
+                .font(AppFont.subheadline())
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(Text("Location"))
+
+            if status != nil || showsSort {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
+                        statusText
+                        Spacer(minLength: 0)
+                        sortMenu
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.xxs) {
+                        statusText
+                        sortMenu
+                    }
+                }
+                .font(AppFont.footnote())
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.top, Spacing.xxs)
+        .padding(.bottom, Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var breadcrumb: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            WrappingHStack(horizontalSpacing: Spacing.xxs, verticalSpacing: Spacing.xxs) {
+                levelItems
+            }
+        } else {
+            // Short paths sit at the leading edge; long ones scroll, showing the current folder.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.xxs) {
+                    levelItems
+                }
+                .lineLimit(1)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Spacing.xxs) {
+                        levelItems
+                    }
+                    .lineLimit(1)
+                }
+                .defaultScrollAnchor(.trailing)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var levelItems: some View {
+        ForEach(levels.dropLast()) { level in
+            HStack(spacing: Spacing.xxs) {
+                Button(level.title) {
+                    onSelectLevel(level)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.appAccent)
+
+                Image(systemName: "chevron.forward")
+                    .font(AppFont.caption2(.semibold))
+                    .foregroundStyle(Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+
+        if let current = levels.last {
+            Text(current.title)
+                .foregroundStyle(Color.textSecondary)
+                .accessibilityAddTraits(.isStaticText)
+        }
+    }
+
+    @ViewBuilder
+    private var statusText: some View {
+        if let status {
+            Text(status)
+                .foregroundStyle(Color.textSecondary)
+        }
+    }
+
+    @ViewBuilder
+    private var sortMenu: some View {
+        if showsSort {
+            Menu {
+                Picker("Sort", selection: Binding(get: { sortMode }, set: onSelectSortMode)) {
+                    ForEach(RemoteDirectorySortMode.allCases) { mode in
+                        Label(mode.title, systemImage: mode.systemImageName)
+                            .tag(mode)
+                    }
+                }
+            } label: {
+                Label(sortMode.title, systemImage: "arrow.up.arrow.down")
+                    .foregroundStyle(Color.appAccent)
+            }
+            .accessibilityLabel(Text("Sort"))
+            .accessibilityValue(Text(sortMode.title))
+        }
+    }
+}

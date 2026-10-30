@@ -388,4 +388,26 @@ extension RemoteServerProfile {
     var shareDisplaySummary: String {
         providerRootDisplayPath
     }
+
+    /// "192.168.1.20 · Comics": the host, then the share or start path.
+    var addressSummary: String {
+        let path = providerRootDisplayPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return path.isEmpty ? endpointDisplaySummary : "\(endpointDisplaySummary) · \(path)"
+    }
+}
+
+/// SMB / WEBDAV in neutral gray: a type, not a status (`StatusBadge`).
+struct RemoteProtocolTag: View {
+    let kind: RemoteProviderKind
+
+    var body: some View {
+        Text(kind.title.uppercased())
+            .font(AppFont.caption2(.semibold))
+            .foregroundStyle(Color.textSecondary)
+            .padding(.horizontal, Spacing.xs)
+            .padding(.vertical, 2)
+            .background(Color(.systemFill), in: Capsule())
+            .lineLimit(1)
+            .fixedSize()
+    }
 }

@@ -88,6 +88,8 @@ enum BrowseNavigationRoute {
     case home
     case serverDetail(UUID)
     case serverBrowser(UUID, path: String?)
+    /// A breadcrumb level above the current remote folder.
+    case serverBrowserAncestor(UUID, path: String)
     case savedFolders(UUID?)
     case offlineShelf(UUID?)
 }

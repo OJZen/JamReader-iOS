@@ -53,7 +53,7 @@ struct RemoteCacheSettingsView: View {
         var confirmationMessage: String {
             switch self {
             case .downloads:
-                return String(localized: "Downloaded remote files are removed. Servers and reading progress stay intact.")
+                return String(localized: "Every downloaded copy, including offline copies, is removed from this device. Servers, reading history, and progress stay.")
             case .temporaryCache:
                 return String(localized: "Unfinished downloads and leftover remote cache files are removed.")
             case .thumbnails:
@@ -178,6 +178,10 @@ struct RemoteCacheSettingsView: View {
     var body: some View {
         Form {
             Section {
+                StorageUsageSummary(segments: usageSegments)
+            }
+
+            Section {
                 Picker("Download Limit", selection: cachePolicyBinding) {
                     ForEach(RemoteComicCachePolicyPreset.allCases) { preset in
                         Text(preset.settingsLocalizedTitle).tag(preset)
@@ -199,35 +203,47 @@ struct RemoteCacheSettingsView: View {
                     }
                     .accessibilityElement(children: .combine)
                 }
+
+                StorageItemRow(
+                    title: String(localized: "Downloaded"),
+                    bytes: remoteCacheSummary.hasCachedComics ? remoteCacheSummary.cachedComicBytes : 0,
+                    actionTitle: String(localized: "Clean Up")
+                ) {
+                    pendingConfirmation = .downloads
+                }
             } header: {
-                Text("Downloads")
+                Text("Remote Downloads")
             } footer: {
-                Text("For streamed remote comics. Required downloads and explicit offline saves are unchanged.")
+                Text("Downloaded includes offline copies. The limit and full-copy setting apply to comics streamed while reading; offline copies you save are unchanged.")
             }
 
-            DownloadedCopiesCacheSection(
-                summary: remoteCacheSummary,
-                onClearDownloads: {
-                    pendingConfirmation = .downloads
-                },
-                onClearTemporaryCache: {
+            Section("Rebuildable Data") {
+                StorageItemRow(
+                    title: String(localized: "Temporary Data"),
+                    bytes: remoteCacheSummary.otherCacheBytes,
+                    actionTitle: String(localized: "Clean Up")
+                ) {
                     pendingConfirmation = .temporaryCache
                 }
-            )
 
-            ThumbnailCacheSection(
-                summary: remoteThumbnailCacheSummary,
-                onClear: {
+                StorageItemRow(
+                    title: String(localized: "Remote Cover Thumbnails"),
+                    bytes: remoteThumbnailCacheSummary.isEmpty ? 0 : remoteThumbnailCacheSummary.totalBytes,
+                    actionTitle: String(localized: "Clean Up")
+                ) {
                     pendingConfirmation = .thumbnails
                 }
-            )
+            }
 
-            ImportedComicsCacheSection(
-                summary: importedComicsLibrarySummary,
-                onClear: {
+            Section("Your Files") {
+                StorageItemRow(
+                    title: String(localized: "“Imported Comics” Library"),
+                    bytes: importedComicsLibrarySummary.isEmpty ? 0 : importedComicsLibrarySummary.totalBytes,
+                    actionTitle: String(localized: "Empty Library")
+                ) {
                     pendingConfirmation = .imported
                 }
-            )
+            }
         }
         .scrollContentBackground(.hidden)
         .background(Color.surfaceGrouped)
@@ -270,6 +286,32 @@ struct RemoteCacheSettingsView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+    }
+
+    /// Only what this screen measures; other App libraries are not counted.
+    private var usageSegments: [StorageUsageSummary.Segment] {
+        [
+            StorageUsageSummary.Segment(
+                title: String(localized: "Imported Comics"),
+                bytes: importedComicsLibrarySummary.isEmpty ? 0 : importedComicsLibrarySummary.totalBytes,
+                color: .appJam
+            ),
+            StorageUsageSummary.Segment(
+                title: String(localized: "Remote Downloads"),
+                bytes: remoteCacheSummary.hasCachedComics ? remoteCacheSummary.cachedComicBytes : 0,
+                color: .appChartDownloads
+            ),
+            StorageUsageSummary.Segment(
+                title: String(localized: "Temporary Data"),
+                bytes: remoteCacheSummary.otherCacheBytes,
+                color: .appChartTemp
+            ),
+            StorageUsageSummary.Segment(
+                title: String(localized: "Remote Covers"),
+                bytes: remoteThumbnailCacheSummary.isEmpty ? 0 : remoteThumbnailCacheSummary.totalBytes,
+                color: .appChartThumbs
+            )
+        ]
     }
 
     private func setDownloadsFullCopyWhileReading(_ isEnabled: Bool) {
@@ -498,100 +540,112 @@ struct RemoteCacheSettingsView: View {
     }
 }
 
-private struct DownloadedCopiesCacheSection: View {
-    let summary: RemoteComicCacheSummary
-    let onClearDownloads: () -> Void
-    let onClearTemporaryCache: () -> Void
+/// "Used by JamReader" with a segmented bar and a legend of what each part is.
+private struct StorageUsageSummary: View {
+    struct Segment: Identifiable {
+        let title: String
+        let bytes: Int64
+        let color: Color
+
+        var id: String { title }
+    }
+
+    let segments: [Segment]
 
     var body: some View {
-        Section {
-            LabeledContent("Downloaded Copies") {
-                Text(
-                    summary.hasCachedComics
-                        ? summary.summaryText
-                        : String(localized: "None")
-                )
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Used by JamReader")
+                    .font(AppFont.headline())
+                Spacer(minLength: Spacing.sm)
+                Text(Self.sizeText(totalBytes))
                     .foregroundStyle(Color.textSecondary)
-                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
             }
 
-            LabeledContent("Temporary Cache") {
-                Text(
-                    summary.hasOtherCacheData
-                        ? summary.otherCacheSizeText
-                        : String(localized: "None")
-                )
-                    .foregroundStyle(Color.textSecondary)
-                    .multilineTextAlignment(.trailing)
-            }
+            bar
+                .frame(height: 10)
+                .accessibilityHidden(true)
 
-            if summary.hasCachedComics {
-                Button(role: .destructive, action: onClearDownloads) {
-                    Label("Clear Downloaded Copies", systemImage: "trash")
+            WrappingHStack(horizontalSpacing: Spacing.md, verticalSpacing: Spacing.xxs) {
+                ForEach(segments) { segment in
+                    HStack(spacing: Spacing.xxs) {
+                        Circle()
+                            .fill(segment.color)
+                            .frame(width: 8, height: 8)
+                        Text(segment.title + " " + Self.sizeText(segment.bytes))
+                            .font(AppFont.footnote())
+                            .foregroundStyle(Color.textSecondary)
+                    }
                 }
             }
-
-            if summary.hasOtherCacheData {
-                Button(role: .destructive, action: onClearTemporaryCache) {
-                    Label("Clear Temporary Cache", systemImage: "trash.slash")
-                }
-            }
-        } header: {
-            Text("Remote Files")
         }
+        .padding(.vertical, Spacing.xxs)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var totalBytes: Int64 {
+        segments.reduce(0) { $0 + max($1.bytes, 0) }
+    }
+
+    private var bar: some View {
+        GeometryReader { proxy in
+            let visible = segments.filter { $0.bytes > 0 }
+            let spacing: CGFloat = 2
+            let available = max(proxy.size.width - spacing * CGFloat(max(visible.count - 1, 0)), 0)
+            HStack(spacing: spacing) {
+                ForEach(visible) { segment in
+                    segment.color
+                        .frame(width: max(available * CGFloat(segment.bytes) / CGFloat(max(totalBytes, 1)), 3))
+                }
+            }
+            .frame(width: proxy.size.width, alignment: .leading)
+            .background(Color(.tertiarySystemFill))
+            .clipShape(Capsule())
+        }
+    }
+
+    static func sizeText(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: max(bytes, 0), countStyle: .file)
     }
 }
 
-private struct ThumbnailCacheSection: View {
-    let summary: RemoteThumbnailCacheSummary
-    let onClear: () -> Void
+/// A stored item: its size and the button that clears it. What clearing
+/// removes is written in the confirmation, not here.
+private struct StorageItemRow: View {
+    let title: String
+    let bytes: Int64
+    let actionTitle: String
+    let action: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Section {
-            LabeledContent("On Device") {
-                Text(
-                    summary.isEmpty
-                        ? String(localized: "None")
-                        : summary.summaryText
-                )
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xs))
+            : AnyLayout(HStackLayout(spacing: Spacing.sm))
+        layout {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: Spacing.sm) {
+                Text(bytes > 0 ? StorageUsageSummary.sizeText(bytes) : String(localized: "None"))
                     .foregroundStyle(Color.textSecondary)
-                    .multilineTextAlignment(.trailing)
-            }
+                    .monospacedDigit()
 
-            if !summary.isEmpty {
-                Button(role: .destructive, action: onClear) {
-                    Label("Clear Cover Thumbnails", systemImage: "photo.stack")
+                Button(action: action) {
+                    Text(actionTitle)
+                        .font(AppFont.subheadline(.semibold))
+                        .padding(.horizontal, Spacing.sm)
+                        .padding(.vertical, Spacing.xxs)
+                        .background(Color.appAccentSoft, in: Capsule())
+                        .foregroundStyle(Color.appAccentOnSoft)
                 }
+                .buttonStyle(.borderless)
+                .disabled(bytes <= 0)
+                .opacity(bytes > 0 ? 1 : 0.45)
+                .accessibilityLabel(Text("\(actionTitle) \(title)"))
             }
-        } header: {
-            Text("Cover Thumbnails")
-        }
-    }
-}
-
-private struct ImportedComicsCacheSection: View {
-    let summary: LibraryStorageFootprintSummary
-    let onClear: () -> Void
-
-    var body: some View {
-        Section {
-            LabeledContent("On Device") {
-                Text(
-                    summary.isEmpty
-                        ? String(localized: "None")
-                        : summary.summaryText
-                )
-                    .foregroundStyle(Color.textSecondary)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            if !summary.isEmpty {
-                Button(role: .destructive, action: onClear) {
-                    Label("Clear Imported Comics", systemImage: "books.vertical")
-                }
-            }
-        } header: {
-            Text("Imported Comics")
         }
     }
 }

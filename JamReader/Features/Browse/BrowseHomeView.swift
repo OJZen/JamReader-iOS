@@ -28,7 +28,10 @@ struct BrowseHomeView: View {
         .navigationTitle("Remote")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            addServerToolbarItem
+            // An empty home has one action: the Add Server button in its empty state.
+            if !showsEmptyState || usesPersistentSelection {
+                addServerToolbarItem
+            }
         }
         .refreshable {
             viewModel.load()
@@ -85,21 +88,42 @@ struct BrowseHomeView: View {
 
     private var content: some View {
         Group {
-            if displayedProfiles.isEmpty && !showsQuickAccess {
+            if showsEmptyState {
                 BrowseHomeEmptyState(
                     showsGuidance: !usesPersistentSelection,
                     onAddServer: presentCreateServerSheet
                 )
-            } else {
+            } else if usesPersistentSelection {
+                // The sidebar lists servers, then the all-server pages.
                 List {
                     serversSection
-
-                    if showsQuickAccess {
-                        quickAccessSection
-                    }
+                    quickAccessSection
                 }
-                .adaptiveRootListStyle(usesSidebarStyle: usesPersistentSelection)
+                .adaptiveRootListStyle(usesSidebarStyle: true)
+            } else {
+                // Offline Shelf and Saved Folders first: they are what works offline.
+                List {
+                    entryCardsSection
+                    serversSection
+                }
+                .adaptiveRootListStyle(usesSidebarStyle: false)
             }
+        }
+    }
+
+    private var showsEmptyState: Bool {
+        displayedProfiles.isEmpty && totalSavedFolderCount == 0 && totalOfflineCopyCount == 0
+    }
+
+    // MARK: - Entry Cards
+
+    private var entryCardsSection: some View {
+        Section {
+            BrowseHomeEntryCards(items: quickAccessItems) { item in
+                open(item.splitSelection)
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
         }
     }
 
@@ -202,10 +226,6 @@ struct BrowseHomeView: View {
         viewModel.totalOfflineCopyCount
     }
 
-    private var showsQuickAccess: Bool {
-        !quickAccessItems.isEmpty
-    }
-
     private var usesPersistentSelection: Bool {
         AppLayout.usesPersistentSplitSelection(
             isPad: UIDevice.current.userInterfaceIdiom == .pad
@@ -229,49 +249,46 @@ struct BrowseHomeView: View {
         }
     }
 
+    /// Offline Shelf and Saved Folders for all servers; shown even when empty
+    /// so where they live is learned before they are needed.
     private var quickAccessItems: [BrowseHomeShortcutItem] {
-        var items = [BrowseHomeShortcutItem]()
-
-        if totalSavedFolderCount > 0 {
-            items.append(
-                BrowseHomeShortcutItem(
-                    id: "saved-folders",
-                    title: String(localized: "Saved Folders"),
-                    subtitle: totalSavedFolderCount == 1
-                        ? String(localized: "1 saved")
-                        : String(localized: "\(totalSavedFolderCount) saved"),
-                    systemImage: "star.fill",
-                    tint: .appAccent,
-                    splitSelection: .savedFolders
-                )
-            )
+        let offlineSubtitle: String = switch totalOfflineCopyCount {
+        case 0: String(localized: "No offline copies yet")
+        case 1: String(localized: "1 comic · Readable offline")
+        default: String(localized: "\(totalOfflineCopyCount) comics · Readable offline")
+        }
+        let savedSubtitle: String = switch totalSavedFolderCount {
+        case 0: String(localized: "No saved folders yet")
+        case 1: String(localized: "1 shortcut")
+        default: String(localized: "\(totalSavedFolderCount) shortcuts")
         }
 
-        if totalOfflineCopyCount > 0 {
-            items.append(
-                BrowseHomeShortcutItem(
-                    id: "offline-shelf",
-                    title: String(localized: "Offline Shelf"),
-                    subtitle: totalOfflineCopyCount == 1
-                        ? String(localized: "1 downloaded")
-                        : String(localized: "\(totalOfflineCopyCount) downloaded"),
-                    systemImage: "arrow.down.circle.fill",
-                    tint: .appOffline,
-                    splitSelection: .offlineShelf
-                )
+        return [
+            BrowseHomeShortcutItem(
+                id: "offline-shelf",
+                title: String(localized: "Offline Shelf"),
+                subtitle: offlineSubtitle,
+                systemImage: "arrow.down.circle.fill",
+                tint: .appOffline,
+                splitSelection: .offlineShelf
+            ),
+            BrowseHomeShortcutItem(
+                id: "saved-folders",
+                title: String(localized: "Saved Folders"),
+                subtitle: savedSubtitle,
+                systemImage: "pin.fill",
+                tint: .appAccent,
+                splitSelection: .savedFolders
             )
-        }
-
-        return items
+        ]
     }
 
     @ToolbarContentBuilder
     private var addServerToolbarItem: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Button(action: presentCreateServerSheet) {
-                Image(systemName: "plus")
+                Label("Add Server", systemImage: "plus")
             }
-            .accessibilityLabel("Add Remote Server")
         }
     }
 
@@ -410,7 +427,7 @@ private struct BrowseHomeServerRow: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
             ListIconBadge(
-                systemImage: protocolSystemImage,
+                systemImage: profile.providerKind.systemImage,
                 tint: profile.providerKind.tintColor
             )
 
@@ -420,15 +437,15 @@ private struct BrowseHomeServerRow: View {
                     .foregroundStyle(Color.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: Spacing.xxs) {
-                    Text(profile.endpointDisplaySummary)
-                        .lineLimit(1)
-                }
-                .font(AppFont.footnote())
-                .foregroundStyle(Color.textSecondary)
+                Text(profile.addressSummary)
+                    .font(AppFont.footnote())
+                    .foregroundStyle(Color.textSecondary)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: Spacing.xs)
+
+            RemoteProtocolTag(kind: profile.providerKind)
 
             if showsDisclosureIndicator {
                 Image(systemName: "chevron.right")
@@ -441,14 +458,56 @@ private struct BrowseHomeServerRow: View {
         .contentShape(Rectangle())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
+}
 
-    private var protocolSystemImage: String {
-        switch profile.providerKind {
-        case .smb:
-            return "externaldrive.connected.to.line.below"
-        case .webdav:
-            return "globe"
+// MARK: - Entry Cards
+
+/// Two cards on top of the iPhone remote home (`ScreenRemoteHome`).
+private struct BrowseHomeEntryCards: View {
+    let items: [BrowseHomeShortcutItem]
+    let onOpen: (BrowseHomeShortcutItem) -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: Spacing.sm))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.sm))
+        layout {
+            ForEach(items) { item in
+                Button {
+                    onOpen(item)
+                } label: {
+                    card(item)
+                }
+                .buttonStyle(.plain)
+            }
         }
+    }
+
+    private func card(_ item: BrowseHomeShortcutItem) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Image(systemName: item.systemImage)
+                .font(AppFont.subheadline(.semibold))
+                .foregroundStyle(item.tint)
+                .frame(width: 32, height: 32)
+                .background(item.tint.opacity(0.14), in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                Text(item.title)
+                    .font(AppFont.body(.medium))
+                    .foregroundStyle(Color.textPrimary)
+                Text(item.subtitle)
+                    .font(AppFont.footnote())
+                    .foregroundStyle(Color.textSecondary)
+            }
+        }
+        .padding(Spacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.surfaceGroupedSecondary, in: RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: CornerRadius.lg, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -494,9 +553,9 @@ private struct BrowseHomeEmptyState: View {
     var body: some View {
         EmptyStateView(
             systemImage: "server.rack",
-            title: String(localized: "No Servers"),
+            title: String(localized: "Connect Your NAS"),
             description: showsGuidance
-                ? String(localized: "Add a server to browse comics.")
+                ? String(localized: "Add an SMB or WebDAV server to read online or save comics to this device.")
                 : nil,
             actionTitle: showsGuidance ? String(localized: "Add Server") : nil,
             action: showsGuidance ? onAddServer : nil

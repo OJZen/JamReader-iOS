@@ -68,8 +68,21 @@ struct RemoteServerBrowserView: View {
     }
 
     private var browserBaseLayer: some View {
-        browserContent
-            .readContainerWidth(into: $browserContainerWidth)
+        VStack(spacing: 0) {
+            RemoteBrowserLocationBar(
+                levels: viewModel.pathLevels,
+                status: locationStatusText,
+                sortMode: sortMode,
+                showsSort: hasVisibleItems,
+                onSelectLevel: { level in
+                    appNavigator?.navigate(.browse(.serverBrowserAncestor(viewModel.profile.id, path: level.path)))
+                },
+                onSelectSortMode: applySortMode(_:)
+            )
+
+            browserContent
+                .readContainerWidth(into: $browserContainerWidth)
+        }
             .navigationTitle(viewModel.navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { browserToolbar }
@@ -265,139 +278,119 @@ struct RemoteServerBrowserView: View {
     private var browserToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button {
-                let newMode: LibraryComicDisplayMode = displayMode == .list ? .grid : .list
-                applyDisplayMode(newMode)
+                viewModel.toggleCurrentFolderShortcut()
             } label: {
-                Image(systemName: displayMode == .list ? "square.grid.2x2" : "list.bullet")
+                Label(
+                    viewModel.isCurrentFolderSaved
+                        ? String(localized: "Unsave Folder")
+                        : String(localized: "Save Folder"),
+                    systemImage: viewModel.isCurrentFolderSaved ? "pin.fill" : "pin"
+                )
             }
-            .accessibilityLabel(
-                displayMode == .list
-                    ? String(localized: "Show Grid")
-                    : String(localized: "Show List")
-            )
-
-            Menu {
-                ForEach(RemoteDirectorySortMode.allCases) { mode in
-                    Button {
-                        applySortMode(mode)
-                    } label: {
-                        HStack {
-                            Label(mode.title, systemImage: mode.systemImageName)
-
-                            if sortMode == mode {
-                                Spacer()
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                Image(systemName: "arrow.up.arrow.down")
-            }
-            .accessibilityLabel("Sort")
 
             Menu {
                 Section {
+                    Picker("View As", selection: displayModeBinding) {
+                        ForEach(LibraryComicDisplayMode.allCases) { mode in
+                            Label(mode.title, systemImage: mode.systemImageName)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.palette)
+                }
+
+                Section {
                     Button {
-                        viewModel.toggleCurrentFolderShortcut()
+                        presentImportSheet(.currentFolder)
                     } label: {
-                        Label(
-                            viewModel.isCurrentFolderSaved
-                                ? String(localized: "Remove from Favorites")
-                                : String(localized: "Add to Favorites"),
-                            systemImage: viewModel.isCurrentFolderSaved ? "star.fill" : "star"
-                        )
+                        Label(importCurrentFolderButtonTitle, systemImage: "square.and.arrow.down")
                     }
-                }
+                    .disabled(!viewModel.canImportCurrentFolderRecursively)
 
-                if let parentPath = viewModel.parentPath {
-                    Section("Navigate") {
-                        Button {
-                            openDirectory(parentPath)
-                        } label: {
-                            Label("Up One Level", systemImage: "arrow.up.left")
+                    Button {
+                        Task<Void, Never> {
+                            await viewModel.saveComicsForOffline(displayedComicFiles)
                         }
-
-                        if parentPath != viewModel.rootPath {
-                            Button {
-                                openDirectory(viewModel.rootPath)
-                            } label: {
-                                Label("Go to Root", systemImage: "arrow.uturn.backward.circle")
-                            }
-                        }
+                    } label: {
+                        Label(saveVisibleComicsButtonTitle, systemImage: "arrow.down.circle")
                     }
-                }
+                    .disabled(displayedComicFiles.isEmpty)
 
-                if hasContextActions {
-                    Section("Folder") {
-                        if !displayedComicFiles.isEmpty {
-                            Button {
-                                Task<Void, Never> {
-                                    await viewModel.saveComicsForOffline(displayedComicFiles)
-                                }
-                            } label: {
-                                Label(saveVisibleComicsButtonTitle, systemImage: "icloud.and.arrow.down")
-                            }
-                        }
-
-                        if !visibleOfflineComicFiles.isEmpty {
-                            Button(role: .destructive) {
-                                presentVisibleOfflineRemovalConfirmation()
-                            } label: {
-                                Label(removeVisibleOfflineCopiesButtonTitle, systemImage: "trash")
-                            }
-                        }
-
-                        if viewModel.canImportCurrentFolderRecursively {
-                            Button {
-                                presentImportSheet(.currentFolder)
-                            } label: {
-                                Label(importCurrentFolderButtonTitle, systemImage: "square.and.arrow.down.on.square")
-                            }
-                        }
+                    Button(role: .destructive) {
+                        presentVisibleOfflineRemovalConfirmation()
+                    } label: {
+                        Label(removeVisibleOfflineCopiesButtonTitle, systemImage: "trash")
                     }
+                    .disabled(visibleOfflineComicFiles.isEmpty)
                 }
             } label: {
-                Image(systemName: "ellipsis.circle")
+                Label("Folder Actions", systemImage: "ellipsis")
             }
-            .accessibilityLabel("Folder Actions")
         }
     }
 
-    @ViewBuilder
+    private var displayModeBinding: Binding<LibraryComicDisplayMode> {
+        Binding(get: { displayMode }, set: applyDisplayMode(_:))
+    }
+
+    /// "2 folders · 14 comics · 3 offline", counting only what the page shows.
+    private var locationStatusText: String? {
+        guard hasVisibleItems else {
+            return nil
+        }
+
+        var parts: [String] = []
+        if !displayedDirectories.isEmpty {
+            parts.append(String(localized: "\(displayedDirectories.count) folders"))
+        }
+        if !displayedComicFiles.isEmpty {
+            parts.append(String(localized: "\(displayedComicFiles.count) comics"))
+        }
+        if !visibleOfflineComicFiles.isEmpty {
+            parts.append(String(localized: "\(visibleOfflineComicFiles.count) offline"))
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private func importSheet(for request: RemoteBrowserImportRequest) -> some View {
+        RemoteImportOptionsSheet(
+            source: importSource(for: request),
+            availableScopes: availableImportScopes(for: request),
+            defaultScope: defaultImportScope(for: request),
+            dependencies: dependencies
+        ) { selection, scope in
+            startImportTask(
+                request,
+                destinationSelection: selection,
+                scope: scope
+            )
+        }
+    }
+
+    private func importSource(for request: RemoteBrowserImportRequest) -> RemoteImportSource {
+        let levelTitles = viewModel.pathLevels.map(\.title)
         switch request {
-        case .comic:
-            LibraryImportDestinationSheet(
-                title: request.destinationPickerTitle,
-                message: request.destinationPickerMessage,
-                supplementaryNotice: ImportDestinationSheetCopy.remoteImportNotice,
-                dependencies: dependencies,
-                preferredSelection: nil
-            ) { selection in
-                startImportTask(
-                    request,
-                    destinationSelection: selection,
-                    scope: .currentFolderOnly
-                )
-            }
-        case .currentFolder, .directory:
-            RemoteImportOptionsSheet(
-                title: request.destinationPickerTitle,
-                message: request.destinationPickerMessage,
-                supplementaryNotice: ImportDestinationSheetCopy.remoteImportNotice,
-                confirmLabel: String(localized: "Import"),
-                availableScopes: availableImportScopes(for: request),
-                defaultScope: defaultImportScope(for: request),
-                dependencies: dependencies,
-                preferredSelection: nil
-            ) { selection, scope in
-                startImportTask(
-                    request,
-                    destinationSelection: selection,
-                    scope: scope
-                )
-            }
+        case .currentFolder:
+            return RemoteImportSource(
+                title: viewModel.navigationTitle,
+                location: levelTitles.joined(separator: " › "),
+                isFolder: true,
+                directComicCount: displayedComicFiles.count
+            )
+        case .directory(let item):
+            return RemoteImportSource(
+                title: item.name,
+                location: (levelTitles + [item.name]).joined(separator: " › "),
+                isFolder: true,
+                directComicCount: nil
+            )
+        case .comic(let item):
+            return RemoteImportSource(
+                title: item.name,
+                location: levelTitles.joined(separator: " › "),
+                isFolder: false,
+                directComicCount: 1
+            )
         }
     }
 
@@ -744,12 +737,6 @@ struct RemoteServerBrowserView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    private var hasContextActions: Bool {
-        viewModel.canImportCurrentFolderRecursively
-            || !displayedComicFiles.isEmpty
-            || !visibleOfflineComicFiles.isEmpty
     }
 
     private func configureDisplayModeIfNeeded() {
@@ -1150,9 +1137,8 @@ struct RemoteServerBrowserView: View {
                 RemoteBrowserListSectionModel(
                     kind: .directories,
                     title: String(localized: "Folders"),
-                    metadataText: snapshot.directories.count == 1
-                        ? String(localized: "1 folder")
-                        : String(localized: "\(snapshot.directories.count) folders"),
+                    // Counts are in the location bar's status line.
+                    metadataText: nil,
                     footerText: nil,
                     items: snapshot.directories.map {
                         RemoteBrowserListRowModel(
@@ -1166,31 +1152,11 @@ struct RemoteServerBrowserView: View {
         }
 
         if !snapshot.comicFiles.isEmpty {
-            let downloadedCopies = snapshot.comicFiles.reduce(into: 0) { count, item in
-                let itemID = Self.itemIdentifier(for: item)
-                if cacheAvailabilityByItemID[itemID]?.kind != .unavailable {
-                    count += 1
-                }
-            }
-
-            let comicMetadata = [
-                snapshot.comicFiles.count == 1
-                    ? String(localized: "1 comic")
-                    : String(localized: "\(snapshot.comicFiles.count) comics"),
-                downloadedCopies > 0
-                    ? (downloadedCopies == 1
-                        ? String(localized: "1 downloaded copy")
-                        : String(localized: "\(downloadedCopies) downloaded copies"))
-                    : nil
-            ]
-                .compactMap { $0 }
-                .joined(separator: " · ")
-
             sections.append(
                 RemoteBrowserListSectionModel(
                     kind: .comics,
                     title: String(localized: "Comics"),
-                    metadataText: comicMetadata.isEmpty ? nil : comicMetadata,
+                    metadataText: nil,
                     footerText: nil,
                     items: snapshot.comicFiles.map {
                         let itemID = Self.itemIdentifier(for: $0)
@@ -1439,17 +1405,17 @@ struct RemoteServerBrowserView: View {
     }
 
     private var saveVisibleComicsButtonTitle: String {
-        String(localized: "Save Visible Comics")
+        String(localized: "Save Page Comics as Offline Copies")
     }
 
     private var removeVisibleOfflineCopiesButtonTitle: String {
-        String(localized: "Remove Downloaded Copies")
+        String(localized: "Remove Local Copies on This Page")
     }
 
     private var importCurrentFolderButtonTitle: String {
         supportsVisibleResultsImportScope
             ? String(localized: "Import Results")
-            : String(localized: "Import This Folder")
+            : String(localized: "Import This Folder to Library…")
     }
 
     private func availableImportScopes(for request: RemoteBrowserImportRequest) -> [RemoteDirectoryImportScope] {
@@ -1670,85 +1636,6 @@ struct RemoteComicOpenItem: Identifiable {
     }
 }
 
-struct RemoteBrowserItemActionMenuContent: View {
-    let item: RemoteDirectoryItem
-    let cacheAvailability: RemoteComicCachedAvailability
-    let onShowInfo: (() -> Void)?
-    let onOpenOffline: (() -> Void)?
-    let onSaveOffline: (() -> Void)?
-    let onRemoveOffline: (() -> Void)?
-    let onImport: (() -> Void)?
-
-    var body: some View {
-        if let onShowInfo {
-            Section("Info") {
-                Button(action: onShowInfo) {
-                    Label("Show File Info", systemImage: "info.circle")
-                }
-            }
-        }
-
-        if onOpenOffline != nil || onSaveOffline != nil || onRemoveOffline != nil {
-            Section("Offline") {
-                if let onOpenOffline {
-                    Button(action: onOpenOffline) {
-                        Label(
-                            cacheAvailability.kind == .stale
-                                ? String(localized: "Open Older Downloaded Copy")
-                                : String(localized: "Open Downloaded Copy"),
-                            systemImage: "arrow.down.circle"
-                        )
-                    }
-                }
-
-                if let onSaveOffline {
-                    Button(action: onSaveOffline) {
-                        Label(saveOfflineTitle, systemImage: saveOfflineSystemImage)
-                    }
-                }
-
-                if let onRemoveOffline {
-                    Button(role: .destructive, action: onRemoveOffline) {
-                        Label("Remove Downloaded Copy", systemImage: "trash")
-                    }
-                }
-            }
-        }
-
-        if let onImport {
-            Section("Library") {
-                Button(action: onImport) {
-                    Label(
-                        item.isDirectory
-                            ? String(localized: "Import Folder to Library")
-                            : String(localized: "Import to Library"),
-                        systemImage: "square.and.arrow.down.on.square"
-                    )
-                }
-            }
-        }
-    }
-
-    private var saveOfflineTitle: String {
-        switch cacheAvailability.kind {
-        case .unavailable:
-            return String(localized: "Save for Offline")
-        case .current:
-            return String(localized: "Refresh Downloaded Copy")
-        case .stale:
-            return String(localized: "Update Downloaded Copy")
-        }
-    }
-
-    private var saveOfflineSystemImage: String {
-        switch cacheAvailability.kind {
-        case .unavailable:
-            return "icloud.and.arrow.down"
-        case .current, .stale:
-            return "arrow.clockwise.icloud"
-        }
-    }
-}
 @MainActor
 final class RemoteComicVisibilityTracker: ObservableObject {
     private(set) var visibleIDs: Set<String> = []

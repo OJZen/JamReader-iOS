@@ -409,3 +409,23 @@ private extension RemoteComicFileReference {
             && path == other.path
     }
 }
+
+extension RemoteOfflineCopyStore {
+    /// Content keys of the offline copies saved from this server. A reading
+    /// cache is not in this set: only saved copies count as offline.
+    func offlineCopyKeys(for profile: RemoteServerProfile) throws -> Set<String> {
+        Set(
+            try loadRecords()
+                .filter { $0.matches(profile: profile) }
+                .map { Self.contentKey(kind: $0.contentKind, path: $0.path) }
+        )
+    }
+
+    static func contentKey(for reference: RemoteComicFileReference) -> String {
+        contentKey(kind: reference.contentKind, path: reference.path)
+    }
+
+    static func contentKey(kind: RemoteComicReferenceKind, path: String) -> String {
+        "\(kind.rawValue)|\(path)"
+    }
+}
