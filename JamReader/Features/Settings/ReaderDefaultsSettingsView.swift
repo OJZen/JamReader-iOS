@@ -35,9 +35,10 @@ struct ReaderDefaultsSettingsView: View {
 
                     pageLayoutPicker
 
+                    // Same names as the reader's display panel.
                     if layout.spreadMode == .doublePage {
                         Picker(
-                            "Reading Direction",
+                            "Spread Order",
                             selection: $layout.readingDirection
                         ) {
                             ForEach(ReaderReadingDirection.allCases, id: \.self) { direction in
@@ -46,10 +47,7 @@ struct ReaderDefaultsSettingsView: View {
                         }
                         .settingsPickerStyle()
 
-                        ReaderDoublePagePairingPicker(
-                            keepsFirstPageSingle: $layout.coverAsSinglePage
-                        )
-                        .settingsPickerStyle()
+                        Toggle("Show First Page Alone", isOn: $layout.coverAsSinglePage)
                     }
                 }
 
@@ -60,7 +58,7 @@ struct ReaderDefaultsSettingsView: View {
                 Text("Display")
             } footer: {
                 if layout.spreadMode == .doublePage {
-                    Text("Choose the grouping that keeps scanned two-page artwork aligned.")
+                    Text("If two-page artwork doesn’t line up, switch Show First Page Alone.")
                 }
             }
 

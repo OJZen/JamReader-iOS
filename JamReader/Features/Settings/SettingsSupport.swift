@@ -19,12 +19,8 @@ extension ReaderDisplayLayout {
             parts.append(readingDirection.settingsLocalizedTitle)
         }
         parts.append(fitMode.settingsLocalizedTitle)
-        if spreadMode == .doublePage {
-            parts.append(
-                coverAsSinglePage
-                    ? String(localized: "Even Page Ordering")
-                    : String(localized: "Odd Page Ordering")
-            )
+        if spreadMode == .doublePage, coverAsSinglePage {
+            parts.append(String(localized: "Show First Page Alone"))
         }
         return parts.joined(separator: " · ")
     }

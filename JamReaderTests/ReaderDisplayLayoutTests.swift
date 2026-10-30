@@ -86,7 +86,7 @@ final class ReaderDisplayLayoutTests: XCTestCase {
 
         XCTAssertEqual(spreads.map(\.pageIndices), [[0], [1, 2], [3, 4]])
         XCTAssertEqual(ReaderSpreadDescriptor.spreadIndex(containing: 2, in: spreads), 1)
-        XCTAssertTrue(layout.settingsSummary.contains(String(localized: "Even Page Ordering")))
+        XCTAssertTrue(layout.settingsSummary.contains(String(localized: "Show First Page Alone")))
     }
 
     func testOddPageOrderingPairsFirstAndSecondPages() {
@@ -102,7 +102,7 @@ final class ReaderDisplayLayoutTests: XCTestCase {
 
         XCTAssertEqual(spreads.map(\.pageIndices), [[0, 1], [2, 3], [4]])
         XCTAssertEqual(ReaderSpreadDescriptor.spreadIndex(containing: 2, in: spreads), 1)
-        XCTAssertTrue(layout.settingsSummary.contains(String(localized: "Odd Page Ordering")))
+        XCTAssertFalse(layout.settingsSummary.contains(String(localized: "Show First Page Alone")))
     }
 
     func testDisplayPageIndicesReverseForRightToLeftDoublePageSpread() {

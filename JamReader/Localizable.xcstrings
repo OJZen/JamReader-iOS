@@ -1676,6 +1676,28 @@
         }
       }
     },
+    "If two-page artwork doesn’t line up, switch Show First Page Alone.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "見開きの絵がずれるときは、「最初のページを単独で表示」を切り替えてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跨页画面没有对齐时，切换“首页单独显示”。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跨頁畫面沒有對齊時，切換「首頁單獨顯示」。"
+          }
+        }
+      }
+    },
     "Import %lld Comics": {
       "localizations": {
         "ja": {
@@ -7611,28 +7633,6 @@
         }
       }
     },
-    "Choose the grouping that keeps scanned two-page artwork aligned.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "選擇讓掃描版跨頁畫面正確對齊的頁面配對方式。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スキャン版の見開きが正しく揃うページの組み合わせを選択します。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "选择让扫描版跨页画面正确对齐的页面配对方式。"
-          }
-        }
-      }
-    },
     "Classification": {
       "localizations": {
         "zh-Hant-TW": {
@@ -10275,28 +10275,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "输入有效的 WebDAV 主机或 URL。"
-          }
-        }
-      }
-    },
-    "Even Page Ordering": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "偶數頁排序"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "偶数ページ順"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "偶数页排序"
           }
         }
       }
@@ -16581,28 +16559,6 @@
         }
       }
     },
-    "Odd Page Ordering": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "奇數頁排序"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "奇数ページ順"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "奇数页排序"
-          }
-        }
-      }
-    },
     "Offline": {
       "localizations": {
         "zh-Hant-TW": {
@@ -17804,28 +17760,6 @@
         }
       }
     },
-    "Page Pairing": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "頁面配對"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ページの組み合わせ"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "页面配对"
-          }
-        }
-      }
-    },
     "Paged": {
       "localizations": {
         "zh-Hant-TW": {
@@ -17866,28 +17800,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "页面"
-          }
-        }
-      }
-    },
-    "Pair pages 1 and 2, then 3 and 4": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "將第 1、2 頁配對，然後將第 3、4 頁配對"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1ページ目と2ページ目、次に3ページ目と4ページ目を組み合わせる"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将第 1、2 页配对，然后将第 3、4 页配对"
           }
         }
       }
@@ -18670,28 +18582,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "阅读默认设置"
-          }
-        }
-      }
-    },
-    "Reading Direction": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "閱讀方向"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "読み方向"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "阅读方向"
           }
         }
       }
@@ -21168,28 +21058,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "快捷方式"
-          }
-        }
-      }
-    },
-    "Show page 1 alone, then pair pages 2 and 3, 4 and 5": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "第 1 頁單獨顯示，然後將第 2、3 頁和第 4、5 頁分別配對"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1ページ目を単独表示し、2ページ目と3ページ目、4ページ目と5ページ目を組み合わせる"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "第 1 页单独显示，然后将第 2、3 页和第 4、5 页分别配对"
           }
         }
       }
