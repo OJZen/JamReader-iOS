@@ -448,6 +448,23 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         applyBookmarks(bookmarkPageIndices.filter { $0 != pageIndex })
     }
 
+    /// At the bookmark limit: moves the bookmark on `pageIndex` to the current page.
+    func replaceBookmark(at pageIndex: Int) {
+        guard bookmarkPageIndices.contains(pageIndex) else {
+            return
+        }
+        AppHaptics.light()
+        applyBookmarks(
+            ReaderBookmarkSupport.replaced(
+                bookmarkPageIndices,
+                bookmarkAt: pageIndex,
+                with: currentPageIndex,
+                pageCount: document?.pageCount,
+                maximumCount: bookmarkLimit
+            )
+        )
+    }
+
     func toggleFavoriteStatus() {
         guard let session = activeSession, isLibraryBacked else {
             return

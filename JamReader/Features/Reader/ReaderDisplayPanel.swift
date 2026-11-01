@@ -139,6 +139,10 @@ struct ReaderDisplayPanel: View {
         .scrollBounceBehavior(.basedOnSize)
         // The panel is attached inside the reader's white top bar.
         .foregroundStyle(Color.textPrimary)
+        // The sheet leaves the page usable, so VoiceOver does not treat it as
+        // modal and needs its own way out.
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(.escape, onClose)
         .modifier(
             ReaderDisplayPanelSizing(
                 contentHeight: contentHeight,

@@ -2,6 +2,23 @@ import Combine
 import SwiftUI
 import UIKit
 
+// MARK: - Navigation Tier
+
+/// Picks the iPad or iPhone values of the protected navigation lists. The
+/// window decides, so iPhone Duo's inner screen uses iPad values while an
+/// iPhone Plus / Max in landscape (regular width, compact height) stays on
+/// iPhone values.
+enum ReaderNavigationTier {
+    static func usesPadValues(
+        horizontalSizeClass: UserInterfaceSizeClass?,
+        verticalSizeClass: UserInterfaceSizeClass?,
+        userInterfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
+    ) -> Bool {
+        userInterfaceIdiom == .pad
+            || (horizontalSizeClass == .regular && verticalSizeClass == .regular)
+    }
+}
+
 // MARK: - Metrics
 
 private enum ReaderChromeMetrics {
@@ -54,10 +71,15 @@ private struct ReaderScrubberLayout {
 
     static func adaptive(
         horizontalSizeClass: UserInterfaceSizeClass?,
+        verticalSizeClass: UserInterfaceSizeClass?,
         viewportSize: CGSize = ReaderViewportResolver.currentBounds.size,
         userInterfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
     ) -> ReaderScrubberLayout {
-        if userInterfaceIdiom == .pad {
+        if ReaderNavigationTier.usesPadValues(
+            horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass,
+            userInterfaceIdiom: userInterfaceIdiom
+        ) {
             let minimumHeight: CGFloat = 700
             let maximumHeight: CGFloat = 1_366
             let minimumScale: CGFloat = 1.24
@@ -399,7 +421,7 @@ struct ReaderTopBar<DisplayPanel: View, MoreMenu: View>: View {
 
             if showsDisplaySettings {
                 Button {
-                    isDisplayPanelPresented = true
+                    isDisplayPanelPresented.toggle()
                 } label: {
                     // "Aa" in every language; the symbol is localized otherwise.
                     toolIcon("textformat.size")
@@ -451,6 +473,7 @@ struct ReaderBottomBar: View {
     let onScrubberInteractionChanged: (Bool) -> Void
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @StateObject private var scrubberCoordinator: ReaderThumbnailScrubberCoordinator
     @State private var containerWidth: CGFloat = 0
 
@@ -482,6 +505,7 @@ struct ReaderBottomBar: View {
     private var scrubberLayout: ReaderScrubberLayout {
         ReaderScrubberLayout.adaptive(
             horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass,
             viewportSize: CGSize(
                 width: max(containerWidth, 0),
                 height: max(viewportHeight, 0)
@@ -616,7 +640,10 @@ struct ReaderBottomBar: View {
         let viewportBounds = ReaderViewportResolver.currentBounds
         let viewportMidY = viewportBounds.midY
         let previewHalfHeight = previewCardHeight / 2
-        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        let isPad = ReaderNavigationTier.usesPadValues(
+            horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass
+        )
         let upwardBias = min(
             max(viewportBounds.height * (isPad ? 0.09 : 0.06), isPad ? 56 : 28),
             isPad ? 120 : 72

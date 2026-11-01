@@ -13,6 +13,8 @@ struct ReaderVerticalThumbnailRail: View {
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     @StateObject private var coordinator: ReaderVerticalThumbnailRailCoordinator
     @StateObject private var previewCoordinator = ReaderVerticalRailPreviewCoordinator()
 
@@ -154,7 +156,9 @@ struct ReaderVerticalThumbnailRail: View {
         ReaderVerticalThumbnailRailLayout.adaptive(
             viewportSize: viewportSize,
             safeAreaInsets: safeAreaInsets,
-            pageCount: pageCount
+            pageCount: pageCount,
+            horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass
         )
     }
 
@@ -777,9 +781,15 @@ struct ReaderVerticalThumbnailRailLayout: Equatable {
         viewportSize: CGSize,
         safeAreaInsets: EdgeInsets,
         pageCount: Int,
+        horizontalSizeClass: UserInterfaceSizeClass? = nil,
+        verticalSizeClass: UserInterfaceSizeClass? = nil,
         userInterfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
     ) -> ReaderVerticalThumbnailRailLayout {
-        let isPad = userInterfaceIdiom == .pad
+        let isPad = ReaderNavigationTier.usesPadValues(
+            horizontalSizeClass: horizontalSizeClass,
+            verticalSizeClass: verticalSizeClass,
+            userInterfaceIdiom: userInterfaceIdiom
+        )
         let chromeClearance: CGFloat = isPad ? 112 : 96
         let availableHeight = max(
             viewportSize.height

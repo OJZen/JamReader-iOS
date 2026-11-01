@@ -423,4 +423,25 @@ final class ReaderVerticalThumbnailRailGeometryTests: XCTestCase {
             minimumGap: compactMinimumGap
         )
     }
+
+    func testNavigationTierUsesPadValuesOnIPadOrFullyRegularWindow() {
+        func usesPadValues(
+            _ width: UserInterfaceSizeClass,
+            _ height: UserInterfaceSizeClass,
+            _ idiom: UIUserInterfaceIdiom
+        ) -> Bool {
+            ReaderNavigationTier.usesPadValues(
+                horizontalSizeClass: width,
+                verticalSizeClass: height,
+                userInterfaceIdiom: idiom
+            )
+        }
+
+        XCTAssertTrue(usesPadValues(.regular, .regular, .pad))
+        XCTAssertTrue(usesPadValues(.compact, .regular, .pad), "iPad in a narrow window")
+        XCTAssertTrue(usesPadValues(.regular, .regular, .phone), "iPhone Duo inner screen")
+        XCTAssertFalse(usesPadValues(.compact, .regular, .phone), "iPhone portrait, Duo outer screen")
+        XCTAssertFalse(usesPadValues(.regular, .compact, .phone), "iPhone Plus / Max landscape")
+        XCTAssertFalse(usesPadValues(.compact, .compact, .phone), "iPhone landscape")
+    }
 }

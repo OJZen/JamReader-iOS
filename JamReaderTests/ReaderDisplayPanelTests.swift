@@ -118,4 +118,11 @@ final class ReaderDisplayPanelTests: XCTestCase {
         XCTAssertTrue(ReaderBookmarkSupport.canToggle([1, 4], at: 12, maximumCount: 3))
         XCTAssertTrue(ReaderBookmarkSupport.canToggle(bookmarks, at: 12, maximumCount: nil))
     }
+
+    func testReplacingBookmarkKeepsTheCountAtTheLimit() {
+        XCTAssertEqual(
+            ReaderBookmarkSupport.replaced([1, 4, 9], bookmarkAt: 4, with: 12, pageCount: 40, maximumCount: 3),
+            [1, 9, 12]
+        )
+    }
 }

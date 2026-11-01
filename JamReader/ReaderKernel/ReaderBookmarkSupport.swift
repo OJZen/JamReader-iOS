@@ -31,6 +31,21 @@ enum ReaderBookmarkSupport {
         )
     }
 
+    /// Moves the bookmark on `oldPageIndex` to `newPageIndex` as one change.
+    static func replaced(
+        _ pageIndices: [Int],
+        bookmarkAt oldPageIndex: Int,
+        with newPageIndex: Int,
+        pageCount: Int? = nil,
+        maximumCount: Int? = nil
+    ) -> [Int] {
+        ReaderBookmarkNormalizer.normalized(
+            pageIndices.filter { $0 != oldPageIndex } + [newPageIndex],
+            pageCount: pageCount,
+            maximumCount: maximumCount
+        )
+    }
+
     /// Whether bookmarking `pageIndex` stays within the limit. A page that
     /// already has a bookmark can always be toggled off.
     static func canToggle(

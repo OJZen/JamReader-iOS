@@ -664,6 +664,28 @@
         }
       }
     },
+    "Choose one to replace with page %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldページに置き換えるブックマークを選択"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一个替换为第 %lld 页"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇一個替換為第 %lld 頁"
+          }
+        }
+      }
+    },
     "Clean Up": {
       "localizations": {
         "ja": {
@@ -3282,50 +3304,6 @@
         }
       }
     },
-    "Remove a bookmark before adding this page.": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このページを追加するには、ブックマークを1件削除してください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除一个书签后，才能添加这一页。"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除一個書籤後，才能加入這一頁。"
-          }
-        }
-      }
-    },
-    "Remove Bookmark on Page %lld": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lldページのブックマークを削除"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除第 %lld 页的书签"
-          }
-        },
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除第 %lld 頁的書籤"
-          }
-        }
-      }
-    },
     "Remove Library…": {
       "localizations": {
         "ja": {
@@ -3454,6 +3432,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "重新命名⋯"
+          }
+        }
+      }
+    },
+    "Replace Bookmark on Page %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lldページのブックマークを置き換え"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换第 %lld 页的书签"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替換第 %lld 頁的書籤"
           }
         }
       }

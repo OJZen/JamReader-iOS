@@ -69,7 +69,7 @@
 | 按 idiom 的列数 / 档位 | `RemoteServerBrowserGridUIKitView` 482 / 573；`ReaderThumbnailBrowserUIKitView` 59 / 673 | 按容器宽度与尺寸类别 |
 | `UIScreen.main.bounds` | `ReaderChromeOverlay` 283；`ReaderPageJumpOverlay` 181；`RemoteServerBrowserView` 785 | 所在窗口的 bounds |
 | `UIScreen.main.scale` | `ReaderThumbnailBrowserUIKitView` 728；`RemoteServerBrowserList/GridUIKitView` | `traitCollection.displayScale` |
-| 受保护组件的 `isPad` | `ReaderChromeOverlay` 58–60、618–621；`ReaderVerticalThumbnailRail` 780–851 | iPad 或常规宽度窗口 → iPad 档；数值不变 |
+| 受保护组件的 `isPad` | `ReaderChromeOverlay`（`ReaderScrubberLayout.adaptive`、浮动预览）；`ReaderVerticalThumbnailRailLayout.adaptive` | 统一用 `ReaderNavigationTier`：iPad，或窗口的宽、高尺寸类别都为常规 → iPad 档；其余 → iPhone 档（iPhone Plus / Max 横放是常规宽度、紧凑高度，仍用 iPhone 档）；数值不变 |
 | 折叠区 / 摄像头 | 新增 | iOS 27：`UIView.reservedRegions(kind:)` / SwiftUI `reservedRegions(kind:)`，`.division`、`.occlusion`，决定列数时 `.includeInactive` |
 | 写死的左右边距 | SwiftUI `.padding(.horizontal, …)` / `scenePadding`；collection view `contentInsets` | 系统容器边距：`layoutMarginsGuide`、`contentInsetsReference = .layoutMargins`、iOS 27.1 `.contentMargins(for: .container)` |
 | 自建栏 / 自绘按钮条 | 选择模式底栏等 | 系统栏项（只有系统栏会进侧边列） |

@@ -301,16 +301,16 @@ struct ComicReaderView: View {
             readerMoreMenu
         }
         .alert("Up to 3 Bookmarks per Comic", isPresented: $isShowingBookmarkLimitAlert) {
-            // The alert itself manages them: SwiftUI cannot open a second
-            // dialog while an alert is closing.
             ForEach(viewModel.bookmarkItems) { bookmark in
-                Button("Remove Bookmark on Page \(bookmark.pageNumber)", role: .destructive) {
-                    viewModel.removeBookmark(at: bookmark.pageIndex)
+                Button("Replace Bookmark on Page \(bookmark.pageNumber)") {
+                    viewModel.replaceBookmark(at: bookmark.pageIndex)
                 }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Remove a bookmark before adding this page.")
+            if let pageNumber = viewModel.currentPageNumber {
+                Text("Choose one to replace with page \(pageNumber)")
+            }
         }
     }
 
