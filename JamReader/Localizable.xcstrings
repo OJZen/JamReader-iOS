@@ -48,6 +48,28 @@
         }
       }
     },
+    "%@ · 1 comic": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@・1冊"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 本"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 1 本"
+          }
+        }
+      }
+    },
     "%lld comics · Readable offline": {
       "localizations": {
         "ja": {
@@ -4048,6 +4070,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "資料夾唯讀"
+          }
+        }
+      }
+    },
+    "The library now has %lld comics.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリには現在%lld冊のコミックがあります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书库现在共有 %lld 本漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書庫現在共有 %lld 本漫畫。"
+          }
+        }
+      }
+    },
+    "The library now has 1 comic.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライブラリには現在1冊のコミックがあります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "书库现在共有 1 本漫画。"
+          }
+        },
+        "zh-Hant-TW": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "書庫現在共有 1 本漫畫。"
           }
         }
       }
@@ -17281,28 +17347,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在打开书库"
-          }
-        }
-      }
-    },
-    "Opening this comic took too long.": {
-      "localizations": {
-        "zh-Hant-TW": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "開啟此漫畫耗時過久。"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このコミックを開くのに時間がかかりすぎました。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开此漫画用时过长。"
           }
         }
       }

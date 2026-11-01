@@ -18,6 +18,21 @@ final class ImportedComicsImportResultTests: XCTestCase {
         XCTAssertTrue(result.hasImportedAnyComics)
     }
 
+    func testCompletionMessageStatesLibraryTotalApartFromImportedCount() {
+        let result = makeResult(
+            importedComicCount: 1,
+            scanSummary: LibraryScanSummary(folderCount: 2, comicCount: 6)
+        )
+
+        XCTAssertEqual(
+            result.completionMessageLines(),
+            [
+                "Imported 1 comic file into Imported Comics.",
+                "The library now has 6 comics."
+            ]
+        )
+    }
+
     func testCompletionMessageReportsScanErrorRecoveryGuidance() {
         let result = makeResult(
             importedComicCount: 2,
@@ -68,6 +83,7 @@ final class ImportedComicsImportResultTests: XCTestCase {
         importedDestinationDisplayName: String = "Imported Comics",
         createdLibrary: Bool = false,
         importedComicCount: Int = 0,
+        scanSummary: LibraryScanSummary? = nil,
         scanErrorMessage: String? = nil,
         unsupportedItemNames: [String] = [],
         failedItemNames: [String] = []
@@ -78,7 +94,7 @@ final class ImportedComicsImportResultTests: XCTestCase {
             importedDestinationDisplayName: importedDestinationDisplayName,
             createdLibrary: createdLibrary,
             importedComicCount: importedComicCount,
-            scanSummary: nil,
+            scanSummary: scanSummary,
             scanErrorMessage: scanErrorMessage,
             unsupportedItemNames: unsupportedItemNames,
             failedItemNames: failedItemNames

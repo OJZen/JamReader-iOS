@@ -873,7 +873,11 @@ struct RemoteOfflineShelfView: View {
     }
 
     private func sectionHeader(for section: RemoteOfflineShelfSection) -> some View {
-        Text("\(section.profile.name) · \(section.entries.count) comics")
+        Text(
+            section.entries.count == 1
+                ? String(localized: "\(section.profile.name) · 1 comic")
+                : String(localized: "\(section.profile.name) · \(section.entries.count) comics")
+        )
             .font(AppFont.footnote())
             .foregroundStyle(Color.textSecondary)
             .textCase(nil)
@@ -1141,8 +1145,10 @@ private struct RemoteOfflineShelfRow: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: Spacing.xs) {
                         statusBadge
+                            .fixedSize()
                         detailText
                     }
+                    // Not fixed: at accessibility sizes the badge wraps between words.
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         statusBadge
                         detailText
@@ -1164,7 +1170,6 @@ private struct RemoteOfflineShelfRow: View {
 
     private var statusBadge: some View {
         StatusBadge(status: entry.availability.kind == .stale ? .staleCopy : .offline)
-            .fixedSize()
     }
 
     private var detailText: some View {

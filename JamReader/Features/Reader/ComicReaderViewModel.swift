@@ -782,6 +782,14 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
         loadTask = nil
         currentLoadToken = nil
         loadState = .failed(message)
+        alertOpenFailureIfNeeded(message: message)
+    }
+
+    /// With no document on screen the failure page already says this.
+    private func alertOpenFailureIfNeeded(message: String) {
+        guard document != nil else {
+            return
+        }
         alert = AppAlertState(
             title: String(localized: "Failed to Open Comic"),
             message: message
@@ -842,11 +850,9 @@ final class ComicReaderViewModel: ObservableObject, LoadableViewModel {
             self?.loadTask?.cancel()
             self?.loadTask = nil
             self?.currentLoadToken = nil
-            self?.loadState = .failed(String(localized: "Opening this comic took too long."))
-            self?.alert = AppAlertState(
-                title: String(localized: "Failed to Open Comic"),
-                message: String(localized: "Opening this comic took too long. The file may be unavailable or the storage provider is not responding.")
-            )
+            let message = String(localized: "Opening this comic took too long. The file may be unavailable or the storage provider is not responding.")
+            self?.loadState = .failed(message)
+            self?.alertOpenFailureIfNeeded(message: message)
         }
     }
 

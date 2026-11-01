@@ -29,6 +29,14 @@ struct LibraryScanSummary: Codable, Equatable {
         String(localized: "Indexed \(summaryLine)")
     }
 
+    /// The whole library after a scan, worded so it doesn't read as the
+    /// number of comics just imported.
+    var libraryTotalLine: String {
+        comicCount == 1
+            ? String(localized: "The library now has 1 comic.")
+            : String(localized: "The library now has \(comicCount) comics.")
+    }
+
     var addedComicCount: Int? {
         guard let reusedComicCount else {
             return nil

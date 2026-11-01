@@ -145,10 +145,7 @@ struct BrowseHomeView: View {
                     BrowseHomeServerRow(
                         profile: profile,
                         isSelected: usesPersistentSelection && splitSelection == .server(profile.id),
-                        showsDisclosureIndicator: !usesPersistentSelection,
-                        trailingAccessoryReservedWidth: usesPersistentSelection
-                            ? AppLayout.persistentRowActionReservedWidth
-                            : 0
+                        isInSidebar: usesPersistentSelection
                     )
                 }
                 .buttonStyle(.plain)
@@ -156,18 +153,6 @@ struct BrowseHomeView: View {
                     isSelected: splitSelection == .server(profile.id),
                     isEnabled: usesPersistentSelection
                 )
-                .overlay(alignment: .trailing) {
-                    if usesPersistentSelection {
-                        Menu {
-                            serverActionMenuContent(for: profile)
-                        } label: {
-                            PersistentRowActionButtonLabel()
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Manage \(profile.displayTitle)")
-                        .padding(.trailing, Spacing.xs)
-                    }
-                }
                 .contextMenu {
                     serverActionMenuContent(for: profile)
                 }
@@ -427,8 +412,9 @@ private struct BrowseHomeShortcutItem: Identifiable {
 private struct BrowseHomeServerRow: View {
     let profile: RemoteServerProfile
     var isSelected = false
-    var showsDisclosureIndicator = true
-    var trailingAccessoryReservedWidth: CGFloat = 0
+    /// The narrow sidebar names the protocol in the subtitle and keeps the
+    /// server's actions on long press, so the name gets the whole row.
+    var isInSidebar = false
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -445,32 +431,31 @@ private struct BrowseHomeServerRow: View {
                 Text(profile.displayTitle)
                     .font(AppFont.body())
                     .foregroundStyle(Color.textPrimary)
-                    .lineLimit(isLarge ? 3 : 1)
+                    .lineLimit(isLarge ? 3 : (isInSidebar ? 2 : 1))
 
-                Text(profile.addressSummary)
+                Text(isInSidebar ? profile.protocolAddressSummary : profile.addressSummary)
                     .font(AppFont.footnote())
                     .foregroundStyle(Color.textSecondary)
                     .lineLimit(isLarge ? 2 : 1)
 
-                if isLarge {
+                if isLarge && !isInSidebar {
                     RemoteProtocolTag(kind: profile.providerKind)
                 }
             }
 
             Spacer(minLength: Spacing.xs)
 
-            if !isLarge {
-                RemoteProtocolTag(kind: profile.providerKind)
-            }
+            if !isInSidebar {
+                if !isLarge {
+                    RemoteProtocolTag(kind: profile.providerKind)
+                }
 
-            if showsDisclosureIndicator {
                 Image(systemName: "chevron.right")
                     .font(AppFont.caption2(.semibold))
                     .foregroundStyle(Color.textTertiary)
             }
         }
         .padding(.vertical, Spacing.xxs)
-        .padding(.trailing, trailingAccessoryReservedWidth)
         .contentShape(Rectangle())
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

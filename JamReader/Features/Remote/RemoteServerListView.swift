@@ -394,6 +394,13 @@ extension RemoteServerProfile {
         let path = providerRootDisplayPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         return path.isEmpty ? endpointDisplaySummary : "\(endpointDisplaySummary) · \(path)"
     }
+
+    /// "WebDAV · 127.0.0.1:8088": the protocol, then the host.
+    var protocolAddressSummary: String {
+        endpointDisplaySummary.isEmpty
+            ? providerKind.title
+            : "\(providerKind.title) · \(endpointDisplaySummary)"
+    }
 }
 
 /// SMB / WEBDAV in neutral gray: a type, not a status (`StatusBadge`).

@@ -127,7 +127,6 @@ struct RemoteCacheSettingsView: View {
     @State private var downloadsFullCopyWhileReading = true
     @State private var remoteThumbnailCacheSummary: RemoteThumbnailCacheSummary = .empty
     @State private var importedComicsLibrarySummary: LibraryStorageFootprintSummary = .empty
-    @State private var pendingConfirmation: CacheMaintenanceAction?
     @State private var maintenanceAction: CacheMaintenanceAction?
     @State private var isApplyingPolicy = false
     @State private var alert: AppAlertState?
@@ -157,17 +156,6 @@ struct RemoteCacheSettingsView: View {
         Binding(
             get: { downloadsFullCopyWhileReading },
             set: setDownloadsFullCopyWhileReading
-        )
-    }
-
-    private var confirmationIsPresented: Binding<Bool> {
-        Binding(
-            get: { pendingConfirmation != nil },
-            set: { isPresented in
-                if !isPresented {
-                    pendingConfirmation = nil
-                }
-            }
         )
     }
 
@@ -207,10 +195,10 @@ struct RemoteCacheSettingsView: View {
                 StorageItemRow(
                     title: String(localized: "Downloaded"),
                     bytes: remoteCacheSummary.hasCachedComics ? remoteCacheSummary.cachedComicBytes : 0,
-                    actionTitle: String(localized: "Clean Up")
-                ) {
-                    pendingConfirmation = .downloads
-                }
+                    actionTitle: String(localized: "Clean Up"),
+                    confirmation: .downloads,
+                    onConfirm: startMaintenance
+                )
             } header: {
                 Text("Remote Downloads")
             } footer: {
@@ -221,28 +209,28 @@ struct RemoteCacheSettingsView: View {
                 StorageItemRow(
                     title: String(localized: "Temporary Data"),
                     bytes: remoteCacheSummary.otherCacheBytes,
-                    actionTitle: String(localized: "Clean Up")
-                ) {
-                    pendingConfirmation = .temporaryCache
-                }
+                    actionTitle: String(localized: "Clean Up"),
+                    confirmation: .temporaryCache,
+                    onConfirm: startMaintenance
+                )
 
                 StorageItemRow(
                     title: String(localized: "Remote Cover Thumbnails"),
                     bytes: remoteThumbnailCacheSummary.isEmpty ? 0 : remoteThumbnailCacheSummary.totalBytes,
-                    actionTitle: String(localized: "Clean Up")
-                ) {
-                    pendingConfirmation = .thumbnails
-                }
+                    actionTitle: String(localized: "Clean Up"),
+                    confirmation: .thumbnails,
+                    onConfirm: startMaintenance
+                )
             }
 
             Section("Your Files") {
                 StorageItemRow(
                     title: String(localized: "“Imported Comics” Library"),
                     bytes: importedComicsLibrarySummary.isEmpty ? 0 : importedComicsLibrarySummary.totalBytes,
-                    actionTitle: String(localized: "Empty Library")
-                ) {
-                    pendingConfirmation = .imported
-                }
+                    actionTitle: String(localized: "Empty Library"),
+                    confirmation: .imported,
+                    onConfirm: startMaintenance
+                )
             }
         }
         .scrollContentBackground(.hidden)
@@ -262,22 +250,6 @@ struct RemoteCacheSettingsView: View {
         }
         .refreshable {
             await refresh()
-        }
-        .confirmationDialog(
-            pendingConfirmation?.confirmationTitle ?? "Clear stored data?",
-            isPresented: confirmationIsPresented,
-            titleVisibility: .visible,
-            presenting: pendingConfirmation
-        ) { action in
-            Button(action.buttonTitle, role: .destructive) {
-                pendingConfirmation = nil
-                startMaintenance(action)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingConfirmation = nil
-            }
-        } message: { action in
-            Text(action.confirmationMessage)
         }
         .alert(item: $alert) { alert in
             Alert(
@@ -552,12 +524,18 @@ private struct StorageUsageSummary: View {
 
     let segments: [Segment]
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
+        // Large text moves the size to its own line so the title keeps the width.
+        let headerLayout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.xxs))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: Spacing.sm))
         VStack(alignment: .leading, spacing: Spacing.sm) {
-            HStack(alignment: .firstTextBaseline) {
+            headerLayout {
                 Text("Used by JamReader")
                     .font(AppFont.headline())
-                Spacer(minLength: Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Text(Self.sizeText(totalBytes))
                     .foregroundStyle(Color.textSecondary)
                     .monospacedDigit()
@@ -611,14 +589,16 @@ private struct StorageUsageSummary: View {
 }
 
 /// A stored item: its size and the button that clears it. What clearing
-/// removes is written in the confirmation, not here.
+/// removes is written in the confirmation, which opens from that button.
 private struct StorageItemRow: View {
     let title: String
     let bytes: Int64
     let actionTitle: String
-    let action: () -> Void
+    let confirmation: RemoteCacheSettingsView.CacheMaintenanceAction
+    let onConfirm: (RemoteCacheSettingsView.CacheMaintenanceAction) -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var isConfirming = false
 
     var body: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
@@ -633,7 +613,9 @@ private struct StorageItemRow: View {
                     .foregroundStyle(Color.textSecondary)
                     .monospacedDigit()
 
-                Button(action: action) {
+                Button {
+                    isConfirming = true
+                } label: {
                     Text(actionTitle)
                         .font(AppFont.subheadline(.semibold))
                         .padding(.horizontal, Spacing.sm)
@@ -645,6 +627,18 @@ private struct StorageItemRow: View {
                 .disabled(bytes <= 0)
                 .opacity(bytes > 0 ? 1 : 0.45)
                 .accessibilityLabel(Text(actionTitle + " " + title))
+                .confirmationDialog(
+                    confirmation.confirmationTitle,
+                    isPresented: $isConfirming,
+                    titleVisibility: .visible
+                ) {
+                    Button(confirmation.buttonTitle, role: .destructive) {
+                        onConfirm(confirmation)
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text(confirmation.confirmationMessage)
+                }
             }
         }
     }

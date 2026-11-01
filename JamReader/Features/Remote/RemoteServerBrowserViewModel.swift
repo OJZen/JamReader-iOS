@@ -1804,7 +1804,7 @@ final class RemoteServerBrowserViewModel: ObservableObject {
         )
 
         if let scanSummary = result.scanSummary {
-            segments.append(scanSummary.indexedSummaryLine + ".")
+            segments.append(scanSummary.libraryTotalLine)
         } else if result.scanErrorMessage != nil {
             segments.append(String(localized: "Open the library and run Refresh to finish indexing the new files."))
         }

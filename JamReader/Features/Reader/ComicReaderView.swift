@@ -22,6 +22,7 @@ struct ComicReaderView: View {
     @State private var isShowingThumbnailBrowser = false
     @State private var isShowingBookmarkLimitAlert = false
     @State private var readStatusToastMessage: String?
+    @State private var cachedFailureCover: UIImage?
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isPageNavigationInteracting = false
@@ -82,6 +83,7 @@ struct ComicReaderView: View {
                     )
                 } else {
                     ReaderOpenFailureView(
+                        coverImage: openingPreviewImage ?? cachedFailureCover,
                         title: viewModel.navigationTitle,
                         message: viewModel.failureMessage
                             ?? String(localized: "The selected comic could not be opened."),
@@ -91,6 +93,7 @@ struct ComicReaderView: View {
                             { presentServerEditor(for: profile) }
                         }
                     )
+                    .task(loadCachedFailureCover)
                 }
             }
             .background(Color.black.ignoresSafeArea())
@@ -566,6 +569,19 @@ struct ComicReaderView: View {
         )
     }
 
+    /// A comic opened without a preview may still have a cover cached on disk.
+    /// This only reads the cache, so it works while the server is unreachable.
+    private func loadCachedFailureCover() async {
+        guard openingPreviewImage == nil, let remoteItem else {
+            return
+        }
+        cachedFailureCover = await RemoteComicThumbnailPipeline.shared.cachedThumbnailImage(
+            for: remoteItem,
+            browsingService: dependencies.remoteServerBrowsingService,
+            maxPixelSize: 512
+        )
+    }
+
     private func toggleBookmark() {
         guard viewModel.canToggleBookmarkForCurrentPage else {
             isShowingBookmarkLimitAlert = true
@@ -853,15 +869,7 @@ private struct ReaderOpeningStateView: View {
         GeometryReader { proxy in
             VStack(spacing: Spacing.lg) {
                 if let previewImage {
-                    Image(uiImage: previewImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(
-                            maxWidth: min(proxy.size.width * 0.55, 260),
-                            maxHeight: proxy.size.height * 0.45
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous))
-                        .accessibilityHidden(true)
+                    ReaderStateCover(image: previewImage, viewportSize: proxy.size)
                 }
 
                 VStack(spacing: Spacing.sm) {
@@ -917,9 +925,28 @@ private struct ReaderOpeningStateView: View {
     }
 }
 
-/// Opening failed: say why, then offer Try Again and, for a remote comic,
-/// Edit Server. × closes the reader.
+/// The comic's cover on the opening and failure states.
+private struct ReaderStateCover: View {
+    let image: UIImage
+    let viewportSize: CGSize
+
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(
+                maxWidth: min(viewportSize.width * 0.55, 260),
+                maxHeight: viewportSize.height * 0.45
+            )
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.sm, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// Opening failed: keep the cover if there is one, say why, then offer Try
+/// Again and, for a remote comic, Edit Server. × closes the reader.
 private struct ReaderOpenFailureView: View {
+    let coverImage: UIImage?
     let title: String
     let message: String
     let onClose: () -> Void
@@ -927,11 +954,33 @@ private struct ReaderOpenFailureView: View {
     let onEditServer: (() -> Void)?
 
     var body: some View {
+        GeometryReader { proxy in
+            // A short window has no room for the cover and the buttons.
+            ViewThatFits(in: .vertical) {
+                content(cover: coverImage, viewportSize: proxy.size)
+                content(cover: nil, viewportSize: proxy.size)
+            }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.vertical, ReaderStateTopBar.clearance)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .background(Color.black.ignoresSafeArea())
+        .overlay(alignment: .topLeading) {
+            ReaderStateTopBar(title: title, onClose: onClose)
+        }
+        .environment(\.colorScheme, .dark)
+    }
+
+    private func content(cover: UIImage?, viewportSize: CGSize) -> some View {
         VStack(spacing: Spacing.md) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.86))
-                .accessibilityHidden(true)
+            if let cover {
+                ReaderStateCover(image: cover, viewportSize: viewportSize)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.86))
+                    .accessibilityHidden(true)
+            }
 
             Text("Comic Unavailable")
                 .font(AppFont.headline(.semibold))
@@ -953,13 +1002,6 @@ private struct ReaderOpenFailureView: View {
             }
             .padding(.top, Spacing.xs)
         }
-        .padding(.horizontal, Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.ignoresSafeArea())
-        .overlay(alignment: .topLeading) {
-            ReaderStateTopBar(title: title, onClose: onClose)
-        }
-        .environment(\.colorScheme, .dark)
     }
 
     @ViewBuilder
@@ -983,6 +1025,9 @@ private struct ReaderOpenFailureView: View {
 /// × and the comic's name above the opening and failure states, before the
 /// reader's own bars exist.
 private struct ReaderStateTopBar: View {
+    /// Keeps centered content out from under the bar and the status bar.
+    static let clearance: CGFloat = 88
+
     let title: String
     let onClose: () -> Void
 

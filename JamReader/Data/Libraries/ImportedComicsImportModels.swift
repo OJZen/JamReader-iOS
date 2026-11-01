@@ -31,7 +31,7 @@ struct ImportedComicsImportResult {
         }
 
         if let scanSummary {
-            messageLines.append(scanSummary.indexedSummaryLine + ".")
+            messageLines.append(scanSummary.libraryTotalLine)
         } else if let scanErrorMessage {
             messageLines.append(String(localized: "Automatic indexing failed: \(scanErrorMessage)"))
             messageLines.append(String(localized: "Open \(importedDestinationDisplayName) and run Refresh to index the new files."))
