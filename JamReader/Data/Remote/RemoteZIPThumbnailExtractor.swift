@@ -41,7 +41,7 @@ struct RemoteZIPThumbnailExtractor {
             from: UInt64(endOfCentralDirectory.centralDirectoryOffset),
             length: Int(endOfCentralDirectory.centralDirectorySize)
         )
-        let entries = try await parseEntries(from: centralDirectoryData)
+        let entries = try parseEntries(from: centralDirectoryData)
         let orderedEntries = orderedPageEntries(from: entries)
 
         guard let firstEntry = orderedEntries.first else {
@@ -81,7 +81,7 @@ struct RemoteZIPThumbnailExtractor {
         )
     }
 
-    private func parseEntries(from centralDirectoryData: Data) async throws -> [RemoteZIPEntry] {
+    private func parseEntries(from centralDirectoryData: Data) throws -> [RemoteZIPEntry] {
         var entries: [RemoteZIPEntry] = []
         var offset = 0
 
@@ -110,7 +110,6 @@ struct RemoteZIPThumbnailExtractor {
 
             let fileNameData = centralDirectoryData.subdata(in: pathStart..<pathEnd)
             let path = decodeEntryName(fileNameData, generalPurposeFlag: generalPurposeFlag)
-            let dataOffset = try await resolveDataOffset(from: UInt64(localHeaderOffset))
 
             entries.append(
                 RemoteZIPEntry(
@@ -119,7 +118,7 @@ struct RemoteZIPThumbnailExtractor {
                     generalPurposeFlag: generalPurposeFlag,
                     compressedSize: compressedSize,
                     uncompressedSize: uncompressedSize,
-                    dataOffset: dataOffset
+                    localHeaderOffset: UInt64(localHeaderOffset)
                 )
             )
 
@@ -168,7 +167,7 @@ struct RemoteZIPThumbnailExtractor {
         }
 
         let compressedData = try await readData(
-            from: entry.dataOffset,
+            from: try await resolveDataOffset(from: entry.localHeaderOffset),
             length: Int(entry.compressedSize)
         )
 
@@ -319,7 +318,7 @@ private struct RemoteZIPEntry {
     let generalPurposeFlag: UInt16
     let compressedSize: UInt32
     let uncompressedSize: UInt32
-    let dataOffset: UInt64
+    let localHeaderOffset: UInt64
 
     var isDirectory: Bool {
         path.hasSuffix("/")

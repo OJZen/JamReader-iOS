@@ -729,12 +729,13 @@ private struct CachedThumbnailFileRecord {
     let lastAccessDate: Date
 }
 
-private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
+final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
     nonisolated(unsafe) private let fileManager: FileManager
     private let cacheRootURL: URL
     private let maximumCachedThumbnailCount: Int
     private let maximumTotalCacheBytes: Int64
     private let fileMutationLock = NSRecursiveLock()
+    private let generationLock = NSLock()
     private let summaryLock = NSLock()
     private let touchStateLock = NSLock()
     private let maintenanceQueue = DispatchQueue(
@@ -779,8 +780,10 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         }
     }
 
+    /// Read on the main actor for every thumbnail request, so this must not wait for
+    /// `fileMutationLock`, which disk scans and trims can hold for a long time.
     nonisolated func currentGeneration() -> UInt64 {
-        withFileMutationLock { cacheGeneration }
+        withGenerationLock { cacheGeneration }
     }
 
     nonisolated func cacheSummaryAsync() async -> RemoteThumbnailCacheSummary {
@@ -797,7 +800,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
 
     nonisolated func clearCache() throws {
         try withFileMutationLock {
-            cacheGeneration &+= 1
+            withGenerationLock { cacheGeneration &+= 1 }
             if fileManager.fileExists(atPath: cacheRootURL.path) {
                 try fileManager.removeItem(at: cacheRootURL)
             }
@@ -825,22 +828,13 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         }
     }
 
-    nonisolated func loadCachedImage(at fileURL: URL) -> UIImage? {
-        withFileMutationLock {
-            decodedCachedImage(at: fileURL)
-        }
-    }
-
-    /// Async variant — performs the disk read on the maintenance queue so the
-    /// caller's thread (typically the main actor) is never blocked by file I/O.
+    /// Decodes on the maintenance queue without `fileMutationLock`, so neither the caller
+    /// nor concurrent stores wait for it. Stores replace files atomically, and callers
+    /// compare generations to drop a result that a cache clear overtook.
     nonisolated func loadCachedImageAsync(at fileURL: URL) async -> UIImage? {
         await withCheckedContinuation { continuation in
             maintenanceQueue.async { [self] in
-                continuation.resume(
-                    returning: withFileMutationLock {
-                        decodedCachedImage(at: fileURL)
-                    }
-                )
+                continuation.resume(returning: decodedCachedImage(at: fileURL))
             }
         }
     }
@@ -879,7 +873,7 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         generation: UInt64
     ) throws {
         try withFileMutationLock {
-            guard generation == cacheGeneration else {
+            guard generation == currentGeneration() else {
                 return
             }
 
@@ -1075,6 +1069,12 @@ private final class RemoteThumbnailDiskCacheStore: @unchecked Sendable {
         }
 
         return cachedFiles
+    }
+
+    nonisolated private func withGenerationLock<T>(_ body: () -> T) -> T {
+        generationLock.lock()
+        defer { generationLock.unlock() }
+        return body()
     }
 
     nonisolated private func withSummaryLock<T>(_ body: () -> T) -> T {

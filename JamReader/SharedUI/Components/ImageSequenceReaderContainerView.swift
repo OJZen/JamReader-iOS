@@ -1063,7 +1063,7 @@ private final class ComicImageSpreadViewController: UIViewController {
 
                     for index in pageIndices {
                         let data = try await pageSource.dataForPage(at: index)
-                        guard let image = Self.decodeImage(
+                        guard let image = ReaderPagedImageDecoder.decodeImage(
                             from: data,
                             maxPixelSize: decodeMaxPixelSize,
                             preferFullResolution: shouldPreferFullResolution
@@ -1425,19 +1425,21 @@ private final class ComicImageSpreadViewController: UIViewController {
         let estimatedPixels = normalizedDimension * screenScale * zoomFactor * spreadFactor
         return max(1600, min(Int(estimatedPixels.rounded()), 8192))
     }
+}
 
-    nonisolated private static func decodeImage(
+nonisolated enum ReaderPagedImageDecoder {
+    static func decodeImage(
         from data: Data,
         maxPixelSize: Int,
         preferFullResolution: Bool
     ) -> UIImage? {
         guard !preferFullResolution else {
-            return UIImage(data: data)
+            return fullyDecodedImage(from: data)
         }
 
         let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            return UIImage(data: data)
+            return fullyDecodedImage(from: data)
         }
 
         if let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
@@ -1445,7 +1447,7 @@ private final class ComicImageSpreadViewController: UIViewController {
            let pixelHeight = properties[kCGImagePropertyPixelHeight] as? CGFloat {
             let maxSourceDimension = max(pixelWidth, pixelHeight)
             if maxSourceDimension <= CGFloat(maxPixelSize) * 1.1 {
-                return UIImage(data: data)
+                return fullyDecodedImage(from: data)
             }
         }
 
@@ -1460,7 +1462,17 @@ private final class ComicImageSpreadViewController: UIViewController {
             return UIImage(cgImage: thumbnail)
         }
 
-        return UIImage(data: data)
+        return fullyDecodedImage(from: data)
+    }
+
+    /// `UIImage(data:)` waits for Core Animation's first draw to decode, which would stall
+    /// the page turn on the main thread, so the loading task finishes the work instead.
+    private static func fullyDecodedImage(from data: Data) -> UIImage? {
+        guard let image = UIImage(data: data) else {
+            return nil
+        }
+
+        return image.preparingForDisplay() ?? image
     }
 }
 

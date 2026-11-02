@@ -523,6 +523,7 @@ iPadOS 后台恢复后曾出现 tab 栏多出空白项。修复 root tabs 是必
 - `RemoteServerBrowserView` 按可见范围预热当前目录漫画：主范围允许远程提取，次范围只用缓存，PDF 不参与预热。
 - 文件夹卡片的预览请求使用 `allowsRemoteFetch: false`，不能为填满卡片额外下载漫画。no-Range 规则见[4.1](#41-webdav-range-是流式读取和封面预读的边界)。
 - 保留并发和范围限制；滚动、切目录、切显示模式或打开 reader 时取消或重新规划任务。
+- 单个封面的远端读取次数不能随页数增长：远程 ZIP 封面只读取选中页的本地文件头。
 
 ### 9.2 大量远程 I/O 不应拖慢主线程
 
@@ -553,6 +554,16 @@ SMB 浏览器中，文件夹封面在 list/grid 切换时曾出现低清、黑�
 - 缓存 key 要包含必要的目标尺寸或质量等级。
 - 低清占位可以先显示，但高分辨率结果回来后必须替换。
 - 封面裁剪策略要统一，避免同一缓存图在不同 aspect ratio 下出现黑边。
+
+### 9.5 图片解码和缓存文件锁不能落到主线程
+
+翻页时卡一下、滚动远程列表时偶发停顿，常见原因是解码或锁等待留在了主线程。
+
+维护要求：
+
+- 翻页模式的页面由 `ReaderPagedImageDecoder` 在加载任务里解码完成。`UIImage(data:)` 要等 Core Animation 首次绘制才解码，直接交给 `UIImageView` 会把解码留到翻页动画期间的主线程。
+- 提前解码后，已加载的 spread 都占用解码后的内存；上限由 `controllerRetentionRadius` 决定，内存警告时只保留当前 spread。
+- `RemoteThumbnailDiskCacheStore` 的 `fileMutationLock` 可能被摘要扫描和裁剪长时间持有。主线程读取的缓存代际只用 `generationLock`，读取和解码磁盘缩略图不持有文件锁，迟到结果由调用方按代际丢弃。
 
 ## 10. 缓存和存储设置
 
