@@ -7,24 +7,29 @@ struct ImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
     let isHorizontalScrollingDisabled: Bool
+    let heroContext: ReaderHeroContext
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
     let onZoomStateChanged: ((Bool) -> Void)?
+    let onFirstPageShown: () -> Void
 
     func makeUIViewController(context: Context) -> ReaderPagedCollectionViewController {
-        ReaderPagedCollectionViewController(
+        let viewController = ReaderPagedCollectionViewController(
             document: document,
             layout: layout,
             onPageChanged: onPageChanged,
             onReaderTap: onReaderTap,
             initialPageIndex: clampedPageIndex(initialPageIndex)
         )
+        heroContext.pageSource = viewController
+        return viewController
     }
 
     func updateUIViewController(_ viewController: ReaderPagedCollectionViewController, context: Context) {
         viewController.onPageChanged = onPageChanged
         viewController.onReaderTap = onReaderTap
         viewController.onZoomStateChanged = onZoomStateChanged
+        viewController.onFirstPageShown = onFirstPageShown
         viewController.isDismissGestureActive = isHorizontalScrollingDisabled
         viewController.update(
             document: document,
@@ -97,10 +102,15 @@ enum ReaderSpreadPageGeometry {
 }
 
 @MainActor
-final class ReaderPagedCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+final class ReaderPagedCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, ReaderHeroPageSource {
     var onPageChanged: (Int) -> Void
     var onReaderTap: (ReaderTapRegion) -> Void
     var onZoomStateChanged: ((Bool) -> Void)?
+    var onFirstPageShown: (() -> Void)?
+
+    var heroPage: ReaderHeroPage? {
+        controllerCache[currentSpreadIndex]?.heroPage
+    }
 
     var isDismissGestureActive: Bool = false {
         didSet {
@@ -619,6 +629,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         controller.onInteractionBegan = { [weak self, spreadIndex] in
             self?.handleInteractionBegan(on: spreadIndex)
         }
+        controller.onContentShown = { [weak self, spreadIndex] in
+            guard let self, spreadIndex == self.currentSpreadIndex else { return }
+            self.onFirstPageShown?()
+        }
         if pageViewportSize.width > 0, pageViewportSize.height > 0 {
             controller.requireViewportSize(pageViewportSize)
         }
@@ -907,11 +921,25 @@ private final class ComicImageSpreadViewController: UIViewController {
     private var lastViewportSize: CGSize = .zero
     private var targetViewportSize: CGSize?
     private var needsViewportResetOnNextLayout = true
+    private var hasReportedContentShown = false
     private let previewNamespace: String
     private var previewObserver: NSObjectProtocol?
     private let onTapRegion: (ReaderTapRegion) -> Void
     var onZoomStateChanged: ((Bool) -> Void)?
     var onInteractionBegan: (() -> Void)?
+    /// Called once, when the page or its error is on screen.
+    var onContentShown: (() -> Void)?
+
+    var heroPage: ReaderHeroPage? {
+        guard isViewLoaded, !imageViews.isEmpty else {
+            return nil
+        }
+
+        let contentRect = rotationContainerView
+            .convert(rotationContainerView.bounds, to: zoomablePageView)
+            .intersection(zoomablePageView.bounds)
+        return ReaderHeroPage(view: zoomablePageView, contentRect: contentRect)
+    }
 
     init(
         spreadIndex: Int,
@@ -1247,7 +1275,17 @@ private final class ComicImageSpreadViewController: UIViewController {
             fitMode: layout.fitMode,
             resetZoomScale: shouldSnapToPreferredViewport
         )
+        reportContentShownIfNeeded()
         return true
+    }
+
+    private func reportContentShownIfNeeded() {
+        guard !hasReportedContentShown else {
+            return
+        }
+
+        hasReportedContentShown = true
+        onContentShown?()
     }
 
     func setPageSpacingEnabled(_ pageSpacingEnabled: Bool) {
@@ -1271,6 +1309,7 @@ private final class ComicImageSpreadViewController: UIViewController {
         rotationContainerView.bounds = .zero
         rotationContainerView.frame = .zero
         zoomablePageView.clearContentLayout()
+        reportContentShownIfNeeded()
         messageLabel.text = message
         messageLabel.isHidden = false
     }

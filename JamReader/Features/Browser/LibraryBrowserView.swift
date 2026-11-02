@@ -639,8 +639,7 @@ struct LibraryBrowserView: View {
                         comic,
                         context: previewNavigationContext(for: .reading),
                         sourceFrame: frame,
-                        preferredHeroSourceID: previewHeroSourceID(for: .reading, comic: comic),
-                        transitionStyle: .libraryLift
+                        preferredHeroSourceID: previewHeroSourceID(for: .reading, comic: comic)
                     )
                 } label: {
                     ContinueReadingCard(
@@ -1301,8 +1300,7 @@ struct LibraryBrowserView: View {
         _ comic: LibraryComic,
         context: ReaderNavigationContext,
         sourceFrame: CGRect,
-        preferredHeroSourceID: String? = nil,
-        transitionStyle: ReaderHeroTransitionStyle = .coverZoom
+        preferredHeroSourceID: String? = nil
     ) {
         let heroSourceID = preferredHeroSourceID ?? viewModel.heroSourceID(for: comic)
         let registeredFrame = HeroSourceRegistry.shared.frame(for: heroSourceID)
@@ -1316,9 +1314,9 @@ struct LibraryBrowserView: View {
                     descriptor: viewModel.descriptor,
                     comic: comic,
                     navigationContext: context,
+                    heroSourceID: heroSourceID,
                     sourceFrame: effectiveSourceFrame,
                     previewImage: previewImage,
-                    transitionStyle: transitionStyle,
                     onComicUpdated: handleReaderComicUpdate,
                     onDismiss: nil
                 )

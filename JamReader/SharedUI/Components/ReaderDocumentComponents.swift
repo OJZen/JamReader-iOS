@@ -42,9 +42,11 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
     let pageIndex: Int
     let layout: ReaderDisplayLayout
     let isDismissGestureActive: Bool
+    let heroContext: ReaderHeroContext
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
     let onZoomStateChanged: ((Bool) -> Void)?
+    let onFirstPageShown: () -> Void
     @ViewBuilder let unsupportedContent: (UnsupportedComicDocument) -> UnsupportedContent
 
     var body: some View {
@@ -70,9 +72,11 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 initialPageIndex: pageIndex,
                 layout: resolvedLayout,
                 isDismissGestureActive: isDismissGestureActive,
+                heroContext: heroContext,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap,
-                onZoomStateChanged: onZoomStateChanged
+                onZoomStateChanged: onZoomStateChanged,
+                onFirstPageShown: onFirstPageShown
             )
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())
@@ -82,9 +86,11 @@ struct ReaderDocumentContentView<UnsupportedContent: View>: View {
                 initialPageIndex: pageIndex,
                 layout: resolvedLayout,
                 isHorizontalScrollingDisabled: isDismissGestureActive,
+                heroContext: heroContext,
                 onPageChanged: onPageChanged,
                 onReaderTap: onReaderTap,
-                onZoomStateChanged: onZoomStateChanged
+                onZoomStateChanged: onZoomStateChanged,
+                onFirstPageShown: onFirstPageShown
             )
             .ignoresSafeArea()
             .background(Color.black.ignoresSafeArea())

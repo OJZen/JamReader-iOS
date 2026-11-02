@@ -2,38 +2,83 @@ import SwiftUI
 import UIKit
 
 @MainActor
+@Observable
 final class HeroSourceRegistry {
     static let shared = HeroSourceRegistry()
 
     private final class WeakViewBox {
         weak var view: UIView?
+        /// The cover of a UIKit cell; SwiftUI covers use `HeroSourceCoverModifier`.
+        weak var coverView: UIView?
 
-        init(view: UIView) {
+        init(view: UIView, coverView: UIView?) {
             self.view = view
+            self.coverView = coverView
         }
     }
 
-    private var viewsByID: [String: WeakViewBox] = [:]
+    @ObservationIgnored private var viewsByID: [String: WeakViewBox] = [:]
 
-    func register(view: UIView, for id: String) {
-        viewsByID[id] = WeakViewBox(view: view)
+    /// The cover a flying copy stands in for, hidden so it doesn't show twice.
+    private(set) var hiddenSourceID: String?
+
+    func register(view: UIView, for id: String, coverView: UIView? = nil) {
+        viewsByID[id] = WeakViewBox(view: view, coverView: coverView)
+        coverView?.alpha = id == hiddenSourceID ? 0 : 1
     }
 
     func unregister(view: UIView, for id: String) {
-        guard let registeredView = viewsByID[id]?.view, registeredView === view else {
+        guard let box = viewsByID[id], box.view === view else {
             return
         }
 
+        box.coverView?.alpha = 1
         viewsByID[id] = nil
     }
 
     func frame(for id: String) -> CGRect {
         guard let view = viewsByID[id]?.view, view.window != nil else {
+            viewsByID[id]?.coverView?.alpha = 1
             viewsByID[id] = nil
             return .zero
         }
 
         return HeroSourceFrameSanitizer.windowFrame(for: view)
+    }
+
+    func cornerRadius(for id: String) -> CGFloat {
+        viewsByID[id]?.coverView?.layer.cornerRadius ?? CornerRadius.thumbnail
+    }
+
+    /// Hides one source and brings back the previous one. Pass nil to hide none.
+    func hideSource(_ id: String?) {
+        guard hiddenSourceID != id else {
+            return
+        }
+
+        if let hiddenSourceID {
+            viewsByID[hiddenSourceID]?.coverView?.alpha = 1
+        }
+        hiddenSourceID = id
+        if let id {
+            viewsByID[id]?.coverView?.alpha = 0
+        }
+    }
+}
+
+/// Marks a SwiftUI cover as the place the reader opens from and closes back to.
+struct HeroSourceCoverModifier: ViewModifier {
+    let id: String?
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(id != nil && HeroSourceRegistry.shared.hiddenSourceID == id ? 0 : 1)
+            .overlay {
+                if let id {
+                    HeroSourceAnchorView(id: id)
+                        .allowsHitTesting(false)
+                }
+            }
     }
 }
 

@@ -612,9 +612,9 @@ struct LibraryComicCollectionPage<Model: LibraryComicCollectionModel, MenuConten
                     descriptor: model.descriptor,
                     comic: comic,
                     navigationContext: ReaderNavigationContext(title: title, comics: displayedComics),
+                    heroSourceID: heroSourceID,
                     sourceFrame: effectiveSourceFrame,
                     previewImage: previewImage,
-                    transitionStyle: .libraryLift,
                     onComicUpdated: { model.applyUpdatedComic($0) },
                     onDismiss: nil
                 )

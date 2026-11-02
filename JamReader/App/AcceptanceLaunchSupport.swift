@@ -8,6 +8,8 @@ import UIKit
 /// - `-JRAcceptanceOpenComic <file name prefix>` opens that comic from
 ///   Imported Comics in the reader, so protected reader UI can be captured
 ///   without navigating the library UI.
+/// - `-JRAcceptanceAnimationSpeed <0...1>` slows the window's animations, so a
+///   transition can be captured frame by frame with repeated screenshots.
 @MainActor
 enum AcceptanceLaunchSupport {
     private static var presenter: UIKitPresentationCoordinator?
@@ -20,6 +22,18 @@ enum AcceptanceLaunchSupport {
         importFixturesIfRequested(into: libraryListViewModel)
         addWebDAVServerIfRequested(dependencies: dependencies)
         openComicIfRequested(dependencies: dependencies, rootViewController: rootViewController)
+        applyAnimationSpeedIfRequested(to: rootViewController)
+    }
+
+    private static func applyAnimationSpeedIfRequested(to rootViewController: UIViewController) {
+        let speed = UserDefaults.standard.float(forKey: "JRAcceptanceAnimationSpeed")
+        guard speed > 0 else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            rootViewController.view.window?.layer.speed = speed
+        }
     }
 
     /// `-JRAcceptanceWebDAVPort <port>` adds a guest WebDAV profile for a local
@@ -108,6 +122,7 @@ enum AcceptanceLaunchSupport {
                         descriptor: descriptor,
                         comic: comic,
                         navigationContext: nil,
+                        heroSourceID: nil,
                         sourceFrame: .zero,
                         previewImage: nil,
                         onComicUpdated: nil,

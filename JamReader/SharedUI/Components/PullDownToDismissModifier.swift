@@ -93,6 +93,8 @@ enum ReaderDismissGestureDirection: Equatable {
 extension View {
     /// Adds an interactive directional dismissal gesture to the reader.
     /// Zoomed or scrollable content along the dismissal axis keeps ownership.
+    /// - Parameter heroContext: Carries the page under the finger while the
+    ///   rest of the reader fades, revealing the list behind it.
     /// - Parameter onDismissGestureActiveChanged: Called when the dismiss drag starts/ends.
     ///   Use this to temporarily disable the active reader scroller.
     /// - Parameter onDismiss: Called when the custom dismiss transition should
@@ -103,6 +105,7 @@ extension View {
         isEnabled: Bool = true,
         direction: ReaderDismissGestureDirection = .down,
         isZoomed: Bool = false,
+        heroContext: ReaderHeroContext,
         onDismissGestureActiveChanged: ((Bool) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) -> some View {
@@ -111,6 +114,7 @@ extension View {
                 isEnabled: isEnabled,
                 direction: direction,
                 isZoomed: isZoomed,
+                heroContext: heroContext,
                 onDismissGestureActiveChanged: onDismissGestureActiveChanged,
                 onDismiss: onDismiss
             )
@@ -124,10 +128,10 @@ private struct PullDownToDismissModifier: ViewModifier {
     let isEnabled: Bool
     let direction: ReaderDismissGestureDirection
     let isZoomed: Bool
+    let heroContext: ReaderHeroContext
     let onDismissGestureActiveChanged: ((Bool) -> Void)?
     let onDismiss: () -> Void
 
-    @State private var dragDistance: CGFloat = 0
     @State private var isDragging = false
     @State private var isCompletingDismiss = false
 
@@ -136,14 +140,9 @@ private struct PullDownToDismissModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         ZStack {
-            // Black background travels with content as one unit.
-            // The whole group fades as the user drags down, revealing
-            // the browser behind (requires .overFullScreen presentation).
             Color.black.ignoresSafeArea()
             content
         }
-        .opacity(isEnabled ? contentOpacity : 1)
-        .offset(isEnabled ? direction.offset(for: dragDistance) : .zero)
         .background {
             PullDownGestureLayer(
                 isEnabled: isEnabled && !isZoomed && !isCompletingDismiss,
@@ -153,19 +152,12 @@ private struct PullDownToDismissModifier: ViewModifier {
                 onDragCancelled: handleDragCancelled
             )
         }
-        .animation(isDragging || isCompletingDismiss ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: dragDistance)
         .onChange(of: dismissGestureState) { _, newValue in
             onDismissGestureActiveChanged?(newValue)
         }
         .onChange(of: direction) { _, _ in
             handleDragCancelled()
         }
-    }
-
-    private var contentOpacity: Double {
-        guard dragDistance > 0 else { return 1.0 }
-        let progress = min(dragDistance / 350, 1.0)
-        return max(0, 1.0 - progress)
     }
 
     private var dismissGestureState: Bool {
@@ -175,12 +167,11 @@ private struct PullDownToDismissModifier: ViewModifier {
     private func handleDragChanged(_ distance: CGFloat) {
         isCompletingDismiss = false
         isDragging = true
-        dragDistance = distance
+        heroContext.updateDrag(offset: direction.offset(for: distance), distance: distance)
     }
 
     private func handleDragEnded(_ distance: CGFloat, _ velocity: CGFloat) {
         isDragging = false
-        dragDistance = distance
 
         if distance > dismissThreshold || velocity > velocityThreshold {
             isCompletingDismiss = true
@@ -189,14 +180,14 @@ private struct PullDownToDismissModifier: ViewModifier {
             }
         } else {
             isCompletingDismiss = false
-            dragDistance = 0
+            heroContext.cancelDrag()
         }
     }
 
     private func handleDragCancelled() {
         isDragging = false
         isCompletingDismiss = false
-        dragDistance = 0
+        heroContext.cancelDrag()
     }
 }
 

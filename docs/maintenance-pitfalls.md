@@ -439,9 +439,11 @@ App 进入后台时可以保存进度、清理图片内存缓存，但不能释�
 
 维护要求：
 
-- 进入后台或页面刷新后，source frame 需要重新捕获。
+- 进入后台或页面刷新后，source frame 需要重新捕获。关闭时用 `HeroSourceRegistry` 取实时位置，打开时存下的 frame 在旋转或改窗口后已过期。
 - 如果找不到稳定 source frame，应退化成明确的 bottom-up 或 fade，而不是使用 `(0,0)` 假 frame。
-- 不要让旧截图或旧 preview image 覆盖新打开的漫画。
+- 不要让旧截图或旧 preview image 覆盖新打开的漫画。阅读器换到下一本后，封面和 source 都属于上一本：`ReaderHeroContext.isShowingOpenedComic` 为 false 时不再使用。
+- 飞行的只有 `ReaderHeroView`，不要再截整个阅读器去缩放：带黑边和工具栏的截图缩回封面，就是之前的黑色卡片。新阅读模式要实现 `ReaderHeroPageSource`，并在首页上屏时调用 `onFirstPageShown`。
+- 封面隐藏后必须恢复。SwiftUI 封面下一次更新才重新显示，所以关闭时飞行视图要多留一两帧；UIKit 单元格复用时靠 `unregister` 恢复透明度。
 
 ### 7.3 Root tab 修复逻辑要保守
 

@@ -1609,7 +1609,11 @@ final class RemoteBrowserListItemCardView: UIView {
             return
         }
 
-        HeroSourceRegistry.shared.register(view: thumbnailPlaceholderView, for: item.id)
+        HeroSourceRegistry.shared.register(
+            view: thumbnailPlaceholderView,
+            for: item.id,
+            coverView: thumbnailImageView
+        )
         registeredHeroSourceID = item.id
     }
 

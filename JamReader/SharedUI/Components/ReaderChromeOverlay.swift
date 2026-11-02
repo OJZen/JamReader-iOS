@@ -231,7 +231,7 @@ private enum ReaderSafeAreaResolver {
     }
 }
 
-private struct ReaderSafeAreaProbe: UIViewRepresentable {
+struct ReaderSafeAreaProbe: UIViewRepresentable {
     let onChange: (EdgeInsets) -> Void
 
     func makeUIView(context: Context) -> SafeAreaReportingView {
@@ -246,7 +246,7 @@ private struct ReaderSafeAreaProbe: UIViewRepresentable {
     }
 }
 
-private final class SafeAreaReportingView: UIView {
+final class SafeAreaReportingView: UIView {
     var onInsetsChanged: ((EdgeInsets) -> Void)?
     private var lastReportedInsets = EdgeInsets()
 

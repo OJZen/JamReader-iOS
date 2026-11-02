@@ -1607,7 +1607,11 @@ private final class RemoteBrowserGridCell: UICollectionViewCell {
             return
         }
 
-        HeroSourceRegistry.shared.register(view: thumbnailPlaceholderView, for: item.id)
+        HeroSourceRegistry.shared.register(
+            view: thumbnailPlaceholderView,
+            for: item.id,
+            coverView: thumbnailImageView
+        )
         registeredHeroSourceID = item.id
     }
 

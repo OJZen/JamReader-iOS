@@ -255,9 +255,9 @@ struct LocalReaderPresentation {
     let descriptor: LibraryDescriptor
     let comic: LibraryComic
     let navigationContext: ReaderNavigationContext?
+    let heroSourceID: String?
     let sourceFrame: CGRect
     let previewImage: UIImage?
-    let transitionStyle: ReaderHeroTransitionStyle
     let onComicUpdated: ((LibraryComic) -> Void)?
     let onDismiss: (() -> Void)?
 
@@ -265,18 +265,18 @@ struct LocalReaderPresentation {
         descriptor: LibraryDescriptor,
         comic: LibraryComic,
         navigationContext: ReaderNavigationContext?,
+        heroSourceID: String?,
         sourceFrame: CGRect,
         previewImage: UIImage?,
-        transitionStyle: ReaderHeroTransitionStyle = .coverZoom,
         onComicUpdated: ((LibraryComic) -> Void)?,
         onDismiss: (() -> Void)?
     ) {
         self.descriptor = descriptor
         self.comic = comic
         self.navigationContext = navigationContext
+        self.heroSourceID = heroSourceID
         self.sourceFrame = sourceFrame
         self.previewImage = previewImage
-        self.transitionStyle = transitionStyle
         self.onComicUpdated = onComicUpdated
         self.onDismiss = onDismiss
     }
@@ -295,7 +295,6 @@ struct RemoteReaderPresentation {
     let referenceOverride: RemoteComicFileReference?
     let sourceFrame: CGRect
     let previewImage: UIImage?
-    let transitionStyle: ReaderHeroTransitionStyle
     let onDismiss: (() -> Void)?
 
     init(
@@ -305,7 +304,6 @@ struct RemoteReaderPresentation {
         referenceOverride: RemoteComicFileReference?,
         sourceFrame: CGRect,
         previewImage: UIImage?,
-        transitionStyle: ReaderHeroTransitionStyle = .coverZoom,
         onDismiss: (() -> Void)?
     ) {
         self.profile = profile
@@ -314,7 +312,6 @@ struct RemoteReaderPresentation {
         self.referenceOverride = referenceOverride
         self.sourceFrame = sourceFrame
         self.previewImage = previewImage
-        self.transitionStyle = transitionStyle
         self.onDismiss = onDismiss
     }
 }
@@ -322,13 +319,6 @@ struct RemoteReaderPresentation {
 enum ReaderPresentationRoute {
     case local(LocalReaderPresentation)
     case remote(RemoteReaderPresentation)
-}
-
-enum ReaderHeroTransitionStyle {
-    /// File-manager style: the thumbnail cover expands into the full-screen reader.
-    case coverZoom
-    /// Library style: the cover/card lifts forward while the reader fades in behind it.
-    case libraryLift
 }
 
 enum AppSheetRoute: Identifiable {

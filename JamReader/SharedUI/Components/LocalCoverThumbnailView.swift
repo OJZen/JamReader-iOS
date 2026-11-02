@@ -52,12 +52,7 @@ struct LocalCoverThumbnailView: View {
                 scale: scale
             )
         }
-        .overlay {
-            if let heroSourceID {
-                HeroSourceAnchorView(id: heroSourceID)
-                    .allowsHitTesting(false)
-            }
-        }
+        .modifier(HeroSourceCoverModifier(id: heroSourceID))
     }
 
     private static func contentID(

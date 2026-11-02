@@ -6,7 +6,7 @@
 
 ## 何时使用
 - 书库内容、集合、远程目录、离线书架的网格模式；iPhone 默认 3 列（`size-grid-min-compact`），iPad 按 `size-grid-min`–`size-grid-max` 自适应。
-- 点击封面 = 直接打开阅读器（保留现有 hero 过渡 `coverZoom` / `libraryLift`）。没有阅读前的详情页。
+- 点击封面 = 直接打开阅读器（hero 过渡，见 `00-foundations` 的动效）。没有阅读前的详情页。
 
 ## 消费方提供
 - 封面图（本地 `LocalCoverThumbnailView` / 远程 `RemoteComicThumbnailView`），缺失时显示 `surface-2` 底 + `book` 图标，不显示文件扩展名图片。

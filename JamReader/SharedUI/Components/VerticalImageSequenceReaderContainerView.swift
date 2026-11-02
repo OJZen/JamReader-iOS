@@ -94,9 +94,11 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
     let initialPageIndex: Int
     let layout: ReaderDisplayLayout
     let isDismissGestureActive: Bool
+    let heroContext: ReaderHeroContext
     let onPageChanged: (Int) -> Void
     let onReaderTap: (ReaderTapRegion) -> Void
     let onZoomStateChanged: ((Bool) -> Void)?
+    let onFirstPageShown: () -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -112,6 +114,8 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> VerticalReaderViewController {
         let viewController = VerticalReaderViewController()
         viewController.isDismissGestureActive = isDismissGestureActive
+        heroContext.pageSource = viewController
+        context.coordinator.onFirstPageShown = onFirstPageShown
         context.coordinator.attach(to: viewController)
         context.coordinator.scrollToPage(index: clampedPageIndex(initialPageIndex), animated: false)
         return viewController
@@ -122,6 +126,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         context.coordinator.onPageChanged = onPageChanged
         context.coordinator.onReaderTap = onReaderTap
         context.coordinator.onZoomStateChanged = onZoomStateChanged
+        context.coordinator.onFirstPageShown = onFirstPageShown
         context.coordinator.update(
             document: document,
             layout: layout,
@@ -156,6 +161,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
         var onPageChanged: (Int) -> Void
         var onReaderTap: (ReaderTapRegion) -> Void
         var onZoomStateChanged: ((Bool) -> Void)?
+        var onFirstPageShown: (() -> Void)?
         private var lastReportedPageIndex: Int?
 
         init(
@@ -691,6 +697,7 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                             cell.setError(error.userFacingMessage)
                         }
                     }
+                    self.reportFirstPageShownIfCurrent(index)
                 }
             }
         }
@@ -767,6 +774,15 @@ struct VerticalImageSequenceReaderContainerView: UIViewControllerRepresentable {
                 ratio: image.size.height / max(image.size.width, 1),
                 in: collectionView
             )
+            reportFirstPageShownIfCurrent(index)
+        }
+
+        private func reportFirstPageShownIfCurrent(_ index: Int) {
+            guard index == currentPageIndex else {
+                return
+            }
+
+            onFirstPageShown?()
         }
 
         private func updateAspectRatioIfNeeded(
@@ -1045,9 +1061,16 @@ fileprivate final class VerticalReaderCollectionViewLayout: UICollectionViewLayo
     }
 }
 
-final class VerticalReaderViewController: UIViewController {
+final class VerticalReaderViewController: UIViewController, ReaderHeroPageSource {
     fileprivate let collectionLayout: VerticalReaderCollectionViewLayout
     let collectionView: UICollectionView
+
+    var heroPage: ReaderHeroPage? {
+        let contentRect = collectionView.visibleCells
+            .reduce(CGRect.null) { $0.union($1.convert($1.bounds, to: view)) }
+            .intersection(view.bounds)
+        return contentRect.isNull ? nil : ReaderHeroPage(view: view, contentRect: contentRect)
+    }
     var isDismissGestureActive = false {
         didSet {
             guard isDismissGestureActive != oldValue else {

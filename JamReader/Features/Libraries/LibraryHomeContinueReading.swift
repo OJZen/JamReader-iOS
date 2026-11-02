@@ -303,9 +303,9 @@ enum LibraryContinueReadingPresenter {
                         title: String(localized: "Continue Reading"),
                         comics: LibraryContinueReadingAggregate.navigationComics(for: entry, in: entries)
                     ),
+                    heroSourceID: heroSourceID,
                     sourceFrame: registeredFrame == .zero ? sourceFrame : registeredFrame,
                     previewImage: LocalCoverTransitionCache.shared.image(for: heroSourceID),
-                    transitionStyle: .libraryLift,
                     onComicUpdated: { _ in onComicUpdated() },
                     onDismiss: nil
                 )

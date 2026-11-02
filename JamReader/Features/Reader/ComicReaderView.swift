@@ -2,13 +2,17 @@ import SwiftUI
 import UIKit
 
 struct ComicReaderView: View {
+    private static let firstPageTimeout: Duration = .seconds(3)
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appPresenter) private var appPresenter
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
 
     private let dependencies: AppDependencies
-    private let openingPreviewImage: UIImage?
+    private let heroContext: ReaderHeroContext
+    /// The comic the reader was opened with; a local one can move on to the next.
+    private let openedComicID: LibraryComic.ID?
     /// The server a remote comic comes from, offered for editing when opening fails.
     private let remoteProfile: RemoteServerProfile?
     private let remoteItem: RemoteDirectoryItem?
@@ -23,6 +27,8 @@ struct ComicReaderView: View {
     @State private var isShowingBookmarkLimitAlert = false
     @State private var readStatusToastMessage: String?
     @State private var cachedFailureCover: UIImage?
+    /// Keeps the cover up until the document's first page can replace it.
+    @State private var firstPageDocumentIdentity: String?
     @State private var isContentZoomed = false
     @State private var isDismissGestureActive = false
     @State private var isPageNavigationInteracting = false
@@ -32,16 +38,21 @@ struct ComicReaderView: View {
     init(
         request: ComicOpenRequest,
         dependencies: AppDependencies,
-        openingPreviewImage: UIImage? = nil
+        heroContext: ReaderHeroContext
     ) {
         self.dependencies = dependencies
-        self.openingPreviewImage = openingPreviewImage
+        self.heroContext = heroContext
         if case .remote(let remoteRequest) = request {
             self.remoteProfile = remoteRequest.profile
             self.remoteItem = remoteRequest.item
         } else {
             self.remoteProfile = nil
             self.remoteItem = nil
+        }
+        if case .library(let libraryRequest) = request {
+            self.openedComicID = libraryRequest.comic.id
+        } else {
+            self.openedComicID = nil
         }
         _keepsScreenAwake = State(
             initialValue: dependencies.readerBehaviorPreferencesStore.loadKeepsScreenAwake()
@@ -72,18 +83,11 @@ struct ComicReaderView: View {
             ZStack {
                 if let document = viewModel.document {
                     readerContent(for: document)
+                        .id(viewModel.documentIdentity)
                         .zIndex(1)
-                } else if viewModel.isLoading || !viewModel.hasAttemptedInitialLoad {
-                    ReaderOpeningStateView(
-                        previewImage: openingPreviewImage,
-                        title: viewModel.navigationTitle,
-                        detail: viewModel.loadingMessage,
-                        progress: viewModel.loadingProgress,
-                        onCancel: cancelOpeningAndDismiss
-                    )
-                } else {
+                } else if !showsOpeningState {
                     ReaderOpenFailureView(
-                        coverImage: openingPreviewImage ?? cachedFailureCover,
+                        coverImage: openedComicCover ?? cachedFailureCover,
                         title: viewModel.navigationTitle,
                         message: viewModel.failureMessage
                             ?? String(localized: "The selected comic could not be opened."),
@@ -95,9 +99,22 @@ struct ComicReaderView: View {
                     )
                     .task(loadCachedFailureCover)
                 }
+
+                if showsOpeningState {
+                    ReaderOpeningStateView(
+                        previewImage: openedComicCover,
+                        coverFrame: heroContext.landingFrame(in:),
+                        title: viewModel.navigationTitle,
+                        detail: viewModel.loadingMessage,
+                        progress: viewModel.loadingProgress,
+                        onCancel: cancelOpeningAndDismiss
+                    )
+                    .zIndex(2)
+                    .transition(.opacity)
+                }
             }
+            .animation(.easeOut(duration: 0.2), value: showsOpeningState)
             .background(Color.black.ignoresSafeArea())
-            .id(readerRenderIdentity)
         } topBar: {
             readerTopBar
         } bottomBar: { viewportSize in
@@ -124,6 +141,7 @@ struct ComicReaderView: View {
             isEnabled: !readerSession.state.isPageJumpPresented && !isPageNavigationInteracting && !isAnySheetPresented,
             direction: dismissGestureDirection,
             isZoomed: isContentZoomed,
+            heroContext: heroContext,
             onDismissGestureActiveChanged: { active in
                 isDismissGestureActive = active
             },
@@ -165,6 +183,22 @@ struct ComicReaderView: View {
         .onChange(of: viewModel.documentIdentity) { _, _ in
             updateIdleTimerState()
             scheduleReaderSessionSynchronization()
+        }
+        .onChange(of: heroContent, initial: true) { _, heroContent in
+            heroContext.content = heroContent
+        }
+        .onChange(of: isShowingOpenedComic) { _, isShowingOpenedComic in
+            heroContext.isShowingOpenedComic = isShowingOpenedComic
+        }
+        .task(id: viewModel.documentIdentity) {
+            // A page that never reports back must not leave the cover up.
+            guard viewModel.documentIdentity != nil else {
+                return
+            }
+            try? await Task.sleep(for: Self.firstPageTimeout)
+            if !Task.isCancelled {
+                markFirstPageShown()
+            }
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -239,8 +273,38 @@ struct ComicReaderView: View {
         return imageSequence.usesComicImageLayout
     }
 
-    private var readerRenderIdentity: String {
-        viewModel.documentIdentity ?? "opening-\(viewModel.hasAttemptedInitialLoad)"
+    private var isShowingOpenedComic: Bool {
+        viewModel.currentLibraryComic?.id == openedComicID
+    }
+
+    private var openedComicCover: UIImage? {
+        isShowingOpenedComic ? heroContext.coverImage : nil
+    }
+
+    private var showsOpeningState: Bool {
+        guard viewModel.document != nil else {
+            return viewModel.isLoading || !viewModel.hasAttemptedInitialLoad
+        }
+
+        guard case .imageSequence = viewModel.document else {
+            return false
+        }
+        return firstPageDocumentIdentity != viewModel.documentIdentity
+    }
+
+    private var heroContent: ReaderHeroContent {
+        if showsOpeningState {
+            return .openingState
+        }
+        return viewModel.document == nil ? .nothing : .document
+    }
+
+    private func markFirstPageShown() {
+        guard firstPageDocumentIdentity != viewModel.documentIdentity else {
+            return
+        }
+
+        firstPageDocumentIdentity = viewModel.documentIdentity
     }
 
     @ViewBuilder
@@ -250,11 +314,17 @@ struct ComicReaderView: View {
             pageIndex: readerSession.state.currentPageIndex,
             layout: readerSession.state.layout,
             isDismissGestureActive: isDismissGestureActive,
+            heroContext: heroContext,
             onPageChanged: handleVisiblePageChange(to:),
             onReaderTap: handleReaderTap,
             onZoomStateChanged: { zoomed in
                 DispatchQueue.main.async {
                     isContentZoomed = zoomed
+                }
+            },
+            onFirstPageShown: {
+                DispatchQueue.main.async {
+                    markFirstPageShown()
                 }
             }
         ) { unsupportedDocument in
@@ -572,7 +642,7 @@ struct ComicReaderView: View {
     /// A comic opened without a preview may still have a cover cached on disk.
     /// This only reads the cache, so it works while the server is unreachable.
     private func loadCachedFailureCover() async {
-        guard openingPreviewImage == nil, let remoteItem else {
+        guard heroContext.coverImage == nil, let remoteItem else {
             return
         }
         cachedFailureCover = await RemoteComicThumbnailPipeline.shared.cachedThumbnailImage(
@@ -856,58 +926,142 @@ struct ComicReaderView: View {
     }
 }
 
-/// Shown while a comic opens. A remote comic that has to download first
-/// keeps its cover, says why and how far along it is; × is the only cancel.
+/// Shown while a comic opens. It holds the cover exactly where the opening
+/// animation left it, so the first page can fade in over it. A slow open, such
+/// as a remote comic that has to download, then says why and how far along it
+/// is; × is the only cancel.
 private struct ReaderOpeningStateView: View {
+    /// A quick open stays a clean cover, without text flashing over it.
+    private static let statusDelay: Duration = .milliseconds(900)
+    private static let scrimOpacity = 0.72
+
     let previewImage: UIImage?
+    let coverFrame: (CGRect) -> CGRect
     let title: String
     let detail: String
     let progress: Double?
     let onCancel: () -> Void
 
+    @State private var showsStatus: Bool
+    @State private var windowSafeAreaInsets = EdgeInsets()
+
+    init(
+        previewImage: UIImage?,
+        coverFrame: @escaping (CGRect) -> CGRect,
+        title: String,
+        detail: String,
+        progress: Double?,
+        onCancel: @escaping () -> Void
+    ) {
+        self.previewImage = previewImage
+        self.coverFrame = coverFrame
+        self.title = title
+        self.detail = detail
+        self.progress = progress
+        self.onCancel = onCancel
+        _showsStatus = State(initialValue: previewImage == nil)
+    }
+
     var body: some View {
-        GeometryReader { proxy in
-            VStack(spacing: Spacing.lg) {
-                if let previewImage {
-                    ReaderStateCover(image: previewImage, viewportSize: proxy.size)
-                }
-
-                VStack(spacing: Spacing.sm) {
-                    Text("Preparing to Read")
-                        .font(AppFont.headline(.semibold))
-                        .foregroundStyle(.white)
-
-                    if let normalizedProgress {
-                        ProgressView(value: normalizedProgress)
-                            .progressViewStyle(.linear)
-                            .tint(.appJam)
-                            .frame(maxWidth: 220)
-                    } else {
-                        ProgressView()
-                            .tint(.white)
-                    }
-
-                    VStack(spacing: Spacing.xxs) {
-                        if let progressText {
-                            Text(progressText)
-                                .monospacedDigit()
-                        }
-                        Text(detail)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .font(AppFont.footnote())
-                    .foregroundStyle(.white.opacity(0.72))
-                }
-                .accessibilityElement(children: .combine)
+        Color.clear
+            .background {
+                cover
+                ReaderSafeAreaProbe { windowSafeAreaInsets = $0 }
+                    .allowsHitTesting(false)
             }
-            .padding(.horizontal, Spacing.xl)
-            .frame(width: proxy.size.width, height: proxy.size.height)
+            .overlay(alignment: previewImage == nil ? .center : .bottom) {
+                if showsStatus {
+                    status
+                        .padding(.horizontal, Spacing.xl)
+                        .padding(.top, Spacing.lg)
+                        .padding(.bottom, Spacing.lg + windowSafeAreaInsets.bottom)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if previewImage != nil {
+                                scrim(from: .top, to: .bottom)
+                            }
+                        }
+                        .transition(.opacity)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if showsStatus {
+                    ReaderStateTopBar(title: title, onClose: onCancel)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background {
+                            if previewImage != nil {
+                                scrim(from: .bottom, to: .top)
+                            }
+                        }
+                        .transition(.opacity)
+                }
+            }
+            .task {
+                guard !showsStatus else {
+                    return
+                }
+                try? await Task.sleep(for: Self.statusDelay)
+                withAnimation(.easeIn(duration: 0.2)) {
+                    showsStatus = true
+                }
+            }
+    }
+
+    /// Fills the window: this is where the flying cover lands.
+    private var cover: some View {
+        GeometryReader { proxy in
+            if let previewImage {
+                let frame = coverFrame(CGRect(origin: .zero, size: proxy.size))
+                Image(uiImage: previewImage)
+                    .resizable()
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
+                    .accessibilityHidden(true)
+            }
         }
-        .background(Color.black.ignoresSafeArea())
-        .overlay(alignment: .topLeading) {
-            ReaderStateTopBar(title: title, onClose: onCancel)
+        .background(Color.black)
+        .ignoresSafeArea()
+    }
+
+    private var status: some View {
+        VStack(spacing: Spacing.sm) {
+            Text("Preparing to Read")
+                .font(AppFont.headline(.semibold))
+                .foregroundStyle(.white)
+
+            if let normalizedProgress {
+                ProgressView(value: normalizedProgress)
+                    .progressViewStyle(.linear)
+                    .tint(.appJam)
+                    .frame(maxWidth: 220)
+            } else {
+                ProgressView()
+                    .tint(.white)
+            }
+
+            VStack(spacing: Spacing.xxs) {
+                if let progressText {
+                    Text(progressText)
+                        .monospacedDigit()
+                }
+                Text(detail)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(AppFont.footnote())
+            .foregroundStyle(.white.opacity(0.72))
         }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Keeps the text legible over a cover of any color.
+    private func scrim(from start: UnitPoint, to end: UnitPoint) -> some View {
+        LinearGradient(
+            colors: [.black.opacity(0), .black.opacity(Self.scrimOpacity)],
+            startPoint: start,
+            endPoint: end
+        )
+        .ignoresSafeArea()
     }
 
     private var normalizedProgress: Double? {
@@ -1025,11 +1179,14 @@ private struct ReaderOpenFailureView: View {
 /// × and the comic's name above the opening and failure states, before the
 /// reader's own bars exist.
 private struct ReaderStateTopBar: View {
-    /// Keeps centered content out from under the bar and the status bar.
+    /// Keeps centered content out from under the bar in a short window.
     static let clearance: CGFloat = 88
 
     let title: String
     let onClose: () -> Void
+
+    /// The reader's content ignores the safe area, so it has to be read here.
+    @State private var windowSafeAreaInsets = EdgeInsets()
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
@@ -1054,8 +1211,13 @@ private struct ReaderStateTopBar: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
         }
-        .padding(.horizontal, Spacing.md)
-        .padding(.top, Spacing.xs)
+        .padding(.leading, Spacing.md + windowSafeAreaInsets.leading)
+        .padding(.trailing, Spacing.md + windowSafeAreaInsets.trailing)
+        .padding(.top, Spacing.xs + windowSafeAreaInsets.top)
+        .background {
+            ReaderSafeAreaProbe { windowSafeAreaInsets = $0 }
+                .allowsHitTesting(false)
+        }
         .environment(\.colorScheme, .dark)
     }
 }

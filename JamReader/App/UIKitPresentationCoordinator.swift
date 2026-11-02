@@ -21,9 +21,9 @@ final class UIKitPresentationCoordinator {
 
     func presentReader(_ route: ReaderPresentationRoute) {
         let request: ComicOpenRequest
+        let heroSourceID: String?
         let sourceFrame: CGRect
         let previewImage: UIImage?
-        let transitionStyle: ReaderHeroTransitionStyle
         let onDismiss: (() -> Void)?
 
         switch route {
@@ -36,9 +36,9 @@ final class UIKitPresentationCoordinator {
                     onComicUpdated: presentation.onComicUpdated
                 )
             )
+            heroSourceID = presentation.heroSourceID
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
-            transitionStyle = presentation.transitionStyle
             onDismiss = {
                 presentation.onDismiss?()
                 NotificationCenter.default.post(name: .localReaderDidClose, object: nil)
@@ -52,28 +52,29 @@ final class UIKitPresentationCoordinator {
                     referenceOverride: presentation.referenceOverride
                 )
             )
+            heroSourceID = presentation.item.id
             sourceFrame = presentation.sourceFrame
             previewImage = presentation.previewImage
-            transitionStyle = presentation.transitionStyle
             onDismiss = presentation.onDismiss
         }
 
+        let layout = dependencies.readerLayoutPreferencesStore.loadLayout()
+        let heroContext = ReaderHeroContext(
+            sourceID: heroSourceID,
+            sourceFrame: sourceFrame,
+            coverImage: previewImage,
+            landsAtTop: layout.pagingMode == .verticalContinuous && request.fallbackPageIndex == 0
+        )
         let content = AnyView(
             ComicReaderView(
                 request: request,
                 dependencies: dependencies,
-                openingPreviewImage: previewImage
+                heroContext: heroContext
             )
                 .environment(\.appPresenter, self)
         )
 
-        presentReader(
-            content: content,
-            sourceFrame: sourceFrame,
-            previewImage: previewImage,
-            transitionStyle: transitionStyle,
-            onDismiss: onDismiss
-        )
+        presentReader(content: content, heroContext: heroContext, onDismiss: onDismiss)
     }
 
     func presentSheet(_ route: AppSheetRoute) {
@@ -130,22 +131,14 @@ final class UIKitPresentationCoordinator {
 
     private func presentReader(
         content: AnyView,
-        sourceFrame: CGRect,
-        previewImage: UIImage?,
-        transitionStyle: ReaderHeroTransitionStyle,
+        heroContext: ReaderHeroContext,
         onDismiss: (() -> Void)?
     ) {
         if let presentedReaderController {
             self.presentedReaderController = nil
             readerTransitionDelegate = nil
             presentedReaderController.dismiss(animated: false) { [weak self] in
-                self?.presentReader(
-                    content: content,
-                    sourceFrame: sourceFrame,
-                    previewImage: previewImage,
-                    transitionStyle: transitionStyle,
-                    onDismiss: onDismiss
-                )
+                self?.presentReader(content: content, heroContext: heroContext, onDismiss: onDismiss)
             }
             return
         }
@@ -154,11 +147,7 @@ final class UIKitPresentationCoordinator {
             return
         }
 
-        let transitionDelegate = HeroTransitionDelegate(
-            sourceFrame: sourceFrame,
-            previewImage: previewImage,
-            style: transitionStyle
-        )
+        let transitionDelegate = HeroTransitionDelegate(context: heroContext)
         readerTransitionDelegate = transitionDelegate
 
         let hostingController = DismissTrackingReaderHostingController(rootView: content)
@@ -171,6 +160,7 @@ final class UIKitPresentationCoordinator {
             onDismiss?()
         }
 
+        heroContext.presentedView = hostingController.view
         presentedReaderController = hostingController
         presenter.present(hostingController, animated: true)
     }
