@@ -287,6 +287,9 @@ final class RemoteServerBrowserViewModel: ObservableObject {
             logger.info(
                 "Remote browser load completed provider=\(provider, privacy: .public) serverID=\(serverID, privacy: .public) path=\(pathForLog, privacy: .public) items=\(sortedItems.count) directories=\(directoryCount) comics=\(comicCount) unsupported=\(unsupportedCount)"
             )
+        } catch is CancellationError {
+            // The view left before loading finished; let its next appearance load again.
+            hasLoaded = false
         } catch {
             progressRefreshTask?.cancel()
             progressRefreshTask = nil

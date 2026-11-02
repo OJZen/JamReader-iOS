@@ -278,16 +278,12 @@ final class RemoteServerBrowsingService {
         let requestedPath = normalizeDisplayPath(path ?? profile.normalizedBaseDirectoryPath)
         switch profile.providerKind {
         case .smb:
-            let progressState = RecursiveListProgressState()
-            return try await withConnectedSMBClient(for: profile, priority: .userInitiated) { client in
-                try await recursivelyListComicFiles(
-                    with: client,
-                    for: profile,
-                    displayPath: requestedPath,
-                    progressState: progressState,
-                    progressHandler: progressHandler
-                )
-            }
+            return try await recursivelyListComicFiles(
+                for: profile,
+                displayPath: requestedPath,
+                progressState: RecursiveListProgressState(),
+                progressHandler: progressHandler
+            )
         case .webdav:
             return try await recursivelyListComicFiles(
                 forWebDAVProfile: profile,
@@ -321,7 +317,7 @@ final class RemoteServerBrowsingService {
         stageCacheReplacementForRollback: Bool = false,
         progressHandler: @escaping @Sendable (Double) -> Void
     ) async throws -> RemoteComicDownloadResult {
-        await downloadSemaphore.wait()
+        try await downloadSemaphore.wait()
         defer { Task { await downloadSemaphore.signal() } }
 
         guard validateProfile(profile).allSatisfy({ $0.severity != .error }) else {
@@ -337,28 +333,14 @@ final class RemoteServerBrowsingService {
             let result: RemoteComicDownloadResult
             switch profile.providerKind {
             case .smb:
-                result = try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
-                    try await withConnectedSMBClient(for: profile, priority: .utility) { client in
-                        try await downloadComicFileCore(
-                            for: profile,
-                            reference: reference,
-                            forceRefresh: forceRefresh,
-                            trimCacheAfterDownload: trimCacheAfterDownload,
-                            stageCacheReplacementForRollback: stageCacheReplacementForRollback,
-                            progressHandler: progressHandler
-                        ) { temporaryDownloadURL, resumeOffset in
-                            let reader = client.fileReader(
-                                path: smbRelativePath(forDisplayPath: reference.path)
-                            )
-                            try await downloadRemoteFile(
-                                using: reader,
-                                to: temporaryDownloadURL,
-                                resumeOffset: resumeOffset,
-                                progressHandler: progressHandler
-                            )
-                        }
-                    }
-                }
+                result = try await downloadSMBComicFile(
+                    for: profile,
+                    reference: reference,
+                    forceRefresh: forceRefresh,
+                    trimCacheAfterDownload: trimCacheAfterDownload,
+                    stageCacheReplacementForRollback: stageCacheReplacementForRollback,
+                    progressHandler: progressHandler
+                )
             case .webdav:
                 let authorizationHeader = try resolvedAuthorizationHeader(for: profile)
                 result = try await downloadComicFileCore(
@@ -425,7 +407,15 @@ final class RemoteServerBrowsingService {
                     for: references,
                     maximumConcurrency: Self.batchDownloadWorkerLimit
                 ) { [downloadSemaphore] reference in
-                    await downloadSemaphore.wait(priority: .utility)
+                    do {
+                        try await downloadSemaphore.wait(priority: .utility)
+                    } catch {
+                        return RemoteComicBatchDownloadOutcome(
+                            reference: reference,
+                            result: nil,
+                            error: error
+                        )
+                    }
                     defer { Task { await downloadSemaphore.signal() } }
 
                     guard !Task.isCancelled else {
@@ -437,32 +427,16 @@ final class RemoteServerBrowsingService {
                     }
 
                     return await self.batchDownloadOutcome(for: reference) {
-                        let result = try await self.withRetry(maxAttempts: 3, baseDelay: 1.0) {
-                            try await self.withConnectedSMBClient(for: profile, priority: .utility) { client in
-                                try await self.downloadComicFileCore(
-                                    for: profile,
-                                    reference: reference,
-                                    forceRefresh: forceRefresh,
-                                    trimCacheAfterDownload: trimCacheAfterDownload,
-                                    stageCacheReplacementForRollback: stageCacheReplacementForRollback,
-                                    progressHandler: { fraction in
-                                        progressHandler(reference, fraction)
-                                    }
-                                ) { temporaryDownloadURL, resumeOffset in
-                                    let reader = client.fileReader(
-                                        path: self.smbRelativePath(forDisplayPath: reference.path)
-                                    )
-                                    try await self.downloadRemoteFile(
-                                        using: reader,
-                                        to: temporaryDownloadURL,
-                                        resumeOffset: resumeOffset,
-                                        progressHandler: { fraction in
-                                            progressHandler(reference, fraction)
-                                        }
-                                    )
-                                }
+                        let result = try await self.downloadSMBComicFile(
+                            for: profile,
+                            reference: reference,
+                            forceRefresh: forceRefresh,
+                            trimCacheAfterDownload: trimCacheAfterDownload,
+                            stageCacheReplacementForRollback: stageCacheReplacementForRollback,
+                            progressHandler: { fraction in
+                                progressHandler(reference, fraction)
                             }
-                        }
+                        )
                         progressHandler(reference, 1.0)
                         return result
                     }
@@ -473,7 +447,15 @@ final class RemoteServerBrowsingService {
                     for: references,
                     maximumConcurrency: Self.batchDownloadWorkerLimit
                 ) { [downloadSemaphore] reference in
-                    await downloadSemaphore.wait(priority: .utility)
+                    do {
+                        try await downloadSemaphore.wait(priority: .utility)
+                    } catch {
+                        return RemoteComicBatchDownloadOutcome(
+                            reference: reference,
+                            result: nil,
+                            error: error
+                        )
+                    }
                     defer { Task { await downloadSemaphore.signal() } }
 
                     guard !Task.isCancelled else {
@@ -1137,7 +1119,9 @@ final class RemoteServerBrowsingService {
             )
         }
 
-        await thumbnailSemaphore.wait(priority: .utility)
+        guard (try? await thumbnailSemaphore.wait(priority: .utility)) != nil else {
+            return nil
+        }
         defer { Task { await thumbnailSemaphore.signal() } }
 
         let fileExtension = URL(fileURLWithPath: reference.fileName).pathExtension.lowercased()
@@ -1596,7 +1580,9 @@ final class RemoteServerBrowsingService {
         reference: RemoteComicFileReference,
         maxPixelSize: Int
     ) async -> UIImage? {
-        await thumbnailSemaphore.wait(priority: .utility)
+        guard (try? await thumbnailSemaphore.wait(priority: .utility)) != nil else {
+            return nil
+        }
         defer { Task { await thumbnailSemaphore.signal() } }
 
         let coverPath = await resolvedImageDirectoryCoverPath(for: profile, reference: reference)
@@ -1748,7 +1734,7 @@ final class RemoteServerBrowsingService {
         priority: TaskPriority = .medium,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
-        await smbClientSemaphore.wait(priority: priority)
+        try await smbClientSemaphore.wait(priority: priority)
         defer { Task { await smbClientSemaphore.signal() } }
 
         let credentials = try resolvedCredentials(for: profile)
@@ -1779,7 +1765,7 @@ final class RemoteServerBrowsingService {
         for profile: RemoteServerProfile,
         operation: (SMBClient) async throws -> T
     ) async throws -> T {
-        await thumbnailSMBClientSemaphore.wait(priority: .utility)
+        try await thumbnailSMBClientSemaphore.wait(priority: .utility)
         defer { Task { await thumbnailSMBClientSemaphore.signal() } }
 
         let credentials = try resolvedCredentials(for: profile)
@@ -1861,7 +1847,6 @@ final class RemoteServerBrowsingService {
     }
 
     private func recursivelyListComicFiles(
-        with client: SMBClient,
         for profile: RemoteServerProfile,
         displayPath: String,
         progressState: RecursiveListProgressState,
@@ -1875,7 +1860,6 @@ final class RemoteServerBrowsingService {
             try Task.checkCancellation()
             if entry.isDirectory {
                 let nestedComicFiles = try await recursivelyListComicFiles(
-                    with: client,
                     for: profile,
                     displayPath: entry.path,
                     progressState: progressState,
@@ -2453,6 +2437,51 @@ final class RemoteServerBrowsingService {
         if let metadataBackupURL = backup.metadataURL,
            fileManager.fileExists(atPath: metadataBackupURL.path) {
             try fileManager.removeItem(at: metadataBackupURL)
+        }
+    }
+
+    private func downloadSMBComicFile(
+        for profile: RemoteServerProfile,
+        reference: RemoteComicFileReference,
+        forceRefresh: Bool,
+        trimCacheAfterDownload: Bool,
+        stageCacheReplacementForRollback: Bool,
+        progressHandler: @escaping @Sendable (Double) -> Void
+    ) async throws -> RemoteComicDownloadResult {
+        try await withRetry(maxAttempts: 3, baseDelay: 1.0) {
+            // Image directories take an SMB slot for each request, so holding one
+            // here as well deadlocks once every slot waits on an inner request.
+            if reference.isImageDirectoryComic {
+                return try await downloadImageDirectoryComicCore(
+                    for: profile,
+                    reference: reference,
+                    forceRefresh: forceRefresh,
+                    trimCacheAfterDownload: trimCacheAfterDownload,
+                    stageCacheReplacementForRollback: stageCacheReplacementForRollback,
+                    progressHandler: progressHandler
+                )
+            }
+
+            return try await withConnectedSMBClient(for: profile, priority: .utility) { client in
+                try await downloadComicFileCore(
+                    for: profile,
+                    reference: reference,
+                    forceRefresh: forceRefresh,
+                    trimCacheAfterDownload: trimCacheAfterDownload,
+                    stageCacheReplacementForRollback: stageCacheReplacementForRollback,
+                    progressHandler: progressHandler
+                ) { temporaryDownloadURL, resumeOffset in
+                    let reader = client.fileReader(
+                        path: smbRelativePath(forDisplayPath: reference.path)
+                    )
+                    try await downloadRemoteFile(
+                        using: reader,
+                        to: temporaryDownloadURL,
+                        resumeOffset: resumeOffset,
+                        progressHandler: progressHandler
+                    )
+                }
+            }
         }
     }
 

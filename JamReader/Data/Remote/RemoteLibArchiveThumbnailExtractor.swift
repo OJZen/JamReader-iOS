@@ -7,7 +7,14 @@ enum RemoteLibArchiveThumbnailExtractionError: Error {
     case unreadableImage
 }
 
-struct RemoteLibArchiveThumbnailExtractor {
+nonisolated struct RemoteLibArchiveThumbnailExtractor {
+    // libarchive blocks while remote reads run on the main actor and the cooperative
+    // pool, so extraction must stay off both or the reads can never start.
+    private static let extractionQueue = DispatchQueue(
+        label: "JamReader.RemoteLibArchiveThumbnailExtractor",
+        qos: .utility
+    )
+
     let fileReader: any RemoteRandomAccessFileReader
 
     func extractThumbnail(maxPixelSize: Int) async throws -> UIImage {
@@ -16,6 +23,24 @@ struct RemoteLibArchiveThumbnailExtractor {
             fileReader: fileReader,
             fileSize: fileSize
         )
+
+        return try await withCheckedThrowingContinuation { continuation in
+            Self.extractionQueue.async {
+                continuation.resume(
+                    with: autoreleasepool {
+                        Result {
+                            try extractThumbnail(from: dataSource, maxPixelSize: maxPixelSize)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    private func extractThumbnail(
+        from dataSource: RemoteLibArchiveDataSource,
+        maxPixelSize: Int
+    ) throws -> UIImage {
         let archiveReader = try YRLibArchiveReader(dataSource: dataSource)
         let orderedEntries = try orderedPageEntries(from: archiveReader.entryPaths)
 
@@ -86,13 +111,13 @@ struct RemoteLibArchiveThumbnailExtractor {
     }
 }
 
-private struct RemoteLibArchiveEntry {
+nonisolated private struct RemoteLibArchiveEntry {
     let path: String
     let archiveIndex: Int
 }
 
 @objcMembers
-private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource {
+nonisolated private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource, @unchecked Sendable {
     let archiveSize: Int64
 
     private let readerProxy: RemoteLibArchiveFileReaderProxy
@@ -194,7 +219,7 @@ private final class RemoteLibArchiveDataSource: NSObject, YRLibArchiveDataSource
     }
 }
 
-private final class RemoteLibArchiveBlockCache {
+nonisolated private final class RemoteLibArchiveBlockCache {
     private let lock = NSLock()
     private var blocksByOffset: [UInt64: Data] = [:]
     private var lruOffsets: [UInt64] = []
@@ -233,7 +258,7 @@ private final class RemoteLibArchiveBlockCache {
     }
 }
 
-private final class RemoteLibArchiveFileReaderProxy: @unchecked Sendable {
+nonisolated private final class RemoteLibArchiveFileReaderProxy: @unchecked Sendable {
     let fileReader: any RemoteRandomAccessFileReader
 
     init(fileReader: any RemoteRandomAccessFileReader) {
@@ -241,7 +266,7 @@ private final class RemoteLibArchiveFileReaderProxy: @unchecked Sendable {
     }
 }
 
-private final class RemoteLibArchiveReadResultBox: @unchecked Sendable {
+nonisolated private final class RemoteLibArchiveReadResultBox: @unchecked Sendable {
     nonisolated private let lock = NSLock()
     nonisolated(unsafe) private var _result: Result<Data, Error>?
 

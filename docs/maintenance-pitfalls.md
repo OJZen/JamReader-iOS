@@ -248,6 +248,16 @@ WebDAV/SMB 曾出现“ZIP 打不开”，后来确认是旧缓存损坏或旧�
 - 不要把远程浏览状态混入 AppLibraryV2.sqlite 的本地漫画库表。
 - 切换服务器、删除服务器、凭据失效时，要清理或忽略对应浏览状态。
 
+### 4.8 远程读取的线程和信号量边界
+
+工程默认把类型隔离到 `MainActor`，`nonisolated async` 也会留在调用方的 actor 上。没有 `Task.detached`、`@concurrent` 或专用队列时，看起来在后台的代码可能都在主线程。SMB 和 WebDAV reader 的 `read` 也从主线程开始。
+
+维护要求：
+
+- libarchive 这类同步回调要阻塞等待远程读取时，必须放在专用 `DispatchQueue`。放在主线程时读取永远开始不了，只能等到超时；放在协作线程池时，线程占满后读取任务同样启动不了。
+- `withConnectedSMBClient` 不能嵌套。已经占着 `smbClientSemaphore` 再申请，并发到上限后会全部互等。图片目录漫画的下载和递归列目录都由内层按请求申请连接。
+- `AsyncSemaphore.wait` 在任务取消时抛 `CancellationError`，不占用槽位。释放用的 `defer` 要写在 `wait` 成功之后，调用方要把取消和普通失败分开处理。
+
 ## 5. 统一阅读器 Pipeline
 
 ### 5.1 不要再拆本地 reader 和远程 reader
