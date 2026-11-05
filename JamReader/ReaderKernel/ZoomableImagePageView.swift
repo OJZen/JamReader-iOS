@@ -18,6 +18,8 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
 
     private let scrollView = ReaderTouchAwareScrollView()
     private var naturalContentSize: CGSize = .zero
+    private var fitMode: ReaderFitMode = .page
+    private var configuredViewportSize: CGSize = .zero
     private var lastReportedZoomState: Bool?
     private var pendingZoomState: Bool?
     private var hasQueuedZoomStateFlush = false
@@ -61,7 +63,13 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
             return
         }
 
+        let viewportSize = scrollView.bounds.size
+        if abs(viewportSize.width - configuredViewportSize.width) > 0.5
+            || abs(viewportSize.height - configuredViewportSize.height) > 0.5 {
+            updateZoomScales(for: viewportSize, resetZoomScale: false)
+        }
         syncContentGeometry()
+        queueZoomStateChanged(!isAtPreferredZoom)
     }
 
     func configureContentLayout(
@@ -75,16 +83,25 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
         }
 
         naturalContentSize = size
+        self.fitMode = fitMode
         contentContainerView.frame = CGRect(origin: .zero, size: size)
 
+        // The constrained scroll view may not have laid out at our new size yet.
+        updateZoomScales(for: bounds.size, resetZoomScale: resetZoomScale)
+        scrollView.layoutIfNeeded()
+        syncContentGeometry()
+        queueZoomStateChanged(!isAtPreferredZoom)
+    }
+
+    private func updateZoomScales(for viewportSize: CGSize, resetZoomScale: Bool) {
+        let wasAtFitZoom = isAtPreferredZoom
+        configuredViewportSize = viewportSize
         let minimumZoomScale = preferredZoomScale(
-            boundsSize: scrollView.bounds.size,
-            contentSize: size,
+            boundsSize: viewportSize,
+            contentSize: naturalContentSize,
             fitMode: fitMode
         )
         let maximumZoomScale = max(minimumZoomScale * 4, 4)
-        let previousMinimumZoomScale = scrollView.minimumZoomScale
-        let wasAtFitZoom = scrollView.zoomScale <= previousMinimumZoomScale + 0.01
 
         scrollView.minimumZoomScale = minimumZoomScale
         scrollView.maximumZoomScale = maximumZoomScale
@@ -95,10 +112,6 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
         } else {
             scrollView.zoomScale = min(max(scrollView.zoomScale, minimumZoomScale), maximumZoomScale)
         }
-
-        scrollView.layoutIfNeeded()
-        syncContentGeometry()
-        queueZoomStateChanged(!isAtPreferredZoom)
     }
 
     func restorePreferredViewportState() {
@@ -117,6 +130,7 @@ final class ZoomableImagePageView: UIView, UIScrollViewDelegate, UIGestureRecogn
 
     func clearContentLayout() {
         naturalContentSize = .zero
+        configuredViewportSize = .zero
         contentContainerView.frame = .zero
         scrollView.contentSize = .zero
         scrollView.minimumZoomScale = 1

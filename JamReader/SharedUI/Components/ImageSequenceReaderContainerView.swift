@@ -102,6 +102,65 @@ enum ReaderSpreadPageGeometry {
 }
 
 @MainActor
+final class ReaderPageLoadGate {
+    private struct Waiter {
+        let id: UUID
+        let continuation: CheckedContinuation<Void, Error>
+    }
+
+    private let maxConcurrent: Int
+    private var activeCount = 0
+    private var waiters: [Waiter] = []
+
+    var isSuspended: Bool {
+        didSet { resumeWaitersIfPossible() }
+    }
+
+    init(maxConcurrent: Int, isSuspended: Bool = false) {
+        precondition(maxConcurrent > 0)
+        self.maxConcurrent = maxConcurrent
+        self.isSuspended = isSuspended
+    }
+
+    func wait() async throws {
+        try Task.checkCancellation()
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                waiters.append(Waiter(id: id, continuation: continuation))
+                resumeWaitersIfPossible()
+            }
+        } onCancel: {
+            Task { @MainActor in self.cancelWaiter(id) }
+        }
+    }
+
+    func signal() {
+        precondition(activeCount > 0)
+        activeCount -= 1
+        resumeWaitersIfPossible()
+    }
+
+    private func resumeWaitersIfPossible() {
+        while !isSuspended, activeCount < maxConcurrent, !waiters.isEmpty {
+            activeCount += 1
+            waiters.removeFirst().continuation.resume()
+        }
+    }
+
+    private func cancelWaiter(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        waiters.remove(at: index).continuation.resume(throwing: CancellationError())
+    }
+}
+
+@MainActor
 final class ReaderPagedCollectionViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegateFlowLayout, ReaderHeroPageSource {
     var onPageChanged: (Int) -> Void
     var onReaderTap: (ReaderTapRegion) -> Void
@@ -140,6 +199,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     private var layout: ReaderDisplayLayout
     private var spreads: [ReaderSpreadDescriptor]
     private var controllerCache: [Int: ComicImageSpreadViewController] = [:]
+    private let pageLoadGate = ReaderPageLoadGate(maxConcurrent: 2, isSuspended: true)
     private var prefetchTask: Task<Void, Never>?
     private var controllerPrewarmWorkItem: DispatchWorkItem?
     private var memoryWarningObserver: NSObjectProtocol?
@@ -191,7 +251,8 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         Task { @MainActor in
             for controller in cachedControllers {
                 controller.willMove(toParent: nil)
-                controller.view.removeFromSuperview()
+                controller.cancelLoading()
+                controller.viewIfLoaded?.removeFromSuperview()
                 controller.removeFromParent()
             }
         }
@@ -479,6 +540,11 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             "displaySpread target=\(spreadIndex) animated=\(animated) loaded=\(controllerCache[spreadIndex] != nil)"
         )
         animatedTransitionTargetSpreadIndex = animated ? spreadIndex : nil
+        currentSpreadIndex = spreadIndex
+        currentPageIndex = spreads[spreadIndex].primaryPageIndex
+        // Neighbors wait for the new spread, but prewarming them waits for
+        // finalizeVisibleSpread so it stays out of the page-turn animation.
+        pageLoadGate.isSuspended = controllerCache[spreadIndex]?.hasFinishedLoading != true
         if let controller = controller(forSpreadIndex: spreadIndex) {
             if animated {
                 ReaderPerformanceTrace.measure("prewarmForUpcomingPresentation spread=\(spreadIndex)") {
@@ -490,8 +556,6 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
                 }
             }
         }
-        currentSpreadIndex = spreadIndex
-        currentPageIndex = spreads[spreadIndex].primaryPageIndex
         scrollToSpread(spreadIndex, animated: animated)
 
         if !animated {
@@ -545,8 +609,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         if !animated {
             ensureControllerHosted(forSpreadIndex: currentSpreadIndex)
         }
-        prefetchAround(spreadIndex: currentSpreadIndex)
-        scheduleNeighborPrewarm(around: currentSpreadIndex)
+        updateNeighborLoading()
     }
 
     private func finalizeVisibleSpread() {
@@ -562,6 +625,7 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         currentSpreadIndex = spreadIndex
         currentPageIndex = spread.primaryPageIndex
         animatedTransitionTargetSpreadIndex = nil
+        updateNeighborLoading()
         if spreadIndex != previousSpreadIndex {
             onZoomStateChanged?(false)
             ReaderPerformanceTrace.log("finalizeVisibleSpread moved \(previousSpreadIndex) -> \(spreadIndex)")
@@ -570,8 +634,6 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         ensureControllerHosted(forSpreadIndex: spreadIndex)
         notifyPageChangedIfNeeded(spread.primaryPageIndex)
         trimCache(around: spreadIndex)
-        prefetchAround(spreadIndex: spreadIndex)
-        scheduleNeighborPrewarm(around: spreadIndex)
     }
 
     private func ensureControllerHosted(forSpreadIndex spreadIndex: Int, remainingAttempts: Int = 2) {
@@ -610,6 +672,9 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         }
 
         if let cachedController = controllerCache[spreadIndex] {
+            if spreadIndex == currentSpreadIndex {
+                cachedController.prioritizeLoading()
+            }
             return cachedController
         }
 
@@ -618,6 +683,8 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             spread: spreads[spreadIndex],
             document: document,
             layout: layout,
+            loadGate: pageLoadGate,
+            loadsWithoutGate: spreadIndex == currentSpreadIndex,
             onTapRegion: { [weak self] tapRegion in
                 self?.handleTapRegion(tapRegion)
             }
@@ -632,6 +699,12 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         controller.onContentShown = { [weak self, spreadIndex] in
             guard let self, spreadIndex == self.currentSpreadIndex else { return }
             self.onFirstPageShown?()
+        }
+        controller.onLoadFinished = { [weak self, weak controller] in
+            guard let self,
+                  spreadIndex == self.currentSpreadIndex,
+                  self.controllerCache[spreadIndex] === controller else { return }
+            self.updateNeighborLoading()
         }
         if pageViewportSize.width > 0, pageViewportSize.height > 0 {
             controller.requireViewportSize(pageViewportSize)
@@ -692,6 +765,11 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
     }
 
     private func clearControllerCache() {
+        pageLoadGate.isSuspended = true
+        prefetchTask?.cancel()
+        prefetchTask = nil
+        controllerPrewarmWorkItem?.cancel()
+        controllerPrewarmWorkItem = nil
         let keys = Array(controllerCache.keys)
         for key in keys {
             removeCachedController(forSpreadIndex: key)
@@ -703,9 +781,25 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
             return
         }
 
+        controller.cancelLoading()
         controller.willMove(toParent: nil)
-        controller.view.removeFromSuperview()
+        controller.viewIfLoaded?.removeFromSuperview()
         controller.removeFromParent()
+    }
+
+    private func updateNeighborLoading() {
+        let isCurrentLoadFinished = controllerCache[currentSpreadIndex]?.hasFinishedLoading == true
+        pageLoadGate.isSuspended = !isCurrentLoadFinished
+        guard isCurrentLoadFinished else {
+            prefetchTask?.cancel()
+            prefetchTask = nil
+            controllerPrewarmWorkItem?.cancel()
+            controllerPrewarmWorkItem = nil
+            return
+        }
+
+        prefetchAround(spreadIndex: currentSpreadIndex)
+        scheduleNeighborPrewarm(around: currentSpreadIndex)
     }
 
     private func prefetchAround(spreadIndex: Int) {
@@ -737,7 +831,10 @@ final class ReaderPagedCollectionViewController: UIViewController, UICollectionV
         controllerPrewarmWorkItem?.cancel()
 
         let workItem = DispatchWorkItem { [weak self] in
-            self?.prewarmNeighbors(around: spreadIndex)
+            guard let self,
+                  spreadIndex == self.currentSpreadIndex,
+                  self.controllerCache[spreadIndex]?.hasFinishedLoading == true else { return }
+            self.prewarmNeighbors(around: spreadIndex)
         }
         controllerPrewarmWorkItem = workItem
         DispatchQueue.main.async(execute: workItem)
@@ -917,7 +1014,11 @@ private final class ComicImageSpreadViewController: UIViewController {
     private var imageViews: [UIImageView] = []
     private var loadedPages: [LoadedComicPage] = []
     private var hasStartedLoading = false
+    private var hasStartedPageRead = false
+    private(set) var hasFinishedLoading = false
     private var loadTask: Task<Void, Never>?
+    private let loadGate: ReaderPageLoadGate
+    private var loadsWithoutGate: Bool
     private var lastViewportSize: CGSize = .zero
     private var targetViewportSize: CGSize?
     private var needsViewportResetOnNextLayout = true
@@ -929,6 +1030,7 @@ private final class ComicImageSpreadViewController: UIViewController {
     var onInteractionBegan: (() -> Void)?
     /// Called once, when the page or its error is on screen.
     var onContentShown: (() -> Void)?
+    var onLoadFinished: (() -> Void)?
 
     var heroPage: ReaderHeroPage? {
         guard isViewLoaded, !imageViews.isEmpty else {
@@ -946,12 +1048,16 @@ private final class ComicImageSpreadViewController: UIViewController {
         spread: ReaderSpreadDescriptor,
         document: ImageSequenceComicDocument,
         layout: ReaderDisplayLayout,
+        loadGate: ReaderPageLoadGate,
+        loadsWithoutGate: Bool,
         onTapRegion: @escaping (ReaderTapRegion) -> Void
     ) {
         self.spreadIndex = spreadIndex
         self.spread = spread
         self.document = document
         self.layout = layout
+        self.loadGate = loadGate
+        self.loadsWithoutGate = loadsWithoutGate
         self.previewNamespace = ReaderPageCache.namespace(for: document.url)
         self.onTapRegion = onTapRegion
         super.init(nibName: nil, bundle: nil)
@@ -1054,22 +1160,44 @@ private final class ComicImageSpreadViewController: UIViewController {
         observePreviewUpdates(for: pageIndices)
         applyPreviewIfAvailable(for: pageIndices, resetZoomScale: true)
 
+        let loadGate = loadGate
+        let loadsWithoutGate = loadsWithoutGate
         loadTask = Task { [weak self] in
+            var holdsPermit = false
+            defer {
+                if holdsPermit { loadGate.signal() }
+            }
+            if !loadsWithoutGate {
+                do {
+                    try await loadGate.wait()
+                    holdsPermit = true
+                } catch {
+                    return
+                }
+            }
+            guard !Task.isCancelled else { return }
+            self?.hasStartedPageRead = true
             let loadStart = DispatchTime.now().uptimeNanoseconds
-            let result = await Task.detached(priority: .userInitiated) { () -> Result<[LoadedComicPage], Error> in
+            let decodingTask = Task.detached(priority: .userInitiated) { () -> Result<[LoadedComicPage], Error> in
                 do {
                     var loadedPages: [LoadedComicPage] = []
                     loadedPages.reserveCapacity(pageIndices.count)
 
                     for index in pageIndices {
+                        try Task.checkCancellation()
                         let data = try await pageSource.dataForPage(at: index)
-                        guard let image = ReaderPagedImageDecoder.decodeImage(
-                            from: data,
-                            maxPixelSize: decodeMaxPixelSize,
-                            preferFullResolution: shouldPreferFullResolution
-                        ) else {
+                        try Task.checkCancellation()
+                        let image = autoreleasepool {
+                            ReaderPagedImageDecoder.decodeImage(
+                                from: data,
+                                maxPixelSize: decodeMaxPixelSize,
+                                preferFullResolution: shouldPreferFullResolution
+                            )
+                        }
+                        guard let image else {
                             throw ReaderSpreadImageError.decodeFailed(index: index)
                         }
+                        try Task.checkCancellation()
 
                         loadedPages.append(LoadedComicPage(index: index, image: image))
                     }
@@ -1078,9 +1206,14 @@ private final class ComicImageSpreadViewController: UIViewController {
                 } catch {
                     return .failure(error)
                 }
-            }.value
+            }
+            let result = await withTaskCancellationHandler {
+                await decodingTask.value
+            } onCancel: {
+                decodingTask.cancel()
+            }
 
-            guard let self else {
+            guard !Task.isCancelled, let self else {
                 return
             }
 
@@ -1118,7 +1251,26 @@ private final class ComicImageSpreadViewController: UIViewController {
                         : error.userFacingMessage
                 )
             }
+            self.hasFinishedLoading = true
+            self.loadTask = nil
+            self.onLoadFinished?()
         }
+    }
+
+    func prioritizeLoading() {
+        guard !loadsWithoutGate else { return }
+        loadsWithoutGate = true
+        guard hasStartedLoading, !hasStartedPageRead, !hasFinishedLoading else { return }
+        loadTask?.cancel()
+        hasStartedLoading = false
+        loadImagesIfNeeded()
+    }
+
+    func cancelLoading() {
+        loadTask?.cancel()
+        loadTask = nil
+        onLoadFinished = nil
+        removePreviewObserver()
     }
 
     private func observePreviewUpdates(for pageIndices: [Int]) {

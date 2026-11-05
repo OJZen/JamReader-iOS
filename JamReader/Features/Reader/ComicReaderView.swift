@@ -971,17 +971,18 @@ private struct ReaderOpeningStateView: View {
             }
             .overlay(alignment: previewImage == nil ? .center : .bottom) {
                 if showsStatus {
-                    status
-                        .padding(.horizontal, Spacing.xl)
-                        .padding(.top, Spacing.lg)
-                        .padding(.bottom, Spacing.lg + windowSafeAreaInsets.bottom)
-                        .frame(maxWidth: .infinity)
-                        .background {
-                            if previewImage != nil {
-                                scrim(from: .top, to: .bottom)
-                            }
+                    Group {
+                        if previewImage != nil {
+                            statusBadge
+                        } else {
+                            status
                         }
-                        .transition(.opacity)
+                    }
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.top, Spacing.lg)
+                    .padding(.bottom, Spacing.lg + windowSafeAreaInsets.bottom)
+                    .frame(maxWidth: .infinity)
+                    .transition(.opacity)
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -1021,6 +1022,34 @@ private struct ReaderOpeningStateView: View {
         }
         .background(Color.black)
         .ignoresSafeArea()
+    }
+
+    private var statusBadge: some View {
+        ReaderStatusBadge {
+            HStack(spacing: 10) {
+                if let normalizedProgress {
+                    ProgressView(value: normalizedProgress)
+                        .progressViewStyle(.linear)
+                        .tint(.appJam)
+                        .frame(width: 48)
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Text(verbatim: progressText.map { "\(detail) \($0)" } ?? detail)
+                    .monospacedDigit()
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.6)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
+        }
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(verbatim: detail))
+        .accessibilityValue(Text(verbatim: progressText ?? ""))
     }
 
     private var status: some View {

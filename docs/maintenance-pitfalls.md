@@ -563,6 +563,8 @@ SMB 浏览器中，文件夹封面在 list/grid 切换时曾出现低清、黑�
 
 - 翻页模式的页面由 `ReaderPagedImageDecoder` 在加载任务里解码完成。`UIImage(data:)` 要等 Core Animation 首次绘制才解码，直接交给 `UIImageView` 会把解码留到翻页动画期间的主线程。
 - 提前解码后，已加载的 spread 都占用解码后的内存；上限由 `controllerRetentionRadius` 决定，内存警告时只保留当前 spread。
+- 当前 spread 先加载，成功或失败后才启动邻居预热和数据预取；邻居按距离排队，最多 2 个同时取数据和解码，约束打开时的瞬时峰值。排队邻居成为当前 spread 时绕过队列，取消任务必须归还名额。
+- `ZoomableImagePageView` 按自身真实 bounds 计算适配缩放，不能用尚未布局的内部 scroll view 尺寸；尺寸变化后自行重新适配，已放大的内容只夹取到合法缩放范围。
 - `RemoteThumbnailDiskCacheStore` 的 `fileMutationLock` 可能被摘要扫描和裁剪长时间持有。主线程读取的缓存代际只用 `generationLock`，读取和解码磁盘缩略图不持有文件锁，迟到结果由调用方按代际丢弃。
 
 ## 10. 缓存和存储设置
