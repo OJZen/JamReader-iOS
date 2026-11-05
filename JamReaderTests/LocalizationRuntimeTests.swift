@@ -29,7 +29,6 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Save to Photos": "Save to Photos",
                 "Settings": "Settings",
                 "Share": "Share",
-                "Strategy": "Strategy",
             ]
         ),
         LocaleExpectation(
@@ -54,7 +53,6 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Save to Photos": "存到相册",
                 "Settings": "设置",
                 "Share": "共享名称",
-                "Strategy": "导入方式",
             ]
         ),
         LocaleExpectation(
@@ -79,7 +77,6 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Save to Photos": "存到「照片」",
                 "Settings": "設定",
                 "Share": "共享名稱",
-                "Strategy": "匯入方式",
             ]
         ),
         LocaleExpectation(
@@ -104,7 +101,6 @@ final class LocalizationRuntimeTests: XCTestCase {
                 "Save to Photos": "「写真」に保存",
                 "Settings": "設定",
                 "Share": "共有名",
-                "Strategy": "インポート方法",
             ]
         ),
     ]
