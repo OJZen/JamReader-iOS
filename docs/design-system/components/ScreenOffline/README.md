@@ -1,12 +1,12 @@
 # ScreenOffline
 
-离线书架与已保存文件夹（各一个页面，范围为全部服务器或当前服务器）。
+Offline Shelf and Saved Folders are separate pages, each scoped to all servers or the current server.
 
-## 离线书架
-- 断网时顶部 Notice 告诉用户“这里都可以直接阅读”。
-- 搜索 + 筛选（全部 / 需要更新，带数量）+ 排序按钮（最近 / 标题 / 服务器）。原来的“最新 / 较旧”两个筛选合并：用户只关心哪些需要更新。
-- 联网时，较旧副本的行尾直接是“更新”按钮；断网时不显示（副标题写“联网后可更新”），不给点了必然失败的按钮。其余动作（移除副本、前往所在文件夹）在长按 / 侧滑。导入书库需回到所在远程目录（复用同一导入流程）。
-- 整服务器清理只在服务器管理与设置 → 存储；离线书架没有该入口。清理后果见 [设计需求](../../../design-requirements.md#删除移除与清理)。
+## Offline Shelf
+- When offline, a top Notice says “Every comic here opens without a connection.”
+- Search + filters (All / Needs Update, with counts) + sort (Recent / Title / Server). The former current / older filters are merged; users need to know which copies need updating.
+- While online, older-copy rows have a trailing Update button. Hide it offline, with “Can update when online” in the subtitle, rather than offer a button certain to fail. Other actions (remove copy, go to its folder) use long press / swipe. Import to Library requires returning to the remote directory and reusing the same import flow.
+- Whole-server cleanup exists only in server management and Settings → Storage, not Offline Shelf. See [design requirements](../../../design-requirements.md#deletion-removal-and-cleanup) for cleanup consequences.
 
-## 已保存文件夹
-按服务器分组；导航栏“编辑”进入编辑模式改名、移除（侧滑是快捷方式）；移除的确认写“服务器上的文件不受影响”。点击进入对应远程目录。
+## Saved Folders
+Group by server. Navigation-bar Edit enters editing mode for rename/removal (swipe is a shortcut). Removal confirmation states “Files on the server are not affected.” Tap to enter the corresponding remote directory.

@@ -1,7 +1,7 @@
 # ScreenComicActions
 
-漫画管理：点封面阅读，长按或“更多”管理（同一组动作，见 MoreMenu）。
+Comic management: tap the cover to read; long press or More to manage (the same actions; see MoreMenu).
 
-- 资料编辑 Sheet：常用（标题、系列、卷/期、类型）直接编辑；出版信息、作者与角色、简介与备注分组进入二级页。
-- “从 ComicInfo.xml 读取”在 Sheet 内只作用于这一本；批量与范围导入在书库菜单“导入漫画资料…”。
-- 有修改时下滑不可直接关闭，弹出“放弃更改 / 继续编辑”。
+- Metadata-editing sheet: edit Common fields (Title, Series, Volume / Issue, Type) directly; Publication, Creators & Characters, and Summary & Notes groups open secondary pages.
+- Read ComicInfo.xml from the File inside the sheet affects only this comic; batch and scoped import uses Import Comic Info… in the library menu.
+- With changes, swiping down must not dismiss directly; show Discard Changes / Keep Editing.

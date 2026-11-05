@@ -1,10 +1,10 @@
 # ScreenLibraryHome
 
-书库首页（iPhone）。
+Library Home (iPhone).
 
-- 页面底色 `bg-grouped`，书库列表与继续阅读主卡用 `surface`。
-- 顶部“继续阅读”的显隐由 [ContinueReading](../ContinueReading/README.md#位置与范围) 的位置设置决定；隐藏后直接从“我的书库”开始。
-- 主卡整张是一个按钮（VoiceOver 读作一个元素），“继续”只是视觉提示，不是第二个点击目标。
-- “我的书库”：类型图标区分 App 内 / 关联文件夹 / 已导入；副行写数量和存放方式；只读、需授权用 StatusBadge。
-- 书库的改名、信息、移除 / 删除在书库内容页 ⋯ →“书库信息”；首页行的长按菜单复用同一组动作。
-- 右上 [+] 打开“添加漫画”Sheet；空态时隐藏 [+]，由空态按钮承担同一入口；“或连接 NAS 服务器”跳到远程分区的添加服务器。
+- Page background is `bg-grouped`; the library list and Continue Reading hero card use `surface`.
+- Top Continue Reading visibility follows [ContinueReading](../ContinueReading/README.md#placement-and-scope) placement settings; when hidden, start directly with My Libraries.
+- The whole hero card is one button (one VoiceOver element). Continue is a visual hint, not a second tap target.
+- My Libraries: type icons distinguish In App / Linked Folder / Imported Comics; the secondary row shows count and storage method; read-only and authorization-needed states use StatusBadge.
+- Library Rename, Info, Remove / Delete live in the content page's ⋯ → Library Info; home-row long press reuses those actions.
+- Top-right [+] opens the Add Comics sheet. Hide [+] in the empty state, whose button provides the same entry. Or Connect a NAS Server opens Add Server in Remote.

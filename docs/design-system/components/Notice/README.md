@@ -1,12 +1,12 @@
 # Notice
 
-行内提示：错误、权限、只读、搜索范围等需要解释原因的状态，放在内容顶部，不弹窗打断。
+Inline notices explain errors, permissions, read-only state, search scope, and similar conditions at the top of content, without interrupting with a dialog.
 
-## 结构
-图标（状态色）+ 标题（`subheadline` semibold）+ 说明（`footnote` `ink-2`）+ 最多 3 个文字动作（`accent`）。
+## Structure
+Icon (status color) + title (`subheadline` semibold) + description (`footnote`, `ink-2`) + at most 3 text actions (`accent`).
 
-## 规则
-- 失败保留用户位置与输入；动作给真实出口（重试、编辑服务器、去离线书架）。
-- 区分“不能访问”（`danger`）与“不能写入”（`warning`）。
-- 原地重新授权没有现成入口，提示只说明访问失败与记录保留；见 [实现边界](../../05-batches.md#书库与导入)。
-- 只有阻断性的确认才用 Alert（见 ConfirmDialog）。
+## Rules
+- Failures preserve location and input; actions offer real exits (Retry, Edit Server, go to Offline Shelf).
+- Distinguish inaccessible (`danger`) from unwritable (`warning`).
+- No in-place reauthorization entry exists; notices only explain access failure and retained records. See [implementation limits](../../05-batches.md#library-and-import).
+- Use Alert only for blocking confirmations (see ConfirmDialog).

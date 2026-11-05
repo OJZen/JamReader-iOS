@@ -1,15 +1,15 @@
 # ScreenRemoteServer
 
-服务器详情与远程目录。
+Server details and remote directories.
 
-## 服务器详情
-- 头部：名称、协议、地址；只有一个主按钮“浏览文件”，从上次位置打开（没有记录时从起始目录）。需要回到根目录时点面包屑，不再单独放“从根目录浏览”按钮。
-- “继续阅读”使用 ContinueReading 组件，来源为该服务器阅读历史；单条删除用长按菜单。
-- “本服务器”快捷区：已保存文件夹、离线书架。菜单中不再重复这两项。
-- ⋯：编辑服务器 · 清除阅读历史 · 清理本机下载（保留历史，复用服务器管理的清理流程）· 删除服务器。
+## Server Details
+- Header: name, protocol, address; only one primary Browse Files button, opening the last location (Start Folder if none is recorded). Use breadcrumbs to return to root; do not add a separate Browse from Root button.
+- Continue Reading uses the ContinueReading component with that server's reading history; remove one entry through long press.
+- This Server shortcuts: Saved Folders, Offline Shelf. Do not repeat them in the menu.
+- ⋯: Edit Server · Clear Reading History · Clear Downloads on This Device (preserves history, reuses server-management cleanup) · Delete Server.
 
-## 远程目录
-- 行内标题为文件夹名，面包屑显示服务器 › 路径；没有搜索框。标题取舍见 [实现边界](../../05-batches.md#远程与存储)。
-- 图钉按钮：保存 / 取消保存此文件夹（已保存时为实心）。排序在状态行右侧（名称 / 更新 / 大小）；⋯：显示方式、导入此文件夹到书库…、将本页漫画保存为离线副本、移除本页的本机副本。
-- 面包屑每一级都可点，替代“上一层 / 根目录”菜单项。
-- 不支持的文件只以脚注计数。
+## Remote Directory
+- Inline title is the folder name, with Server › Path breadcrumbs and no search field. See [implementation limits](../../05-batches.md#remote-and-storage) for the title decision.
+- Pin button: Save Folder / Unsave Folder (solid when saved). Sort sits at the right of the status row (Name / Update / Size). ⋯: View As, Import This Folder to Library…, Save Page Comics as Offline Copies, Remove Local Copies on This Page.
+- Every breadcrumb level is tappable, replacing Up / Root menu entries.
+- Unsupported files appear only as a footnote count.

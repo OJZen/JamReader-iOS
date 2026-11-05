@@ -1,118 +1,118 @@
 # iPhone Duo
 
-iPhone Duo 有外屏与内屏两块屏幕，中间是铰链。本章说明 JamReader 在它上面怎么摆：沿用现有 iPhone 与 iPad 两套布局，按窗口宽度切换，不为某个姿势单独设计。外壳、列表与阅读器窗口适配已接入；阅读器折痕和摄像头几何仍是设计约束，缺口统一见 [实现边界](05-batches.md#尚未接入的环境适配)。
+iPhone Duo has outer and inner displays with a hinge between them. This chapter describes JamReader's layout on it: reuse the existing iPhone and iPad layouts, switching by window width rather than designing for individual postures. Shell, list, and reader window adaptation is connected; reader crease and camera geometry remain design constraints. See [implementation limits](05-batches.md#environment-adaptation-not-yet-connected) for the gaps.
 
-依据：Apple《Human Interface Guidelines · Designing for iPhone Duo》（2026-09-09），Tech Talk 111461（准备 App）、111462（竖向栏）、111463（保留区与排布）、111466（设计），以及 SwiftUI `ContentMarginGuide.container` 文档。预览卡片 `ScreenDuoLibrary`、`ScreenDuoReader` 中的设备框按比例示意，不是实际点数；规则里不写死任何屏幕尺寸。
+Sources: Apple's Human Interface Guidelines · Designing for iPhone Duo (2026-09-09), Tech Talks 111461 (prepare your app), 111462 (vertical bars), 111463 (reserved regions and layout), 111466 (design), and the SwiftUI `ContentMarginGuide.container` documentation. Device frames in `ScreenDuoLibrary` and `ScreenDuoReader` preview cards are proportional illustrations, not actual point dimensions. These rules hard-code no screen dimensions.
 
-## 已确认的决定
+## Confirmed Decisions
 
-| 问题 | 决定 |
+| Question | Decision |
 | --- | --- |
-| 两个受保护的阅读器导航列表 | **只做环境适配**：外观、动效、手势、跳页全部不变；只把“按设备判断”换成“按窗口 / 容器判断”，并避开侧边状态栏、灵动岛与折叠区 |
-| 内屏横放（书本形状） | **沿用用户偏好**：不自动切换为双页 |
-| 半折姿势 | **只做系统要求的避让**：可交互元素离开折叠区，双页时两页分居两侧；不做桌面姿势专用模式 |
+| Two protected reader navigation lists | **Environment adaptation only**: appearance, animation, gestures, and page jumps remain unchanged. Replace device-based decisions only with window/container decisions and avoid the side status bar, Dynamic Island, and fold region |
+| Inner display in landscape (book shape) | **Follow user preference**: do not automatically switch to double pages |
+| Half-folded posture | **Only system-required avoidance**: keep interactive elements out of the fold region and place double pages on separate sides; no tabletop-specific mode |
 
-## 环境一览
+## Environment Overview
 
-以下为设计采用的系统环境参考，不代表各姿势均已在设备上验收。
+These system-environment references guide the design; they do not mean every posture has passed device acceptance checks.
 
-| 环境 | 宽度类别 | 系统控件位置 | 保留区 | JamReader 用哪套布局 |
+| Environment | Width class | System control placement | Reserved region | JamReader layout |
 | --- | --- | --- | --- | --- |
-| 外屏（合上） | 紧凑 | 后缘一列：灵动岛、状态栏、工具栏，标签栏在这一列底部 | 前置摄像头，常驻 | 现有 iPhone 布局 |
-| 内屏竖放 | 常规 | 上下水平栏（与普通 iPhone 相同） | 内屏摄像头，仅启用时；半折时横向折叠区 | 现有 iPad 布局（侧栏 + 内容） |
-| 内屏横放 | 常规 | 侧边一列（与外屏一致） | 同上；半折时竖向折叠区 | 现有 iPad 布局；半折时两栏由系统调成对称 |
-| 内屏分屏多任务 | 按窗口宽度 | 各 App 的外侧边缘（在左边的 App 控件在左） | 同上 | 按窗口宽度：紧凑用 iPhone 布局 |
+| Outer display (closed) | Compact | A trailing column: Dynamic Island, status bar, toolbar, with the tab bar at the bottom of the column | Front camera, permanent | Existing iPhone layout |
+| Inner display in portrait | Regular | Horizontal bars at top and bottom (like ordinary iPhone) | Inner camera only while active; horizontal fold region when half-folded | Existing iPad layout (sidebar + content) |
+| Inner display in landscape | Regular | A side column (like the outer display) | Same as above; vertical fold region when half-folded | Existing iPad layout; the system makes the two columns symmetric when half-folded |
+| Inner-display split-view multitasking | By window width | Each app's outer edge (the left app's controls are on the left) | Same as above | By window width: compact uses iPhone layout |
 
-侧边控件的位置随硬件，不随语言方向：从右到左语言里也不换边。
+Side controls follow hardware, not language direction; they do not switch sides in right-to-left languages.
 
-## 原则
+## Principles
 
-以下约束继续用于维护；未接入的几何不能据此当作已实现。
+These constraints continue to guide maintenance. Geometry not yet connected must not be described as implemented based on these rules.
 
-1. **按宽度，不按设备。** 用窗口的尺寸类别与容器宽度做判断；不用 `UIScreen.main`，不写死屏幕尺寸。受保护导航保留 iPad 设备优先的档位规则，见下文。
-2. **外屏 = iPhone，内屏 = iPad。** 两块屏的信息层级相同，内屏只多显示一层（侧栏）。功能不因屏幕或姿势而缺少。
-3. **开合要连续。** 打开、合上、旋转、进出分屏后，保留当前分区、导航层级、滚动位置、选择状态、已打开的 Sheet 和阅读页码；不重新加载列表。因窄屏而暂时不可用的设置（例如双页）只是暂时不显示，不改写已保存的偏好。
-4. **只做系统要求的避让。** 按钮、浮层、可拖动的控件不放在折叠区；可滚动的内容可以跨过。不做桌面姿势专用布局，不做按姿势切换的特殊界面。
-5. **系统控件交给系统摆放。** 不覆盖默认的侧边 / 水平放置，不自绘侧边栏。微调只通过系统提供的优先级与压缩方式。
+1. **Use width, not device.** Decide using window size classes and container width, not `UIScreen.main` or hard-coded screen dimensions. Protected navigation keeps its iPad-device-first tier rule; see below.
+2. **Outer display = iPhone, inner display = iPad.** Both displays have the same information hierarchy; the inner display shows only one extra level (the sidebar). Features do not disappear by screen or posture.
+3. **Preserve continuity when opening and closing.** After opening, closing, rotating, or entering/leaving split view, preserve the current area, navigation hierarchy, scroll position, selection, open sheets, and reading page. Do not reload lists. Settings temporarily unavailable in a narrow window (such as double pages) are only hidden temporarily; do not overwrite saved preferences.
+4. **Only system-required avoidance.** Keep buttons, overlays, and draggable controls out of the fold region; scrollable content may cross it. No tabletop-specific layouts or special interfaces that switch by posture.
+5. **Let the system place system controls.** Do not override default side/horizontal placement or draw custom side bars. Fine-tune only through system priorities and compression behavior.
 
-## 页面边距
+## Page Margins
 
-左右边距用系统给的**容器边距**，不写死 16。外屏和内屏横放时，靠近侧边控件那一侧的边距约为 0，内容直接贴到控件列；另一侧保持 16–20。分屏时 App 在左边，控件列在前缘，两侧边距随之对调。
+Use system **container margins** for left and right margins rather than hard-coding 16. On the outer display and inner display in landscape, the margin beside side controls is about 0, so content meets the control column; the other side stays 16–20. In split view, an app on the left has controls on the leading edge, and the two margins swap accordingly.
 
-| 实现 | 做法 |
+| Implementation | Approach |
 | --- | --- |
-| UIKit 列表 / 网格 | `UICollectionViewCompositionalLayout` 的 section 用 `contentInsetsReference = .layoutMargins`（或 `.readableContent`），不在 `contentInsets` 里写死左右值；`insetGrouped` 列表自动跟随 |
-| UIKit 自定义视图 | 子视图约束到 `layoutMarginsGuide`，容器 `preservesSuperviewLayoutMargins = true`；滚动视图内容约束到 `contentLayoutGuide`，宽度跟 `frameLayoutGuide` |
-| SwiftUI | `List`、`Form` 自动处理，不要再叠加 `.padding(.horizontal)`。自定义滚动内容在 iOS 27.1 起用 `.contentMargins(for: .container)`；更早系统通过 `containerHorizontalMargins()` 回退到紧凑宽度 `Spacing.md` / 常规宽度 `Spacing.lg` |
-| 计算宽度 | 每一侧单独取：`bounds.inset(by: safeAreaInsets)`，不要写 `width - inset * 2` |
-| 不改的 | 受保护导航列表的内部间距；卡片、封面之间的间距 token |
+| UIKit lists / grids | Set `contentInsetsReference = .layoutMargins` (or `.readableContent`) on `UICollectionViewCompositionalLayout` sections rather than hard-coding left/right `contentInsets`; `insetGrouped` lists follow automatically |
+| UIKit custom views | Constrain subviews to `layoutMarginsGuide`, with `preservesSuperviewLayoutMargins = true` on the container; constrain scroll content to `contentLayoutGuide` and its width to `frameLayoutGuide` |
+| SwiftUI | `List` and `Form` handle this automatically; do not add `.padding(.horizontal)`. Custom scrolling content uses `.contentMargins(for: .container)` from iOS 27.1; earlier systems use `containerHorizontalMargins()` to fall back to `Spacing.md` at compact width / `Spacing.lg` at regular width |
+| Width calculation | Resolve each side separately with `bounds.inset(by: safeAreaInsets)`, not `width - inset * 2` |
+| Unchanged | Internal spacing in protected navigation lists; spacing tokens between cards and covers |
 
-旧系统自定义视图的回退值来自现有间距 token，不影响组件内部间距。
+Fallback values for custom views on older systems come from existing spacing tokens and do not affect component-internal spacing.
 
-## 书库 · 远程 · 设置
+## Library · Remote · Settings
 
-| 项 | 规则 |
+| Item | Rule |
 | --- | --- |
-| 外壳 | 三个分区的 split view **始终创建**，由系统在紧凑宽度折成单栏（单栏导航栈）、在常规宽度展开（侧栏 + 内容）。展开 / 折叠时保留选中项与导航层级 |
-| 侧栏宽度 | 使用系统默认宽度，不写死 320pt |
-| 侧栏常驻判断 | “侧栏是否同屏可见”看 split view 是否展开（`isCollapsed == false`），不看设备；注意侧栏所在列本身报告紧凑尺寸类别 |
-| 书库侧栏恢复 | 继续阅读 / 书库 / 集合选中项由 `libraryHome.sidebarSelection` 保存；重启时恢复内容与高亮。集合入口同屏显示时，书库根目录不重复放 2×2 集合卡 |
-| 不用标签栏侧栏 | 不开启 `tabBarController.sidebar.preferredPlacement = .sidebar` / `.defaultTabBarPlacement(.sidebar)`：每个分区已有自己的侧栏，再开会出现两层侧栏 |
-| 只有系统栏会竖排 | 只有 `UINavigationController` / `UITabBarController` 管理的栏（SwiftUI `.toolbar` + `NavigationStack` / `NavigationSplitView`）会进侧边列。自建的 `UIToolbar`、`UINavigationBar`、`UITabBar` 或浮动按钮条不会——工具栏动作都要走系统栏 |
-| 哪一栏竖排 | split view 只有内容（detail）栏的工具栏项进侧边列；侧栏自己的控件（如“我的书库”旁的 +）留在侧栏顶部，靠近它作用的内容 |
-| 工具栏项 | 每项同时给标题与 SF Symbol，溢出菜单保留标题。iOS 27.1 起“选择 / 完成”保留符号，“全选 / 全不选”设 `.horizontalOnly`；更早系统仍用文字 |
-| 侧边列顺序 | 自上而下：返回 / 关闭（自定义的用 `.cancellationAction` / 前导项）→ 主要动作（高可见优先级）→ 其余按原分组。书库首页 [+]；书库内容 选择 · ⋯；远程目录 图钉 · ⋯；服务器详情 ⋯ |
-| 选择模式 | 底部动作使用系统底部工具栏项；“完成”设高可见优先级；iOS 27.1 起“更多”并入系统溢出菜单。见 [SelectionBar](components/SelectionBar/README.md) |
-| 溢出 | iOS 27.1 起把页面自己的 ⋯ 菜单内容并入系统溢出菜单（`additionalOverflowItems` / `ToolbarOverflowMenu`），同一屏只有一个 ⋯。⋯ 只用于溢出；排序等其它菜单用各自的符号。iOS 27.0 及以下保留页面自己的 ⋯ 菜单 |
-| 优先级 | 默认从下往上收起。最后才收起：书库首页 [+]、远程目录图钉（同时显示“已保存”状态）、选择模式的“完成”与“标为已读”。用 `visibilityPriority`（UIKit `item.visibilityPriority`，SwiftUI `.visibilityPriority`），先设分组再设单项 |
-| 数量 | 需要显示数量的符号按钮用系统徽标（`item.badge = .count(n)` / `.badge(n)`），不要做成“文字 + 数字”的按钮，否则它会留在水平栏 |
-| 压缩方式 | 书库、远程、设置的浏览页用默认方式（工具栏项先收起，保留标签栏）。选择模式是任务型，`verticalBarCompressionBehavior = .prefersBarItems` / `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` |
-| 不加额外间距 | 栏周围不加自定义间距，也不在侧边列旁边再留白（见“页面边距”） |
-| Sheet | “添加漫画”已在 iOS 27.1 起使用 `.toolbarVerticalBehavior(.disabled)`；表单类 Sheet 保持默认。外屏对比尚未完成，见 [系统适配](05-batches.md#系统适配) |
-| 网格列数 | 照常按容器宽度与现有最小宽度 token 计算 |
-| 横跨竖向折叠区的网格 | 当前接入书库与远程目录网格；缩略图总览未接入。布局规则：只要存在折叠区（查询时包含未启用区域）就用偶数列，左右各一半；**外侧边距不变，加大折痕两侧的间距**，让中缝对准折痕；列宽相同。开合时只改中缝，不重排 |
-| 浮动元素 | `TaskBanner`、`LightToast`、远程目录任务卡与全局导入浮层：在安全区内；竖向折叠区启用时，原本居中的元素放进后缘一侧区域（与系统把 Alert 放到后缘一致），不横跨折叠区。`TaskBanner` 在 iOS 27.1 起用 `ConcentricRectangle` 同心圆角，`LightToast` 保持胶囊 |
-| Sheet / Alert / 菜单 / popover | 交给系统（自动避让折叠区，外屏 Sheet 停在摄像头前）。不自己改位置 |
-| 背景与前景 | 背景（分组底色、阅读器黑底）可以铺满到屏幕边缘；文字、按钮、封面等前景留在安全区内 |
+| Shell | **Always create** split views for all three areas. The system collapses them at compact width into one column (one navigation stack) and expands them at regular width (sidebar + content). Preserve selection and navigation hierarchy on expansion/collapse |
+| Sidebar width | Use the system default, not a fixed 320pt |
+| Persistent-sidebar detection | Determine whether the sidebar is visible alongside content from the split view's expansion (`isCollapsed == false`), not the device. The sidebar column itself reports a compact size class |
+| Library sidebar restoration | `libraryHome.sidebarSelection` saves Continue Reading / library / collection selection; restore content and highlight after restart. When collection entries are visible alongside content, do not repeat the 2×2 collection cards at the library root |
+| No tab-bar sidebar | Do not enable `tabBarController.sidebar.preferredPlacement = .sidebar` / `.defaultTabBarPlacement(.sidebar)`: each area already has its own sidebar, so this would create two layers |
+| Only system bars become vertical | Only bars managed by `UINavigationController` / `UITabBarController` (SwiftUI `.toolbar` + `NavigationStack` / `NavigationSplitView`) enter the side column. Custom `UIToolbar`, `UINavigationBar`, `UITabBar`, or floating button strips do not; all toolbar actions must use system bars |
+| Which column becomes vertical | Only toolbar items in the split view's content (detail) column enter the side column. Sidebar controls (such as + beside My Libraries) stay at its top, near the content they affect |
+| Toolbar items | Supply both a title and SF Symbol for every item; overflow menus retain titles. From iOS 27.1, Select / Done keep symbols and Select All / Deselect All use `.horizontalOnly`; earlier systems keep text |
+| Side-column order | Top to bottom: Back / Close (custom ones use `.cancellationAction` / leading items) → primary actions (high visibility priority) → remaining original groups. Library Home [+]; library contents Select · ⋯; remote directory pin · ⋯; server details ⋯ |
+| Selection mode | Bottom actions use system bottom-toolbar items; Done gets high visibility priority; from iOS 27.1, More joins system overflow. See [SelectionBar](components/SelectionBar/README.md) |
+| Overflow | From iOS 27.1, merge the page's own ⋯ contents into system overflow (`additionalOverflowItems` / `ToolbarOverflowMenu`), leaving one ⋯ per screen. Use ⋯ only for overflow; other menus such as Sort use their own symbols. iOS 27.0 and earlier keep the page's own ⋯ menu |
+| Priority | Items collapse from bottom to top by default. Last to collapse: Library Home [+], remote-directory pin (also showing Saved state), and Done and Mark as Read in selection mode. Use `visibilityPriority` (UIKit `item.visibilityPriority`, SwiftUI `.visibilityPriority`), setting groups before individual items |
+| Counts | Symbol buttons that need counts use system badges (`item.badge = .count(n)` / `.badge(n)`), not text-plus-number buttons, which would stay in the horizontal bar |
+| Compression | Library, Remote, and Settings browsing pages use the default (collapse toolbar items first, keeping the tab bar). Selection mode is task-oriented: `verticalBarCompressionBehavior = .prefersBarItems` / `.toolbarVerticalCompressionBehavior(.prefersToolbarItems)` |
+| No extra spacing | Do not add custom spacing around bars or extra clearance beside the side column (see Page Margins) |
+| Sheets | Add Comics uses `.toolbarVerticalBehavior(.disabled)` from iOS 27.1; form sheets keep the default. The outer-display comparison is unfinished; see [system adaptation](05-batches.md#system-adaptation) |
+| Grid columns | Compute as usual from container width and existing minimum-width tokens |
+| Grids crossing a vertical fold region | Connected for library and remote-directory grids, not the thumbnail overview. Rule: whenever a fold region exists (including inactive regions in the query), use even columns, half on each side. **Keep outer margins unchanged and increase spacing on both sides of the crease** so the center gap aligns with it; column widths stay equal. Opening/closing changes only the center gap, without reordering |
+| Floating elements | `TaskBanner`, `LightToast`, remote-directory task cards, and the global import overlay stay within the safe area. When a vertical fold region is active, normally centered elements move into the trailing region (matching system Alert placement) without crossing the fold. From iOS 27.1, `TaskBanner` uses `ConcentricRectangle` concentric corners; `LightToast` stays a capsule |
+| Sheet / Alert / menu / popover | Let the system handle them (automatically avoiding fold regions; outer-display sheets stop before the camera). Do not reposition manually |
+| Background and foreground | Backgrounds (grouped surfaces, reader black) may reach screen edges; foreground text, buttons, and covers stay inside the safe area |
 
-## 阅读器
+## Reader
 
-| 项 | 规则 |
+| Item | Rule |
 | --- | --- |
-| 单页 / 双页 | 双页只在常规宽度提供（现有 `supportsDoublePageSpread`）。内屏按用户偏好显示，不自动切换。外屏或紧凑分屏窗口暂时显示单页，**不改写**偏好；回到内屏恢复。切换时停在同一阅读页 |
-| 双页的位置（未接入） | 设计要求：跨页中心对准折痕（division 区域中线，查询时包含未启用区域），不用安全区中心——侧边状态栏让安全区左右不对称。平放时两页按现有方式相接；半折时两页分居折叠区两侧，各自适应自己一侧 |
-| 单页在内屏横放 | 居中，会跨过折痕。这是内容，允许；点按区域不变 |
-| 画面视口 | 由窗口与安全区决定，不用 `UIScreen.main`。当前没有 `.occlusion` 查询；设计要求用常驻摄像头保留区避让，不随工具显隐改变画面几何 |
-| 顶栏 | 保持水平：返回 · 书名 · [书签 · Aa · ⋯]。整体在安全区内，避开后缘的状态栏 / 灵动岛列；当前仍用 `ReaderChromeMetrics.horizontalPadding`，未接入侧边容器边距。它是阅读器自绘的控件，不会进系统侧边列，这是有意的。半折分区尚未接入；设计要求返回 + 书名在前缘一侧、三键在后缘一侧，书名在折痕前截断。不改成侧边竖排：阅读器是沉浸界面，竖向模式的受保护轨道就在后缘 |
-| 显示面板（Aa） | 紧凑宽度用底部浮动面板（点 ×、下滑或再点一次 `Aa` 关闭），常规宽度用 popover（系统避让折叠区，点外面关闭）。按尺寸类别判断，不按设备 |
-| 更多（⋯） | 系统菜单，自动避让 |
-| 跳页浮层 | 键盘抬升使用窗口高度；折痕避让尚未接入，设计要求不横跨折叠区：竖向折叠时放后缘一侧，横向折叠时放下半区 |
-| 缩略图总览 | 列数按尺寸类别与容器宽度；跨折痕偶数列尚未接入 |
-| 跨本导航胶囊 | `ReaderContextNavigator` 没有页面调用；若以后接入，须避开折叠区 |
-| 方向锁 | 内屏会忽略 App 声明的支持方向。阅读器里的“旋转（仅本次）”只旋转画面，行为不变。外屏横放照常可读 |
-| 内屏摄像头 | 内屏前置摄像头只在启用时成为保留区；阅读器顶栏按安全区布局即可，不为它单独处理 |
+| Single Page / Double Page | Double pages are available only at regular width (existing `supportsDoublePageSpread`). The inner display follows user preference without automatic switching. The outer display or compact split-view window temporarily shows a single page **without overwriting** preference; returning to the inner display restores it. Stay on the same reading page when switching |
+| Double-page position (not connected) | Design requirement: align the spread center to the crease (the division region's centerline, including inactive regions in the query), not the safe-area center, because the side status bar makes the safe area asymmetric. When flat, pages meet as currently implemented; when half-folded, each page sits and fits on its own side of the fold region |
+| Single page on the inner display in landscape | Centered, crossing the crease. This is content and is allowed; tap regions stay unchanged |
+| Reading viewport | Determined by the window and safe area, not `UIScreen.main`. There is currently no `.occlusion` query; the design requires avoiding the permanent camera region without changing viewport geometry as tools show/hide |
+| Top bar | Stays horizontal: Back · title · [Bookmarks · Aa · ⋯]. Entirely within the safe area, avoiding the trailing status-bar / Dynamic Island column. It still uses `ReaderChromeMetrics.horizontalPadding`, without side container margins. These are custom reader controls and intentionally do not enter the system side column. Half-folded partitioning is not connected; the design requires Back + title on the leading side and the three buttons on the trailing side, truncating the title before the crease. Do not make it a vertical side bar: the reader is immersive, and the protected vertical-mode track already occupies the trailing edge |
+| Display panel (Aa) | A bottom floating panel at compact width (close with ×, swipe down, or tap `Aa` again); a popover at regular width (system avoids fold regions; tap outside to close). Decide by size class, not device |
+| More (⋯) | System menu with automatic avoidance |
+| Page-jump overlay | Keyboard lift uses window height. Crease avoidance is not connected; the design requires staying out of fold regions: trailing side for vertical folds, lower half for horizontal folds |
+| Thumbnail overview | Columns follow size class and container width; even columns across the crease are not connected |
+| Cross-comic navigation capsule | No page calls `ReaderContextNavigator`; any future adoption must avoid fold regions |
+| Orientation lock | The inner display ignores the app's supported orientations. Rotation (This Reading Only) in the reader rotates only content, with behavior unchanged. The outer display remains readable in landscape |
+| Inner camera | The inner front camera becomes a reserved region only while active. The reader top bar only needs safe-area layout, with no separate handling |
 
-### 受保护导航列表 · 只做环境适配
+### Protected Navigation Lists · Environment Adaptation Only
 
-适用于 `ReaderBottomBar`（`ReaderThumbnailScrubber`、浮动预览、页码胶囊）与 `ReaderVerticalThumbnailRail`。
+Applies to `ReaderBottomBar` (`ReaderThumbnailScrubber`, floating preview, page-number capsule) and `ReaderVerticalThumbnailRail`.
 
-| 项目 | 当前实现 / 约束 | 保持不变 |
+| Item | Current implementation / constraint | Unchanged |
 | --- | --- | --- |
-| 档位 | 档位 = iPad，**或**窗口的宽、高尺寸类别都为常规 → iPad 数值；其余 → iPhone 数值。iPad 始终保留 iPad 档；Duo 内屏用 iPad 档，外屏与紧凑分屏用 iPhone 档；iPhone Plus / Max 横放是常规宽度、紧凑高度，仍用 iPhone 档。已有的“视口宽度 ≥ `regularReaderLayoutMinWidth`”判断保留 | 两档内的所有数值 |
-| 视口回退 | 使用 key window 的 bounds；没有窗口时返回零尺寸，由调用方回退 | 计算方式 |
-| 容器 | 使用现有 viewport / safe area 约束；半折限制尚未接入。设计要求限制在一个可用区域：底部列表在竖向折叠时放后缘一侧，横向折叠时它本就在下半区；右侧轨道在横向折叠时限制在下半区，竖向折叠时它本就在后缘 | 外观、尺寸、动效、显隐、手势、跳页 |
+| Tier | iPad, **or** both window width and height size classes regular → iPad values; otherwise → iPhone values. iPad always keeps its tier; Duo inner display uses iPad, outer and compact split view use iPhone. iPhone Plus / Max landscape is regular width and compact height, so still uses iPhone. Keep the existing viewport width ≥ `regularReaderLayoutMinWidth` check | All values within both tiers |
+| Viewport fallback | Use key-window bounds; return zero size if no window exists and let the caller fall back | Calculation method |
+| Container | Uses existing viewport / safe-area constraints; half-folded constraints are not connected. The design requires staying in one usable region: bottom list on the trailing side for a vertical fold (already in the lower half for a horizontal fold); right-side track limited to the lower half for a horizontal fold (already trailing for a vertical fold) | Appearance, dimensions, animation, visibility, gestures, page jumps |
 
-档位由窗口决定，不由半折后变窄的容器决定：开合时缩略图大小不跳变，容器变窄只改变能看到的缩略图数量。
+The window determines the tier, not the container narrowed by half-folding. Thumbnail sizes do not jump during opening/closing; a narrower container changes only how many thumbnails are visible.
 
-## 工程要求
+## Engineering Requirements
 
-- 使用提供对应 API 的 SDK，并保留 availability 判断；实际版本边界见 [系统适配](05-batches.md#系统适配)，最低系统与构建要求见 [开发流程](../development-workflow.md)。
-- 不加 `UIRequiresFullScreen`。保留区查询：SwiftUI `reservedRegions(kind:)`，UIKit `UIView.reservedRegions(kind:)`；折叠区为 `.division`，摄像头为 `.occlusion`；决定列数时带 `.includeInactive`。
-- 根标签栏在 iOS 18 起保留 `mode = .tabBar`，不开启第二层标签栏侧栏。
-- 新布局继续用尺寸类别，不加入 `UIDevice.current.orientation` 等设备方向判断。
-- 外屏横放（立成帐篷状）也要可用：外屏横放是紧凑宽 × 紧凑高，侧边列空间最少、最容易溢出；不要锁定竖屏。内屏会忽略 App 声明的方向。
-- 测试：Xcode Device Hub 的 iPhone Duo——合上、内屏竖放 / 横放、书本半折、桌面姿势、分屏在左 / 在右；浅色 / 深色、AX5、减少透明度（侧边列会出现底色，内容仍要清晰）、四种语言；iPhone 与 iPad 的受保护组件截图与改动前逐像素一致。
+- Use an SDK providing the relevant APIs and keep availability checks. See [system adaptation](05-batches.md#system-adaptation) for actual version boundaries and [development workflow](../development-workflow.md) for minimum OS and build requirements.
+- Do not add `UIRequiresFullScreen`. Reserved-region queries: SwiftUI `reservedRegions(kind:)`, UIKit `UIView.reservedRegions(kind:)`; fold regions are `.division`, cameras `.occlusion`; include `.includeInactive` when determining column count.
+- From iOS 18, the root tab bar keeps `mode = .tabBar` without enabling a second tab-bar sidebar.
+- New layouts keep using size classes; do not add device-orientation checks such as `UIDevice.current.orientation`.
+- The outer display must also work in landscape (tent posture). It is compact width × compact height, with the least space in the side column and the greatest overflow risk. Do not lock portrait. The inner display ignores declared app orientations.
+- Test iPhone Duo in Xcode Device Hub: closed, inner portrait / landscape, half-folded book, tabletop, split view on left / right; light/dark mode, AX5, Reduce Transparency (the side column gains a background; content must remain clear), all four languages. Protected-component screenshots on iPhone and iPad must match the pre-change version pixel for pixel.
 
-## 不在适配范围
+## Outside Adaptation Scope
 
-桌面姿势专用阅读模式、按姿势自动切换单双页、为外屏单独设计的页面、自绘侧边栏、改动两个受保护导航列表的外观。
+A tabletop-specific reading mode, automatic posture-based single/double-page switching, pages designed only for the outer display, custom side bars, and appearance changes to the two protected navigation lists.

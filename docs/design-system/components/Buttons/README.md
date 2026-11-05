@@ -1,16 +1,16 @@
 # Buttons
 
-按钮：系统按钮样式，不自造形状。
+Buttons use system styles, without custom shapes.
 
-| 样式 | SwiftUI | 用途 |
+| Style | SwiftUI | Purpose |
 | --- | --- | --- |
-| primary | `.borderedProminent` + `.tint(.appJam)` | 每屏最多一个：继续阅读、导入、保存 |
-| secondary | `.bordered` | 并列的次要动作 |
-| plain | `.borderless` | 取消、文字链接 |
-| danger | `role: .destructive` | 只在确认弹窗与菜单末尾 |
-| 工具栏 | 系统 ToolbarItem（iOS 26 玻璃） | 导航栏操作 |
+| primary | `.borderedProminent` + `.tint(.appJam)` | At most one per screen: Continue Reading, Import, Save |
+| secondary | `.bordered` | Secondary actions alongside others |
+| plain | `.borderless` | Cancel, text links |
+| danger | `role: .destructive` | Only in confirmation dialogs and at the end of menus |
+| Toolbar | System ToolbarItem (iOS 26 glass) | Navigation-bar actions |
 
-- 实心按钮底色用 `jam`、文字用 `on-jam`（白）。不要让它继承 AccentColor：深色下 `accent` 是亮果酱粉，白字在上面不可读。
-- 文字按钮、链接、工具栏按钮用 `accent`。
-- 键盘焦点：2pt `focus-ring` 外环，偏移 2pt。
-- 禁用 35% 透明，并说明为何不可用（Notice / 脚注），不留无效按钮。
+- Solid buttons use `jam` backgrounds and `on-jam` (white) text. Do not inherit AccentColor: dark-mode `accent` is bright jam pink, making white text unreadable.
+- Text buttons, links, and toolbar buttons use `accent`.
+- Keyboard focus: 2pt `focus-ring` outer ring, offset 2pt.
+- Disabled buttons use 35% opacity and explain why they are unavailable (Notice / footnote); do not leave ineffective buttons.

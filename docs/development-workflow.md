@@ -88,7 +88,7 @@ For every change, run static guards and `git diff --check`. Source or Xcode proj
 | SMB/WebDAV | remote tests plus real-server checks for listing, thumbnail, open, cancel, import/offline, and cache cleanup |
 | Format policy/localization | format/localization tests; build for catalog changes as well |
 
-Use the [manual regression checklist](maintenance-pitfalls.md#12-最小回归检查清单) for the affected high-risk paths. When the user limits validation or the environment cannot run a check, report that boundary explicitly. Simulator success does not prove device gestures, memory pressure, security-scoped access, SMB behavior, or iPad restoration.
+Use the [manual regression checklist](maintenance-pitfalls.md#12-minimum-regression-checklist) for the affected high-risk paths. When the user limits validation or the environment cannot run a check, report that boundary explicitly. Simulator success does not prove device gestures, memory pressure, security-scoped access, SMB behavior, or iPad restoration.
 
 ## Performance Review
 

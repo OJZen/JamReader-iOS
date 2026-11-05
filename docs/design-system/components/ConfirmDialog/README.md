@@ -1,13 +1,13 @@
 # ConfirmDialog
 
-破坏性确认：说清删什么、留什么。用系统 Alert / confirmationDialog，按钮文字是具体动词。
+Destructive confirmation states what is deleted and what remains. Use system Alert / confirmationDialog with specific verbs for buttons.
 
-## 规则
-- 标题含对象名，正文用文字说明会删除与保留什么；使用系统确认框，不承诺彩色影响列表。
-- 确认删除的按钮使用系统 destructive 样式，取消始终在场；不提供无法兑现的“撤销”。
-- 用词见 [固定用词](../../00-foundations.md#固定用词)，具体后果见 [删除、移除与清理](../../../design-requirements.md#删除移除与清理)。
-- 批量时标题写数量与范围（“删除 12 本漫画？”）。
-- 确认框从被点的按钮弹出：`confirmationDialog` 挂在按钮上，不挂在页面根部（否则会从屏幕顶部弹出）。
+## Rules
+- Include the target name in the title and explain deleted and preserved data in the body. Use system confirmation dialogs; do not promise a colored impact list.
+- The delete confirmation button uses system destructive styling; Cancel is always present. Do not offer Undo without a recovery mechanism.
+- See [fixed terminology](../../00-foundations.md#fixed-terminology) for wording and [deletion, removal, and cleanup](../../../design-requirements.md#deletion-removal-and-cleanup) for consequences.
+- Batch titles state count and scope (“Delete 12 Comics?”).
+- Present the dialog from the tapped button: attach `confirmationDialog` to the button, not the page root, or it will appear from the screen top.
 
-## 必须使用的场景
-删除本地漫画、删除 App 内书库、移除关联书库、删除服务器、修改服务器位置/身份、清理下载、清空“已导入漫画”、清除阅读历史。
+## Required Scenarios
+Deleting local comics, deleting app-managed libraries, removing linked libraries, deleting servers, changing server location/identity, clearing downloads, emptying Imported Comics, and clearing reading history.

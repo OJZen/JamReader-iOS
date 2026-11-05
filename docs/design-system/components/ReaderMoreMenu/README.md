@@ -1,9 +1,9 @@
 # ReaderMoreMenu
 
-阅读器“更多”菜单：按“页面 / 这本漫画”分组。
+Reader More menu: grouped by Pages / This Comic.
 
-- **页面**：缩略图总览（复用 `ReaderThumbnailBrowserSheet`）、书签（子菜单：每个书签一行可跳转，末尾“移除书签”）、存到相册（处理授权与失败）。
-- **跳到页码不进菜单**：点底部页码胶囊（竖向为紧凑页码入口）打开现有 `ReaderPageJumpOverlay`，这是它唯一的入口，与受保护组件的现有行为一致。
-- **这本漫画**：本地复用 [MoreMenu](../MoreMenu/README.md#本地漫画) 的管理动作，但不含删除；标为已读 / 未读会移动阅读位置并用 Toast 说明。远程只保留信息。
-- 分组标题：“页面”正常显示；“这本漫画”以一排快捷动作开头，系统菜单不画它的标题，只留分隔线。
-- 能力按文档判断：有页数时提供缩略图与书签，图像序列页面可存到相册；PDF / EPUB 渲染页也有这些能力，EPUB 网页模式隐藏不支持的动作。
+- **Pages**: thumbnail overview (reuses `ReaderThumbnailBrowserSheet`), Bookmarks (submenu: one jumpable row per bookmark, Remove Bookmark last), Save to Photos (handles authorization and failure).
+- **Page-number jumping stays out of the menu**: tap the bottom page-number capsule (compact entry in vertical mode) to open the existing `ReaderPageJumpOverlay`. This is its only entry, matching protected-component behavior.
+- **This Comic**: local comics reuse management actions from [MoreMenu](../MoreMenu/README.md#local-comics), excluding deletion; Mark as Read / Mark as Unread moves reading position and explains it with Toast. Remote comics keep only Info.
+- Section titles: Pages appears normally; This Comic starts with a row of quick actions, so the system menu omits its title and keeps only the separator.
+- Determine capability by document: page counts enable thumbnails and bookmarks; image-sequence pages can save to Photos. PDF / EPUB rendered pages also support these; EPUB web mode hides unsupported actions.

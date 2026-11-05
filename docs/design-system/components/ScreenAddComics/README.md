@@ -1,9 +1,9 @@
 # ScreenAddComics
 
-“添加漫画”流程：书库首页 [+] 与空态按钮进入同一个 Sheet。
+Add Comics flow: Library Home [+] and the empty-state button open the same sheet.
 
-1. 三种方式按用途写：导入漫画（复制）/ 使用已有文件夹（不复制）/ 新建空书库。三张卡交互一致：整张卡可点，进入下一步。
-2. “导入漫画”下一步：先选去处（默认“已导入漫画”，之后记住上次选择；只读书库不可选并写明原因），再用底部两个按钮选择文件或文件夹，进入系统文件选择。选文件 / 文件夹只出现一次。
-3. 复制与整理期间显示 TaskBanner，可取消；完成后打开目标书库，结果条按 [TaskBanner](../TaskBanner/README.md) 展示实际计数。
-- 从书库内容页 ⋯ →“导入到这里”直接用当前书库与文件夹，不再问去处。
-- 重复内容自动复用，不画覆盖确认。
+1. Describe three methods by purpose: Import Comics (copy) / Use Existing Folder (no copy) / New Empty Library. All three cards behave alike: tap the whole card to continue.
+2. Next in Import Comics: choose a destination first (Imported Comics by default, remembering the last choice afterward; read-only libraries are unavailable with a reason), then use the two bottom buttons to Choose Files or Choose Folder and open the system file picker. File / folder choice appears only once.
+3. Show TaskBanner during copying and indexing, with cancellation. Open the target library on completion; the result banner shows actual counts as specified in [TaskBanner](../TaskBanner/README.md).
+- Library content page ⋯ → Import Here uses the current library and folder directly, without asking for a destination again.
+- Reuse duplicate content automatically; do not draw overwrite confirmation.

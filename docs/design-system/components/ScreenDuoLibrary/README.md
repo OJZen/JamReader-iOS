@@ -1,5 +1,5 @@
 # ScreenDuoLibrary
 
-iPhone Duo 的书库外壳示意，远程、设置使用同一窗口适配方式。设备框按比例绘制，不是实际点数或设备截图。
+iPhone Duo library-shell illustration. Remote and Settings use the same window adaptation. Device frames are proportional, not actual point dimensions or device screenshots.
 
-窗口、侧栏、工具栏、边距与跨折痕网格规则统一见 [iPhone Duo](../../06-iphone-duo.md#书库--远程--设置)。代码入口见 [设计与代码映射](../../04-implementation.md#窗口与系统栏适配)，版本和验证边界见 [系统适配](../../05-batches.md#系统适配)。
+See [iPhone Duo](../../06-iphone-duo.md#library--remote--settings) for window, sidebar, toolbar, margin, and cross-crease grid rules. See [design-to-code mapping](../../04-implementation.md#window-and-system-bar-adaptation) for code entry points and [system adaptation](../../05-batches.md#system-adaptation) for version and validation boundaries.

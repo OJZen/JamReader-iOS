@@ -1,16 +1,16 @@
 # ReaderDisplayPanel
 
-显示设置面板（`Aa`）：所见即所得地调整当前画面。
+Display settings panel (`Aa`): adjust the current view with immediate visual feedback.
 
-## 结构
+## Structure
 
-- 紧凑宽度用高度随内容变化的系统 sheet；常规宽度从 `Aa` 弹出 popover，默认宽 380pt，辅助功能字号为 520pt。
-- 两种形式都使用实色 `surface` 底，避免漫画内容透过背景影响阅读控件。
-- 阅读模式用图示卡片，其余为分段控件和开关；辅助功能字号下卡片竖排、分段改用菜单。
-- 控件可见性由 [阅读器控件表](../../03-reader.md#显示面板的控件可见性) 负责。“首页单独显示”是页面配对偏好的开关形式；适应方式保留“原始大小”，旋转后有“重置旋转”。
-- 脚注说明共享默认值与本次旋转的作用范围，契约见 [阅读器需求](../../../design-requirements.md#5-漫画阅读器保护范围与可改部分)。
-- 底部面板用 ×、下滑或再点 `Aa` 关闭；背后画面可继续操作，点面板外不关闭。popover 点外面或再点 `Aa` 关闭。两者都接入 VoiceOver 返回手势（`accessibilityPerformEscape`）。
+- Compact width uses a system sheet whose height follows content; regular width opens a popover from `Aa`, 380pt wide by default or 520pt at accessibility text sizes.
+- Both use solid `surface` backgrounds so comics do not show through and impair control readability.
+- Reading Mode uses illustrated cards; other settings use segmented controls and switches. At accessibility text sizes, cards stack vertically and segments become menus.
+- The [reader control table](../../03-reader.md#display-panel-control-visibility) owns visibility. Show First Page Alone is a switch for page-pairing preference; Fit Mode keeps Original, with Reset Rotation after rotating.
+- Footnotes explain the scope of shared defaults and current-session rotation; see [reader requirements](../../../design-requirements.md#5-comic-reader-protected-and-editable-areas).
+- Close the bottom panel with ×, swipe down, or another tap on `Aa`. Content behind it remains interactive; tapping outside does not close it. Close the popover by tapping outside or `Aa` again. Both support the VoiceOver escape gesture (`accessibilityPerformEscape`).
 
-## 保护
+## Protection
 
-面板打开时，底部导航列表 / 右侧轨道不移动、不重排。
+Opening the panel does not move or rearrange the bottom navigation list / right-side track.

@@ -59,7 +59,7 @@ The Xcode project uses file-system-synchronized groups. New source files under `
 4. ZIP/CBZ can use remote random access when the provider supports it. Other formats fall back to a complete local download before opening.
 5. Active reader leases protect in-use cache files from cleanup or eviction.
 
-Remote cover work uses the thumbnail pipeline and supported random/range readers, with local-cache fallback. It must stay bounded and must not trigger a full comic download merely to show a thumbnail. See the [remote pitfalls](maintenance-pitfalls.md#4-远程-smbwebdav) for Range detection and the differences from local cover extraction.
+Remote cover work uses the thumbnail pipeline and supported random/range readers, with local-cache fallback. It must stay bounded and must not trigger a full comic download merely to show a thumbnail. See the [remote pitfalls](maintenance-pitfalls.md#4-remote-smbwebdav) for Range detection and the differences from local cover extraction.
 
 ### Reader
 

@@ -1,9 +1,9 @@
 # NavigationBar
 
-页面头部：大标题 + 位置 + 范围明确的搜索。使用系统导航栏与 `.searchable`。
+Page header: large title, location, and clearly scoped search. Use system navigation bars and `.searchable`.
 
-## 规则
-- 一级页和书库根目录用大标题；子文件夹大标题为文件夹名，搜索框之后的内容顶部显示面包屑（书库 › … › 当前），点击可跳到任一层级；系统搜索默认下拉出现，位置取舍见 [实现边界](../../05-batches.md#书库与导入)。
-- 搜索占位符写清范围：“在‘我的漫画’中”。远程目录使用行内标题与固定位置栏，没有搜索框。
-- 书库内容页在根目录和子文件夹使用同一组按钮：“选择” + `ellipsis`。导入到这里、显示方式、导入漫画资料、刷新与扫描、书库信息都在 `ellipsis` 中，位置不随层级变化。
-- 其它页面右侧最多 2 个按钮：一个主动作，其余收入 `ellipsis`。iOS 26 系统会将它们分组为玻璃胶囊。
+## Rules
+- Top-level pages and library roots use large titles. Subfolders use the folder name as their large title, with breadcrumbs at the top of content after search (Library › … › Current); tap any level to jump. System search appears on pull-down by default; see [implementation limits](../../05-batches.md#library-and-import) for placement decisions.
+- Search placeholders state scope: “Search in ‘My Comics’”. Remote directories use inline titles and a fixed location bar without search.
+- Library contents use the same buttons at root and subfolders: Select + `ellipsis`. Import Here, View As, Import Comic Info, Refresh & Scan, and Library Info all live in `ellipsis`, without changing position by level.
+- Other pages have at most 2 trailing buttons: one primary action, with the rest in `ellipsis`. iOS 26 groups them into glass capsules.

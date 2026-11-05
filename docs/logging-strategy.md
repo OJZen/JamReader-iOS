@@ -1,53 +1,53 @@
-# JamReader 日志策略
+# JamReader Logging Strategy
 
-日志用于还原一次业务动作及其失败边界，不用于记录用户内容，也不应成为滚动、解码或网络分块热路径的负担。实际覆盖以 `AppLog` 调用和测试为准，不在文档维护逐模块完成清单。
+Logs reconstruct a business action and where it failed. They do not record user content and must not burden scrolling, decoding, or network-chunk hot paths. Actual coverage is defined by `AppLog` calls and tests; do not maintain a module-by-module completion checklist in this document.
 
-## 入口与分类
+## Entry Point and Categories
 
-运行时代码统一使用 `JamReader/Core/Logging/AppLog.swift`，常用分类如下；完整分类以该文件为准：
+Runtime code uses `JamReader/Core/Logging/AppLog.swift` throughout. Common categories follow; that file defines the complete list:
 
-- `library`、`libraryImport`、`libraryIndexing`：资料库、导入、扫描和索引。
-- `remote`、`remoteCache`：SMB/WebDAV、下载、离线副本、缓存策略和 active lease。
-- `reader`：打开、session 生命周期、进度与页面保存。
-- `persistence`：SQLite、UserDefaults、Keychain 和文件持久化失败。
-- `ui`：仅记录会改变业务状态的协调动作，不记录普通点击、滚动或 layout。
+- `library`, `libraryImport`, `libraryIndexing`: libraries, import, scanning, and indexing.
+- `remote`, `remoteCache`: SMB/WebDAV, downloads, offline copies, cache policy, and active leases.
+- `reader`: opening, session lifecycle, progress, and page saving.
+- `persistence`: SQLite, UserDefaults, Keychain, and file-persistence failures.
+- `ui`: only coordination actions that change business state, not ordinary taps, scrolling, or layout.
 
-Objective-C/C 桥接层使用相同 subsystem `ooou.fun.jamreader` 和匹配 category，不使用 `OS_LOG_DEFAULT`。
+Objective-C/C bridges use the same subsystem, `ooou.fun.jamreader`, and a matching category, not `OS_LOG_DEFAULT`.
 
-## 隐私与字段
+## Privacy and Fields
 
-`AppLogSanitizer` 各方法的保护范围不同，不能把“经过 helper”理解成“已脱敏”：
+`AppLogSanitizer` methods protect different things. Passing through a helper does not mean a value is redacted:
 
-| 方法 | 当前行为与限制 |
+| Method | Current behavior and limits |
 | --- | --- |
-| `url` | 移除用户名、密码、query 和 fragment；仍保留主机和路径 |
-| `path` | 保留末尾路径分量并限制长度；文件名仍可见 |
-| `namesPreview` | 限制名称数量和总长度；保留的名称仍是原文 |
-| `errorDescription` | 对 `String(describing: error)` 限制长度；不移除错误中的凭据、URL 或路径 |
-| `hashedIdentifier` | 返回 SHA-256 摘要前缀，用于标识关联 |
+| `url` | Removes username, password, query, and fragment; retains host and path |
+| `path` | Keeps trailing path components and limits length; filenames remain visible |
+| `namesPreview` | Limits name count and total length; retained names remain verbatim |
+| `errorDescription` | Limits the length of `String(describing: error)`; does not remove credentials, URLs, or paths from errors |
+| `hashedIdentifier` | Returns a SHA-256 digest prefix for identity correlation |
 
-- 写日志前按字段选择处理方式；无法确认安全的错误应记录固定业务摘要或错误 domain/code，不能把截断后的任意错误当成安全的 `.public` 字段。
-- `error=` 不直接拼接 `localizedDescription` 或 `String(describing:)`。
-- 不记录用户名、密码、token、authorization header、凭据引用原文、完整用户目录、完整书名列表、图片或文档正文。
-- 记录数量、耗时、provider、结果类型和经过脱敏的作用域；不要为了调试输出用户内容。
+- Choose handling per field before logging. If an error cannot be confirmed safe, log a fixed business summary or error domain/code. Arbitrary truncated errors are not safe `.public` fields.
+- Do not concatenate `localizedDescription` or `String(describing:)` directly into `error=`.
+- Do not log usernames, passwords, tokens, authorization headers, raw credential references, full user directories, full lists of book titles, images, or document bodies.
+- Log counts, durations, providers, result types, and redacted scopes. Do not output user content for debugging.
 
-## 级别
+## Levels
 
-- `notice`：用户可感知的重要维护动作或策略变化。
-- `info`：低频业务动作成功或正常结束。
-- `warning`：可恢复的异常、fallback 或一致性修复。
-- `error`：需要用户提示或开发排查的失败。
+- `notice`: important maintenance actions or policy changes visible to users.
+- `info`: successful or normal completion of infrequent business actions.
+- `warning`: recoverable exceptions, fallbacks, or consistency repairs.
+- `error`: failures requiring user feedback or developer investigation.
 
-## 记录边界
+## Logging Boundaries
 
-适合记录：业务入口与摘要结果、持久化提交、导入/删除/缓存协调、连接或 reader session 生命周期、一次性 fallback。
+Suitable events: business entry points and summary results, persistence commits, import/deletion/cache coordination, connection or reader-session lifecycle, and one-time fallbacks.
 
-默认保持静默：每页解码与预热、每个 cell/thumbnail 成功、SMB/WebDAV chunk、SwiftUI `body`、UIKit layout、频繁 progress，以及格式探测链中的正常失败。外层最终失败必须有一条可关联日志。
+Silent by default: per-page decoding and warming, each successful cell/thumbnail, SMB/WebDAV chunks, SwiftUI `body`, UIKit layout, frequent progress, and expected failures in format probing. A final failure at the outer layer must have one correlatable log entry.
 
-## 阅读器性能跟踪
+## Reader Performance Tracing
 
-`JamReader/ReaderKernel/ReaderPerformanceTrace.swift` 仅在 Debug 构建且进程环境变量 `JAM_READER_TRACE=1` 时启用，通过 `AppLog.reader.debug` 记录翻页、布局、预热和反馈耗时。它默认关闭，Release 始终关闭；开启跟踪不等于已验证性能改善。
+`JamReader/ReaderKernel/ReaderPerformanceTrace.swift` is enabled only in Debug builds with the process environment variable `JAM_READER_TRACE=1`. It logs page-turn, layout, warming, and feedback durations through `AppLog.reader.debug`. It is off by default and always off in Release. Enabling tracing does not establish a performance improvement.
 
-## 验证
+## Validation
 
-按[开发流程](development-workflow.md#validation-by-change-type)验证日志修改。`AppLogSanitizerTests` 目前覆盖文本截断、URL 字段移除、路径尾部保留和名称数量限制；没有通用错误脱敏或哈希标识测试。新增敏感字段或脱敏逻辑时补相应边界测试，静态日志检查只能发现部分明显违规。
+Validate logging changes using [development workflow](development-workflow.md#validation-by-change-type). `AppLogSanitizerTests` currently covers text truncation, URL field removal, trailing path retention, and name-count limits; it has no general error-redaction or hashed-identifier tests. Add boundary tests for new sensitive fields or redaction logic. Static logging checks detect only some obvious violations.

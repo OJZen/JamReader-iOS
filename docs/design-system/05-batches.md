@@ -1,61 +1,61 @@
-# 实现取舍与能力边界
+# Implementation Decisions and Capability Limits
 
-本页保留实现与静态稿不同的地方及原因。批次任务、验收流水与旧尝试由 Git 保留；页面规则在组件 README 维护，验证要求见 [开发流程](../development-workflow.md#validation-by-change-type)。
+This page keeps differences between implementation and static mockups, with reasons. Git retains batch tasks, acceptance logs, and old attempts. Component READMEs own page rules; see [development workflow](../development-workflow.md#validation-by-change-type) for validation requirements.
 
-## 书库与导入
+## Library and Import
 
-| 差异 | 实现与原因 |
+| Difference | Implementation and reason |
 | --- | --- |
-| 选择底栏的图标与文字 | 使用系统底部工具栏；iPhone 不逐项显示图标下文字，避免另造无法随系统栏适配的按钮条。规则见 [SelectionBar](components/SelectionBar/README.md) |
-| 搜索与面包屑位置 | 搜索采用系统默认显隐；子文件夹面包屑在搜索框之后的内容顶部。常显搜索或大标题副标题会在推入 / 替换导航栈时让大标题提前折叠，未采用静态稿中“搜索框之前”的位置 |
-| 首页汇总的“全部” | 使用按书库分组的阅读页，没有复用单库集合页的搜索、选择与批量动作；这些操作以单库数据库为作用域，不能跨库套用。范围见 [ContinueReading](components/ContinueReading/README.md) |
-| 汇总封面 | `LibraryContinueReadingViewModel.coverURL` 只查派生封面文件，不为其他书库按需提取；缺失时显示占位图 |
-| 原地重新授权 | 书库服务没有此入口。“书库信息”说明访问失败与记录保留，不放无效按钮 |
-| 导入结果与取消 | 导入数包含复用文件，无法分别显示“新增 / 已存在”；扫描与 ComicInfo 资料导入没有 UI 取消路径。实际反馈和取消入口见 [TaskBanner](components/TaskBanner/README.md) |
+| Icons and text in the selection bottom bar | Uses the system bottom toolbar; iPhone does not show text below every icon, avoiding a separate button strip that cannot adapt with system bars. See [SelectionBar](components/SelectionBar/README.md) |
+| Search and breadcrumb placement | Search uses system-default visibility; subfolder breadcrumbs sit at the top of content after search. Always-visible search or a large-title subtitle collapses the large title early when pushing/replacing the navigation stack, so the mockup's position before search was not adopted |
+| All in the home summary | Uses a reading page grouped by library, without reusing single-library collection search, selection, or batch actions; those operations are scoped to one library database and cannot be applied across libraries. See [ContinueReading](components/ContinueReading/README.md) for scope |
+| Summary covers | `LibraryContinueReadingViewModel.coverURL` only checks derived cover files and does not extract on demand for other libraries; missing covers show placeholders |
+| In-place reauthorization | The library service has no such entry. Library Info explains access failure and retained records without a nonfunctional button |
+| Import results and cancellation | Import counts include reused files and cannot separate newly added / already existing. Scanning and ComicInfo metadata import have no UI cancellation path. See [TaskBanner](components/TaskBanner/README.md) for actual feedback and cancellation entries |
 
-## 远程与存储
+## Remote and Storage
 
-| 差异 | 实现与原因 |
+| Difference | Implementation and reason |
 | --- | --- |
-| 远程目录标题 | 保留行内标题。UIKit 集合视图没有接入大标题的收起联动；面包屑、数量与排序在标题下方的固定位置栏 |
-| 远程导入的目标与数量 | `RemoteImportOptionsSheet` 只选择书库，写入其根目录；子目录在导入开始后才列出，不能提前给递归总数。从目录行发起时直属数量也可能未知，不补造数量或目标子文件夹选择器 |
-| 下载中 / 失败角标 | `StatusBadge` 提供这两种状态，但远程列表没有逐本接入。保存离线副本用页面底部任务卡和结果提示，当前没有取消按钮；不能把组件能力写成页面能力 |
-| 准备阅读的下载进度 | 回调只有比例，所以显示百分比，没有已下载 / 总字节数。加载与失败页规则见 [ScreenRemoteActions](components/ScreenRemoteActions/README.md) |
-| 失败页编辑服务器 | 保存后关闭阅读器回到目录。原打开请求持有旧配置，留在原页重试会继续用旧设置 |
-| WebDAV 表单 | 沿用独立的地址、端口、服务器路径、起始文件夹字段，没有改成静态稿中的单一 URL / 路径输入 |
-| 存储统计 | 本地用户文件只统计默认“已导入漫画”；其他 App 内书库没有接入大小统计。占用条不能当作所有书库或整个 App 的总占用 |
-| 断网提示 | `NetworkStatusMonitor` 只反映系统网络路径；网络可用不能证明 NAS 可达，实际访问仍可能失败 |
+| Remote-directory title | Keeps an inline title. The UIKit collection view is not connected to large-title collapse; breadcrumbs, counts, and sort sit in a fixed location bar below the title |
+| Remote-import target and counts | `RemoteImportOptionsSheet` selects only a library and writes to its root; subdirectories are listed only after import starts, so no recursive total is available beforehand. Starting from a directory row may also lack an immediate-child count; do not invent counts or a target-subfolder picker |
+| Downloading / failure badges | `StatusBadge` provides both states, but remote lists do not connect them per comic. Save Offline Copy uses a bottom task card and result notice, currently without a cancel button; component capability is not page capability |
+| Download progress while preparing to read | The callback provides only a fraction, so show a percentage, not downloaded / total bytes. See [ScreenRemoteActions](components/ScreenRemoteActions/README.md) for loading and failure-page rules |
+| Edit Server on the failure page | Saving closes the reader and returns to the directory. The original open request holds the old configuration; retrying on that page would keep using old settings |
+| WebDAV form | Keeps separate Address, Port, Server Path, and Start Folder fields rather than the static mockup's single URL / path input |
+| Storage totals | Local user-file totals cover only the default Imported Comics library; other app-managed libraries have no size accounting. The usage bar is not the total for all libraries or the whole app |
+| Offline notice | `NetworkStatusMonitor` reflects only the system network path; an available network does not prove NAS reachability, and actual access may still fail |
 
-离线书架已无整服务器清空入口，但 `RemoteOfflineShelfViewModel.clearDownloadedCopies` 仍保留旧方法且没有调用方；它会清掉历史与记住的位置，不要复用它实现新的清理入口。现有清理入口的后果见 [删除、移除与清理](../design-requirements.md#删除移除与清理)。
+Offline Shelf no longer has a whole-server clear entry, but the old `RemoteOfflineShelfViewModel.clearDownloadedCopies` method remains without callers. It clears history and the remembered location; do not reuse it for a new cleanup entry. See [deletion, removal, and cleanup](../design-requirements.md#deletion-removal-and-cleanup) for the effects of existing cleanup entries.
 
-## 阅读器
+## Reader
 
-| 差异或决定 | 原因与边界 |
+| Difference or decision | Reason and boundary |
 | --- | --- |
-| 显示面板用实色背景 | 玻璃背景叠在彩色漫画上影响可读性；紧凑窗口使用系统 sheet，常规窗口使用 popover，见 [ReaderDisplayPanel](components/ReaderDisplayPanel/README.md) |
-| 书签满额时一步替换 | 避免系统 Alert 关闭过程中再弹确认框；一次写入完成替换，不先删再加。数量与行为契约见 [阅读器需求](../design-requirements.md#5-漫画阅读器保护范围与可改部分) |
-| 显示控件只在生效时出现 | 单页的页间距不起作用；适应方式保留“原始大小”，旋转后保留重置入口。可见性见 [控件表](03-reader.md#显示面板的控件可见性) |
-| “这本漫画”分组标题 | 首项为系统 `ControlGroup` 时标题不显示，仍保留分隔线，不自绘菜单 |
-| 跨本导航胶囊 | `ReaderContextNavigator` 只有定义，没有页面使用；未为静态稿新增入口，本地跨本阅读保留边缘点按 |
-| 缩略图总览的 Current / Locate | Current 滚回正在读的页，并复位快速跳转页码；Locate 滚到快速跳转选中的页。两者都不提交阅读位置，不能因名称近似合并 |
+| Solid display-panel background | Glass over colorful comics reduces control readability; compact windows use a system sheet, regular windows a popover. See [ReaderDisplayPanel](components/ReaderDisplayPanel/README.md) |
+| One-step bookmark replacement at the limit | Avoids presenting another confirmation while a system Alert is closing; replace in one write, not delete then add. See [reader requirements](../design-requirements.md#5-comic-reader-protected-and-editable-areas) for count and behavior |
+| Display controls appear only when effective | Page Spacing has no effect on a single page; Fit Mode keeps Original, and rotation keeps a reset action afterward. See the [control table](03-reader.md#display-panel-control-visibility) for visibility |
+| This Comic section title | The title is not shown when the first item is a system `ControlGroup`; keep the separator without drawing a custom menu |
+| Cross-comic navigation capsule | `ReaderContextNavigator` is defined but unused by pages; no entry was added for the static mockup. Local cross-comic reading keeps edge taps |
+| Current / Locate in the thumbnail overview | Current scrolls back to the page being read and resets the Quick Jump page number; Locate scrolls to the page selected in Quick Jump. Neither commits reading position; do not merge them because their names are similar |
 
-转场的视觉规则见 [动效](00-foundations.md#动效)，source frame 与页面交接约束见 [转场维护](../maintenance-pitfalls.md#72-hero-动画依赖-source-frame后台恢复后容易失效)。加载顺序、解码与缓存锁规则见 [性能维护](../maintenance-pitfalls.md#95-图片解码和缓存文件锁不能落到主线程)，不在本页重复修复流水。
+See [motion](00-foundations.md#motion) for transition visuals and [transition maintenance](../maintenance-pitfalls.md#72-hero-animations-depend-on-source-frames-that-can-expire-after-background-restoration) for source-frame and page-handoff constraints. See [performance maintenance](../maintenance-pitfalls.md#95-image-decoding-and-cache-file-locks-must-stay-off-the-main-thread) for loading order, decoding, and cache-lock rules; do not repeat fix logs here.
 
-## 系统适配
+## System Adaptation
 
-- `AdaptiveSplitShell` 移交同一组页面控制器，避免因宽度变化重建导航层级。侧栏采用系统默认宽度；窗口与恢复规则见 [iPhone Duo](06-iphone-duo.md)。
-- 紧凑首页与侧栏首页各有一份；只有当前可见者处理导入完成、待聚焦书库、添加服务器等一次性事件，避免两份首页重复导航。
-- 工具栏高可见优先级从 iOS 27.0 启用；系统溢出菜单、选择 / 完成符号、只水平的“全选”、容器边距、同心圆角与折痕查询从 iOS 27.1 启用。这样保留较早系统的栏外观，普通 iPhone / iPad 到对应版本也会使用这些行为。
-- “添加漫画”Sheet 已在 iOS 27.1 起关闭工具栏竖排，给卡片内容留宽度；表单类 Sheet 保持系统默认。外屏两种呈现的 Device Hub 对比仍缺失，不能把当前选择记成已完成视觉验收。
+- `AdaptiveSplitShell` hands off the same page controllers to avoid rebuilding navigation on width changes. The sidebar uses system-default width; see [iPhone Duo](06-iphone-duo.md) for window and restoration rules.
+- Compact home and sidebar home each have an instance. Only the visible one handles one-time events such as import completion, pending library focus, and Add Server, avoiding duplicate navigation from both homes.
+- High toolbar visibility priority starts at iOS 27.0. System overflow menus, Select / Done symbols, horizontal-only Select All, container margins, concentric corners, and crease queries start at iOS 27.1. This preserves bar appearance on earlier systems; ordinary iPhone / iPad also use these behaviors at the corresponding versions.
+- The Add Comics sheet disables vertical toolbars from iOS 27.1 to leave width for cards; form sheets keep the system default. A Device Hub comparison of both outer-display presentations is still missing. Do not record the current choice as visually accepted.
 
-## 尚未接入的环境适配
+## Environment Adaptation Not Yet Connected
 
-以下仍是 [iPhone Duo 设计规则](06-iphone-duo.md#阅读器)，不是现有能力；不因改版完成就标成已实现：
+These remain [iPhone Duo design rules](06-iphone-duo.md#reader), not existing capabilities. Do not mark them implemented merely because the redesign is complete:
 
-- 阅读器没有查询外屏摄像头的常驻 `.occlusion` 保留区。
-- 双页未按折痕对齐，半折时未将两页分居两侧。
-- 顶栏、跳页浮层没有按半折区域拆分或避让；未使用的跨本导航胶囊也没有此适配。
-- 受保护底部列表与右侧轨道没有半折区域限制；已有档位与行为继续遵守 [保护约束](components/ProtectedNavigation/README.md)。
-- `FoldSplitGridMetrics` 仅用于书库与远程目录网格，缩略图总览没有接入跨折痕偶数列。
+- The reader does not query the outer camera's permanent `.occlusion` reserved region.
+- Double pages are not aligned to the crease or placed on separate sides when half-folded.
+- The top bar and page-jump overlay do not split by or avoid half-folded regions; the unused cross-comic navigation capsule also lacks this adaptation.
+- The protected bottom list and right-side track have no half-folded region constraints. Existing tiers and behavior continue to follow [protection constraints](components/ProtectedNavigation/README.md).
+- `FoldSplitGridMetrics` is used only for library and remote-directory grids; the thumbnail overview does not use even columns across the crease.
 
-内屏、半折、分屏和开合连续性的设备验收仍需补充；单元测试中的状态移交不能代替设备表现。
+Device acceptance checks for the inner display, half-folded posture, split view, and continuity while opening/closing still need to be added. State handoff in unit tests does not replace device behavior.

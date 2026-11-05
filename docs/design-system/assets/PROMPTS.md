@@ -1,6 +1,6 @@
-# 图标候选生成提示词
+# Icon Candidate Generation Prompts
 
-现有 3 张候选稿的生成依据；文件清单与采用状态见 [README](README.md)。本页保留提示词用于复现，不列后续生成任务。
+Generation basis for the existing 3 candidates; see [README](README.md) for the file list and adoption status. This page keeps prompts for reproduction, not future generation tasks.
 
 ## app-icon/concept-1.png · concept-2.png · concept-3.png
 

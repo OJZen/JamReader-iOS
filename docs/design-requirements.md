@@ -1,253 +1,253 @@
-# JamReader UI/UX 需求与现状
+# JamReader UI/UX Requirements and Current State
 
-面向 UI/UX 设计师 · 当前能力、操作流程与维护约束
+For UI/UX designers · Current capabilities, workflows, and maintenance constraints
 
-**目标：让用户容易找到漫画、开始阅读、管理文件，同时保留已经调好的漫画阅读操作。** 界面调整须保留分页阅读底部导航列表、竖向阅读侧边导航列表的现有行为，详见第 5 节。
+**Goal: make comics easy to find, read, and manage while preserving the tuned comic-reading interactions.** Interface changes must preserve the current behavior of the bottom navigation list in paged reading and the side navigation list in vertical reading. See section 5.
 
-本文描述代码中的现有能力，以及后续维护必须保留的数据边界和交互约束。实现与静态稿的差异见 [实现取舍与能力边界](design-system/05-batches.md)；文档不代替设备、手感或无障碍验收。
+This document describes existing capabilities in code and the data boundaries and interaction constraints that maintenance must preserve. See [implementation decisions and capability limits](design-system/05-batches.md) for differences between implementation and static mockups. Documentation does not replace device, interaction-feel, or accessibility acceptance checks.
 
-信息架构、入口安排、视觉 token、组件与页面规则见 [设计系统](design-system/README.md)。本文负责业务需求、数据边界、删除后果与阅读器行为契约。
+See the [design system](design-system/README.md) for information architecture, entry placement, visual tokens, and component and page rules. This document owns business requirements, data boundaries, deletion consequences, and the reader behavior contract.
 
-## 1. 产品与使用场景
+## 1. Product and Use Cases
 
-JamReader 是 iPhone 和 iPad 上的个人漫画阅读与管理工具。漫画来自用户自己的文件、文件夹或 NAS/服务器。
+JamReader is a personal comic reader and manager for iPhone and iPad. Comics come from the user's own files, folders, or NAS/servers.
 
-| 用户想做什么 | 产品需要帮助他完成什么 |
+| What the user wants | What the product must help them do |
 | --- | --- |
-| 日常阅读 | 找到上次没看完的漫画，继续阅读，退出后记住进度 |
-| 整理收藏 | 导入文件，按文件夹、标签、阅读列表找书，修改书名等资料 |
-| 阅读 NAS 漫画 | 连接 SMB/WebDAV，浏览文件夹，直接阅读，或为离线使用保存副本 |
-| 管理空间 | 看懂哪些是自己的漫画、哪些是可重建缓存，再决定清理什么 |
+| Everyday reading | Find the last unfinished comic, continue reading, and remember progress after leaving |
+| Organize a collection | Import files, find books by folder, tag, or reading list, and edit titles and other metadata |
+| Read NAS comics | Connect over SMB/WebDAV, browse folders, read directly, or save copies for offline use |
+| Manage space | Understand which data is their own comics and which is rebuildable cache before choosing what to clean up |
 
-**本地书库与远程阅读并重；采用安静、内容优先的原生 iOS/iPadOS 风格。** 漫画阅读器的既有操作按第 5 节保留。
+**Give equal weight to local libraries and remote reading, with a quiet, content-first, native iOS/iPadOS style.** Preserve existing comic-reader interactions as specified in section 5.
 
-功能扩展的范围边界见第 8 节。
+See section 8 for the boundary of feature expansion.
 
-## 2. 先分清这些概念
+## 2. Distinguish These Concepts First
 
-| 概念 | 用户需要理解的含义 |
+| Concept | Meaning the user needs to understand |
 | --- | --- |
-| App 内书库 | 用户新建的本地收藏空间，漫画文件由 App 保存 |
-| 已导入漫画 | App 提供的默认导入书库；与用户新建书库一样，里面是用户文件 |
-| 关联文件夹 | 直接使用“文件”App 中选定的文件夹，添加时不复制整份漫画；可用性取决于文件夹权限 |
-| 标签 / 阅读列表 | 同一本地书库里的逻辑分组，不复制或移动漫画文件；收藏与页书签也是不同用途 |
-| 已保存文件夹 | 远程文件夹的快捷入口；保存这个入口不会下载里面的漫画 |
-| 离线副本 | 用户主动保存到本机的远程漫画，仍归属于该服务器，不会自动加入本地书库 |
-| 阅读缓存 | 在线阅读产生的临时数据或自动下载副本；存在缓存不等于已加入“离线书架” |
+| App Managed | A local collection space created by the user; the app stores its comic files |
+| Imported Comics | The app's default import library; like user-created libraries, it contains user files |
+| Linked Folder | Uses a folder selected in Files directly, without copying all comics when added; availability depends on folder permission |
+| Tags / Reading Lists | Logical groups within one local library; they do not copy or move comic files. Favorites and page bookmarks also serve different purposes |
+| Saved Folders | Shortcuts to remote folders; saving a shortcut does not download its comics |
+| Offline Copy | A remote comic explicitly saved to this device by the user; it still belongs to that server and does not automatically enter a local library |
+| Reading cache | Temporary data or automatically downloaded copies from online reading; cached content is not necessarily on the Offline Shelf |
 
-**关联文件夹不等于只读。** 有写入权限时可以向它导入文件、删除其中的漫画；书名、标签、阅读进度等 App 资料仍保存在 App 内。只读时，应保留阅读和资料管理，说明导入、文件删除为何不可用。
+**A linked folder is not necessarily read-only.** With write permission, users can import files into it and delete comics from it. App metadata such as titles, tags, and reading progress still stays in the app. When read-only, preserve reading and metadata management and explain why import and file deletion are unavailable.
 
-“导入书库”与“保存离线副本”必须是可区分的操作。一个远程漫画即使已经能离线打开，也不代表它已经出现在本地书库。
+“Import to Library” and “Save Offline Copy” must remain distinct actions. A remote comic that can already open offline is not necessarily present in a local library.
 
-## 3. 功能地图
+## 3. Feature Map
 
-三个逻辑分区为“书库 / 远程 / 设置”。下面是现有功能关系；入口安排与页面复用见第 6 节。
+The three logical areas are Library / Remote / Settings. The diagram shows existing feature relationships; see section 6 for entry placement and page reuse.
 
 ```mermaid
 flowchart LR
-    A[书库] --> B[选择书库]
-    A --> L[汇总继续阅读，按设置显示]
-    B --> C[文件夹与漫画]
-    B --> D[收藏 / 最近加入 / 书库内继续阅读，按设置显示]
-    B --> E[标签 / 阅读列表]
-    F[远程] --> G[服务器]
-    G --> H[远程文件夹 / 阅读历史]
-    F --> I[已保存文件夹 / 离线书架]
-    C --> R[阅读器]
+    A[Library] --> B[Select a Library]
+    A --> L[Combined Continue Reading, shown according to settings]
+    B --> C[Folders and Comics]
+    B --> D[Favorites / Recently Added / Continue Reading in each library, shown according to settings]
+    B --> E[Tags / Reading Lists]
+    F[Remote] --> G[Servers]
+    G --> H[Remote Folders / Reading History]
+    F --> I[Saved Folders / Offline Shelf]
+    C --> R[Reader]
     D --> R
     L --> R
     E --> R
     H --> R
     I --> R
-    S[设置] --> T[通用 / 阅读 / 书库 / 存储]
+    S[Settings] --> T[General / Reading / Library / Storage]
 ```
 
-### 本地书库
+### Local Libraries
 
-| 页面或任务 | 现有能力 | 维护约束 |
+| Page or task | Existing capabilities | Maintenance constraints |
 | --- | --- | --- |
-| 书库首页 | 新建书库、关联文件夹、导入文件或文件夹；书库改名、信息、移除或删除 | “添加”的不同方式按用途解释，避免要求新用户先理解存储术语 |
-| 书库内容 | 文件夹逐级浏览、系统返回与可点面包屑、点击漫画直接阅读；向当前文件夹导入文件；刷新整库或当前文件夹 | 明确当前位置和导入目标；扫描等维护动作放在次级位置 |
-| 找书 | 当前书库搜索文件夹和漫画；排序；iPhone/iPad 均可切换网格与列表 | 标明搜索范围，区分“空文件夹”与“没有搜索结果”；不要暗示能搜索所有服务器 |
-| 继续阅读与集合 | 支持汇总或按书库显示继续阅读；收藏、最近加入、标签、阅读列表有独立入口 | 优先展示封面、名称、阅读进度；分组入口易找，避免大量状态标签挤占封面 |
-| 漫画管理 | 收藏、已读/未读、1–5 星评分或取消评分、编辑资料、标签/阅读列表、删除文件 | 轻操作与删除分开；常用操作不能只能靠长按发现 |
-| 批量管理 | 多选、全选、批量已读/收藏、资料修改、标签/阅读列表增删、导入 ComicInfo | 明确选中数量与作用范围；退出选择模式后恢复普通打开行为 |
-| 标签与阅读列表 | 新建、改名、标签颜色、删除分组；加入/移出漫画；搜索与排序 | “移出分组”不能写成“删除漫画”；不把分组设计成复制文件 |
-| 资料编辑 | 标题、系列、卷/期、类型；出版信息、作者、角色、简介、备注等；支持读取 ComicInfo.xml | 常用字段在前，详细字段分组展开；批量只改用户勾选的字段；未保存退出要有明确选择 |
+| Library Home | Create libraries, link folders, import files or folders; rename libraries, view info, remove or delete | Explain Add methods by purpose so new users need not learn storage terminology first |
+| Library contents | Browse folder levels, system back navigation and tappable breadcrumbs, tap comics to read; import files into the current folder; refresh the whole library or current folder | Make current location and import target clear; keep scanning and other maintenance actions secondary |
+| Find books | Search folders and comics in the current library; sort; switch grid/list on both iPhone and iPad | State the search scope, distinguish Empty Folder from no search results, and do not imply search across all servers |
+| Continue Reading and collections | Combined or per-library Continue Reading; separate entries for Favorites, Recently Added, Tags, and Reading Lists | Prioritize covers, names, and reading progress; make groups easy to find and avoid crowding covers with status labels |
+| Comic management | Favorite, read/unread, rate 1–5 stars or Clear Rating, Edit Metadata, Tags/Reading Lists, delete files | Separate lightweight actions from deletion; common actions must not be discoverable only through long press |
+| Batch management | Multiselect, Select All, batch read/favorite status, metadata edits, tag/reading-list additions and removals, ComicInfo import | Make selected count and scope clear; restore normal opening behavior after selection mode ends |
+| Tags and Reading Lists | Create, rename, set tag colors, delete groups; add/remove comics; search and sort | Do not call removing from a group Delete Comic or present grouping as file copying |
+| Metadata editing | Title, series, volume/issue, type; publication, creators, characters, synopsis, notes, and more; read ComicInfo.xml | Put common fields first and expand detailed fields in groups; batch edits change only checked fields; offer an explicit choice on leaving with unsaved changes |
 
-现状补充：
+Current details:
 
-- 本地“最近”是**最近加入书库**，时间范围为 7、14、30、90 天；不是阅读历史。界面统一称为“最近加入”。
-- “继续阅读”是已打开但未读完的漫画，位置与呈现由 [ContinueReading](design-system/components/ContinueReading/README.md) 负责。汇总按书库分别查询（每库最多 20 本，首页显示 10 本），以书库 + 行 ID 区分条目，打开后只在同一书库内前后翻本。远程服务器的阅读历史仍在各服务器详情，不并入本地汇总。
-- 本地浏览默认使用封面网格，可切列表并保存偏好；辅助功能大字号使用两列网格。当前文件夹提供全部、未读、阅读中、已读、有书签筛选，文件夹不受筛选影响。
-- 本地书库搜索当前最多返回 40 个文件夹和 40 本漫画，不是无限完整结果。取消上限或新增全局搜索需另列功能需求。
-- 集合内容页可以在当前集合内搜索。收藏、最近加入、标签、阅读列表页有全部 / 未读 / 阅读中 / 已读 / 有书签快捷筛选（“继续阅读”页本身就是阅读中，不显示筛选）；筛选与搜索可同时生效，空结果写出全部条件（如“最近加入”中没有同时符合“阅读中”和“Night”的漫画）并提供“显示全部”。
-- ComicInfo 是漫画文件内的资料。现有范围包括所选漫画、当前列表、整个书库、当前文件夹及其子文件夹；可选“只补空白”或“覆盖已有字段”。入口调整不能合并掉这些范围差异。
-- 书库改名和漫画资料编辑只改 App 内显示资料，不会给源文件或文件夹改名；本地文件移动、源文件改名没有现成入口。
+- Local “Recent” means **recently added to the library**, with 7-, 14-, 30-, or 90-day windows, not reading history. The UI consistently calls it Recently Added.
+- Continue Reading contains opened but unfinished comics. [ContinueReading](design-system/components/ContinueReading/README.md) owns placement and presentation. Combined results query each library separately (up to 20 comics per library, 10 shown on the home page), identify entries by library + row ID, and allow previous/next comic navigation only within that library after opening. Remote reading history stays in each server's detail page and is not merged into the local summary.
+- Local browsing defaults to a cover grid, can switch to a list, and saves the preference. Accessibility text sizes use a two-column grid. The current folder offers All, Unread, In Progress, Read, and With Bookmarks filters; folders are unaffected.
+- Local-library search currently returns at most 40 folders and 40 comics, not unlimited complete results. Removing the cap or adding global search requires a separate feature requirement.
+- Collection content pages can search within the current collection. Favorites, Recently Added, Tags, and Reading Lists offer All / Unread / In Progress / Read / With Bookmarks quick filters (Continue Reading is already In Progress and shows no filter). Filters and search can apply together. Empty results state all conditions (for example, no comics in Recently Added match both In Progress and “Night”) and offer Show All.
+- ComicInfo is metadata inside comic files. Existing scopes include Selected Comics, Current List, Entire Library, and This Folder and Subfolders. Users can choose Fill Empty Fields or Overwrite Existing Fields. Entry changes must not merge away these scope differences.
+- Library renaming and comic metadata edits change only display metadata inside the app; they do not rename source files or folders. There are no existing actions for moving local files or renaming source files.
 
-### 远程浏览与离线阅读
+### Remote Browsing and Offline Reading
 
-| 页面或任务 | 现有能力 | 维护约束 |
+| Page or task | Existing capabilities | Maintenance constraints |
 | --- | --- | --- |
-| 远程首页 | 顶部为全部服务器范围的离线书架、已保存文件夹；下方服务器列表显示名称、地址与协议 | 不推测连接状态；空状态仅保留一个“添加服务器” |
-| 添加/编辑服务器 | 按协议显示字段与示例；错误保留输入；修改位置或账户前确认清理影响；未保存退出确认 | 保存配置不连接服务器；密码遮蔽 |
-| 服务器详情 | 唯一“浏览文件”主按钮从上次目录打开；继续阅读主卡与卡带展示历史；本服务器快捷区保留文件夹、离线书架 | 菜单只保留编辑、清除历史、清理本机下载和删除；历史卡长按可移除单条 |
-| 远程目录 | 文件夹行内标题、可点面包屑、图钉保存/取消保存、网格/列表、按名称/更新/大小排序 | 不支持文件只计数；显示方式与批量操作收进更多菜单 |
-| 单本漫画 | 点封面阅读；菜单按本机副本、本地书库、信息分组；较旧副本有更新和显式打开旧副本入口 | 主动保存的完整副本才显示“已离线”；普通阅读缓存不冒充离线保存 |
-| 整个文件夹 | 导入当前文件夹，选择是否包括子文件夹；批量保存或移除当前目录漫画的本机副本 | 开始前说明范围、目标位置；不要把“当前目录”描述成整台服务器 |
-| 已保存文件夹 | 按服务器分组、搜索；导航栏编辑支持改名/移除；图钉标记；点击进入目录 | 移除确认明确只删快捷入口，服务器文件保留 |
-| 离线书架 | 搜索、全部/需要更新筛选及数量、排序；打开/移除副本；联网时旧副本行尾更新 | 系统报告断网时显示提示、隐藏更新和远程目录入口；没有整服务器清空操作 |
+| Remote home | Offline Shelf and Saved Folders across all servers at the top; server list below shows name, address, and protocol | Do not infer connection status; the empty state keeps only one Add Server action |
+| Add/Edit Server | Protocol-specific fields and examples; retain input on error; confirm cleanup impact before changing location or account; confirm leaving with unsaved changes | Saving configuration does not connect to the server; mask passwords |
+| Server details | A single primary Browse Files button opens the last directory; a Continue Reading hero card and strip show history; server shortcuts keep folders and Offline Shelf | The menu keeps only Edit, Clear Reading History, Clear Downloads on This Device, and Delete Server; long-press history cards to remove one entry |
+| Remote directory | Inline folder title, tappable breadcrumbs, pin to save/unsave, grid/list, sort by name/update/size | Unsupported files are only counted; View As and batch actions live in More |
+| Single comic | Tap the cover to read; menu grouped by On This Device, local library, and Info; older copies offer Update Copy and an explicit Open Older Local Copy action | Only explicitly saved full copies show Available Offline; ordinary reading cache must not appear as offline saving |
+| Whole folder | Import the current folder with an include-subfolders choice; batch save or remove local copies of comics in the current directory | Explain scope and destination before starting; do not describe the current directory as the whole server |
+| Saved Folders | Group by server, search; navigation-bar Edit supports rename/remove; pin markers; tap to enter a directory | Removal confirmation makes clear that only the shortcut is deleted and server files remain |
+| Offline Shelf | Search, All/Needs Update filters with counts, sort; open/remove copies; trailing update action for older copies while online | When the system reports no network, show a notice and hide update and remote-directory actions; no whole-server clear action |
 
-现状补充：
+Current details:
 
-- 保存服务器配置只验证配置并保存，**不等于已经连接成功**。当前表单没有独立的“测试连接”功能。
-- 当前远程目录没有搜索框；不要把递归搜索、跨服务器搜索或远程文件改名/移动/删除画成已有功能。
-- ZIP/CBZ 在服务器支持时可边取页面边读；其他格式或不支持这种读取方式时，需要先下载。打开失败不保证总能自动改用另一种方式。
-- 准备远程阅读与失败反馈沿用统一阅读器，封面、进度、取消及编辑服务器的表现见 [准备阅读](design-system/components/ScreenRemoteActions/README.md)。
-- 远程导入仍写入目标书库根目录。当前目录可显示已列出的漫画数量；递归总数在实际导入时统计，没有预扫描总数或目标子文件夹选择器。WebDAV 表单字段见 [FormField](design-system/components/FormField/README.md)。
-- 服务器历史仍使用详情页内已有查询范围；目前没有独立“全部远程历史”集合页。网络路径可用也不代表 NAS 可达，更新失败仍显示实际错误。
-- 阅读缓存可能自动清理；主动保存的离线副本受自动清理保护，但用户明确清理下载副本时仍会被删除。
-- 远程阅读历史和本地书库进度分别保存；把同一本远程漫画导入书库，不应宣称两份进度会自动同步。
-- 离线书架当前没有直接“导入书库”按钮；需回到所在远程目录，再使用漫画的导入操作。维护时复用这条路径，不另造第二套导入流程。
+- Saving server configuration only validates and saves it; **it does not mean the connection succeeded**. The current form has no separate Test Connection feature.
+- Remote directories currently have no search field. Do not draw recursive search, cross-server search, or remote file rename/move/delete as existing features.
+- ZIP/CBZ can fetch pages while reading when the server supports it. Other formats or servers without that reading capability require downloading first. An open failure does not guarantee automatic fallback to another method.
+- Remote-reading preparation and failure feedback use the unified reader. See [reading preparation](design-system/components/ScreenRemoteActions/README.md) for covers, progress, cancellation, and Edit Server presentation.
+- Remote import still writes to the target library root. The current directory can show its listed comic count; recursive totals are counted during import. There is no prescanned total or target-subfolder picker. See [FormField](design-system/components/FormField/README.md) for WebDAV form fields.
+- Server history still uses the existing query scope inside the detail page. There is currently no separate all-remote-history collection page. An available network path does not mean the NAS is reachable; failed updates still show the actual error.
+- Reading cache may be cleaned automatically. Explicitly saved offline copies are protected from automatic cleanup but are still deleted when users explicitly clean downloaded copies.
+- Remote reading history and local-library progress are stored separately. Importing the same remote comic into a library must not be described as automatically synchronizing both progress records.
+- Offline Shelf currently has no direct Import to Library button. Return to the remote directory and use the comic's import action. Reuse that path during maintenance rather than creating a second import flow.
 
-### 设置
+### Settings
 
-| 分类 | 现有设置与功能 |
+| Category | Existing settings and features |
 | --- | --- |
-| 通用 | 启动时进入上次使用的分区、书库或远程；App 版本 |
-| 阅读 | 阅读时保持亮屏；共享阅读布局默认值；恢复推荐默认值 |
-| 书库 | 继续阅读显示位置、最近加入的时间范围、远程文件夹默认导入范围 |
-| 存储 | 分为远程下载、可重建数据、你的文件；每行显示大小和清理按钮，后果在确认弹窗说明；顶部占用条仅统计本页可查询的类别 |
+| General | Launch into the last-used area, Library, or Remote; app version |
+| Reading | Keep the screen awake while reading; shared reading-layout defaults; restore recommended defaults |
+| Library | Continue Reading placement, Recently Added time window, default remote-folder import scope |
+| Storage | Remote Downloads, Rebuildable Data, and Your Files sections; each row shows size and a cleanup button, with consequences in confirmation dialogs; the top usage bar counts only categories this page can query |
 
-“存储”直接进入管理页。不要把用户文件与缓存合成一个“一键清理”。下载上限是自动缓存策略，不能保证 App 总占用永远低于该值；阅读中的文件和主动保存的离线副本会影响可清理空间。
+Storage opens management directly. Do not combine user files and cache into one one-tap cleanup. The download limit is an automatic-cache policy, not a guarantee that total app usage always stays below it. Files being read and explicitly saved offline copies affect reclaimable space.
 
-占用条的统计范围见 [存储实现边界](design-system/05-batches.md#远程与存储)，清理后果统一见 [第 7 节](#删除移除与清理)。
+See [storage implementation limits](design-system/05-batches.md#remote-and-storage) for the usage-bar scope and [section 7](#deletion-removal-and-cleanup) for cleanup consequences.
 
-“阅读时下载完整副本”只影响可流式阅读的远程漫画自动下载，不取消必须先下载才能打开的文件，也不改变用户主动保存离线副本的操作。
+Download Full Copy While Reading only affects automatic downloads of remote comics that support streaming. It does not cancel downloads required to open a file or change explicit Save Offline Copy actions.
 
-## 4. 关键操作流程
+## 4. Key Workflows
 
-以下为现有步骤。调整外围流程时仍须保留选择的含义、取消路径和最终结果。
+These are the existing steps. Changes to surrounding flows must preserve the meaning of choices, cancellation paths, and final results.
 
-| 场景 | 操作顺序 | 成功与异常的判断 |
+| Scenario | Steps | Success and failure criteria |
 | --- | --- | --- |
-| 第一次导入本地漫画 | 书库 → 添加漫画 → 导入漫画 → 选目标书库 → 选择文件/文件夹 → 系统文件选择 → 任务条 → 打开目标书库 | 整理入库后才算完成；呈现成功、跳过、失败的实际结果。从书库内容页导入文件则直接使用当前书库/文件夹，不重复选目标 |
-| 使用现有文件夹 | 添加漫画 → 使用已有文件夹 → 系统授权选择 → 打开书库 → 必要时初始化/扫描 | 文件留在原处；权限失效与书库为空必须分开显示 |
-| 继续本地阅读 | 书库首页的继续阅读（或“各书库内”时对应书库的继续阅读）→ 漫画 → 保存的位置 → 退出回原列表 | 返回后封面条目进度更新；保留当前位置与分组，不回到首页 |
-| 第一次远程阅读 | 远程 → 添加服务器 → 保存 → 服务器详情 → 目录 → 漫画 | 可边取边读则打开；需下载则显示准备进度并允许取消；登录/网络/路径错误给对应处理入口 |
-| 准备离线阅读 | 远程漫画操作 → 保存离线副本 → 完成 → 离线书架 → 打开 | 只有完整可用副本才标记可离线；失败或中断不冒充完成；较旧副本可提示更新 |
-| 远程导入本地书库 | 漫画/文件夹操作 → 导入书库 → 选目标与目录范围 → 下载 → 整理入库 → 打开目标书库 | 结束后能在目标书库找到内容；部分成功、整理入库失败、取消分别反馈 |
-| 整理多本漫画 | 内容页 → 选择 → 勾选漫画 → 操作 → 应用 → 完成选择 | 修改目标清楚，未选择的漫画不受影响；移出列表不删除文件 |
-| 清理空间 | 设置 → 存储 → 选数据类别 → 阅读影响说明 → 确认 → 清理结果 | 刷新占用与离线状态；正在使用或任务冲突时说明原因，不能假装成功 |
+| First local comic import | Library → Add Comics → Import Comics → select target library → Choose Files/Choose Folder → system file picker → task banner → open target library | Complete only after indexing into the library; show actual succeeded, skipped, and failed results. Importing files from a library content page uses the current library/folder directly without choosing the target again |
+| Use an existing folder | Add Comics → Use Existing Folder → system authorization picker → open library → initialize/scan if needed | Files stay in place; show expired permission separately from an empty library |
+| Continue local reading | Continue Reading on Library Home (or in the relevant library when set to Inside Each Library) → comic → saved location → exit to the original list | Update progress on the cover item after returning; preserve current location and group rather than returning home |
+| First remote read | Remote → Add Server → Save → server details → directory → comic | Open if streaming is supported; otherwise show download preparation progress and allow cancellation; provide appropriate actions for sign-in/network/path errors |
+| Prepare offline reading | Remote comic actions → Save Offline Copy → completion → Offline Shelf → open | Mark available offline only for a complete usable copy; failure or interruption must not appear complete; older copies may offer an update |
+| Import remote content into a local library | Comic/folder actions → Import to Library → choose target and directory scope → download → index into library → open target library | Content is findable in the target library afterward; distinguish partial success, indexing failure, and cancellation |
+| Organize multiple comics | Content page → Select → check comics → action → Apply → finish selection | Make the edit target clear and leave unselected comics unaffected; removing from a list does not delete files |
+| Clean up space | Settings → Storage → choose data category → read impact → confirm → cleanup result | Refresh usage and offline state; explain active use or task conflicts rather than pretending success |
 
-导入允许取消，已经完成的部分要如实反馈。远程导入可在 App 内切换页面时继续，进度入口应保持可找；这不代表已实现退出 App、系统挂起或重启后可靠续传，设计稿不能承诺。
+Imports allow cancellation and must report completed work accurately. Remote imports can continue while navigating within the app, and their progress entry must stay easy to find. This does not establish reliable resumption after app exit, system suspension, or restart; mockups must not promise it.
 
-重复导入时，现有导入服务会复用在目标位置识别出的相同内容；同名但内容不同的文件自动加序号保留两份。完成数量不一定等于新增数量，不要额外设计覆盖确认或承诺全库去重。
+On repeated imports, the existing import service reuses identical content recognized at the target location. Same-name files with different contents receive a numeric suffix to preserve both. Completed count need not equal newly added count. Do not add overwrite confirmation or promise whole-library deduplication.
 
-## 5. 漫画阅读器：保护范围与可改部分
+## 5. Comic Reader: Protected and Editable Areas
 
-**两处导航列表原样保留：分页阅读底部的缩略图导航列表、竖向连续阅读右侧的缩略图导航列表。** 直接沿用现有组件，其位置、尺寸、间距、缩略图样式、动效、显隐、触控和跳页行为均不调整，也不参与外围入口合并。周边工具或共享样式的改动不能间接改变它们。
+**Preserve both navigation lists unchanged: the bottom thumbnail navigation list in paged reading and the right-side thumbnail navigation list in vertical continuous reading.** Reuse the existing components directly. Do not change their position, dimensions, spacing, thumbnail style, animation, visibility, touch handling, or page-jump behavior, or include them in surrounding entry consolidation. Changes to nearby tools or shared styles must not affect them indirectly.
 
-其余阅读器 UI 可以调整工具栏外观、图标、字体、颜色、面板层级与工具位置，仍须保留现有阅读行为。任何触及下表操作含义的方案，单独标注并交产品负责人确认，不混入视觉优化。
+Other reader UI may change toolbar appearance, icons, fonts, colors, panel hierarchy, and tool placement while preserving existing reading behavior. Any proposal that changes the meaning of an action below must be called out separately and confirmed by the product owner, not bundled into visual polish.
 
-| 需要保留的行为 | 设计约束 |
+| Behavior to preserve | Design constraint |
 | --- | --- |
-| 分页阅读 | 保留横向滑动、边缘点按翻页与中央点按显隐工具；不重新划分触控区域，不改变手势响应时机 |
-| 竖向连续阅读 | 保留上下连续滚动、整页宽度和原有缩放/平移；不能套用分页模式的点按规则 |
-| 退出阅读 | 分页向下滑关闭；竖向连续向右滑关闭；显式返回按钮仍可用。缩放与内容平移优先，不误触退出 |
-| 缩放 | 分页的双击和捏合、竖向的画布捏合/平移按现状保留；取消翻页不能丢失当前缩放 |
-| 阅读画面 | 工具显示或隐藏不挤压漫画、不改变漫画尺寸；工具避开系统安全区；旋转与 iPad 窗口变化后仍稳定定位当前页 |
-| 快速翻页 | 分页底部导航列表、竖向右侧导航列表的 UI 与操作均原样保留；竖向紧凑页码入口仍可用 |
-| 竖向轨道 | 拖动时预览，松手才提交一次跳页；取消留在原页。轨道交互时不触发退出，工具隐藏时不能留下不可见热区 |
-| 精确找页 | 保留输入页码、缩略图总览、定位当前页、页书签与跳转；非法页码给清楚提示 |
-| 跨本阅读 | 保留本地打开序列的上一/下一本逻辑及边缘行为；不能把它擅自改成自动翻到下一本，或扩展为远程连读 |
-| 布局设置 | 保留分页/竖向、支持时的单页/双页、双页左右排列、首页单独/成对、适应方式、页间距；控制项随能力显示 |
-| 设置作用范围 | 布局选项会保存为共享默认值，影响之后打开的漫画；旋转是当前阅读中的操作。不要设计成“每本单独记忆” |
-| 进度与附加操作 | 返回/后台恢复保留进度；本地收藏、已读、评分、资料编辑仍可用；支持的页面可存到系统相册，并处理授权与失败 |
+| Paged reading | Keep horizontal swipes, edge taps to turn pages, and center taps to toggle tools; do not redefine touch regions or change gesture-response timing |
+| Vertical continuous reading | Keep continuous vertical scrolling, full-page width, and existing zoom/pan; do not apply paged-mode tap rules |
+| Exit reading | Swipe down in paged mode and right in vertical continuous mode; the explicit back button remains available. Zoom and content panning take priority to prevent accidental exits |
+| Zoom | Preserve paged double-tap/pinch and vertical canvas pinch/pan as implemented; cancelling a page turn must not lose current zoom |
+| Reading viewport | Showing or hiding tools does not squeeze or resize the comic; tools respect system safe areas; rotation and iPad window changes keep the current page stably positioned |
+| Quick paging | Preserve both UI and interaction of the paged bottom navigation list and vertical right-side navigation list unchanged; keep the vertical compact page-number entry |
+| Vertical track | Preview during dragging and commit one page jump only on release; cancellation keeps the original page. Track interaction must not trigger exit, and hidden tools must not leave invisible touch regions |
+| Find an exact page | Keep page-number input, thumbnail overview, current-page location, page bookmarks, and jumping; clearly explain invalid page numbers |
+| Cross-comic reading | Keep previous/next logic and edge behavior for the local opening sequence; do not silently change it to automatic next-comic navigation or extend it to remote continuous reading |
+| Layout settings | Keep paged/vertical mode, single/double page where supported, left/right spread order, first page alone/paired, fit mode, and page spacing; show controls according to capability |
+| Setting scope | Layout options persist as shared defaults for later comics; rotation is an action in the current reading session. Do not design per-comic memory |
+| Progress and additional actions | Preserve progress on return/background restoration; keep local favorites, read status, ratings, and metadata editing; supported pages can save to Photos with authorization and failure handling |
 
-需要让设计师特别知晓的现状：
+Current behavior designers need to know:
 
-- 竖向模式下，工具隐藏且有本地多本序列时，边缘点按会尝试打开上一/下一本；工具显示时边缘点按收起工具。不要按“左右边缘都应翻一页”的习惯重画交互。具体手感须与现有版本一起复核。
-- 双页仅在支持的较宽布局开放；“双页排列”只决定两页的左右顺序。竖向隐藏双页、适应方式和旋转入口，页间距设置仍可用。
-- 阅读到末页会形成已读进度；手动“标为未读/已读”也会调整阅读位置，不能把它当成只换一个徽标。
-- 本地每本最多保存 3 个页书签，远程没有同样的数量上限。本地满额时点书签弹出系统 Alert，选择一个已有书签替换为当前页，一次写入完成；不先删再加。调整数量上限属于另行确认的功能变化。
-- 顶栏、显示面板与更多菜单见 [阅读器工具布局](design-system/03-reader.md#工具布局)。原整屏控制面板已移除；布局改动即时作用于画面。
-- 阅读器按窗口宽度开放双页；窄窗口临时单页不改写保存的偏好。导航档位与尚未接入的折痕适配见 [iPhone Duo](design-system/06-iphone-duo.md)。
-- 本地资料编辑、收藏、评分等不属于远程漫画的完整能力；不要给远程入口放置无法完成的同款管理面板。
-- PDF 是否可读取决于构建是否包含 PDF 引擎。PDF/EPUB 渲染成页面时使用固定单页布局；EPUB 也可能走独立的网页阅读方式。不要假设所有格式都有漫画布局、页码或书签控件。完整格式清单见[产品说明](../README.md#highlights)。
+- In vertical mode, when tools are hidden and a local multi-comic sequence exists, edge taps attempt to open the previous/next comic. When tools are visible, edge taps hide them. Do not redraw the interaction on the assumption that both side edges should turn one page. Review the interaction feel against the current version.
+- Double Page is available only in supported wider layouts; Spread Order controls only the left/right order of the two pages. Vertical mode hides Double Page, Fit Mode, and Rotation entries; Page Spacing remains available.
+- Reaching the last page produces read progress. Manual Mark as Unread/Mark as Read also adjusts reading position; it is not just a badge change.
+- Local comics support up to 3 page bookmarks each; remote comics do not have the same count limit. At the local limit, tapping the bookmark shows a system Alert to replace an existing bookmark with the current page in one write, not delete then add. Changing the limit is a separate feature change requiring confirmation.
+- See [reader tool layout](design-system/03-reader.md#tool-layout) for the top bar, display panel, and More menu. The old full-screen control panel has been removed; layout changes affect the view immediately.
+- The reader enables double pages by window width; temporary single-page mode in a narrow window does not overwrite the saved preference. See [iPhone Duo](design-system/06-iphone-duo.md) for navigation tiers and crease adaptation that is not yet connected.
+- Local metadata editing, favorites, ratings, and similar actions are not fully available for remote comics. Do not give remote entries the same management panel when its actions cannot complete.
+- PDF reading depends on a PDF engine being included in the build. PDF/EPUB rendered as pages uses a fixed single-page layout; EPUB may also use a separate web reader. Do not assume every format has comic layout, page-number, or bookmark controls. See the [product overview](../README.md#highlights) for the full format list.
 
-## 6. 界面组织与维护
+## 6. Interface Organization and Maintenance
 
-### 入口合并与页面复用
+### Entry Consolidation and Page Reuse
 
-入口位置、范围复用与去重规则由 [信息架构](design-system/02-architecture.md#入口安排与页面复用) 负责；本地与远程数据的含义保持第 2、4、7 节的边界。
+[Information architecture](design-system/02-architecture.md#entry-placement-and-page-reuse) owns entry placement, scope reuse, and deduplication rules. Local and remote data retain the boundaries in sections 2, 4, and 7.
 
-视觉数值与文案见 [设计基础](design-system/00-foundations.md)，窗口宽度变化与侧栏恢复见 [窗口适配](design-system/06-iphone-duo.md)。最低系统与工程边界见 [项目上下文](project-context.md#runtime-shape)。
+See [design foundations](design-system/00-foundations.md) for visual values and copy, [window adaptation](design-system/06-iphone-duo.md) for window-width changes and sidebar restoration, and [project context](project-context.md#runtime-shape) for the minimum OS and engineering boundaries.
 
-文字放大、浅色 / 深色、屏幕朗读、减少动态效果与四种语言的检查要求由 [UI guidelines](ui-guidelines.md#change-checklist) 负责。
+[UI guidelines](ui-guidelines.md#change-checklist) owns checks for text scaling, light/dark mode, screen readers, Reduce Motion, and all four languages.
 
-## 7. 必须画出的状态与操作说明
+## 7. Required States and Action Explanations
 
-### 页面状态
+### Page States
 
-| 状态 | 设计稿必须表达什么 |
+| State | What mockups must communicate |
 | --- | --- |
-| 第一次使用 / 没有内容 | 说明此处能做什么，提供一个主要下一步；不要用空白页 |
-| 有内容 / 内容很多 | 长书名、多层目录、大量封面、缺封面时仍可识别与操作 |
-| 加载或准备阅读 | 保留当前来源，说明正在处理什么；可取消的流程有明确取消入口 |
-| 搜索无结果 | 显示搜索范围，可清空条件，不让用户误以为漫画被删除 |
-| 文件夹权限失效 / 只读 | 分清不能访问和不能写入；给可执行的恢复说明；当前没有原地重新授权入口，不能画一个无效按钮 |
-| 网络 / 登录 / 路径错误 | 保留用户位置与输入，提供重试、编辑服务器或已有离线内容等合适出口 |
-| 部分成功 / 取消 | 已完成多少、哪些未完成、接下来能做什么；不笼统显示“导入完成” |
-| 空间不足 / 保存失败 | 保留输入与可用内容，说明未完成部分；提供重试或存储管理入口，不自动删除用户文件腾空间 |
-| 修改未保存 | 保存、继续编辑、放弃的含义明确；避免滑走丢资料 |
-| 不支持的格式或阅读能力 | 说明当前不能打开/不能执行的动作，不给无效果的控件 |
-| 任务或阅读占用 | 说明为什么暂时不能清理、修改连接或启动冲突任务；保留当前任务入口 |
+| First use / no content | Explain what users can do here and offer one primary next step; do not leave a blank page |
+| Content / lots of content | Long titles, deep directories, many covers, and missing covers remain identifiable and usable |
+| Loading or preparing to read | Preserve the current source and explain what is being processed; cancellable flows have a clear cancel action |
+| No search results | Show search scope and allow clearing conditions so users do not mistake it for deleted comics |
+| Expired folder permission / read-only | Distinguish inaccessible from unwritable; provide actionable recovery guidance. There is currently no in-place reauthorization entry; do not draw a nonfunctional button |
+| Network / sign-in / path error | Preserve location and input; provide suitable exits such as Retry, Edit Server, or existing offline content |
+| Partial success / cancellation | Show how much completed, what did not, and what can happen next; do not show a blanket Import Complete |
+| Insufficient space / save failure | Preserve input and usable content, explain unfinished work, and offer retry or storage management; do not automatically delete user files for space |
+| Unsaved changes | Make Save, Keep Editing, and discard meanings clear; prevent swiping away from losing metadata |
+| Unsupported format or reading capability | Explain what cannot open or which action is unavailable; do not show ineffective controls |
+| Task or reader in use | Explain why cleanup, connection changes, or conflicting tasks are temporarily unavailable; preserve the current task entry |
 
-### 删除、移除与清理
+### Deletion, Removal, and Cleanup
 
-以下是现有数据边界；确认文案必须表达这些后果。表中的“保留”不代表出现故障时可以省略错误反馈。
+These are the existing data boundaries; confirmation copy must state these consequences. “Preserved” in the table does not allow omitting error feedback on failure.
 
-| 操作 | 实际影响 |
+| Action | Actual effect |
 | --- | --- |
-| 从标签/阅读列表移出漫画，或删除分组 | 删除分组关系，不删除漫画文件 |
-| 移除关联文件夹书库 | 移除 App 内该书库及整理记录，源文件夹保留 |
-| 删除 App 内书库 | 删除该书库及其本机漫画文件 |
-| 删除“已导入漫画” | 删除该书库及其中的文件；它仍是默认导入去处，之后导入到“已导入漫画”时会重新创建一个空书库 |
-| 删除一本本地漫画 | 删除书库记录及实际文件；关联文件夹中的文件也可能被删除 |
-| 移除远程文件夹快捷方式 | 只移除快捷入口，服务器文件保留 |
-| 移除单本/当前目录副本，或在设置、服务器管理中清理下载 | 删除对应范围的本机远程文件副本，服务器文件和阅读历史保留；之后可能需要联网 |
-| 删除一条远程阅读历史 / 清空历史 | 下载文件保留，对应单本/该服务器全部历史、进度及页书签记录被移除 |
-| 删除服务器 | 移除配置、已存凭据、相关本机下载、历史和文件夹快捷方式；服务器源文件保留 |
-| 修改服务器位置或访问身份 | 可能清理旧位置对应的历史、快捷方式和本机副本；保存前需要把这一影响说清楚 |
-| 清理临时数据 / 远程封面 | 清理对应可重建数据，不删除本地书库漫画；可重建不等于无需联网 |
-| 清空“已导入漫画” | 删除默认导入书库中的用户文件，保留空书库；不是清空所有书库，也不是清缓存 |
+| Remove comics from a tag/reading list, or delete the group | Removes group relationships, not comic files |
+| Remove a linked-folder library | Removes the library and organization records from the app; preserves the source folder |
+| Delete an app-managed library | Deletes the library and its comic files on this device |
+| Delete Imported Comics | Deletes the library and its files; it remains the default import destination, and a later import into Imported Comics recreates an empty library |
+| Delete a local comic | Deletes the library record and actual file; files in linked folders may also be deleted |
+| Remove a remote-folder shortcut | Removes only the shortcut; preserves server files |
+| Remove a single/current-directory copy, or clear downloads in Settings or server management | Deletes local copies of remote files in that scope; preserves server files and reading history; network access may be needed afterward |
+| Delete one remote reading-history entry / clear history | Preserves downloaded files; removes history, progress, and page-bookmark records for that comic/all comics on that server |
+| Delete a server | Removes configuration, saved credentials, related local downloads, history, and folder shortcuts; preserves server source files |
+| Change server location or access identity | May clear history, shortcuts, and local copies tied to the old location; explain this impact before saving |
+| Clean up Temporary Data / Remote Covers | Removes the corresponding rebuildable data, not local-library comics; rebuildable does not mean no network is needed |
+| Empty Imported Comics | Deletes user files in the default import library and leaves it empty; does not empty every library or clear cache |
 
-批量操作要显示数量和范围。影响源文件的操作使用明确的确认页/弹窗；不能用“移除”掩盖永久删除，也不能给没有恢复机制的操作画“撤销”承诺。
+Batch actions must show count and scope. Actions affecting source files use an explicit confirmation page/dialog. Do not hide permanent deletion behind Remove, or promise Undo where no recovery mechanism exists.
 
-离线书架没有整服务器清空入口。旧的未调用方法仍有不同后果，维护时不要复用，见 [实现边界](design-system/05-batches.md#远程与存储)。
+Offline Shelf has no whole-server clear action. Old uncalled methods still have different consequences; do not reuse them during maintenance. See [implementation limits](design-system/05-batches.md#remote-and-storage).
 
-## 8. 维护与评审
+## 8. Maintenance and Review
 
-界面调整以书库内容、远程目录、阅读器工具、导入流程为代表场景。页面稿见 [设计系统](design-system/README.md)，状态检查使用第 7 节，验证方式使用 [开发流程](development-workflow.md#validation-by-change-type)。
+Use library contents, remote directories, reader tools, and import flows as representative scenarios for interface changes. See the [design system](design-system/README.md) for page mockups, section 7 for state checks, and [development workflow](development-workflow.md#validation-by-change-type) for validation.
 
-评审时按真实任务走一遍：第一次导入能找到结果；能继续未读完的漫画；离线保存与导入不混淆；部分失败有出口；清理前能说出会删什么；阅读器没有新增误退出、误翻页或位置丢失。合并入口后仍须能完成原任务。
+Review by walking through real tasks: find the result of a first import; continue an unfinished comic; distinguish offline saving from importing; recover from partial failure; explain what cleanup will delete before confirming; and check for new accidental exits, page turns, or lost reading positions. Consolidated entries must still support the original tasks.
 
-以下仍属**另行确认的功能扩展**：账号 / 云同步、内容商店 / 社区、合并本地与远程继续阅读、全局 / 远程搜索、进度同步、扩大本地书签数量、重做阅读手势、本地 / 远程源文件改名移动、远程源文件删除、保证 App 退出后的下载续传、“测试连接”。不把这些画成已有能力。
+The following remain **feature expansions requiring separate confirmation**: accounts / cloud sync, content store / community, combined local and remote Continue Reading, global / remote search, progress sync, a higher local bookmark limit, redesigned reading gestures, local / remote source-file rename and move, remote source-file deletion, guaranteed download resumption after app exit, and Test Connection. Do not draw them as existing capabilities.
 
-## 维护附录：核对依据与文档分工
+## Maintenance Appendix: Verification Sources and Document Ownership
 
-以下用于维护时定位行为来源；测试文件说明回归覆盖入口，不代表设备验收结果。
+Use these to locate behavior during maintenance. Test files identify regression coverage entry points, not device acceptance results.
 
-| 核对范围 | 主要依据 |
+| Area to verify | Main sources |
 | --- | --- |
-| 三个主入口、启动和设置 | [导航](../JamReader/App/AppNavigationSupport.swift)、[设置分类](../JamReader/Features/Settings/SettingsSections.swift) |
-| 本地入口、搜索、集合 | [书库首页](../JamReader/Features/Libraries/LibraryHomeView.swift)、[书库内容](../JamReader/Features/Browser/LibraryBrowserView.swift)、[查询与状态](../JamReader/Data/Libraries/NativeLibraryState.swift) |
-| 导入、可写性与取消 | [导入服务](../JamReader/Data/Libraries/ImportedComicsImportService.swift)、[导入测试](../JamReaderTests/ImportedComicsImportServiceIntegrationTests.swift) |
-| 远程操作、范围与离线 | [目录界面](../JamReader/Features/Remote/RemoteServerBrowserView.swift)、[服务器详情](../JamReader/Features/Remote/RemoteServerDetailView.swift)、[离线书架](../JamReader/Features/Remote/RemoteOfflineShelfView.swift)、[服务器保存与清理](../JamReader/Features/Remote/RemoteServerListViewModel.swift)、[保留阅读进度的测试](../JamReaderTests/RemoteServerListViewModelTests.swift) |
-| 删除与缓存 | [本地删除服务](../JamReader/Data/Libraries/LibraryComicRemovalService.swift)、[存储界面](../JamReader/Features/Settings/RemoteCacheSettingsView.swift)、[缓存策略](../JamReader/Data/Remote/RemoteCachePolicyStore.swift) |
-| 阅读器入口、能力与设置 | [阅读器](../JamReader/Features/Reader/ComicReaderView.swift)、[阅读状态](../JamReader/Features/Reader/ComicReaderViewModel.swift)、[共享偏好](../JamReader/Data/Reader/ReaderLayoutPreferencesStore.swift)、[偏好测试](../JamReaderTests/ReaderPreferenceStoreTests.swift) |
-| 阅读手势与快速导航 | [分页容器](../JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift)、[竖向容器](../JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift)、[缩略图轨道](../JamReader/SharedUI/Components/ReaderVerticalThumbnailRail.swift)、[退出手势测试](../JamReaderTests/ReaderDismissGestureDirectionTests.swift) |
-| 格式能力差异 | [文档加载](../JamReader/Data/Reader/ComicDocumentLoader.swift)、[内容展示](../JamReader/SharedUI/Components/ReaderDocumentComponents.swift) |
+| Three main entries, startup, and settings | [Navigation](../JamReader/App/AppNavigationSupport.swift), [settings categories](../JamReader/Features/Settings/SettingsSections.swift) |
+| Local entries, search, and collections | [Library Home](../JamReader/Features/Libraries/LibraryHomeView.swift), [library contents](../JamReader/Features/Browser/LibraryBrowserView.swift), [queries and state](../JamReader/Data/Libraries/NativeLibraryState.swift) |
+| Import, writability, and cancellation | [Import service](../JamReader/Data/Libraries/ImportedComicsImportService.swift), [import tests](../JamReaderTests/ImportedComicsImportServiceIntegrationTests.swift) |
+| Remote actions, scopes, and offline use | [Directory UI](../JamReader/Features/Remote/RemoteServerBrowserView.swift), [server details](../JamReader/Features/Remote/RemoteServerDetailView.swift), [Offline Shelf](../JamReader/Features/Remote/RemoteOfflineShelfView.swift), [server saving and cleanup](../JamReader/Features/Remote/RemoteServerListViewModel.swift), [reading-progress preservation tests](../JamReaderTests/RemoteServerListViewModelTests.swift) |
+| Deletion and cache | [Local deletion service](../JamReader/Data/Libraries/LibraryComicRemovalService.swift), [storage UI](../JamReader/Features/Settings/RemoteCacheSettingsView.swift), [cache policy](../JamReader/Data/Remote/RemoteCachePolicyStore.swift) |
+| Reader entry, capabilities, and settings | [Reader](../JamReader/Features/Reader/ComicReaderView.swift), [reading state](../JamReader/Features/Reader/ComicReaderViewModel.swift), [shared preferences](../JamReader/Data/Reader/ReaderLayoutPreferencesStore.swift), [preference tests](../JamReaderTests/ReaderPreferenceStoreTests.swift) |
+| Reading gestures and quick navigation | [Paged container](../JamReader/SharedUI/Components/ImageSequenceReaderContainerView.swift), [vertical container](../JamReader/SharedUI/Components/VerticalImageSequenceReaderContainerView.swift), [thumbnail track](../JamReader/SharedUI/Components/ReaderVerticalThumbnailRail.swift), [dismissal gesture tests](../JamReaderTests/ReaderDismissGestureDirectionTests.swift) |
+| Format capability differences | [Document loading](../JamReader/Data/Reader/ComicDocumentLoader.swift), [content presentation](../JamReader/SharedUI/Components/ReaderDocumentComponents.swift) |
 
-本文负责设计需求，界面规则由 [设计系统](design-system/README.md) 负责；工程文档职责见[文档索引](README.md)。后续直接更新对应文档，不另建重复的设计说明、审查报告或完成清单。
+This document owns design requirements; the [design system](design-system/README.md) owns interface rules. See the [documentation index](README.md) for engineering-document ownership. Update the responsible document directly rather than adding duplicate design notes, audit reports, or completion checklists.

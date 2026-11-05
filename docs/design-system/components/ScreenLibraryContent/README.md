@@ -1,20 +1,20 @@
 # ScreenLibraryContent
 
-书库内容页：文件夹逐级浏览 + 漫画网格（默认网格，可切列表）。
+Library content page: browse folder levels and a comic grid (grid by default, switchable to list).
 
-## 结构（自上而下，仅根目录有集合）
-搜索（范围与上限见 [本地书库能力](../../../design-requirements.md#本地书库)）→ 集合入口 2×2 → 文件夹 → 漫画。
-- 漫画分区标题右侧是排序（名称 / 加入时间 / 最近打开…），下面一行快捷筛选（全部 / 未读 / 阅读中 / 已读 / 有书签）；筛选只作用于当前文件夹的漫画，文件夹照常显示。“阅读中”筛选仍只作用于当前文件夹，不等于整库继续阅读集合。
-- 根目录继续阅读主卡的显隐遵循 [ContinueReading](../ContinueReading/README.md#位置与范围)，显示时位于集合入口与文件夹之间。
+## Structure (Top to Bottom; Collections Only at Root)
+Search (see [local-library capabilities](../../../design-requirements.md#local-libraries) for scope and limits) → 2×2 collection entries → folders → comics.
+- Sort sits to the right of the Comics section title (Name / Recently Added / Recently Opened…), with quick filters below (All / Unread / In Progress / Read / With Bookmarks). Filters affect only comics in the current folder; folders remain visible. In Progress also stays within the current folder and is not the whole-library Continue Reading collection.
+- Root Continue Reading hero-card visibility follows [ContinueReading](../ContinueReading/README.md#placement-and-scope); when shown, it sits between collection entries and folders.
 
-## 工具栏（根目录与子文件夹相同）
-- “选择” · ⋯。⋯ 依次为：导入到这里… / 网格 · 列表 / 导入漫画资料… / 刷新与扫描 / 书库信息。
-- 只读的关联文件夹里“导入到这里”置灰，并在菜单副标题写“文件夹只读”。空文件夹的空状态按钮也是“导入到这里”。
-- “最近加入时限”从此页菜单移除，只在设置和“最近加入”页出现。
-- 扫描进度、维护记录不再占用“状态”分区：进行中用 TaskBanner，结果写在“书库信息”。
-- “书库信息”里集中：改名、存放位置、只读 / 授权状态说明、上次扫描结果、移除或删除书库。
+## Toolbar (Same at Root and in Subfolders)
+- Select · ⋯. In ⋯, in order: Import Here… / Grid · List / Import Comic Info… / Refresh & Scan / Library Info.
+- In read-only linked folders, disable Import Here and add “The folder is read-only” as the menu subtitle. The empty-folder action is also Import Here.
+- Recently Added Period is removed from this page's menu; it appears only in Settings and Recently Added.
+- Scan progress and maintenance records no longer occupy a Status section. Use TaskBanner while running and Library Info for results.
+- Library Info collects Rename, storage location, read-only / permission explanations, last scan results, and library removal or deletion.
 
-“导入到这里…”是子菜单（选择文件… / 选择文件夹…）；整个书库的刷新与资料导入在子文件夹里同样可用。原地重新授权没有入口，见 [能力边界](../../05-batches.md#书库与导入)。
+Import Here… is a submenu (Choose Files… / Choose Folder…). Whole-library refresh and metadata import remain available in subfolders. There is no in-place reauthorization entry; see [capability limits](../../05-batches.md#library-and-import).
 
-## 导入漫画资料（ComicInfo）
-统一为“导入漫画资料…”一个入口：先选范围（所选漫画 / 当前列表 / 当前文件夹及子文件夹 / 整个书库），再选“只补空白 / 覆盖已有字段”。
+## Import Comic Info (ComicInfo)
+Use one Import Comic Info… entry: first choose scope (Selected Comics / Current List / This Folder and Subfolders / Entire Library), then Fill Empty Fields / Overwrite Existing Fields.

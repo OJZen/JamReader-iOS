@@ -1,11 +1,11 @@
 # ScreenCollections
 
-集合页（复用 `LibrarySpecialCollectionView` / `LibraryOrganizationCollectionDetailView` 的同一布局）。
+Collection pages reuse the same layout in `LibrarySpecialCollectionView` / `LibraryOrganizationCollectionDetailView`.
 
-- 标题写集合名，副标题写所属书库与数量；搜索限定在当前集合。
-- 收藏、最近加入、标签与阅读列表的内容页使用 [FilterChips](../FilterChips/README.md)，与当前集合搜索组合；“继续阅读”本身就是阅读中，不显示筛选。
-- 标签页与阅读列表页是同一结构的两个页面（入口分别是集合卡“标签”“阅读列表”），不再把两者塞进一页。
-- 新建（+）；“编辑”进入编辑模式改名、换色、删除，长按 / 侧滑是同一组动作的快捷方式。
-- 标签页与阅读列表页的排序（名称 / 数量多到少 / 数量少到多）固定在列表分区标题右侧，与“漫画”分区的排序同一位置；导航栏只放“编辑”和“+”。
-- “最近加入”页的导航栏右侧有时间范围菜单（7 / 14 / 30 / 90 天），与设置共用同一偏好。
-- 文案：“从标签中移出”，不写“删除”；删除标签的确认弹窗写明“漫画不会被删除”。
+- Title: collection name; subtitle: owning library and count; search stays within the current collection.
+- Favorites, Recently Added, Tags, and Reading Lists content pages use [FilterChips](../FilterChips/README.md) with current-collection search. Continue Reading is already In Progress and shows no filters.
+- Tags and Reading Lists are two pages with the same structure, entered from their respective Tags and Reading Lists collection cards; do not combine them into one page again.
+- Create (+); Edit enters editing mode for renaming, color changes, and deletion. Long press / swipe are shortcuts to the same actions.
+- Sort on Tags and Reading Lists (Name / Most Comics / Fewest Comics) stays to the right of the list section title, matching sort in the Comics section. The navigation bar has only Edit and +.
+- Recently Added has a trailing navigation-bar time-range menu (7 / 14 / 30 / 90 days), sharing the Settings preference.
+- Copy: Remove from Tag, not Delete. Delete Tag confirmation states “Comics are not deleted”.

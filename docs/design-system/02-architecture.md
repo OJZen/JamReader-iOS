@@ -1,42 +1,42 @@
-# 信息架构与流程
+# Information Architecture and Flows
 
-总览图见 [InformationArchitecture](components/InformationArchitecture/README.md)。三个一级分区为书库、远程、设置；阅读器全屏呈现，退出回到原位置与原分组。
+See [InformationArchitecture](components/InformationArchitecture/README.md) for the overview diagram. The three top-level areas are Library, Remote, and Settings. The reader opens full-screen and returns to the original location and group on exit.
 
-## 一级导航
+## Primary Navigation
 
-| 分区 | 常规宽度侧栏 | 内容 |
+| Area | Regular-width sidebar | Contents |
 | --- | --- | --- |
-| 书库 `books.vertical` | 继续阅读（按设置显示）· 我的书库 · 当前书库的集合 | 本地书库、导入、整理 |
-| 远程 `server.rack` | 离线书架 · 已保存文件夹 · 服务器 | SMB / WebDAV、离线副本 |
-| 设置 `gearshape` | 通用 · 阅读 · 书库 · 存储 | 全局默认值与存储管理 |
+| Library `books.vertical` | Continue Reading (according to settings) · My Libraries · current library's collections | Local libraries, import, organization |
+| Remote `server.rack` | Offline Shelf · Saved Folders · Servers | SMB / WebDAV, offline copies |
+| Settings `gearshape` | General · Reading · Library · Storage | Global defaults and storage management |
 
-紧凑宽度使用单栏导航；窗口变化和侧栏恢复规则见 [窗口适配](06-iphone-duo.md)。
+Compact width uses single-column navigation. See [window adaptation](06-iphone-duo.md) for window changes and sidebar restoration.
 
-## 入口安排与页面复用
+## Entry Placement and Page Reuse
 
-同一屏中的同一操作只保留一个主要可见入口；长按、侧滑和键盘操作可复用同一动作。不能为去重而只留下隐藏手势；iPad 同时出现的侧栏与内容区按一屏检查。
+Keep one primary visible entry for the same action on a screen. Long press, swipe, and keyboard interactions may reuse it. Deduplication must not leave only hidden gestures. Treat an iPad sidebar and content area visible together as one screen.
 
-| 功能 | 当前入口 |
+| Feature | Current entry |
 | --- | --- |
-| 添加 | 工具栏 [+] 与空态按钮二选一，打开同一个 [添加漫画 Sheet](components/ScreenAddComics/README.md) |
-| 书库内导入 | 根目录与子文件夹的 ⋯ →“导入到这里…”→ 文件 / 文件夹；使用当前书库与文件夹 |
-| 导入漫画资料 | ⋯ →“导入漫画资料…”：选择范围与补空白 / 覆盖策略；多选时直接用所选范围 |
-| 刷新与扫描 | ⋯ →“刷新与扫描”（当前文件夹 / 整个书库）；进度见 [TaskBanner](components/TaskBanner/README.md) |
-| 最近加入时限 | 设置 → 书库，以及“最近加入”页；共用同一偏好 |
-| 排序 / 显示方式 | 本地排序在“漫画”分区标题右侧，远程排序在位置栏；网格 / 列表在 ⋯ |
-| 继续阅读 | 位置与范围见 [ContinueReading](components/ContinueReading/README.md) |
-| 层级返回 | 系统返回与可点面包屑；本地面包屑在搜索框之后的内容顶部，远程在固定位置栏 |
-| 维护记录与书库管理 | 书库内容页 ⋯ →“书库信息”；首页长按复用改名、信息、移除 / 删除动作 |
-| 漫画管理 | [MoreMenu](components/MoreMenu/README.md)；本地 ⋯ / 长按共用菜单，侧滑提供其中的快捷动作 |
-| 服务器浏览 | 服务器详情一个“浏览文件”（从上次位置，没有记录时从起始目录）；回根目录用面包屑 |
-| 服务器快捷入口 | “本服务器”快捷区的已保存文件夹 / 离线书架；与远程首页共用页面，范围分别为当前 / 全部服务器 |
-| 下载清理 | 服务器管理清理本服务器，设置 → 存储清理全部；离线书架保留单本移除，没有整服务器清空入口 |
-| 阅读器工具 | [顶栏、显示面板、更多菜单](03-reader.md#工具布局)；精确跳页仍从受保护的页码入口进入 |
+| Add | Either toolbar [+] or the empty-state button opens the same [Add Comics sheet](components/ScreenAddComics/README.md) |
+| Import within a library | Root and subfolder ⋯ → Import Here… → File / Folder; uses the current library and folder |
+| Import Comic Info | ⋯ → Import Comic Info…: choose scope and Fill Empty Fields / Overwrite Existing Fields policy; multiselect uses the selected scope directly |
+| Refresh and scan | ⋯ → Refresh & Scan (This Folder / Entire Library); see [TaskBanner](components/TaskBanner/README.md) for progress |
+| Recently Added Period | Settings → Library and the Recently Added page share one preference |
+| Sort / View As | Local sort is to the right of the Comics section title; remote sort is in the location bar; Grid / List is in ⋯ |
+| Continue Reading | See [ContinueReading](components/ContinueReading/README.md) for placement and scope |
+| Navigate up | System back and tappable breadcrumbs; local breadcrumbs sit at the top of content after search, remote breadcrumbs in a fixed location bar |
+| Maintenance records and library management | Library content page ⋯ → Library Info; home-page long press reuses Rename, Info, Remove / Delete actions |
+| Comic management | [MoreMenu](components/MoreMenu/README.md); local ⋯ / long press share one menu, with swipe shortcuts from it |
+| Server browsing | One Browse Files action in server details opens the last location, or Start Folder if none is recorded; use breadcrumbs to return to root |
+| Server shortcuts | Saved Folders / Offline Shelf in the This Server shortcut area share pages with Remote home, scoped to current / all servers respectively |
+| Download cleanup | Server management cleans the current server; Settings → Storage cleans all; Offline Shelf keeps single-copy removal without a whole-server clear action |
+| Reader tools | [Top bar, display panel, More menu](03-reader.md#tool-layout); exact page jumps still use the protected page-number entry |
 
-## 关键流程
+## Key Flows
 
-业务步骤、取消路径和完成条件统一见 [关键操作流程](../design-requirements.md#4-关键操作流程)。静态稿与数据能力不一致的地方见 [实现取舍](05-batches.md)，不增加第二套导入、阅读或任务流程。
+See [key workflows](../design-requirements.md#4-key-workflows) for business steps, cancellation paths, and completion criteria. See [implementation decisions](05-batches.md) for differences between static mockups and data capabilities. Do not add a second import, reading, or task flow.
 
-## 删除、移除与清理
+## Deletion, Removal, and Cleanup
 
-确认文案必须表达 [删除、移除与清理后果](../design-requirements.md#删除移除与清理)。呈现规则见 [ConfirmDialog](components/ConfirmDialog/README.md)。
+Confirmation copy must state [deletion, removal, and cleanup consequences](../design-requirements.md#deletion-removal-and-cleanup). See [ConfirmDialog](components/ConfirmDialog/README.md) for presentation rules.

@@ -1,11 +1,11 @@
 # FormField
 
-表单行：服务器编辑、书库改名、资料编辑使用系统 `Form`（inset grouped）。
+Form rows use system `Form` (inset grouped) for server editing, library renaming, and metadata editing.
 
-## 规则
-- 标签 92pt 左对齐，输入右侧；占位符给示例而不是重复标签（“例如 Comics”）。
-- 按协议显示字段：SMB = 地址、端口、共享、起始目录；WebDAV = 地址、端口、服务器路径、起始文件夹。
-- 错误：字段标签变 `danger`，错误说明写在分组脚注，保留已填写内容。
-- 保存配置不测试连接；实际访问远程内容时才连接。表单差异见 [实现边界](../../05-batches.md#远程与存储)。
-- 修改地址或账户时，保存前用 ConfirmDialog 说明可能清理的历史、快捷方式和本机副本。
-- 未保存退出：系统确认“放弃更改 / 继续编辑”，禁止下滑直接丢失。
+## Rules
+- Labels are 92pt wide and left-aligned, with input on the right. Placeholders give examples rather than repeat labels (“e.g. Comics”).
+- Show protocol-specific fields: SMB = Address, Port, Share, Start Folder; WebDAV = Address, Port, Server Path, Start Folder.
+- Errors: field labels use `danger`, explanations appear in section footnotes, and entered content is retained.
+- Saving configuration does not test the connection; connection happens when accessing remote content. See [implementation limits](../../05-batches.md#remote-and-storage) for form differences.
+- Before saving address or account changes, use ConfirmDialog to explain history, shortcuts, and local copies that may be cleared.
+- Leaving with unsaved changes: system confirmation with Discard Changes / Keep Editing; swiping down must not silently discard them.

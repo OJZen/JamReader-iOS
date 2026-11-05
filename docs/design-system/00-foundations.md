@@ -1,124 +1,124 @@
-# 视觉与文案基础
+# Visual and Copy Foundations
 
-JamReader 是 iPhone / iPad 上的个人漫画阅读与管理工具：本地书库与远程（SMB / WebDAV）阅读并重。界面要**原生、安静、内容优先**——封面和漫画本身是主角，界面退到后面。用系统导航、系统控件、系统字体和语义色作为地基，只在少数地方用果酱色告诉用户“这里能点”“读到这儿了”。果酱色呼应 JamReader 的名字：深红偏紫，像一罐树莓果酱；蜂蜜金（`favorite`）是它唯一的暖色搭档。
+JamReader is a personal comic reader and manager for iPhone / iPad, with equal weight on local libraries and remote (SMB / WebDAV) reading. The interface must be **native, quiet, and content-first**: covers and comics lead, and the interface recedes. Build on system navigation, controls, fonts, and semantic colors. Use jam color sparingly to mark actions and reading progress. Jam color echoes the JamReader name: a deep purplish red, like a jar of raspberry jam. Honey gold (`favorite`) is its only warm-color companion.
 
-本文件是视觉与文案基础。目录说明、预览查看方式与文档分工见同目录 [README](README.md)。
+This file owns visual and copy foundations. See the [README](README.md) in this directory for the directory guide, preview instructions, and document ownership.
 
-> **受保护：** 分页阅读底部缩略图导航列表、竖向阅读右侧缩略图导航列表原样保留，不受本系统任何 token 或组件改动影响。见 `components/ProtectedNavigation` 与 [03-reader.md](03-reader.md)。
+> **Protected:** Preserve the bottom thumbnail navigation list in paged reading and the right-side thumbnail navigation list in vertical reading unchanged. No token or component change in this system may affect them. See `components/ProtectedNavigation` and [03-reader.md](03-reader.md).
 
-## 内容与文案
+## Content and Copy
 
-- 以简体中文为设计语言，同时保证英文、繁体中文（台湾）、日文三种翻译不溢出：按钮和标签预留约 40% 的伸缩空间，书名一律可截断。
-- 语气平实、直接，不用感叹号、不用 emoji、不卖萌。用“你”指用户，不用“您”。
-- 先说结果，再说原因：“无法访问‘Comics’文件夹。授权已失效，书库内容和阅读进度都还在。”
-- 数字用阿拉伯数字，中文与数字之间加空格：“312 本 · 24 个文件夹”“第 78 / 186 页”。分隔符用“ · ”。
-- 只写帮助下一步决策的字。普通页面不放说明段落；空状态、错误、权限、破坏性操作才解释。后果说明写在确认弹窗里，不在页面上逐条写脚注；不写“左滑可以……”这类操作教学。
+- Use Simplified Chinese as the design language while ensuring English, Traditional Chinese (Taiwan), and Japanese translations do not overflow. Allow about 40% expansion in buttons and labels; book titles may always truncate.
+- Use a plain, direct tone, without exclamation marks, emoji, or cutesy language. Address users with “你”, not “您”, in Chinese.
+- State the result before the reason: “无法访问‘Comics’文件夹。授权已失效，书库内容和阅读进度都还在。”
+- Use Arabic numerals with spaces between Chinese text and numbers: “312 本 · 24 个文件夹”, “第 78 / 186 页”. Use “ · ” as the separator.
+- Write only what helps the next decision. Ordinary pages have no explanatory paragraphs; explain empty states, errors, permissions, and destructive actions. Put consequences in confirmation dialogs, not row-by-row page footnotes. Do not add gesture tutorials such as “Swipe left to…”.
 
-### 固定用词
+### Fixed Terminology
 
-| 概念 | 用这个词 | 不要用 |
+| Concept | Use this term (zh-Hans) | Avoid (zh-Hans) |
 | --- | --- | --- |
-| 本地收藏空间 | 书库 | 资料库、库 |
-| 用户新建、文件在 App 内 | App 内书库 | 托管书库 |
-| 直接使用“文件”里的文件夹 | 关联文件夹 / 使用已有文件夹 | 链接、挂载 |
-| 默认导入书库 | 已导入漫画 | 导入目录 |
-| 远程漫画存到本机 | 离线副本、保存离线副本 | 下载（单独使用时含义不清） |
-| 远程漫画复制进本地书库 | 导入到书库 | 下载、保存 |
-| 在线阅读的临时文件 | 阅读缓存 / 临时数据 | 离线 |
-| 远程文件夹快捷入口 | 已保存文件夹 | 收藏夹、书签 |
-| 最近加入书库 | 最近加入 | 最近、最近阅读 |
-| 添加到标签或阅读列表 | 标签与列表 | 整理、归类 |
-| 会删除文件 | 删除 | 移除 |
-| 只去掉 App 内记录或快捷方式 | 移除 | 删除 |
-| 可重建的数据 | 清理 | 删除 |
+| Local collection space | 书库 | 资料库、库 |
+| User-created, with files inside the app | App 内书库 | 托管书库 |
+| Directly use a folder in Files | 关联文件夹 / 使用已有文件夹 | 链接、挂载 |
+| Default import library | 已导入漫画 | 导入目录 |
+| Save a remote comic to this device | 离线副本、保存离线副本 | 下载 (ambiguous on its own) |
+| Copy a remote comic into a local library | 导入到书库 | 下载、保存 |
+| Temporary files from online reading | 阅读缓存 / 临时数据 | 离线 |
+| Remote-folder shortcut | 已保存文件夹 | 收藏夹、书签 |
+| Recently added to a library | 最近加入 | 最近、最近阅读 |
+| Add to tags or reading lists | 标签与列表 | 整理、归类 |
+| Deletes files | 删除 | 移除 |
+| Removes only app records or shortcuts | 移除 | 删除 |
+| Rebuildable data | 清理 | 删除 |
 
-## 视觉基础
+## Visual Foundations
 
-### 颜色
+### Colors
 
-- 页面底色：普通列表与封面网格用 `bg`；设置、表单、服务器详情等分组页用 `bg-grouped`，单元格用 `surface`，嵌套块用 `surface-2`。这些等于 UIKit 语义色，直接用系统色实现。
-- 文字：标题与正文 `ink`；副标题、数量、时间 `ink-2`；占位与禁用 `ink-3`。`ink-2` 是 Apple 原值，浅色下在白底约 3.4:1，所以关键信息不要只用 `ink-2` 写在 13pt 以下。
-- 果酱色分两种用法：
-  - `jam` 用于**填充与标记**：实心主按钮底、选中勾、阅读进度条、存储条“已导入漫画”、品牌色块。上面的文字图标一律 `on-jam`（白）。浅色 #9B1E56，深色调为树莓果酱 #C23A76。
-  - `accent`（= AccentColor 资源）用于**可点的文字与图标**：工具栏按钮、链接、选中态文字、标签栏选中项。浅色与 `jam` 同值；深色提亮为果酱粉 #E886B2，否则在黑底上读不清。
-  - 因为深色下 `accent` 很亮，实心按钮不能继承 AccentColor（白字会看不清），一律显式 `.tint(.appJam)`。
-- `jam-deep`（#5C1233，罐底色）只用于品牌色块：封面、App 图标底、启动画面，不用于控件。
-- 阅读器不随外观变化，强调色固定用 `reader-accent`（亮果酱粉），用于已加书签等阅读器标记；准备阅读的进度条使用 `jam`。
-- 开关保持系统绿，不染果酱色，与 iOS 一致。
-- 选中的筛选标签和轻提示用 `accent-soft` 底 + `accent-on-soft` 字。
-- 状态色只有五种语义：`success`（已读、完成）、`offline`（已离线）、`warning`（较旧副本、只读）、`danger`（失败、删除）、`favorite`（星标）。前四种有 `-soft` 底色；`favorite` 用于星标，没有对应底色 token。状态永远是“图标 + 文字”，不能只靠颜色。
-- `accent` 与 `danger` 同属红色系（色相差 20–30°，深色下明度接近）：破坏性动作必须同时有 trash / 警告图标和“删除”字样，`accent` 与 `jam` 永远不用于破坏性动作；系统菜单与弹窗中的 destructive 交给系统红。
-- 标签颜色 `label-*` 是与 YACReader 数据库兼容的 12 色原值，只画 10pt 圆点，旁边一定有标签名。
-- 阅读器不跟随系统外观：画布 `reader-bg` 纯黑，工具用 `reader-chrome` 材质 + `reader-ink` / `reader-ink-2`，描边 `reader-stroke`。
+- Page backgrounds: ordinary lists and cover grids use `bg`; grouped pages such as settings, forms, and server details use `bg-grouped`, with `surface` cells and `surface-2` nested blocks. These match UIKit semantic colors; implement them with system colors directly.
+- Text: titles and body use `ink`; subtitles, counts, and times use `ink-2`; placeholders and disabled text use `ink-3`. `ink-2` is Apple's original value, about 3.4:1 on white in light mode, so do not use `ink-2` alone for critical information below 13pt.
+- Jam color has two uses:
+  - `jam` is for **fills and markers**: solid primary-button backgrounds, selection checks, reading progress bars, Imported Comics in the storage bar, and brand blocks. Text and icons on it always use `on-jam` (white). Light: #9B1E56; dark: raspberry jam #C23A76.
+  - `accent` (= the AccentColor asset) is for **tappable text and icons**: toolbar buttons, links, selected text, and selected tabs. It matches `jam` in light mode and brightens to jam pink #E886B2 in dark mode to remain readable on black.
+  - Because dark-mode `accent` is bright, solid buttons must not inherit AccentColor, which makes white text unreadable. Always set `.tint(.appJam)` explicitly.
+- `jam-deep` (#5C1233, the jar-bottom color) is only for brand blocks: covers, app-icon backgrounds, and launch screens, not controls.
+- The reader does not follow appearance changes. Its accent is fixed to `reader-accent` (bright jam pink) for reader markers such as active bookmarks; reading-preparation progress bars use `jam`.
+- Switches keep system green, consistent with iOS, rather than jam color.
+- Selected filter chips and light notices use an `accent-soft` background with `accent-on-soft` text.
+- Status colors have only five meanings: `success` (Read, complete), `offline` (Available Offline), `warning` (Older Copy, read-only), `danger` (failure, deletion), and `favorite` (stars). The first four have `-soft` backgrounds; `favorite` has no matching background token. Status always uses an icon and text, never color alone.
+- `accent` and `danger` are both in the red family (20–30° hue difference, similar lightness in dark mode). Destructive actions must include both a trash/warning icon and Delete text. Never use `accent` or `jam` for destructive actions; system menus and dialogs use system destructive red.
+- `label-*` preserves the 12 original colors compatible with the YACReader database. Show only a 10pt dot, always beside the tag name.
+- The reader does not follow system appearance: pure-black `reader-bg` canvas, `reader-chrome` material with `reader-ink` / `reader-ink-2` tools, and `reader-stroke` borders.
 
-### 字体
+### Typography
 
-- 只用系统字体（SF Pro / 苹方），所有文字走 Dynamic Type 文本样式，不写死字号。token 中的字号是默认 Large 档的数值，仅供设计稿对照。
-- 页面大标题 `largeTitle`；分区标题 `title2`；Sheet 标题 `headline`；列表主行 `body`；副行 `subheadline` 或 `footnote`；封面下书名 13pt medium 两行、状态 `caption1`。
-- 页码、百分比、文件大小一律等宽数字（`.monospacedDigit()`）。
-- 不使用自定义字体文件；系统字体无需打包，所以 `type.fonts` 为空。
+- Use only system fonts (SF Pro / PingFang). All text uses Dynamic Type styles, not fixed font sizes. Token font sizes represent the default Large setting and are only mockup references.
+- Page large titles use `largeTitle`; section titles `title2`; sheet titles `headline`; primary list rows `body`; secondary rows `subheadline` or `footnote`; titles below covers use 13pt medium over two lines, with `caption1` status.
+- Page numbers, percentages, and file sizes always use monospaced digits (`.monospacedDigit()`).
+- Do not use custom font files. System fonts need no bundling, so `type.fonts` is empty.
 
-### 间距与布局
+### Spacing and Layout
 
-- 间距只用 `space-*`（2 / 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48，与 `Spacing` 一致）。页面左右边距与旧系统回退见 [页面边距](06-iphone-duo.md#页面边距)，不在页面重复写死。分区之间 `space-xl`。
-- 封面网格：紧凑窗口按 `size-grid-min-compact` 自适应，普通宽度通常为 3 列，列距 `space-sm`、行距 `space-lg`；iPad 在 `size-grid-min`–`size-grid-max` 之间自适应。列表模式行高至少 `size-row`。
-- 点击区域至少 `size-touch`（44pt）。行尾“更多”按钮也是 44×44。
-- 宽度判断用容器宽度与 size class，不用设备型号。常规宽度用系统侧栏 + 内容区；`size-sidebar` 是静态稿参考值，不固定运行时侧栏宽度。窄窗口自然收拢成 iPhone 布局。
+- Use only `space-*` spacing (2 / 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48, matching `Spacing`). See [page margins](06-iphone-duo.md#page-margins) for horizontal margins and older-system fallbacks; do not hard-code them again per page. Use `space-xl` between sections.
+- Cover grids: compact windows adapt using `size-grid-min-compact`, typically 3 columns at ordinary widths, with `space-sm` column gaps and `space-lg` row gaps. iPad adapts between `size-grid-min`–`size-grid-max`. List rows are at least `size-row` high.
+- Tap targets are at least `size-touch` (44pt). Trailing More buttons are also 44×44.
+- Decide width using container width and size class, not device model. Regular width uses a system sidebar and content area; `size-sidebar` is a static-mockup reference, not a fixed runtime sidebar width. Narrow windows naturally collapse into the iPhone layout.
 
-### 形状、材质与阴影
+### Shapes, Materials, and Shadows
 
-- 圆角：封面 `radius-cover`（6）；搜索框、侧栏选中行 `radius-md`；分组列表、卡片 `radius-lg`；Sheet 与浮动面板 `radius-xl`；胶囊 `radius-full`。全部用 `.continuous` 曲线。
-- 不画描边卡片、不画彩色左边框；层级靠间距与 `surface` 底色区分。
-- iOS 26 起，导航栏按钮、标签栏、工具条交给系统 Liquid Glass；iOS 17.6–18 回退为系统材质（`glass`、`glass-stroke` 只用于这一回退态的示意，不要自绘玻璃）。
-- 阴影：封面 `shadow-cover`（深色模式可省略）；浮层 `shadow-lg`；其余靠材质不加阴影。
+- Corners: covers use `radius-cover` (6); search fields and selected sidebar rows `radius-md`; grouped lists and cards `radius-lg`; sheets and floating panels `radius-xl`; capsules `radius-full`. All use `.continuous` curves.
+- Do not draw outlined cards or colored left borders. Establish hierarchy with spacing and `surface` backgrounds.
+- From iOS 26, system Liquid Glass owns navigation-bar buttons, tab bars, and toolbars. iOS 17.6–18 falls back to system materials (`glass` and `glass-stroke` illustrate only this fallback; do not draw custom glass).
+- Shadows: covers use `shadow-cover` (optional in dark mode); overlays use `shadow-lg`; other surfaces rely on material without shadows.
 
-### 动效
+### Motion
 
-- 动画解释状态变化，不做装饰。沿用 `AppAnimation`：工具显隐 `chromeToggle`（spring 0.35 / 0.82）、Sheet `sheetPresent`、浮层 `overlayPop`、轻切换 `quickFade`（0.15s）。
-- 打开和关闭漫画共用一个 hero 过渡：打开时封面飞到页面在阅读器里的位置，关闭时当前页飞回封面并在途中渐变成封面。全程只有一份漫画在动，原封面在飞行时隐藏；阅读器的黑底只淡入淡出，不跟着移动。下滑 / 右滑退出时页面跟手，松手后从手指位置继续飞回。封面已不在屏幕上或已换到别的漫画时，页面原地缩小淡出。
-- 开启“减弱动态效果”时：hero 过渡改为交叉淡入，列表插入删除不做位移动画。
-- 大范围布局变化、高频进度更新不加动画。
+- Animation explains state changes, not decoration. Reuse `AppAnimation`: `chromeToggle` (spring 0.35 / 0.82) for tools, `sheetPresent` for sheets, `overlayPop` for overlays, and `quickFade` (0.15s) for light transitions.
+- Comic opening and closing share one hero transition: the cover flies to the page's reader position on open; on close, the current page flies back and fades into the cover en route. Only one comic image moves throughout, with the original cover hidden during flight. The reader's black background only fades, without moving. During downward/rightward dismissal, the page follows the finger and continues flying back from the release position. If the cover is offscreen or the reader has switched comics, the page shrinks and fades in place.
+- With Reduce Motion enabled, hero transitions use a crossfade and list insertion/deletion has no positional animation.
+- Do not animate large layout changes or frequent progress updates.
 
-### 状态
+### States
 
-- 远程副本状态使用 [StatusBadge](components/StatusBadge/README.md)；组件提供的状态与页面实际接入范围分别说明。阅读缓存不显示离线徽标。
-- 一张封面的角标位只放一个最重要的状态（优先级见 `ComicCover`）；已读 / 未读只写在副标题里，不画圆点。
-- 加载保留上下文（来源、封面）；空状态给一个下一步；错误保留真实原因和恢复动作（`Notice`）；破坏性操作写清删除什么、保留什么（`ConfirmDialog`）。
-- 长任务复用现有进度入口，不新增任务中心；本地任务条与远程浮层的分工见 [TaskBanner](components/TaskBanner/README.md)。
-- 存储条中远程下载、临时数据与封面用 `chart-*` 中性色，“已导入漫画”用 `jam`；不借用状态色。
+- Remote-copy states use [StatusBadge](components/StatusBadge/README.md); component states and actual page adoption are documented separately. Reading cache does not show an offline badge.
+- A cover's badge position holds only its most important state (see `ComicCover` for priority). Read / Unread appears only in the subtitle, without dots.
+- Loading preserves context (source, cover); empty states offer one next step; errors preserve the actual reason and recovery action (`Notice`); destructive actions state what is deleted and preserved (`ConfirmDialog`).
+- Long tasks reuse existing progress entries rather than adding a task center. See [TaskBanner](components/TaskBanner/README.md) for local task-banner and remote-overlay responsibilities.
+- The storage bar uses `chart-*` neutrals for remote downloads, temporary data, and covers, and `jam` for Imported Comics; do not borrow status colors.
 
-## 图标
+## Icons
 
-- 使用 SF Symbols，线性为默认，选中/强调用 `.fill` 版本，跟随文字字重与 Dynamic Type。
-- 预览卡片里的图标是为网页示意手绘的线性替身，**不是**最终资源；实现时按下表使用 SF Symbols。
+- Use SF Symbols, outlined by default and `.fill` for selection/emphasis, following text weight and Dynamic Type.
+- Icons in preview cards are hand-drawn outlined web stand-ins, **not** final assets. Use the SF Symbols below in implementation.
 
-| 用途 | SF Symbol |
+| Purpose | SF Symbol |
 | --- | --- |
-| 书库标签 | `books.vertical` / `.fill` |
-| 远程标签 | `server.rack` |
-| 设置标签 | `gearshape` / `.fill` |
-| 添加 | `plus` |
-| 更多 | `ellipsis`（行尾、工具栏） |
-| App 内书库 / 关联文件夹 / 已导入 | `books.vertical` / `folder.badge.link`（iOS 17 可用 `folder`）/ `tray` |
-| 导入到这里 / 导入到书库 | `square.and.arrow.down` |
-| 保存离线副本 / 已离线 | `arrow.down.circle` / `arrow.down.circle.fill` |
-| 较旧副本 | `clock.badge.exclamationmark` |
-| 失败 | `exclamationmark.triangle` |
-| 收藏 / 评分 | `star` / `star.fill` |
-| 已读 | `checkmark.circle` |
-| 标签 / 阅读列表 | `tag` / `list.bullet` |
-| 最近加入 | `sparkles` |
-| 已保存文件夹 / 保存此文件夹 | `pin` / `pin.fill`（不用 `star`，星形只表示收藏漫画） |
-| 书签 | `bookmark` / `bookmark.fill` |
-| 显示设置 | `textformat.size` |
-| 缩略图总览 | `square.grid.3x3` |
-| 存到相册 | `photo` |
-| 删除 | `trash` |
+| Library tab | `books.vertical` / `.fill` |
+| Remote tab | `server.rack` |
+| Settings tab | `gearshape` / `.fill` |
+| Add | `plus` |
+| More | `ellipsis` (row trailing edge, toolbar) |
+| App Managed / Linked Folder / Imported Comics | `books.vertical` / `folder.badge.link` (`folder` is available on iOS 17) / `tray` |
+| Import Here / Import to Library | `square.and.arrow.down` |
+| Save Offline Copy / Available Offline | `arrow.down.circle` / `arrow.down.circle.fill` |
+| Older Copy | `clock.badge.exclamationmark` |
+| Failure | `exclamationmark.triangle` |
+| Favorite / Rating | `star` / `star.fill` |
+| Read | `checkmark.circle` |
+| Tags / Reading Lists | `tag` / `list.bullet` |
+| Recently Added | `sparkles` |
+| Saved Folders / Save Folder | `pin` / `pin.fill` (not `star`, which only means favorite comics) |
+| Bookmarks | `bookmark` / `bookmark.fill` |
+| Display settings | `textformat.size` |
+| Thumbnail overview | `square.grid.3x3` |
+| Save to Photos | `photo` |
+| Delete | `trash` |
 
-## 无障碍
+## Accessibility
 
-- 所有状态有文字；VoiceOver 读出“雾港侦探 第 3 卷，读到 42%，已离线”。
-- 文字对比：`ink` 全场景 ≥ 7:1；`accent` 在所有底色 ≥ 4.5:1（浅 6.9–7.7、深 5.6–8.5）；`on-jam` 在 `jam` 上浅 7.7、深 5.1；`jam` 作图形标记 ≥ 3:1（深色 surface 上 3.4）。
-- 键盘焦点用 2pt `focus-ring` 实线外环；iPad 指针悬停用系统 hover 效果。
-- Dynamic Type 到 AX5 时：封面网格降为 2 列，列表行改为多行布局，工具栏文字按钮改图标 + 无障碍名称。
-- 浅色 / 深色、减弱动态效果、增强对比度都要过一遍。
+- Every status has text; a Chinese VoiceOver example is “雾港侦探 第 3 卷，读到 42%，已离线”.
+- Text contrast: `ink` ≥ 7:1 in all contexts; `accent` ≥ 4.5:1 on all backgrounds (light 6.9–7.7, dark 5.6–8.5); `on-jam` on `jam`: light 7.7, dark 5.1; `jam` as a graphic marker ≥ 3:1 (3.4 on dark surface).
+- Keyboard focus uses a 2pt solid `focus-ring` outer ring; iPad pointer hover uses system effects.
+- At Dynamic Type AX5, cover grids drop to 2 columns, list rows become multiline, and toolbar text buttons become icons with accessibility names.
+- Check light/dark mode, Reduce Motion, and Increase Contrast.

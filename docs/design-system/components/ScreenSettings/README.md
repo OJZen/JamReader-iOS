@@ -1,8 +1,8 @@
 # ScreenSettings
 
-设置：通用 / 阅读 / 书库 / 存储（`SettingsHomePane`），iPhone 列表进入，iPad 侧栏常驻。
+Settings: General / Reading / Library / Storage (`SettingsHomePane`), entered from a list on iPhone and a persistent sidebar on iPad.
 
-- 首页每个分类的副标题显示当前关键值，减少进入次数。
-- 书库：[继续阅读位置](../ContinueReading/README.md#位置与范围)、最近加入时间范围、远程导入默认范围。
-- 不重复展示“书库数量”：书库首页已列出全部书库。
-- 存储：一条分段占用条（不借用状态色）；分组 = 远程下载（上限、阅读时下载完整副本、已下载 + 清理）/ 可重建的数据（临时数据、远程封面）/ 你的文件（“已导入漫画”+ 清空）。每类行尾是同样的按钮，后果统一写在 ConfirmDialog，页面上不再逐条写脚注；没有“一键清理”。统计范围见 [存储边界](../../05-batches.md#远程与存储)。
+- Each home category's subtitle shows its key current value to reduce navigation.
+- Library: [Continue Reading placement](../ContinueReading/README.md#placement-and-scope), Recently Added time window, default remote-import scope.
+- Do not repeat a library count; Library Home already lists all libraries.
+- Storage: one segmented usage bar (without status colors). Groups = Remote Downloads (limit, Download Full Copy While Reading, Downloaded + Clean Up) / Rebuildable Data (Temporary Data, Remote Covers) / Your Files (Imported Comics + Empty Library). Every category has the same trailing button pattern; consequences belong in ConfirmDialog rather than per-row page footnotes. No one-tap cleanup. See [storage limits](../../05-batches.md#remote-and-storage) for accounting scope.

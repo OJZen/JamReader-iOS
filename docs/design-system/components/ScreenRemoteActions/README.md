@@ -1,9 +1,9 @@
 # ScreenRemoteActions
 
-远程漫画的操作、导入与准备阅读。
+Remote comic actions, import, and reading preparation.
 
-- 点封面直接阅读；管理动作按 [MoreMenu](../MoreMenu/README.md#远程漫画) 分组，不用一个含糊的下载图标表达离线保存与导入。
-- 导入 Sheet 显示来源路径、目录范围、目标书库与去向说明。已知直属数量时显示数量；目标写入根目录，不提供子文件夹选择或递归预统计，原因见 [远程边界](../../05-batches.md#远程与存储)。
-- 有打开预览时，封面停在开场动画落点，首页就绪后替换；约 0.9 秒后才显示底部紧凑状态胶囊（原因与百分比）、顶部标题与 ×。没有预览时直接显示居中状态。× 取消打开并返回。
-- 失败页给重试，远程漫画还可编辑服务器；保存编辑后关闭阅读器回到目录，原因见 [实现取舍](../../05-batches.md#远程与存储)。
-- 失败封面优先用打开时的预览，其次只读磁盘缩略图缓存，不为失败页发起网络请求；没有可用封面或窗口太矮时显示警告图标。失败页出现时不再叠加同内容的 Alert；已有漫画仍在显示时保留错误 Alert。
+- Tap the cover to read directly. Group management actions by [MoreMenu](../MoreMenu/README.md#remote-comics); do not use one ambiguous download icon for offline saving and importing.
+- The import sheet shows source path, directory scope, target library, and destination explanation. Show immediate-child counts when known. Import writes to the target root, with no subfolder picker or recursive precount; see [remote limits](../../05-batches.md#remote-and-storage) for why.
+- With an opening preview, the cover stays at the opening animation's destination until the first page is ready to replace it. Only after about 0.9 seconds show the compact bottom status capsule (reason and percentage), top title, and ×. Without a preview, show centered status immediately. × cancels opening and returns.
+- Failure pages offer Retry; remote comics also offer Edit Server. Saving edits closes the reader and returns to the directory; see [implementation decisions](../../05-batches.md#remote-and-storage) for why.
+- Failure covers prefer the opening preview, then read only from the disk thumbnail cache; do not make network requests for a failure page. Show a warning icon when no cover is available or the window is too short. Do not add an Alert with the same content when the failure page appears; retain error Alerts when an existing comic is still displayed.

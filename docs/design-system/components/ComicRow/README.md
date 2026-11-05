@@ -1,16 +1,16 @@
 # ComicRow
 
-列表行：信息密度更高的条目，用于列表模式、搜索结果、阅读历史、离线书架。
+List rows provide denser information for list mode, search results, reading history, and Offline Shelf.
 
-## 结构
-- 左侧 32×48 封面（`size-row-thumb` 高，2:3），文件夹用 `accent` 实心文件夹图标代替封面。
-- 主行 `body` 书名单行截断；副行 `footnote` + `ink-2`：先状态，再一项事实（页数 / 大小 / 时间）。
-- 阅读中显示 120pt 宽 3pt `jam` 进度条。
-- 行尾：漫画为 44×44 “更多”按钮（`PersistentRowActionButtonLabel`，图标为 `ellipsis`），文件夹为 chevron。行最小高度 `size-row`。
+## Structure
+- Left: 32×48 cover (`size-row-thumb` height, 2:3); folders replace it with an `accent` solid folder icon.
+- Primary row: `body`, one-line truncated title. Secondary row: `footnote` + `ink-2`, status first, then one fact (page count / size / time).
+- In Progress shows a 120pt-wide, 3pt `jam` progress bar.
+- Trailing edge: comics have a 44×44 More button (`PersistentRowActionButtonLabel`, `ellipsis` icon); folders have a chevron. Minimum row height is `size-row`.
 
-## 消费方提供
-标题、副行状态与事实、进度、点击（阅读或进入文件夹）、更多菜单内容（见 MoreMenu）。
+## Caller Provides
+Title, secondary-row status and fact, progress, tap action (read or enter folder), and More menu contents (see MoreMenu).
 
 ## Do / Don't
-- Do：同一副行内最多一个状态标识。
-- Don't：服务器名重复出现在本服务器的目录行里（来源已由页面标题说明）。
+- Do: show at most one status marker per secondary row.
+- Don't: repeat the server name in that server's directory rows; the page title already identifies the source.

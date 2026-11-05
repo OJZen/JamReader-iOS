@@ -1,14 +1,14 @@
 # SelectionBar
 
-批量选择底栏：使用系统底部工具栏，标签栏显隐按系统版本处理。
+Batch-selection bottom bar: use the system bottom toolbar, with tab-bar visibility handled by OS version.
 
-## 规则
-- 导航栏标题为“已选择 3 本”，左侧“全选/全不选”，右侧“完成”。
-- 底栏：标为已读、收藏、标签与列表、更多（编辑资料、导入漫画资料）、删除（`danger`，二次确认带数量）。
-- 所选漫画全是已读 / 已收藏时，对应按钮切换为“标为未读 / 取消收藏”；状态混合时执行“标为已读 / 收藏”。
-- 未选择时动作禁用；退出选择后点击恢复为“打开”。
-- 批量资料编辑只改用户勾选的字段。
-- 实现用系统底部工具栏（`toolbarItems` / `ToolbarItem(placement: .bottomBar)`），不要自绘按钮条：iPhone Duo 外屏上只有系统栏会自动排进侧边列。每个按钮同时给标题和符号。
-- iOS 27.1 起“更多”的内容并入系统溢出菜单，不再单独放“更多”；iOS 27.0 及以下保持“更多”。
+## Rules
+- Navigation title: “3 Selected”; leading Select All / Deselect All; trailing Done.
+- Bottom bar: Mark as Read, Favorite, Tags & Lists, More (Edit Metadata, Import Comic Info), Delete (`danger`, with a second confirmation stating count).
+- If all selected comics are read / favorited, switch the respective action to Mark as Unread / Unfavorite; mixed states use Mark as Read / Favorite.
+- Disable actions when nothing is selected; after leaving selection mode, taps open comics again.
+- Batch metadata editing changes only fields checked by the user.
+- Implement with the system bottom toolbar (`toolbarItems` / `ToolbarItem(placement: .bottomBar)`), not a custom button strip. Only system bars automatically enter the side column on the iPhone Duo outer display. Give every button both title and symbol.
+- From iOS 27.1, merge More contents into system overflow and omit a separate More button; iOS 27.0 and earlier keep More.
 
-iOS 18 起使用 UIKit 的系统隐藏标签栏 API；iOS 17.6 保留标签栏，选择动作显示在原生底部工具栏。辅助功能大字号使用图标加无障碍名称，避免五项文字挤在一行。
+From iOS 18, use UIKit's system tab-bar hiding API. iOS 17.6 keeps the tab bar and shows selection actions in the native bottom toolbar. Accessibility text sizes use icons with accessibility names to avoid squeezing five text actions into one row.

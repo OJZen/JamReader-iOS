@@ -1,8 +1,8 @@
 # FilterChips
 
-快捷筛选（`FilterChipBar`）：集合页与书库内容页顶部的单选筛选。
+Quick filters (`FilterChipBar`): single-selection filters at the top of collection and library content pages.
 
-- 选项：全部 / 未读 / 阅读中 / 已读 / 有书签；集合内筛选可与搜索同时生效。
-- 选中 `accent-soft` 底 + `accent-on-soft` 文字 + semibold；未选中 `fill`。
-- 标签颜色只以 10pt 圆点出现，旁边始终有标签名。
-- 横向滚动，不换行；辅助功能字号下一个标签就可能占满宽度，改为换行，不截断。与搜索组合时，空结果文案写出两个条件。
+- Options: All / Unread / In Progress / Read / With Bookmarks; collection filters can apply together with search.
+- Selected: `accent-soft` background + `accent-on-soft` text + semibold; unselected: `fill`.
+- Tag colors appear only as 10pt dots, always beside tag names.
+- Scroll horizontally without wrapping. At accessibility text sizes, one chip may fill the width; wrap instead of truncating. With search, empty-result copy states both conditions.

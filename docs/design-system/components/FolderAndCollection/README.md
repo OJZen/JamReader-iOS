@@ -1,12 +1,12 @@
 # FolderAndCollection
 
-文件夹卡与集合入口。
+Folder cards and collection entries.
 
-## 文件夹卡
-- 与漫画封面同为 2:3，`surface-2` 底上叠放最多 3 张内含封面（无封面时只显示文件夹图标），左下角显示漫画数量。
-- 网格中文件夹始终排在漫画前，并以分区标题“文件夹 / 漫画”分开。
+## Folder Cards
+- Like comic covers, use 2:3 proportions. Stack up to 3 contained covers on `surface-2` (folder icon only when no covers exist), with comic count at bottom left.
+- Folders always precede comics in grids, separated by Folders / Comics section titles.
 
-## 集合入口
-- 只在书库根目录出现，2 列 `surface-2` 卡（页面底色为 `bg`）：收藏、最近加入、标签、阅读列表，各带数量。iPad 侧栏已列出集合时，内容区不再显示这组卡。
-- 色彩只作区分：收藏 `favorite`，最近加入 `accent`，标签 `offline`，阅读列表 `success`；名称始终可见。
-- “最近加入”是加入书库的时间（设置里选 7/14/30/90 天），不是阅读历史。
+## Collection Entries
+- Appear only at the library root as 2 columns of `surface-2` cards on `bg`: Favorites, Recently Added, Tags, and Reading Lists, each with a count. Omit these cards from content when the iPad sidebar already lists collections.
+- Color only differentiates: Favorites `favorite`, Recently Added `accent`, Tags `offline`, Reading Lists `success`; names remain visible.
+- Recently Added means time added to the library (7/14/30/90 days in Settings), not reading history.

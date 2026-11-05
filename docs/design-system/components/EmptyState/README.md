@@ -1,9 +1,9 @@
 # EmptyState
 
-空状态：说明这里能做什么，给一个主要下一步。基于系统 `ContentUnavailableView` 的结构。
+Empty states explain what users can do here and offer one primary next step. Use the system `ContentUnavailableView` structure.
 
-## 规则
-- 图标 `ink-3` 44pt，标题 `title2`，说明 `callout` `ink-2`，最多一个主按钮。
-- 首次使用：按钮进入与工具栏 [+] 相同的“添加漫画”流程；同屏不同时出现两个入口（空态时工具栏 [+] 隐藏）。
-- 无搜索结果：写出搜索词与范围，动作是“清除搜索”，明确“漫画没有被删除”。
-- 空文件夹、服务器空目录、离线书架为空分别给各自文案，不复用同一句。
+## Rules
+- Icon: `ink-3`, 44pt; title: `title2`; description: `callout`, `ink-2`; at most one primary button.
+- First use: the button opens the same Add Comics flow as toolbar [+]. Do not show both entries together; hide toolbar [+] in the empty state.
+- No search results: state the query and scope, offer Clear Search, and make clear that comics have not been deleted.
+- Use separate copy for an empty folder, empty server directory, and empty Offline Shelf, rather than one shared sentence.

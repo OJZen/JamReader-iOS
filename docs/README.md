@@ -2,7 +2,7 @@
 
 Start with [`AGENTS.md`](../AGENTS.md), then read `project-context.md` and `development-workflow.md`. Read the remaining pages only when relevant to the task.
 
-For product and UI/UX design, start with the Chinese [design requirements](design-requirements.md). It describes current capabilities, user flows, data boundaries, and protected reader behavior. The [design system](design-system/README.md) owns information architecture, tokens, component rules, page mockups, and implementation decisions. Mockups are layout references; documented capability limits take precedence.
+For product and UI/UX design, start with the [design requirements](design-requirements.md). It describes current capabilities, user flows, data boundaries, and protected reader behavior. The [design system](design-system/README.md) owns information architecture, tokens, component rules, page mockups, and implementation decisions. Mockups are layout references; documented capability limits take precedence.
 
 ## Ownership
 

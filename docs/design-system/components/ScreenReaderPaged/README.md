@@ -1,7 +1,7 @@
 # ScreenReaderPaged
 
-分页阅读器（iPhone）。只改顶栏与面板；画面、手势、底部导航列表不变。
+Paged reader (iPhone). Change only the top bar and panels; content, gestures, and bottom navigation list stay unchanged.
 
-- 顶栏：返回 · 书名 · [书签 | Aa | ⋯]。页码、百分比、跳页入口只在受保护的底部页码胶囊，不在顶栏重复。
-- 显示面板（Aa）与更多菜单都是浮层，不改变阅读画面几何。
-- 中央点按显隐工具、边缘点按翻页、下滑关闭、双击/捏合缩放全部保持现状。
+- Top bar: Back · title · [Bookmarks | Aa | ⋯]. Page number, percentage, and page-jump entry appear only in the protected bottom page-number capsule, not again in the top bar.
+- The display panel (Aa) and More menu are overlays and do not change reading viewport geometry.
+- Preserve center taps to toggle tools, edge taps to turn pages, downward swipe to close, and double-tap/pinch zoom exactly as implemented.

@@ -1,13 +1,13 @@
 # TaskBanner
 
-本地导入与扫描的进度 / 结果条，在内容底部 `safeAreaInset` 中显示，不新增任务中心。
+Progress / result banner for local imports and scans, shown in a bottom content `safeAreaInset`. Do not add a task center.
 
-## 规则
+## Rules
 
-- 显示任务、目标与现有计数；进度可确定时显示比例，否则显示进行中状态。
-- 本地文件导入可用 × 取消；扫描没有取消能力，不显示 ×。ComicInfo 资料导入继续使用原表单与结果提示，没有运行中的取消入口。
-- 本地导入结果写“已导入 / 不支持 / 失败”，不拆成“新增 / 已存在”；原因见 [能力边界](../../05-batches.md#书库与导入)。
-- 干净成功且提供关闭回调时，4 秒后自动消失；有跳过或失败的结果保留到手动关闭。目标动作由调用方按上下文提供。
-- 从书库首页导入完成后打开目标书库，结果条在目标页显示。
-- 远程导入使用 `RemoteBackgroundImportController` 的全局浮层，App 内切换页面仍可查看进度与取消。离线保存使用远程目录的任务卡，当前没有取消按钮或逐本下载状态，见 [远程边界](../../05-batches.md#远程与存储)。
-- 不承诺退出 App 后续传。
+- Show task, target, and existing counts; show a fraction when progress is known, otherwise an in-progress state.
+- Local file import can cancel with ×; scanning cannot, so omit ×. ComicInfo metadata import keeps its existing form and result notices, with no running cancellation entry.
+- Local import results show imported / unsupported / failed, not newly added / already existing; see [capability limits](../../05-batches.md#library-and-import) for why.
+- A clean success with a dismissal callback disappears after 4 seconds. Results with skips or failures remain until dismissed manually. The caller supplies target actions according to context.
+- Completing an import from Library Home opens the target library and shows the result banner there.
+- Remote import uses the global overlay from `RemoteBackgroundImportController`, keeping progress and cancellation available while navigating within the app. Offline saving uses the remote directory's task card, currently without cancellation or per-comic download states; see [remote limits](../../05-batches.md#remote-and-storage).
+- Do not promise resumption after app exit.

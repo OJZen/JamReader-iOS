@@ -1,19 +1,19 @@
 # MoreMenu
 
-“更多”菜单：漫画、书库、服务器的管理动作集中在一处。本地行尾 `ellipsis` 与长按共用菜单，侧滑使用其中的快捷动作。
+More centralizes comic, library, and server management actions. Local trailing `ellipsis` and long press share one menu; swipes use shortcuts from it.
 
-## 本地漫画
-顶部三个快捷动作（收藏 / 标为已读 / 标签与列表），然后评分（子菜单：1–5 星、取消评分）、编辑资料、信息，最后隔开的“删除漫画”。快捷动作随状态切换文字（已收藏 → 取消收藏，已读 → 标为未读）。系统菜单里不能放可点的星星行，所以评分用子菜单。
+## Local Comics
+Three quick actions at the top (Favorite / Mark as Read / Tags & Lists), followed by Rating (submenu: 1–5 stars, Clear Rating), Edit Metadata, Info, and a separated Delete Comic last. Quick-action text changes with state (favorited → Unfavorite, read → Mark as Unread). System menus cannot contain a tappable star row, so ratings use a submenu.
 
-## 远程漫画
-点封面就是阅读，菜单里不再重复“阅读”。其余按意图分组并在副标题说明去向：
-1. **本机副本**：保存离线副本 → 已离线后变为“移除本机副本”；较旧副本时为“更新副本 / 打开本机的较旧副本 / 移除本机副本”。
-2. **本地书库**：导入到书库… → 选择目标书库与范围。
-3. 信息。
-远程漫画不出现收藏、评分、资料编辑（远程不支持）。
+## Remote Comics
+Tapping the cover reads, so do not repeat Reading in the menu. Group remaining actions by intent and state the destination in subtitles:
+1. **On This Device**: Save Offline Copy becomes Remove Local Copy once available offline; older copies offer Update Copy / Open Older Local Copy / Remove Local Copy.
+2. **Local library**: Import to Library… → choose target library and scope.
+3. Info.
+Remote comics do not offer favorites, ratings, or metadata editing, which remote content does not support.
 
-## 规则
-- 删除/移除永远在最后一组，并写出后果副标题。
-- 不在菜单里放与页面快捷区重复、范围相同的入口。
+## Rules
+- Delete/Remove always stays in the final group with a subtitle stating consequences.
+- Do not duplicate entries with the same scope as the page's shortcut area.
 
-⋯ 与长按是同一个系统菜单（`LibraryComicMenuContent`），快捷组用 `ControlGroup`。侧滑只放同一组动作里的快捷按钮：前缘“标为已读 / 标为未读”，后缘“收藏 / 取消收藏”和“删除”（删除仍弹确认）；评分、编辑资料、信息只在 ⋯ 与长按里。标签或阅读列表页另有“从标签中移出 / 从阅读列表中移出”，写明漫画仍在书库中。
+⋯ and long press use the same system menu (`LibraryComicMenuContent`), with `ControlGroup` for quick actions. Swipes contain only shortcuts from those actions: leading Mark as Read / Mark as Unread; trailing Favorite / Unfavorite and Delete (still with confirmation). Rating, Edit Metadata, and Info appear only in ⋯ and long press. Tag and reading-list pages also offer Remove from Tag / Remove from Reading List, stating that the comic stays in the library.

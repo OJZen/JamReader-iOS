@@ -1,7 +1,7 @@
 # ScreenReaderVertical
 
-竖向连续阅读：整页宽度、上下滚动、画布缩放平移；向右滑关闭。
+Vertical continuous reading: full-page width, vertical scrolling, canvas zoom/pan; swipe right to close.
 
-- 顶栏与分页一致；`Aa` 面板中只显示阅读模式与页间距。
-- 右侧缩略图轨道（拖动预览、松手跳页）与紧凑页码入口原样保留。
-- 工具隐藏且有本地序列时，边缘点按打开上一/下一本——保持现有行为，不改成翻页。
+- Same top bar as paged mode; `Aa` shows only Reading Mode and Page Spacing.
+- Preserve the right-side thumbnail track (drag preview, page jump on release) and compact page-number entry unchanged.
+- With tools hidden and a local sequence available, edge taps open the previous/next comic. Keep this behavior; do not change it to page turning.

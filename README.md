@@ -33,5 +33,5 @@ Open `JamReader.xcodeproj` in Xcode. Canonical build, test, validation, artifact
 
 ## UI/UX Design
 
-- [Product requirements and user flows (Chinese)](docs/design-requirements.md)
-- [Design system and implementation decisions (Chinese)](docs/design-system/README.md)
+- [Product requirements and user flows](docs/design-requirements.md)
+- [Design system and implementation decisions](docs/design-system/README.md)

@@ -1,18 +1,18 @@
 # ContinueReading
 
-继续阅读：用封面、名称与进度帮助用户接着看。
+Continue Reading uses covers, names, and progress to help users resume.
 
-## 结构
+## Structure
 
-- 本地主卡使用 84pt 封面，显示书名、进度与“继续”提示；整卡一个按钮，不放第二个点击目标。
-- 首页汇总的其余漫画放在横向卡带，封面宽度使用 `size-shelf-cover`。卡片注明来源书库；书库内主卡不重复来源名。
-- 分区标题右侧“全部”进入继续阅读页；卡带中的长书库名可截断，主卡来源单独一行。
+- The local hero card uses an 84pt cover, title, progress, and Continue hint. The whole card is one button without a second tap target.
+- Other comics in the home summary use a horizontal strip with `size-shelf-cover` cover widths. Cards identify the source library; a hero card within a library does not repeat its source name.
+- All to the right of the section title opens the Continue Reading page. Long library names may truncate in the strip; the hero card has a separate source line.
 
-## 位置与范围
+## Placement and Scope
 
-- “设置 → 书库 → 继续阅读显示在”二选一：默认在书库首页汇总，或在各书库根目录显示；同一时刻只在一处出现。常规宽度首页以侧栏“继续阅读”行进入汇总页。
-- 书库内的“全部”复用单库集合页；首页“全部”按书库分组，只提供阅读与“在书库中显示”。原因及封面限制见 [实现取舍](../../05-batches.md#书库与导入)。
-- 服务器详情使用自己的远程历史卡带，不受本地位置设置影响。
-- 继续阅读的定义、查询上限与跨本作用域见 [本地书库能力](../../../design-requirements.md#本地书库)。
+- Settings → Library → Show Continue Reading offers two choices: combined on Library Home by default, or at each library root. It appears in only one location at a time. At regular width, the home sidebar's Continue Reading row opens the combined page.
+- All within a library reuses the single-library collection page. All on home groups by library and offers only reading and Show in Library. See [implementation decisions](../../05-batches.md#library-and-import) for reasons and cover limits.
+- Server details use their own remote-history strip, unaffected by local placement settings.
+- See [local-library capabilities](../../../design-requirements.md#local-libraries) for the Continue Reading definition, query limits, and cross-comic scope.
 
-不要合并本地与远程进度，也不要宣称导入后进度同步。点击漫画进入阅读器，退出保留原位置。
+Do not merge local and remote progress or claim progress sync after import. Tapping a comic enters the reader; exiting preserves the original location.

@@ -1,3 +1,3 @@
 # Toast
 
-轻提示：使用 `LightToast` 显示非阻断的成功反馈，约 2 秒后消失。当前只有消息与可选图标，没有目标动作按钮；需要操作的反馈使用现有任务条或提示。失败使用 Notice 或 Alert。
+Light feedback: `LightToast` shows nonblocking success feedback and disappears after about 2 seconds. It currently supports only a message and optional icon, without a target-action button. Use existing task banners or notices for feedback requiring action. Failures use Notice or Alert.
