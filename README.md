@@ -6,7 +6,9 @@ JamReader is a native comic reader for iPhone and iPad with local, SMB, and WebD
 
 - Mobile-first library and reader experience for iOS and iPadOS
 - Local library import, browsing, search, tags, reading lists, and metadata editing
+- Continue reading across local libraries, with collection filters and grid/list views
 - Remote browsing over `SMB` and `WebDAV`, with saved folders, history, and offline copies
+- Paged and vertical comic reading, with bookmarks and shared display defaults
 - Reader support for:
   - image folders
   - `CBZ / ZIP`
@@ -31,5 +33,5 @@ Open `JamReader.xcodeproj` in Xcode. Canonical build, test, validation, artifact
 
 ## UI/UX Design
 
-- [设计需求与操作流程（面向设计师）](docs/design-requirements.md)
-- [设计系统与分批实施计划](docs/design-system/README.md)
+- [Product requirements and user flows (Chinese)](docs/design-requirements.md)
+- [Design system and implementation decisions (Chinese)](docs/design-system/README.md)

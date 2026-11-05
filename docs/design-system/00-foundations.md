@@ -39,14 +39,14 @@ JamReader 是 iPhone / iPad 上的个人漫画阅读与管理工具：本地书�
 - 页面底色：普通列表与封面网格用 `bg`；设置、表单、服务器详情等分组页用 `bg-grouped`，单元格用 `surface`，嵌套块用 `surface-2`。这些等于 UIKit 语义色，直接用系统色实现。
 - 文字：标题与正文 `ink`；副标题、数量、时间 `ink-2`；占位与禁用 `ink-3`。`ink-2` 是 Apple 原值，浅色下在白底约 3.4:1，所以关键信息不要只用 `ink-2` 写在 13pt 以下。
 - 果酱色分两种用法：
-  - `jam` 用于**填充与标记**：实心主按钮底、选中勾、阅读进度条、存储条“书库漫画”、品牌色块。上面的文字图标一律 `on-jam`（白）。浅色 #9B1E56，深色调为树莓果酱 #C23A76。
+  - `jam` 用于**填充与标记**：实心主按钮底、选中勾、阅读进度条、存储条“已导入漫画”、品牌色块。上面的文字图标一律 `on-jam`（白）。浅色 #9B1E56，深色调为树莓果酱 #C23A76。
   - `accent`（= AccentColor 资源）用于**可点的文字与图标**：工具栏按钮、链接、选中态文字、标签栏选中项。浅色与 `jam` 同值；深色提亮为果酱粉 #E886B2，否则在黑底上读不清。
   - 因为深色下 `accent` 很亮，实心按钮不能继承 AccentColor（白字会看不清），一律显式 `.tint(.appJam)`。
 - `jam-deep`（#5C1233，罐底色）只用于品牌色块：封面、App 图标底、启动画面，不用于控件。
-- 阅读器不随外观变化，强调色固定用 `reader-accent`（亮果酱粉），用于已加书签与准备阅读的进度。
+- 阅读器不随外观变化，强调色固定用 `reader-accent`（亮果酱粉），用于已加书签等阅读器标记；准备阅读的进度条使用 `jam`。
 - 开关保持系统绿，不染果酱色，与 iOS 一致。
 - 选中的筛选标签和轻提示用 `accent-soft` 底 + `accent-on-soft` 字。
-- 状态色只有五种语义：`success`（已读、完成）、`offline`（已离线）、`warning`（较旧副本、只读）、`danger`（失败、删除）、`favorite`（星标）。每种都有 `-soft` 底色。状态永远是“图标 + 文字”，不能只靠颜色。
+- 状态色只有五种语义：`success`（已读、完成）、`offline`（已离线）、`warning`（较旧副本、只读）、`danger`（失败、删除）、`favorite`（星标）。前四种有 `-soft` 底色；`favorite` 用于星标，没有对应底色 token。状态永远是“图标 + 文字”，不能只靠颜色。
 - `accent` 与 `danger` 同属红色系（色相差 20–30°，深色下明度接近）：破坏性动作必须同时有 trash / 警告图标和“删除”字样，`accent` 与 `jam` 永远不用于破坏性动作；系统菜单与弹窗中的 destructive 交给系统红。
 - 标签颜色 `label-*` 是与 YACReader 数据库兼容的 12 色原值，只画 10pt 圆点，旁边一定有标签名。
 - 阅读器不跟随系统外观：画布 `reader-bg` 纯黑，工具用 `reader-chrome` 材质 + `reader-ink` / `reader-ink-2`，描边 `reader-stroke`。
@@ -60,14 +60,14 @@ JamReader 是 iPhone / iPad 上的个人漫画阅读与管理工具：本地书�
 
 ### 间距与布局
 
-- 间距只用 `space-*`（2 / 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48，与 `Spacing` 一致）。页面左右边距用系统的容器边距（UIKit 布局边距 / SwiftUI `contentMargins(for: .container)`；iPhone 约 16–20，iPad 更大，iPhone Duo 靠侧边控件一侧约为 0），不写死；只有拿不到系统边距时才回退到 `space-md`（iPhone）/ `space-lg`（iPad）。分区之间 `space-xl`。
-- 封面网格：iPhone 默认 3 列（`size-grid-min-compact`），列距 `space-sm`、行距 `space-lg`；iPad 在 `size-grid-min`–`size-grid-max` 之间自适应。列表模式行高至少 `size-row`。
+- 间距只用 `space-*`（2 / 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48，与 `Spacing` 一致）。页面左右边距与旧系统回退见 [页面边距](06-iphone-duo.md#页面边距)，不在页面重复写死。分区之间 `space-xl`。
+- 封面网格：紧凑窗口按 `size-grid-min-compact` 自适应，普通宽度通常为 3 列，列距 `space-sm`、行距 `space-lg`；iPad 在 `size-grid-min`–`size-grid-max` 之间自适应。列表模式行高至少 `size-row`。
 - 点击区域至少 `size-touch`（44pt）。行尾“更多”按钮也是 44×44。
-- 宽度判断用容器宽度与 size class，不用设备型号。iPad 用侧栏（`size-sidebar`）+ 内容区，内容最大宽 `size-content-max`；窄窗口自然收拢成 iPhone 布局。
+- 宽度判断用容器宽度与 size class，不用设备型号。常规宽度用系统侧栏 + 内容区；`size-sidebar` 是静态稿参考值，不固定运行时侧栏宽度。窄窗口自然收拢成 iPhone 布局。
 
 ### 形状、材质与阴影
 
-- 圆角：封面 `radius-cover`（6，比现有 10 更利落）；搜索框、侧栏选中行 `radius-md`；分组列表、卡片 `radius-lg`；Sheet 与浮动面板 `radius-xl`；胶囊 `radius-full`。全部用 `.continuous` 曲线。
+- 圆角：封面 `radius-cover`（6）；搜索框、侧栏选中行 `radius-md`；分组列表、卡片 `radius-lg`；Sheet 与浮动面板 `radius-xl`；胶囊 `radius-full`。全部用 `.continuous` 曲线。
 - 不画描边卡片、不画彩色左边框；层级靠间距与 `surface` 底色区分。
 - iOS 26 起，导航栏按钮、标签栏、工具条交给系统 Liquid Glass；iOS 17.6–18 回退为系统材质（`glass`、`glass-stroke` 只用于这一回退态的示意，不要自绘玻璃）。
 - 阴影：封面 `shadow-cover`（深色模式可省略）；浮层 `shadow-lg`；其余靠材质不加阴影。
@@ -81,11 +81,11 @@ JamReader 是 iPhone / iPad 上的个人漫画阅读与管理工具：本地书�
 
 ### 状态
 
-- 远程副本统一五态：未下载 / 下载中 / 已离线 / 较旧副本 / 失败（`StatusBadge`）。阅读缓存不显示徽标。
+- 远程副本状态使用 [StatusBadge](components/StatusBadge/README.md)；组件提供的状态与页面实际接入范围分别说明。阅读缓存不显示离线徽标。
 - 一张封面的角标位只放一个最重要的状态（优先级见 `ComicCover`）；已读 / 未读只写在副标题里，不画圆点。
 - 加载保留上下文（来源、封面）；空状态给一个下一步；错误保留真实原因和恢复动作（`Notice`）；破坏性操作写清删除什么、保留什么（`ConfirmDialog`）。
-- 长任务只有一个入口：`TaskBanner`。不新增任务中心。
-- 存储占用条用 `chart-*` 中性色，不借用状态色。
+- 长任务复用现有进度入口，不新增任务中心；本地任务条与远程浮层的分工见 [TaskBanner](components/TaskBanner/README.md)。
+- 存储条中远程下载、临时数据与封面用 `chart-*` 中性色，“已导入漫画”用 `jam`；不借用状态色。
 
 ## 图标
 

@@ -2,7 +2,7 @@
 
 Start with [`AGENTS.md`](../AGENTS.md), then read `project-context.md` and `development-workflow.md`. Read the remaining pages only when relevant to the task.
 
-For product and UI/UX design, start with the Chinese [design requirements](design-requirements.md). It separates current capabilities, redesign requirements, and protected reader behavior; it is not a screenshot-based visual audit. The approved redesign solution — information architecture, tokens, component rules, page mockups, and the batched implementation plan — lives in [design-system/](design-system/README.md).
+For product and UI/UX design, start with the Chinese [design requirements](design-requirements.md). It describes current capabilities, user flows, data boundaries, and protected reader behavior. The [design system](design-system/README.md) owns information architecture, tokens, component rules, page mockups, and implementation decisions. Mockups are layout references; documented capability limits take precedence.
 
 ## Ownership
 
@@ -10,7 +10,7 @@ For product and UI/UX design, start with the Chinese [design requirements](desig
 | --- | --- |
 | [Root README](../README.md) | Product capabilities and supported formats |
 | [Design requirements](design-requirements.md) | Designer-facing requirements, user flows, redesign scope, and reader interaction constraints |
-| [Design system](design-system/README.md) | Approved redesign: information architecture, entry placement, `tokens.json` values, component and page specs, batched implementation plan |
+| [Design system](design-system/README.md) | Information architecture, entry placement, `tokens.json` values, component and page specs, implementation decisions and limits |
 | [Project context](project-context.md) | Architecture, data ownership, code entry points, and task routing |
 | [Development workflow](development-workflow.md) | Build/test commands, CI boundaries, artifacts, validation, and handoff |
 | [Maintenance pitfalls](maintenance-pitfalls.md) | Failure modes, diagnostic checks, and manual regression scenarios |

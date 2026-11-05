@@ -5,8 +5,8 @@
 ## 结构
 - 左侧 32×48 封面（`size-row-thumb` 高，2:3），文件夹用 `accent` 实心文件夹图标代替封面。
 - 主行 `body` 书名单行截断；副行 `footnote` + `ink-2`：先状态，再一项事实（页数 / 大小 / 时间）。
-- 阅读中显示 120pt 宽 3px `jam` 进度条。
-- 行尾：漫画为 44×44 “更多”按钮（`PersistentRowActionButtonLabel`，图标改为 `ellipsis`），文件夹为 chevron。行最小高度 `size-row`。
+- 阅读中显示 120pt 宽 3pt `jam` 进度条。
+- 行尾：漫画为 44×44 “更多”按钮（`PersistentRowActionButtonLabel`，图标为 `ellipsis`），文件夹为 chevron。行最小高度 `size-row`。
 
 ## 消费方提供
 标题、副行状态与事实、进度、点击（阅读或进入文件夹）、更多菜单内容（见 MoreMenu）。

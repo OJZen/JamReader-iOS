@@ -10,7 +10,7 @@ JamReader is a native iPhone and iPad comic reader with three primary areas:
 - **Remote** (tab title; the code keeps `AppRootTab.browse` and the `Browse` / `Remote` feature folders) manages SMB/WebDAV servers, remote directories, saved folders, history, online reading, imports, and offline copies.
 - **Settings** owns app startup behavior, the shared reader default and display behavior, reusable import defaults, storage/cache policy, library maintenance, and app information.
 
-Designer-facing product requirements, user flows, and redesign boundaries live in [design requirements](design-requirements.md). Proposed UI changes there are not claims about current runtime behavior.
+Designer-facing product requirements, user flows, and protected reader behavior live in [design requirements](design-requirements.md). The [design system](design-system/README.md) records the current interface rules and the implementation limits of its mockups.
 
 The [root README](../README.md#highlights) lists supported formats. Extension policy is centralized in `JamReader/Core/Types/SupportedComicFormats.swift`; image directories are recognized by the scanner and opened through `DirectoryImageSequenceReader`. Engine selection and local MuPDF build inputs are documented in the [development workflow](development-workflow.md#build-and-static-checks).
 
